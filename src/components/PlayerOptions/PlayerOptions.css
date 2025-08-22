@@ -1,0 +1,5 @@
+.options-wrap {
+  display:flex; gap:10px; justify-content:center; align-items:center;
+  background: rgba(0,0,0,0.6); padding:10px; border-radius:10px;
+}
+.opt { padding:10px 14px; background:#1b6; color:#fff; border:none; border-radius:8px; cursor:pointer; }

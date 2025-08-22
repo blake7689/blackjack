@@ -1,0 +1,40 @@
+:root { 
+    --bg: #07120b; 
+    --card-bg: #06160e; 
+}
+
+html,body,#root,.app-root { 
+    height:100%; 
+    margin:0; 
+    font-family:Inter, 
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+    background: var(--bg); 
+    color: #e6f0ea; 
+    width: 100vw;
+    min-height: 100vh;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+}
+
+a { 
+    color:inherit; 
+    text-decoration:none; 
+}
+
+input, button 
+{ 
+    font-family: inherit; 
+}
+
+input 
+{ padding:8px; border-radius:8px; 
+    border:1px solid rgba(255,255,255,0.06); 
+    background:#0b1210; 
+    color:#fff; 
+}
+
+button 
+{ 
+    cursor:pointer; 
+}
