@@ -94,17 +94,6 @@
   min-height: 48px;
 }
 
-.dealer.cards,
-.dealer-cards {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-}
-
 .center-msg {
   background: rgba(0,0,0,0.45);
   padding: 12px 18px;

@@ -1,6 +1,6 @@
-import Card from "../Card/Card";
+import Card from "../Card/Card.jsx";
 import "./DealerArea.css";
-import "../GameBoard/GameBoard.css";
+// import "../GameBoard/GameBoard.css";
 
 function getBlackjackTotals(cards) {
   let total = 0;
@@ -34,17 +34,19 @@ export default function DealerArea({ dealer }) {
 
   return (
     <div className="dealer-area">
-      {hasCards && faceUpCards.length > 0 && totals.length > 0 && (
-        <div className="hand-total">
-          Total: {totals.join(" / ")}
-        </div>
-      )}
-      <div className="dealer cards">
-        {hasCards && dealer.cards.map((c, i) => (
-          <div key={i} className={`card-wrap ${c.faceDown ? "down" : "up"}`}>
-            <Card card={c} faceDown={c.faceDown} />
+      <div className="dealer-hand">
+        {hasCards && faceUpCards.length > 0 && totals.length > 0 && (
+          <div className="hand-total">
+            Total: {totals.join(" / ")}
           </div>
-        ))}
+        )}
+        <div className="dealer cards">
+          {hasCards && dealer.cards.map((c, i) => (
+            <div key={i} className={`card-wrap ${c.faceDown ? "down" : "up"}`}>
+              <Card card={c} faceDown={c.faceDown} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

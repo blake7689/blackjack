@@ -1,3 +1,4 @@
+// The isCutCard function is removed to fix redeclaration error.
 const SUITS = ["hearts", "diamonds", "clubs", "spades"];
 const RANKS = [
   { code: "2", value: 2 }, { code: "3", value: 3 }, { code: "4", value: 4 }, { code: "5", value: 5 },

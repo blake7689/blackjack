@@ -1,20 +1,13 @@
 import { useState, useMemo, useCallback } from "react";
 import { PlayerContext } from "../context/PlayerContext";
-import { apiPost, apiPut, apiDelete } from "../utils/api";
+import {
+  loginPlayer,
+  addPlayerApi,
+  updatePlayerApi,
+  updateCreditsApi,
+  deletePlayerApi,
+} from "../utils/playerEngine";
 
-function normalizePlayer(apiPlayer) {
-  if (!apiPlayer) return null;
-  return {
-    playerId: apiPlayer.playerId ?? apiPlayer.PlayerId ?? null,
-    userName: apiPlayer.userName ?? apiPlayer.UserName ?? "",
-    email: apiPlayer.email ?? apiPlayer.Email ?? "",
-    firstName: apiPlayer.firstName ?? apiPlayer.FirstName ?? "",
-    lastName: apiPlayer.lastName ?? apiPlayer.LastName ?? "",
-    password: apiPlayer.password ?? apiPlayer.Password ?? "",
-    credits: Number(apiPlayer.credits ?? apiPlayer.Credits ?? 0),
-    inActive: apiPlayer.inActive ?? apiPlayer.InActive ?? null,
-  };
-}
 
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
@@ -23,8 +16,7 @@ export function PlayerProvider({ children }) {
   const login = useCallback(async ({ usernameOrEmail, password }) => {
     setLoading(true);
     try {
-      const data = await apiPost(`/api/Player/login`, { usernameOrEmail, password });
-      const p = normalizePlayer(data);
+      const p = await loginPlayer({ usernameOrEmail, password });
       setPlayer(p);
       return p;
     } finally {
@@ -35,18 +27,7 @@ export function PlayerProvider({ children }) {
   const addPlayer = useCallback(async (payload) => {
     setLoading(true);
     try {
-      const body = {
-        playerId: 0,
-        userName: payload.userName,
-        password: payload.password,
-        email: payload.email,
-        firstName: payload.firstName ?? null,
-        lastName: payload.lastName ?? null,
-        credits: payload.credits ?? 0,
-        inActive: null,
-      };
-      const data = await apiPost(`/api/Player`, body);
-      const p = normalizePlayer(data);
+      const p = await addPlayerApi(payload);
       setPlayer(p);
       return p;
     } finally {
@@ -59,18 +40,8 @@ export function PlayerProvider({ children }) {
       if (!player) throw new Error("Not logged in");
       setLoading(true);
       try {
-        const body = {
-          playerId: player.playerId,
-          userName: updates.userName ?? player.userName,
-          password: updates.password ?? player.password,
-          email: updates.email ?? player.email,
-          firstName: updates.firstName ?? player.firstName,
-          lastName: updates.lastName ?? player.lastName,
-          credits: updates.credits ?? player.credits,
-          inActive: updates.inActive ?? player.inActive ?? null,
-        };
-        await apiPut(`/api/Player/${player.playerId}`, body);
-        setPlayer(normalizePlayer(body));
+        const updated = await updatePlayerApi(player, updates);
+        setPlayer(updated);
         return true;
       } finally {
         setLoading(false);
@@ -82,18 +53,8 @@ export function PlayerProvider({ children }) {
   const updateCreditsOnServer = useCallback(
     async (newCredits) => {
       if (!player) return;
-      const body = {
-        playerId: player.playerId,
-        userName: player.userName,
-        password: player.password,
-        email: player.email,
-        firstName: player.firstName,
-        lastName: player.lastName,
-        credits: Number(newCredits),
-        inActive: player.inActive ?? null,
-      };
-      await apiPut(`/api/Player/${player.playerId}`, body);
-      setPlayer((prev) => (prev ? { ...prev, credits: Number(newCredits) } : prev));
+      const updated = await updateCreditsApi(player, newCredits);
+      setPlayer(updated);
     },
     [player]
   );
@@ -102,8 +63,7 @@ export function PlayerProvider({ children }) {
     if (!player) throw new Error("Not logged in");
     setLoading(true);
     try {
-      const body = { playerId: player.playerId, inActive: new Date().toISOString() };
-      await apiDelete(`/api/Player/${player.playerId}`, body);
+      await deletePlayerApi(player);
       setPlayer(null);
       return true;
     } finally {
