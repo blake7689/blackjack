@@ -57,9 +57,11 @@ export default function GameBoard() {
       {/* MAIN */}
       <div className="main-area" style={{ gridArea: "main" }}>
         <div className="dealer-container">
-          <div className="top-center dealer">
-            <DealerArea dealer={dealer} />
-          </div>
+          {gamePhase !== "betting" && gamePhase !== "waiting" && dealer.cards && dealer.cards.length > 0 && (
+            <div className="top-center dealer">
+              <DealerArea dealer={dealer} />
+            </div>
+          )}
         </div>
         <div className="center-msg-row">
           {gamePhase === "results" ? (

@@ -101,11 +101,19 @@ export function GameProvider({ children }) {
       setHands(result.hands);
       setDealer(result.dealer);
       setShoe(result.shoe);
+      // If dealer has blackjack, go straight to results (player does NOT get a turn)
       if (result.dealer.blackjack) {
         setGamePhase("results");
-      } else {
-        setGamePhase("playerTurn");
+        setSelectedHandIndex(0);
+        return;
       }
+      // If player has blackjack on first two cards, immediately move to dealer turn
+      if (result.hands[0].status === "blackjack") {
+        setGamePhase("dealerTurn");
+        setSelectedHandIndex(0);
+        return;
+      }
+      setGamePhase("playerTurn");
       setSelectedHandIndex(0);
     },
     [shoe]
