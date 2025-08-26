@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
-import { useGameBoardActions } from "../../hooks/useGameBoardActions";
+// import { useGameBoardActions } from "../../hooks/useGameBoardActions";
 import { useGame } from "../../hooks/useGame";
+import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
 import DealerArea from "../DealerArea/DealerArea";
 import DeckStack from "../DeckStack/DeckStack";
@@ -11,26 +12,27 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const {
-    player, dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle,
-    handleHit, handleStay, handleDouble, handleSplit, handleDeal,
-    handleDealerTurn, handleSettle, setBetCircle,
-  } = useGameBoardActions();
-  const { deckCount, runningCount } = useGame();
+  const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
+    deckCount, runningCount , dealerTurn, settle, setBetCircle,
+    hit, stay, double, split, deal } = useGame();
+
+  const { player, updateCreditsOnServer } = usePlayer();
 
   const hasSettled = useRef(false);
-  useEffect(() => {
+
+  //runs twice when dealing and three times when settling !!! Unnecessary
+  useEffect(() => { 
     if (gamePhase === "dealerTurn") {
-      setTimeout(() => handleDealerTurn(), 100);
+      setTimeout(() => dealerTurn(), 100);
     }
     if (gamePhase === "settling" && !hasSettled.current) {
       hasSettled.current = true;
-      handleSettle();
+      settle();
     }
     if (gamePhase !== "settling") {
       hasSettled.current = false;
     }
-  }, [gamePhase, handleDealerTurn, handleSettle]);
+  }, [gamePhase, dealerTurn, settle]);
 
   // Only allow click to continue during settle phase
   const handleBoardClick = () => {
@@ -39,9 +41,15 @@ export default function GameBoard() {
     }
   };
 
+  const handleDeal = () => {
+    if (gamePhase !== "preDeal" || betCircle === 0 || !player) return;
+    updateCreditsOnServer(player.credits);
+    deal(betCircle);
+  };
+
   return (
     <div className="board" onClick={handleBoardClick}>
-      {/* HEADER */}
+      {/* TOP BAR */}
       <div className="top-bar" style={{ gridArea: "header" }}>
         <div className="top-left stats">
           <StatsPanel player={player} />
@@ -54,7 +62,7 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* MAIN */}
+      {/* MAIN GAME AREA */}
       <div className="main-area" style={{ gridArea: "main" }}>
         <div className="dealer-container">
           {gamePhase !== "betting" && gamePhase !== "waiting" && dealer.cards && dealer.cards.length > 0 && (
@@ -80,10 +88,10 @@ export default function GameBoard() {
                 key={idx}
                 hand={hand}
                 active={selectedHandIndex === idx}
-                onHit={() => handleHit(idx)}
-                onStay={() => handleStay(idx)}
-                onDouble={() => handleDouble(idx)}
-                onSplit={() => handleSplit(idx)}
+                onHit={() => hit(idx)}
+                onStay={() => stay(idx)}
+                onDouble={() => double(idx)}
+                onSplit={() => split(idx)}
                 gamePhase={gamePhase}
                 disableActions={dealer && dealer.blackjack}
               />
@@ -92,7 +100,7 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* Bottom Bar */}
       <div className="bottom-bar" style={{ gridArea: "footer" }}>
         <div className="betting-footer">
           <BettingFooter
