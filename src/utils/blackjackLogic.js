@@ -1,4 +1,60 @@
-// Returns all valid blackjack totals for a hand (ace as 1 or 11)
+import { HandStatus } from "./constants/handStatus";
+
+// Returns true if the hand is a blackjack //
+export function isBlackjack(cards) {
+  if (!cards) return false;
+
+  let totalValue = 0;
+  let totalAltValue = 0;
+
+  cards.forEach((card) => {
+    totalValue += card.value;
+    totalAltValue += card.altValue;
+  });
+
+  return (totalValue === 21 || totalAltValue === 21) || (totalValue === 21 && totalAltValue === 21);
+}
+
+// sets player status based on blackjack conditions on deal //
+export function getInitialHandStatus(playerHasBlackjack, dealerHasBlackjack)
+{
+  let handStatus = HandStatus.PLAYING;
+
+  if (dealerHasBlackjack && playerHasBlackjack) {
+    handStatus = HandStatus.PUSH;
+  } else if (dealerHasBlackjack) {
+    handStatus = HandStatus.LOSE;
+  } else if (playerHasBlackjack) {
+    handStatus = HandStatus.WIN;
+  }
+
+  return handStatus;
+}
+
+// Hand Totals //
+export function getHandTotals(cards) {
+  let total = 0;
+  let altTotal = 0;
+
+  cards.forEach((card) => {
+    total += card.value;
+    altTotal += card.altValue;
+  });
+
+  if (total > 21) {
+    total = altTotal;
+    altTotal = undefined;
+  }
+
+  return { total, altTotal };
+}
+
+
+// fix hand totals to give two totals according to the ace(s) in the hand //
+
+
+
+// Returns all valid blackjack totals for a hand (ace as 1 or 11) //
 export function getHandTotals(cards) {
   let total = 0;
   let aces = 0;
@@ -15,10 +71,20 @@ export function getHandTotals(cards) {
   const uniqueTotals = Array.from(new Set(totals)).sort((a, b) => b - a);
   const validTotals = uniqueTotals.filter(t => t <= 21);
   if (validTotals.length === 0) return [Math.min(...uniqueTotals)];
-  return validTotals;
+
+
+
+  return { total, altTotal };
 }
 
-// Returns result message for a hand and dealer
+
+
+
+
+
+
+
+// Returns result message for a hand and dealer //
 export function getResultMessage(hand, dealer) {
   if (dealer && dealer.blackjack) {
     if (hand.status === "push") return "Dealer has blackjack! Push.";
@@ -30,32 +96,9 @@ export function getResultMessage(hand, dealer) {
   return "Settling bets...";
 }
 
-// Hand evaluation and dealer rules
-export function handTotals(cards) {
 
-  // returns { total, soft } where soft is true if any ace counted as 11
-  let total = 0;
-  let aces = 0;
-  for (const c of cards) {
-    total += c.value;
-    if (c.rank === "A") aces++;
-  }
-  while (total > 21 && aces > 0) {
-    total -= 10;
-    aces--;
-  }
-  const soft = cards.some(c => c.rank === "A") && total + 10 <= 21; // informative only
-  return { total, soft };
-}
 
-export function isBlackjack(cards) {
-  if (!cards || cards.length !== 2) return false;
-  const hasAce = cards.some(c => c.rank === "A");
-  const hasTen = cards.some(c => c.value === 10 && c.rank !== "A");
-  return hasAce && hasTen;
-}
-
-// Dealer stands on soft 17 or higher
+// Dealer stands on soft 17 or higher //
 export function dealerShouldHit(cards) {
   // compute best total with aces
   let total = 0;

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-// import { useGameBoardActions } from "../../hooks/useGameBoardActions";
+import { GamePhases } from "../../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
@@ -20,29 +20,38 @@ export default function GameBoard() {
 
   const hasSettled = useRef(false);
 
-  //runs twice when dealing and three times when settling !!! Unnecessary
+
+
+
+
+  //runs twice when dealing and three times when settling !!! Unnecessary, re-work // handles game phase //
   useEffect(() => { 
-    if (gamePhase === "dealerTurn") {
+    if (gamePhase === GamePhases.DEALER_TURN) {
       setTimeout(() => dealerTurn(), 100);
     }
-    if (gamePhase === "settling" && !hasSettled.current) {
+    if (gamePhase === GamePhases.SETTLING && !hasSettled.current) {
       hasSettled.current = true;
       settle();
     }
-    if (gamePhase !== "settling") {
+    if (gamePhase !== GamePhases.SETTLING) {
       hasSettled.current = false;
     }
-  }, [gamePhase, dealerTurn, settle]);
+  }, [gamePhase, dealerTurn, settle]); 
 
-  // Only allow click to continue during settle phase
+
+
+
+
+  // Only allow click to continue during settle phase //
   const handleBoardClick = () => {
-    if (gamePhase === "results") {
-      setGamePhase("settling");
+    if (gamePhase === GamePhases.RESULTS) {
+      setGamePhase(GamePhases.SETTLING);
     }
   };
 
+  // Update player credits and deal //
   const handleDeal = () => {
-    if (gamePhase !== "preDeal" || betCircle === 0 || !player) return;
+    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return;
     updateCreditsOnServer(player.credits);
     deal(betCircle);
   };
@@ -65,14 +74,14 @@ export default function GameBoard() {
       {/* MAIN GAME AREA */}
       <div className="main-area" style={{ gridArea: "main" }}>
         <div className="dealer-container">
-          {gamePhase !== "betting" && gamePhase !== "waiting" && dealer.cards && dealer.cards.length > 0 && (
+          {gamePhase !== GamePhases.PRE_DEAL && dealer.cards && dealer.cards.length > 0 && (
             <div className="top-center dealer">
               <DealerArea dealer={dealer} />
             </div>
           )}
         </div>
         <div className="center-msg-row">
-          {gamePhase === "results" ? (
+          {gamePhase === GamePhases.RESULTS ? (
             <CenterMessage
               gamePhase={gamePhase}
               message={"Click anywhere to continue..."}

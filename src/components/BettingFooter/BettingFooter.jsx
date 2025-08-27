@@ -1,4 +1,5 @@
 import "./BettingFooter.css";
+import { GamePhases } from "../../../utils/constants/gamePhases";
 import { usePlayer } from "../../hooks/usePlayer";
 
 function Chip({ value, onClick, disabled }) {
@@ -43,7 +44,7 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
               .filter((v) => v <= credits)
               .map((v) => (
                 <Chip key={v} value={v} onClick={() => addChip(v)}
-                  disabled={gamePhase !== "preDeal"}
+                  disabled={gamePhase !== GamePhases.PRE_DEAL}
                 />
               ))}
           </div>
@@ -54,7 +55,7 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
               <span className="bet-total">${betCircle}</span>
               {betCircle > 0}
             </div>
-            <button className="clear" onClick={clearBet} disabled={betCircle === 0 || gamePhase !== "preDeal"}>
+            <button className="clear" onClick={clearBet} disabled={betCircle === 0 || gamePhase !== GamePhases.PRE_DEAL}>
               Clear
             </button>
           </div>
@@ -62,7 +63,7 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
         <div className="footer-right">
           <button
             className="deal"
-            disabled={betCircle === 0 || gamePhase !== "preDeal"}
+            disabled={betCircle === 0 || gamePhase !== GamePhases.PRE_DEAL}
             onClick={onDeal}
           >
             Deal

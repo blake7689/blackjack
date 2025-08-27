@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { GamePhases } from "../../utils/constants/gamePhases"; 
 import { GameContext } from "../context/GameContext";
 import * as gameEngine from "../utils/gameEngine";
 import { createShoe } from "../utils/cards";
@@ -9,28 +10,28 @@ export function GameProvider({ children }) {
   const [shoe, setShoe] = useState(createShoe(deckCount));
   const [hands, setHands] = useState([]);
   const [dealer, setDealer] = useState({ cards: [] });
-  const [gamePhase, setGamePhase] = useState("preDeal");
+  const [gamePhase, setGamePhase] = useState(GamePhases.PRE_DEAL);
   const [betCircle, setBetCircle] = useState(0);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
+  const [gameEnded, setGameEnded] = useState(true);
   const { player, addCreditsLocal, updateCreditsOnServer } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
 
-  // Add new cards to playedCards after every deal, hit, double, split, dealerTurn
-  useEffect(() => {
+  {/* EFFECTS */} /////////////////////////////////////////////////////////////////////////////////
 
+  // Add new cards to playedCards after every deal, hit, double, split, dealerTurn // 
+  useEffect(() => {
     // Collect all cards from hands and dealer
     const roundCards = [];
     hands.forEach((hand) => {
       if (hand.cards) roundCards.push(...hand.cards);
     });
-
     // Only add dealer cards that are revealed (not faceDown)
     if (dealer && dealer.cards) {
       roundCards.push(...dealer.cards.filter((card) => !card.faceDown));
     }
-
     // Only add cards that are not already in playedCards (by id)
     const newCards = roundCards.filter(
       (card) => card && card.id && !playedCards.some((c) => c.id === card.id)
@@ -40,99 +41,96 @@ export function GameProvider({ children }) {
     }
   }, [hands, dealer, playedCards]);
 
-  // Reset playedCards when a new shoe is created
+  // Reset playedCards and runningCount when a new shoe is created //
   useEffect(() => {
     setPlayedCards([]);
-  }, [deckCount]);
+    setRunningCount(0);
+  }, [gameEnded]);
 
-  // Calculate running count from playedCards
+  // Calculate running count from playedCards //
   useEffect(() => {
-    const CARD_VALUES = {
-      "2": 1,
-      "3": 1,
-      "4": 1,
-      "5": 1,
-      "6": 1,
-      "7": 0,
-      "8": 0,
-      "9": 0,
-      "10": -1,
-      J: -1,
-      Q: -1,
-      K: -1,
-      A: -1,
-      jack: -1,
-      queen: -1,
-      king: -1,
-      ace: -1,
-    };
-    function getCardRank(card) {
-      if (card.rank) return card.rank;
-      if (card.code) {
-        const code = card.code;
-        if (code.startsWith("A")) return "A";
-        if (code.startsWith("K")) return "K";
-        if (code.startsWith("Q")) return "Q";
-        if (code.startsWith("J")) return "J";
-        if (code.startsWith("10")) return "10";
-        return code.replace(/[^0-9]/g, "");
-      }
-      return null;
-    }
     let count = 0;
     playedCards.forEach((card) => {
-      const rank = getCardRank(card);
-      if (rank && Object.keys(CARD_VALUES).includes(rank)) {
-        count += CARD_VALUES[rank];
-      }
+      if (!card || card.type !== "card") count += 0;
+      count += card.count || 0;
     });
     setRunningCount(count);
   }, [playedCards]);
 
-  // Reset running count ONLY when deckCount changes (new shoe created)
-  useEffect(() => {
-    setRunningCount(0);
-  }, [deckCount]);
+  /////////////////////////////////////////////////////////////////////////////////////////////////
 
-  // Deal
-  const deal = useCallback(
-    (bet) => {
-      const result = gameEngine.dealRound(shoe, bet);
-      setHands(result.hands);
-      setDealer(result.dealer);
-      setShoe(result.shoe);
-      // If dealer has blackjack, go straight to results (player does NOT get a turn)
-      if (result.dealer.blackjack) {
-        setGamePhase("results");
-        setSelectedHandIndex(0);
-        return;
-      }
-      // If player has blackjack on first two cards, immediately move to dealer turn
-      if (result.hands[0].status === "blackjack") {
-        setGamePhase("dealerTurn");
-        setSelectedHandIndex(0);
-        return;
-      }
-      setGamePhase("playerTurn");
-      setSelectedHandIndex(0);
-    },
-    [shoe]
-  );
+  {/* HELPERS */} /////////////////////////////////////////////////////////////////////////////////
 
-  // Helper: move to next hand or dealer phase
+  // Move to next hand or dealer phase //
   const nextHandOrDealer = useCallback(
     (handIdx) => {
       if (handIdx < hands.length - 1) {
         setSelectedHandIndex(handIdx + 1);
       } else {
-        setGamePhase("dealerTurn");
+        setGamePhase(GamePhases.DEALER_TURN);
         setSelectedHandIndex(0);
       }
     },
     [hands.length]
   );
 
-  // Hit
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  {/* GAME ACTIONS */} ////////////////////////////////////////////////////////////////////////////
+
+  // Deal // DONE //
+  const deal = useCallback(
+    (bet) => {
+      const result = gameEngine.dealRound(shoe, bet);
+      setHands(result.hands);
+      setDealer(result.dealer);
+      setShoe(result.shoe);
+
+      // End round if either player or dealer has blackjack
+      if ((result.dealer.blackjack || result.hands[0].blackjack) || 
+          (result.dealer.blackjack && result.hands[0].blackjack)) {
+        setGamePhase(GamePhases.RESULTS);
+        setSelectedHandIndex(0); //need?
+        return;
+      }
+
+      setGamePhase(GamePhases.PLAYER_TURN);
+      setSelectedHandIndex(0); //need?
+    },
+    [shoe]
+  );
+
+  // Start a new shoe (for Home page or reset) //
+  const startNewShoe = useCallback(() => {
+    setShoe(createShoe(deckCount));
+    setHands([]);
+    setDealer({ cards: [] });
+    setGamePhase(GamePhases.PRE_DEAL);
+    setBetCircle(0);
+    setSelectedHandIndex(0);
+    setGameStarted(false);
+    setGameEnded(true);
+  }, [deckCount]);
+
+  // Clear bet and refund //
+  const clearBetAndRefund = useCallback(async () => {
+    setBetCircle(0);
+    if (player) {
+      addCreditsLocal(betCircle);
+      await updateCreditsOnServer(player.credits + betCircle);
+    }
+  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
+
+  // Clear bet without refunding //
+  const clearBetAndNoRefund = useCallback(async () => {
+    setBetCircle(0);
+  }, []);
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  {/* PLAYER ACTIONS */} //////////////////////////////////////////////////////////////////////////
+
+  // Hit //
   const hit = useCallback(
     (handIdx) => {
       const { hand, shoe: newShoe } = gameEngine.playerHit(hands[handIdx], shoe);
@@ -146,7 +144,7 @@ export function GameProvider({ children }) {
     [hands, shoe, nextHandOrDealer]
   );
 
-  // Stay
+  // Stay //
   const stay = useCallback(
     (handIdx) => {
       const newHands = hands.map((h, idx) =>
@@ -158,7 +156,7 @@ export function GameProvider({ children }) {
     [hands, nextHandOrDealer]
   );
 
-  // Double
+  // Double //
   const double = useCallback(
     (handIdx) => {
       const hand = hands[handIdx];
@@ -175,7 +173,7 @@ export function GameProvider({ children }) {
     [hands, shoe, nextHandOrDealer, player, addCreditsLocal]
   );
 
-  // Split
+  // Split //
   const split = useCallback(
     (handIdx) => {
       const hand = hands[handIdx];
@@ -193,7 +191,11 @@ export function GameProvider({ children }) {
     [hands, shoe, player, addCreditsLocal]
   );
 
-  // Dealer turn
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  {/* DEALER ACTIONS */} //////////////////////////////////////////////////////////////////////////
+
+  // Dealer turn //
   const dealerTurn = useCallback(() => {
     const playerAllBust = hands.every((h) => h.status === "bust");
     const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(
@@ -207,10 +209,10 @@ export function GameProvider({ children }) {
     // Settle hands before showing results
     const settledHands = gameEngine.settleHands(hands, newDealer);
     setHands(settledHands);
-    setGamePhase("results");
+    setGamePhase(GamePhases.RESULTS);
   }, [dealer, shoe, hands]);
 
-  // Settle
+  // Settle //
   const settle = useCallback(() => {
     const settledHands = gameEngine.settleHands(hands, dealer);
     setHands(settledHands);
@@ -220,14 +222,16 @@ export function GameProvider({ children }) {
     settledHands.forEach((hand) => {
       creditsToAdd += hand.payout || 0;
     });
+
     if (creditsToAdd > 0) {
       addCreditsLocal(creditsToAdd);
       updateCreditsOnServer(player.credits + creditsToAdd);
     } else {
       updateCreditsOnServer(player.credits);
     }
+
     setTimeout(() => {
-      setGamePhase("preDeal");
+      setGamePhase(GamePhases.PRE_DEAL);
       setHands([]);
       setDealer({ cards: [] });
       setBetCircle(0);
@@ -235,28 +239,7 @@ export function GameProvider({ children }) {
     }, 1000);
   }, [hands, dealer, player, addCreditsLocal, updateCreditsOnServer]);
 
-  // Start a new shoe (for Home page or reset)
-  const startNewShoe = useCallback(() => {
-    setShoe(createShoe(deckCount));
-    setHands([]);
-    setDealer({ cards: [] });
-    setGamePhase("preDeal");
-    setBetCircle(0);
-    setSelectedHandIndex(0);
-    setGameStarted(false);
-  }, [deckCount]);
-
-  const clearBetAndRefund = useCallback(async () => {
-    setBetCircle(0);
-    if (player) {
-      addCreditsLocal(betCircle);
-      await updateCreditsOnServer(player.credits + betCircle);
-    }
-  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
-
-  const clearBetAndNoRefund = useCallback(async () => {
-    setBetCircle(0);
-  }, []);
+  /////////////////////////////////////////////////////////////////////////////////////////////////
 
   const value = useMemo(
     () => ({
@@ -276,6 +259,8 @@ export function GameProvider({ children }) {
       setSelectedHandIndex,
       gameStarted,
       setGameStarted,
+      gameEnded,
+      setGameEnded,
       deal,
       hit,
       stay,
@@ -297,6 +282,7 @@ export function GameProvider({ children }) {
       betCircle,
       selectedHandIndex,
       gameStarted,
+      gameEnded,
       deal,
       hit,
       stay,

@@ -1,19 +1,21 @@
+import { GamePhases } from "../../../utils/constants/gamePhases";
+
 export default function CenterMessage({ gamePhase, message }) {
   let defaultMsg = "";
   switch (gamePhase) {
-    case "preDeal":
+    case GamePhases.PRE_DEAL:
       defaultMsg = "Place your bets!";
       break;
-    case "playerTurn":
+    case GamePhases.PLAYER_TURN:
       defaultMsg = "Your turn!";
       break;
-    case "dealerTurn":
+    case GamePhases.DEALER_TURN:
       defaultMsg = "Dealer's turn...";
       break;
-    case "results":
+    case GamePhases.RESULTS:
       defaultMsg = "Click anywhere to continue...";
       break;
-    case "settling":
+    case GamePhases.SETTLING:
       defaultMsg = "Settling bets...";
       break;
     default:
