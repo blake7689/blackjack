@@ -31,50 +31,32 @@ export function getInitialHandStatus(playerHasBlackjack, dealerHasBlackjack)
   return handStatus;
 }
 
-// Hand Totals //
-export function getHandTotals(cards) {
-  let total = 0;
-  let altTotal = 0;
-
-  cards.forEach((card) => {
-    total += card.value;
-    altTotal += card.altValue;
-  });
-
-  if (total > 21) {
-    total = altTotal;
-    altTotal = undefined;
-  }
-
-  return { total, altTotal };
-}
-
-
-// fix hand totals to give two totals according to the ace(s) in the hand //
-
-
-
 // Returns all valid blackjack totals for a hand (ace as 1 or 11) //
 export function getHandTotals(cards) {
   let total = 0;
   let aces = 0;
+
   for (const c of cards) {
-    if (c.rank === "ace" || c.rank === "A") aces++;
-    else if (["jack", "queen", "king", "J", "Q", "K"].includes(c.rank)) total += 10;
-    else total += parseInt(c.rank, 10) || 0;
+    if (c.value === 11) aces++;
+    else total += c.value;
   }
+
+  // No Aces
+  if (aces === 0) return { totals: [total], total: total };
+
+  // Bust with all Aces as 1
+  if (total + aces > 21) return { totals: [total + aces], total: total + aces };
+
   const totals = [];
-  for (let i = 0; i <= aces; i++) {
-    const t = total + i * 1 + (aces - i) * 11;
+  for (let a = 1; a <= aces; a++) {
+    const t = total + 1 * (aces - a) + 11 * a;
     totals.push(t);
   }
+
   const uniqueTotals = Array.from(new Set(totals)).sort((a, b) => b - a);
   const validTotals = uniqueTotals.filter(t => t <= 21);
-  if (validTotals.length === 0) return [Math.min(...uniqueTotals)];
-
-
-
-  return { total, altTotal };
+  if (validTotals.length === 0) return { totals: [Math.min(...uniqueTotals)], total: Math.min(...uniqueTotals) };
+  return { totals: validTotals, total: Math.max(...validTotals) };
 }
 
 

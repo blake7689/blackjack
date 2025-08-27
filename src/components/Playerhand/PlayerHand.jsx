@@ -28,7 +28,7 @@ export default function PlayerHand({
     <div className={`player-hand${active ? " active" : ""}`}>
       <div className="hand-total">
         Total: {(() => {
-          const totals = getHandTotals(hand.cards);
+          const totals = getHandTotals(hand.cards).totals;
           if (totals.length === 1) return totals[0];
           return totals.join(" / ");
         })()}
@@ -43,7 +43,7 @@ export default function PlayerHand({
         ))}
       </div>
       {active && gamePhase === GamePhases.PLAYER_TURN && hand.status === "playing" && (() => {
-        const totals = getHandTotals(hand.cards);
+        const totals = getHandTotals(hand.cards).totals;
         return !totals.includes(21);
       })() && !isBlackjack(hand.cards) && (
         <PlayerOptions

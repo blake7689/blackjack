@@ -1,5 +1,6 @@
 import { getHandTotals, isBlackjack, dealerShouldHit, getInitialHandStatus } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
+import { HandStatus } from "./constants/handStatus";
 
 {/* GAME ACTIONS */} //////////////////////////////////////////////////////////////////////////////
 
@@ -57,15 +58,18 @@ export function settleHands(hands, dealer) {
 export function playerHit(hand, shoe) {
   const card = drawCardFromShoe(shoe);
   const newCards = [...hand.cards, card];
-  const totals = getHandTotals(newCards);
-  const newHand = { ...hand, cards: newCards, total: totals.total };
-  if (totals)
- //fix totals and set status accordingly
+  const handTotals = getHandTotals(newCards);
+  const allTotals = handTotals.totals;
+  const newHand = { ...hand, cards: newCards, total: handTotals.total };
+  
+// !! figure out status !! //
 
+ // set status accordingly
   if (allTotals.every(t => t > 21)) {
-    newHand.status = "bust";
+    newHand.status = HandStatus.BUST;
   } else if (allTotals.includes(21) && newCards.length === 2) {
     newHand.status = "blackjack";
+    newHand.blackjack = true;
   } else if (allTotals.includes(21)) {
     newHand.status = "stand";
   } else {
@@ -77,13 +81,13 @@ export function playerHit(hand, shoe) {
 // Player Double //
 export function playerDouble(hand, shoe) {
   const card = drawCardFromShoe(shoe);
-  const totals = getHandTotals([...hand.cards, card]);
+  const total = getHandTotals([...hand.cards, card]).total;
   const newHand = {
     ...hand,
     bet: hand.bet * 2,
     cards: [...hand.cards, card],
     status: "stand",
-    total: totals.total,
+    total: total,
   };
   return { hand: newHand, shoe };
 }
