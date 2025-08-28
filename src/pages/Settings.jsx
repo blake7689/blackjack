@@ -2,11 +2,11 @@ import { useState } from "react";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGame } from "../hooks/useGame";
 import { useNavigate } from "react-router-dom";
-import { GamePhases } from "../utils/constants/gamePhases";
+import { GamePhases } from "../../utils/constants/gamePhases";
 
 export default function Settings() {
   const { player, updatePlayer, deletePlayer } = usePlayer();
-  const { deckCount, setDeckCount, startNewShoe, gamePhase, setGameStarted, setGameEnded } = useGame();
+  const { deckCount, setDeckCount, startNewShoe, gamePhase} = useGame();
   const [form, setForm] = useState({
     userName: player?.userName || "",
     email: player?.email || "",
@@ -50,8 +50,8 @@ export default function Settings() {
     }
     setDeckCount(v);
     startNewShoe(v);
-    setGameStarted(false);
-    setGameEnded(true);
+    // setGameStarted(false);
+    // setGameEnded(true);
   };
 
   if (!player) return <div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div>;

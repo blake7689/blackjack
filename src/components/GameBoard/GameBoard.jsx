@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { GamePhases } from "../../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -13,46 +13,38 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    deckCount, runningCount , dealerTurn, settle, setBetCircle,
+    deckCount, runningCount , dealerTurn, settle, calculateResults, endRound, setBetCircle,
     hit, stay, double, split, deal } = useGame();
 
-  const { player, updateCreditsOnServer } = usePlayer();
+  const { player } = usePlayer();
 
-  const hasSettled = useRef(false);
-
-
-
-
-
-  //runs twice when dealing and three times when settling !!! Unnecessary, re-work // handles game phase //
-  useEffect(() => { 
-    if (gamePhase === GamePhases.DEALER_TURN) {
-      setTimeout(() => dealerTurn(), 100);
+  // Handle game phases //
+  useEffect(() => {
+    switch (gamePhase) {
+      case GamePhases.DEALER_TURN:
+        dealerTurn();
+        break;
+      case GamePhases.SETTLING_HANDS:
+        settle();
+        break;
+      case GamePhases.RESULTS:
+        calculateResults();
+        break;
+      case GamePhases.POST_ROUND:
+        endRound();
     }
-    if (gamePhase === GamePhases.SETTLING && !hasSettled.current) {
-      hasSettled.current = true;
-      settle();
-    }
-    if (gamePhase !== GamePhases.SETTLING) {
-      hasSettled.current = false;
-    }
-  }, [gamePhase, dealerTurn, settle]); 
+  }, [gamePhase, dealerTurn, settle, calculateResults, endRound]);
 
-
-
-
-
-  // Only allow click to continue during settle phase //
+  // Only allow click to continue //
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.RESULTS) {
-      setGamePhase(GamePhases.SETTLING);
+      setGamePhase(GamePhases.POST_ROUND);
     }
   };
 
   // Update player credits and deal //
   const handleDeal = () => {
-    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return;
-    updateCreditsOnServer(player.credits);
+    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; // redundant?
     deal(betCircle);
   };
 

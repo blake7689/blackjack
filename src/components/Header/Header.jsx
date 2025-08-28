@@ -22,8 +22,8 @@ export default function Header() {
       else {
         await clearBetAndRefund();
       }
-      setGameStarted(false);
-      setGameEnded(true);
+      // setGameStarted(false);
+      // setGameEnded(true);
       nav("/");
     } else {
       if (gamePhase !== GamePhases.PRE_DEAL) {
