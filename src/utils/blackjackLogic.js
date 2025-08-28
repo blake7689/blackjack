@@ -129,16 +129,29 @@ export function getHandTotals(cards) {
   return { totals: validTotals, total: Math.max(...validTotals) };
 }
 
-// Returns result message for a hand and dealer //
-export function getResultMessage(hand, dealer) {
-  if (dealer && dealer.blackjack) {
-    if (hand.status === "push") return "Dealer has blackjack! Push.";
-    return "Dealer has blackjack! You lose.";
+export function settleHand(hand, dealerTotal) {
+  if (hand.result === HandResult.NONE) {
+    const handTotal = getHandTotals(hand.cards).total;
+    if (handTotal > dealerTotal) {
+      hand.result = HandResult.WIN;
+    } else if (handTotal === dealerTotal) {
+      hand.result = HandResult.PUSH;
+    } else {
+      hand.result = HandResult.LOSE;
+    }
   }
-  if (hand.status === "win") return "You win!";
-  if (hand.status === "lose" || hand.status === "bust") return "You lose!";
-  if (hand.status === "push") return "Push!";
-  return "Settling bets...";
+
+  if (hand.result === HandResult.WIN && hand.isBlackjack) {
+    hand.payout = hand.bet * 2.5;
+  } else if (hand.result === HandResult.WIN) {
+    hand.payout = hand.bet * 2;
+  } else if (hand.result === HandResult.PUSH) {
+    hand.payout = hand.bet;
+  } else {
+    hand.payout = 0;
+  }
+
+  return hand;
 }
 
 

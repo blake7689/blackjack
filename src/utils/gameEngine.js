@@ -1,4 +1,4 @@
-import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, getInitialDealerHandEvaluation, getHandEvaluation } from "./blackjackLogic";
+import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
@@ -16,12 +16,8 @@ export function dealRound(shoe, bet) {
   const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCards);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
-
-  // Check for player & dealer blackjack
   const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
-
-  //get player & dealer status based on blackjacks
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandEvaluation = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
 
@@ -53,25 +49,8 @@ export function dealRound(shoe, bet) {
 
 // Settle Hands //
 export function settleHands(hands, dealer) {
-
   const dealerTotal = getHandTotals(dealer.cards.map((c) => ({ ...c, faceDown: false }))).total;
-
-  return hands.map((hand) => {
-    const playerTotal = getHandTotals(hand.cards).total;
-    // Double Down
-    if (hand.status === "doubleBust") return { ...hand, result: "doubleLose", payout: 0 };
-    if (hand.status === "doublePush") return { ...hand, result: "doublePush", payout: hand.bet };
-    if (hand.status === "doubleWin") return { ...hand, result: "doubleWin", payout: hand.bet * 2 };
-
-    // Split Blackjack (21 on first 2 cards after split)
-    if (hand.status === "blackjack") return { ...hand, result: HandResult.WIN, isBlackjack: true, payout: hand.bet * 2.5 };
-    
-    // Standard outcomes
-    if (hand.status === "bust") return { ...hand, result: HandResult.LOSE, payout: 0 };
-    if (playerTotal === dealerTotal) return { ...hand, result: HandResult.PUSH, payout: hand.bet };
-    if (playerTotal > dealerTotal || dealerTotal > 21) return { ...hand, result: HandResult.WIN, payout: hand.bet * 2 };
-    return { ...hand, result: HandResult.LOSE, payout: 0 };
-  });
+  return hands.map((hand) => settleHand(hand, dealerTotal));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

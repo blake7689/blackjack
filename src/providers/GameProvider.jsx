@@ -147,20 +147,42 @@ export function GameProvider({ children }) {
     setGameEnded(true);
   }, [deckCount]);
 
+
+
+
+ //! move to player provider !///////////////////
+
   // Clear bet and refund //
   const clearBetAndRefund = useCallback(async () => {
+    await addPlayerCredits();
     setBetCircle(0);
-    if (player) {
-      addCreditsLocal(betCircle);
-      await updateCreditsOnServer(player.credits + betCircle);
-    }
-  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
+  }, [addPlayerCredits]);
 
   // Clear bet without refunding //
   const clearBetAndNoRefund = useCallback(async () => {
     setBetCircle(0);
   }, []);
 
+  const addPlayerCredits = useCallback(async () => {
+    if (player) {
+      addCreditsLocal(betCircle);
+      await updateCreditsOnServer(player.credits + betCircle);
+    }
+  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
+
+  const SubtractPlayerCredits = useCallback(async () => {
+    if (player) {
+      addCreditsLocal(-betCircle);
+      await updateCreditsOnServer(player.credits - betCircle);
+    }
+  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
+
+  ///////////////////////////////////////////////
+
+
+
+
+  
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   {/* PLAYER ACTIONS */} //////////////////////////////////////////////////////////////////////////
@@ -174,7 +196,7 @@ export function GameProvider({ children }) {
       setHands(newHands);
       setShoe(newShoe);
 
-      if (hand.status === "bust" || hand.status === "blackjack") {
+      if (hand.status === HandStatus.DONE) {
         nextHandOrDealer(handIdx);
       }
     },
@@ -184,9 +206,7 @@ export function GameProvider({ children }) {
   // Stay //
   const stay = useCallback(
     (handIdx) => {
-      const newHands = hands.map((h, idx) =>
-        idx === handIdx ? { ...h, status: "stand" } : h
-      );
+      const newHands = hands.map((h, idx) => (idx === handIdx ? { ...h, status: HandStatus.DONE } : h));
 
       setHands(newHands);
       nextHandOrDealer(handIdx);
@@ -198,25 +218,29 @@ export function GameProvider({ children }) {
   const double = useCallback(
     (handIdx) => {
       const hand = hands[handIdx];
-      if (!player || player.credits < hand.bet) return; // can't afford
+
+      if (!player || player.credits < hand.bet) return; // can't afford bet redundancy
+
       const { hand: newHand, shoe: newShoe } = gameEngine.playerDouble(hand, shoe);
       const newHands = hands.map((h, idx) => (idx === handIdx ? newHand : h));
 
       setHands(newHands);
       setShoe(newShoe);
-      // Update betCircle to sum of all hand bets
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      addCreditsLocal(-hand.bet); // subtract credits
+      SubtractPlayerCredits();
+      // addCreditsLocal(-hand.bet);
       nextHandOrDealer(handIdx);
     },
-    [hands, shoe, nextHandOrDealer, player, addCreditsLocal]
+    [hands, shoe, nextHandOrDealer, player, SubtractPlayerCredits]
   );
 
   // Split //
   const split = useCallback(
     (handIdx) => {
       const hand = hands[handIdx];
-      if (!player || player.credits < hand.bet) return; 
+
+      if (!player || player.credits < hand.bet) return; // can't afford bet redundancy
+
       const newHandsArr = gameEngine.playerSplit(hand, shoe);
       const newHands = [
         ...hands.slice(0, handIdx),
@@ -226,9 +250,10 @@ export function GameProvider({ children }) {
       
       setHands(newHands);
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      addCreditsLocal(-hand.bet); 
+      SubtractPlayerCredits();
+      // addCreditsLocal(-hand.bet); 
     },
-    [hands, shoe, player, addCreditsLocal]
+    [hands, shoe, player, SubtractPlayerCredits]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
