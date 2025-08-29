@@ -4,14 +4,15 @@ import { useGame } from "../hooks/useGame";
 
 export default function Home() {
   const { player } = usePlayer();
-  const { startNewShoe, setGameStarted } = useGame();
+  const { startNewShoe, setGameStarted, setGameEnded } = useGame();
   const nav = useNavigate();
 
   const onStart = () => {
     if (!player) { nav("/login"); return; }
     startNewShoe();
     setGameStarted(true);
-    nav("/game"); 
+    setGameEnded(false);
+    nav("/game");
   };
 
   return (

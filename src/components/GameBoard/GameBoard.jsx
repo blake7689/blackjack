@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
-import { useGameBoardActions } from "../../hooks/useGameBoardActions";
+import { useEffect } from "react";
+import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
+import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
 import DealerArea from "../DealerArea/DealerArea";
 import DeckStack from "../DeckStack/DeckStack";
@@ -11,37 +12,56 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const {
-    player, dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle,
-    handleHit, handleStay, handleDouble, handleSplit, handleDeal,
-    handleDealerTurn, handleSettle, setBetCircle,
-  } = useGameBoardActions();
-  const { deckCount, runningCount } = useGame();
+  const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
+    deckCount, runningCount , dealerTurn, settle, calculateResults, endRound, setBetCircle,
+    hit, stay, double, split, deal } = useGame();
 
-  const hasSettled = useRef(false);
+  const { player } = usePlayer();
+
+  // Handle dealer turn //
   useEffect(() => {
-    if (gamePhase === "dealerTurn") {
-      setTimeout(() => handleDealerTurn(), 100);
+    if (gamePhase === GamePhases.DEALER_TURN) {
+      dealerTurn();
     }
-    if (gamePhase === "settling" && !hasSettled.current) {
-      hasSettled.current = true;
-      handleSettle();
-    }
-    if (gamePhase !== "settling") {
-      hasSettled.current = false;
-    }
-  }, [gamePhase, handleDealerTurn, handleSettle]);
+  }, [gamePhase, dealerTurn]);
 
-  // Only allow click to continue during settle phase
-  const handleBoardClick = () => {
-    if (gamePhase === "results") {
-      setGamePhase("settling");
+  // Handle settling hands //
+  useEffect(() => {
+    if (gamePhase === GamePhases.SETTLING_HANDS) {
+      settle();
     }
+  }, [gamePhase, settle]);
+
+  // Handle results phase //
+  useEffect(() => {
+    if (gamePhase === GamePhases.RESULTS) {
+      calculateResults();
+    }
+  }, [gamePhase, calculateResults]);
+
+  // Handle end round //
+  useEffect(() => {
+    if (gamePhase === GamePhases.END_ROUND) {
+      endRound();
+    }
+  }, [gamePhase, endRound]);
+
+  // Only allow click to continue //
+  const handleBoardClick = () => {
+    if (gamePhase === GamePhases.POST_ROUND) {
+      setGamePhase(GamePhases.END_ROUND);
+    }
+  };
+
+  // Update player credits and deal //
+  const handleDeal = () => {
+    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; // redundant?
+    deal(betCircle);
   };
 
   return (
     <div className="board" onClick={handleBoardClick}>
-      {/* HEADER */}
+      {/* TOP BAR */}
       <div className="top-bar" style={{ gridArea: "header" }}>
         <div className="top-left stats">
           <StatsPanel player={player} />
@@ -54,17 +74,17 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* MAIN */}
+      {/* MAIN GAME AREA */}
       <div className="main-area" style={{ gridArea: "main" }}>
         <div className="dealer-container">
-          {gamePhase !== "betting" && gamePhase !== "waiting" && dealer.cards && dealer.cards.length > 0 && (
+          {gamePhase !== GamePhases.PRE_DEAL && dealer.cards && dealer.cards.length > 0 && (
             <div className="top-center dealer">
               <DealerArea dealer={dealer} />
             </div>
           )}
         </div>
         <div className="center-msg-row">
-          {gamePhase === "results" ? (
+          {gamePhase === GamePhases.RESULTS ? (
             <CenterMessage
               gamePhase={gamePhase}
               message={"Click anywhere to continue..."}
@@ -80,10 +100,10 @@ export default function GameBoard() {
                 key={idx}
                 hand={hand}
                 active={selectedHandIndex === idx}
-                onHit={() => handleHit(idx)}
-                onStay={() => handleStay(idx)}
-                onDouble={() => handleDouble(idx)}
-                onSplit={() => handleSplit(idx)}
+                onHit={() => hit(idx)}
+                onStay={() => stay(idx)}
+                onDouble={() => double(idx)}
+                onSplit={() => split(idx)}
                 gamePhase={gamePhase}
                 disableActions={dealer && dealer.blackjack}
               />
@@ -92,7 +112,7 @@ export default function GameBoard() {
         </div>
       </div>
 
-      {/* FOOTER */}
+      {/* Bottom Bar */}
       <div className="bottom-bar" style={{ gridArea: "footer" }}>
         <div className="betting-footer">
           <BettingFooter

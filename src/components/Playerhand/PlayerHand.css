@@ -10,3 +10,15 @@
   min-width: 38px;
   color: #fff;
 }
+
+.Lose {
+  color: red !important;
+}
+
+.Push {
+  color: orange !important;
+}
+
+.Win {
+  color: #00e600 !important;
+}

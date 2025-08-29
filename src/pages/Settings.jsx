@@ -2,10 +2,11 @@ import { useState } from "react";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGame } from "../hooks/useGame";
 import { useNavigate } from "react-router-dom";
+import { GamePhases } from "../utils/constants/gamePhases";
 
 export default function Settings() {
   const { player, updatePlayer, deletePlayer } = usePlayer();
-  const { deckCount, setDeckCount, startNewShoe, gamePhase } = useGame();
+  const { deckCount, setDeckCount, startNewShoe, gamePhase} = useGame();
   const [form, setForm] = useState({
     userName: player?.userName || "",
     email: player?.email || "",
@@ -44,11 +45,13 @@ export default function Settings() {
 
   const changeDecks = (n) => {
     const v = Math.min(5, Math.max(1, Number(n)));
-    if (gamePhase !== "preDeal") {
+    if (gamePhase !== GamePhases.PRE_DEAL) {
       if (!confirm("Changing deck size will reset the current game. Continue?")) return;
     }
     setDeckCount(v);
     startNewShoe(v);
+    // setGameStarted(false);
+    // setGameEnded(true);
   };
 
   if (!player) return <div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div>;
