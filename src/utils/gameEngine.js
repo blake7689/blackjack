@@ -22,7 +22,6 @@ export function dealRound(shoe, bet) {
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandEvaluation = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   
-
   return {
     hands: [{ 
       cards: playerCards, 
@@ -130,7 +129,6 @@ export function playerSplit(hand, shoe) {
     isBlackjack: hand2Evaluation.isBlackjack,
     isBusted: hand2Evaluation.isBusted
   };
-
 
   return [newHand1, newHand2];
 }
