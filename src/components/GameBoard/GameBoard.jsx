@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { GamePhases } from "../../../utils/constants/gamePhases";
+import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
@@ -18,27 +18,38 @@ export default function GameBoard() {
 
   const { player } = usePlayer();
 
-  // Handle game phases //
+  // Handle dealer turn //
   useEffect(() => {
-    switch (gamePhase) {
-      case GamePhases.DEALER_TURN:
-        dealerTurn();
-        break;
-      case GamePhases.SETTLING_HANDS:
-        settle();
-        break;
-      case GamePhases.RESULTS:
-        calculateResults();
-        break;
-      case GamePhases.POST_ROUND:
-        endRound();
+    if (gamePhase === GamePhases.DEALER_TURN) {
+      dealerTurn();
     }
-  }, [gamePhase, dealerTurn, settle, calculateResults, endRound]);
+  }, [gamePhase, dealerTurn]);
+
+  // Handle settling hands //
+  useEffect(() => {
+    if (gamePhase === GamePhases.SETTLING_HANDS) {
+      settle();
+    }
+  }, [gamePhase, settle]);
+
+  // Handle results phase //
+  useEffect(() => {
+    if (gamePhase === GamePhases.RESULTS) {
+      calculateResults();
+    }
+  }, [gamePhase, calculateResults]);
+
+  // Handle end round //
+  useEffect(() => {
+    if (gamePhase === GamePhases.END_ROUND) {
+      endRound();
+    }
+  }, [gamePhase, endRound]);
 
   // Only allow click to continue //
   const handleBoardClick = () => {
-    if (gamePhase === GamePhases.RESULTS) {
-      setGamePhase(GamePhases.POST_ROUND);
+    if (gamePhase === GamePhases.POST_ROUND) {
+      setGamePhase(GamePhases.END_ROUND);
     }
   };
 

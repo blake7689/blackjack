@@ -1,9 +1,10 @@
 import Card from "../Card/Card";
 import PlayerOptions from "../PlayerOptions/PlayerOptions";
 import { usePlayer } from "../../hooks/usePlayer";
-import { getHandTotals, isBlackjack } from "../../utils/blackjackLogic";
+import { getHandTotals, isHandBlackjack } from "../../utils/blackjackLogic";
 import "./PlayerHand.css";
-import { GamePhases } from "../../../utils/constants/gamePhases";
+import { GamePhases } from "../../utils/constants/gamePhases";
+import { HandResult } from "../../utils/constants/handResult";
 
 export default function PlayerHand({
   hand,
@@ -33,8 +34,8 @@ export default function PlayerHand({
           return totals.join(" / ");
         })()}
         {' '}| Bet: ${hand.bet}
-        {gamePhase === GamePhases.RESULTS && hand.result && (
-          <span className={`hand-result ${hand.result}`}> {hand.result === "win" ? "Win" : hand.result === "lose" ? "Lose" : hand.result === "push" ? "Push" : ""}</span>
+        {gamePhase === GamePhases.POST_ROUND && hand.result && (
+          <span className={`hand-result ${hand.result}`}> {hand.result === "Win" ? "Win" : hand.result === "Lose" ? "Lose" : hand.result === "Push" ? "Push" : ""}</span>
         )}
       </div>
       <div className="cards">
@@ -45,7 +46,7 @@ export default function PlayerHand({
       {active && gamePhase === GamePhases.PLAYER_TURN && hand.status === "playing" && (() => {
         const totals = getHandTotals(hand.cards).totals;
         return !totals.includes(21);
-      })() && !isBlackjack(hand.cards) && (
+      })() && !isHandBlackjack(hand.cards) && (
         <PlayerOptions
           onHit={onHit}
           onStay={onStay}

@@ -8,10 +8,11 @@ import {
   deletePlayerApi,
 } from "../utils/playerEngine";
 
-
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  {/* LOGIN */} ///////////////////////////////////////////////////////////////////////////////////
 
   const login = useCallback(async ({ usernameOrEmail, password }) => {
     setLoading(true);
@@ -23,6 +24,12 @@ export function PlayerProvider({ children }) {
       setLoading(false);
     }
   }, []);
+
+  const logout = useCallback(() => setPlayer(null), []);
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  {/* PLAYER C.U.D. */} ///////////////////////////////////////////////////////////////////////////
 
   const addPlayer = useCallback(async (payload) => {
     setLoading(true);
@@ -50,15 +57,6 @@ export function PlayerProvider({ children }) {
     [player]
   );
 
-  const updateCreditsOnServer = useCallback(
-    async (newCredits) => {
-      if (!player) return;
-      const updated = await updateCreditsApi(player, newCredits);
-      setPlayer(updated);
-    },
-    [player]
-  );
-
   const deletePlayer = useCallback(async () => {
     if (!player) throw new Error("Not logged in");
     setLoading(true);
@@ -71,11 +69,25 @@ export function PlayerProvider({ children }) {
     }
   }, [player]);
 
-  const logout = useCallback(() => setPlayer(null), []);
-  const addCreditsLocal = useCallback(
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  {/* CREDITS */} /////////////////////////////////////////////////////////////////////////////////
+
+  const updateCreditsOnServer = useCallback(
+    async (newCredits) => {
+      if (!player) return;
+      const updated = await updateCreditsApi(player, newCredits);
+      setPlayer(updated);
+    },
+    [player]
+  );
+
+  const addCreditsLocalOnly = useCallback(
     (delta) => setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev)),
     []
   );
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
 
   const value = useMemo(
     () => ({
@@ -88,9 +100,9 @@ export function PlayerProvider({ children }) {
       updateCreditsOnServer,
       deletePlayer,
       logout,
-      addCreditsLocal,
+      addCreditsLocalOnly,
     }),
-    [player, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocal]
+    [player, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

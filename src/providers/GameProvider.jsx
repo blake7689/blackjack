@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from "react";
-import { GamePhases } from "../../utils/constants/gamePhases"; 
+import { GamePhases } from "../utils/constants/gamePhases"; 
 import { GameContext } from "../context/GameContext";
 import * as gameEngine from "../utils/gameEngine";
 import { createShoe } from "../utils/cards";
@@ -17,7 +17,7 @@ export function GameProvider({ children }) {
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameEnded, setGameEnded] = useState(true);
-  const { player, addCreditsLocal, updateCreditsOnServer } = usePlayer();
+  const { player, updateCreditsOnServer } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
 
@@ -25,19 +25,20 @@ export function GameProvider({ children }) {
 
   // Add new cards to playedCards after every deal, hit, double, split, dealerTurn // 
   useEffect(() => {
-    // Collect all cards from hands and dealer
     const roundCards = [];
+
     hands.forEach((hand) => {
       if (hand.cards) roundCards.push(...hand.cards);
     });
-    // Only add dealer cards that are revealed (not faceDown)
+
     if (dealer && dealer.cards) {
       roundCards.push(...dealer.cards.filter((card) => !card.faceDown));
     }
-    // Only add cards that are not already in playedCards (by id)
+    
     const newCards = roundCards.filter(
       (card) => card && card.id && !playedCards.some((c) => c.id === card.id)
     );
+
     if (newCards.length > 0) {
       setPlayedCards((prev) => [...prev, ...newCards]);
     }
@@ -66,11 +67,10 @@ export function GameProvider({ children }) {
   // Move to next hand or dealer phase //
   const nextHandOrDealer = useCallback(
     (handIdx) => {
-      if (handIdx < hands.length - 1) {
-        setSelectedHandIndex(handIdx + 1);
-      } else {
-        setGamePhase(GamePhases.DEALER_TURN);
-        setSelectedHandIndex(0);
+      if (handIdx < hands.length - 1) { setSelectedHandIndex(handIdx + 1); } 
+      else { 
+        setGamePhase(GamePhases.DEALER_TURN); 
+        setSelectedHandIndex(0); 
       }
     },
     [hands.length]
@@ -88,15 +88,14 @@ export function GameProvider({ children }) {
       setHands(result.hands);
       setDealer(result.dealer);
       setShoe(result.shoe);
-
-      if (hands[selectedHandIndex].status === HandStatus.DONE) {
+      // Use result.hands instead of hands[selectedHandIndex]
+      if (result.hands[selectedHandIndex] && result.hands[selectedHandIndex].status === HandStatus.DONE) {
         setGamePhase(GamePhases.DEALER_TURN);
         return;
       }
-
       setGamePhase(GamePhases.PLAYER_TURN);
     },
-    [hands, shoe, selectedHandIndex, player, updateCreditsOnServer]
+    [shoe, selectedHandIndex, player, updateCreditsOnServer]
   );
 
   // Settle //
@@ -109,20 +108,10 @@ export function GameProvider({ children }) {
   // Calculate Results //
   const calculateResults = useCallback(() => {
     let creditsToAdd = 0;
-
-    hands.forEach((hand) => {
-      creditsToAdd += hand.payout || 0;
-    });
-
-    if (creditsToAdd > 0) {
-      addCreditsLocal(creditsToAdd);
-      updateCreditsOnServer(player.credits + creditsToAdd);
-    } else {
-      updateCreditsOnServer(player.credits);
-    }
-
+    hands.forEach((hand) => { creditsToAdd += hand.payout || 0; });
+    updateCreditsOnServer(creditsToAdd > 0 ? player.credits + creditsToAdd : player.credits);
     setGamePhase(GamePhases.POST_ROUND);
-  }, [hands, player, addCreditsLocal, updateCreditsOnServer]);
+  }, [hands, player, updateCreditsOnServer]);
 
   // End Round //
   const endRound = useCallback(() => {
@@ -147,40 +136,20 @@ export function GameProvider({ children }) {
     setGameEnded(true);
   }, [deckCount]);
 
+  /////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-
- //! move to player provider !///////////////////
+  {/* PLAYER CREDITS */} //////////////////////////////////////////////////////////////////////////
 
   // Clear bet and refund //
-  const clearBetAndRefund = useCallback(async () => {
-    await addPlayerCredits();
+  const clearBetAndRefund = useCallback(() => {
+    updateCreditsOnServer(player.credits + betCircle);
     setBetCircle(0);
-  }, [addPlayerCredits]);
+  }, [updateCreditsOnServer, player, betCircle]);
 
   // Clear bet without refunding //
-  const clearBetAndNoRefund = useCallback(async () => {
+  const clearBetAndNoRefund = useCallback(() => {
     setBetCircle(0);
   }, []);
-
-  const addPlayerCredits = useCallback(async () => {
-    if (player) {
-      addCreditsLocal(betCircle);
-      await updateCreditsOnServer(player.credits + betCircle);
-    }
-  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
-
-  const SubtractPlayerCredits = useCallback(async () => {
-    if (player) {
-      addCreditsLocal(-betCircle);
-      await updateCreditsOnServer(player.credits - betCircle);
-    }
-  }, [player, betCircle, addCreditsLocal, updateCreditsOnServer]);
-
-  ///////////////////////////////////////////////
-
-
-
 
   
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -227,11 +196,10 @@ export function GameProvider({ children }) {
       setHands(newHands);
       setShoe(newShoe);
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      SubtractPlayerCredits();
-      // addCreditsLocal(-hand.bet);
+      updateCreditsOnServer(player.credits - betCircle);
       nextHandOrDealer(handIdx);
     },
-    [hands, shoe, nextHandOrDealer, player, SubtractPlayerCredits]
+    [hands, shoe, nextHandOrDealer, player, updateCreditsOnServer, betCircle]
   );
 
   // Split //
@@ -250,34 +218,40 @@ export function GameProvider({ children }) {
       
       setHands(newHands);
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      SubtractPlayerCredits();
-      // addCreditsLocal(-hand.bet); 
+      updateCreditsOnServer(player.credits - betCircle);
     },
-    [hands, shoe, player, SubtractPlayerCredits]
+    [hands, shoe, player, updateCreditsOnServer, betCircle]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   {/* DEALER ACTIONS */} //////////////////////////////////////////////////////////////////////////
 
-  // Dealer turn //
+  const playDealerStep = useCallback(
+    (currentDealer, currentShoe, playerAllBust, setDealer, setShoe, setGamePhase) => {
+      if (currentDealer.status === HandStatus.PLAYING) {
+        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust);
+        setDealer(newDealer);
+        setShoe(newShoe);
+        setTimeout(() => {
+          playDealerStep(newDealer, newShoe, playerAllBust, setDealer, setShoe, setGamePhase);
+        }, 250);
+      } else {
+        setGamePhase(GamePhases.SETTLING_HANDS);
+      }
+    },
+    []
+  );
+
   const dealerTurn = useCallback(() => {
-    if (dealer.status !== HandStatus.DONE) 
-    {
+    if (dealer.status !== HandStatus.DONE) {
       dealer.status = HandStatus.PLAYING;
       const playerAllBust = hands.every((h) => h.result === HandResult.BUST);
-
-      while (dealer.status === HandStatus.PLAYING) {
-        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(dealer, shoe, playerAllBust);
-        setTimeout(() => {
-          setDealer(newDealer);
-          setShoe(newShoe);
-        }, 250);
-      }
+      playDealerStep({ ...dealer }, shoe, playerAllBust, setDealer, setShoe, setGamePhase);
+    } else {
+      setGamePhase(GamePhases.SETTLING_HANDS);
     }
-
-    setGamePhase(GamePhases.SETTLING_HANDS);
-  }, [dealer, shoe, hands]);
+  }, [dealer, shoe, hands, setDealer, setShoe, setGamePhase, playDealerStep]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 

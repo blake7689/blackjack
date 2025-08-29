@@ -2,7 +2,7 @@ import { useState } from "react";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGame } from "../hooks/useGame";
 import { useNavigate } from "react-router-dom";
-import { GamePhases } from "../../utils/constants/gamePhases";
+import { GamePhases } from "../utils/constants/gamePhases";
 
 export default function Settings() {
   const { player, updatePlayer, deletePlayer } = usePlayer();

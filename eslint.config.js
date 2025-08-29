@@ -22,8 +22,11 @@ export default defineConfig([
         sourceType: 'module',
       },
     },
+    plugins: { reactHooks, reactRefresh },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      "react-hooks/rules-of-hooks": "error", 
+      "react-hooks/exhaustive-deps": "warn"
     },
   },
 ])

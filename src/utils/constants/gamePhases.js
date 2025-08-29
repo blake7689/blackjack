@@ -6,4 +6,5 @@ export const GamePhases = {
   SETTLING_HANDS: "settlingHands",
   RESULTS: "results",
   POST_ROUND: "postRound",
+  END_ROUND: "endRound",
 };

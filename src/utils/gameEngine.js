@@ -1,15 +1,15 @@
 import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
-import { HandResult } from "./constants/handResult";
+// import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 
 {/* GAME ACTIONS */} //////////////////////////////////////////////////////////////////////////////
 
 // Deal Initial Hands //
 export function dealRound(shoe, bet) {
-  const playerFirstCard = [drawCardFromShoe(shoe)];
+  const playerFirstCard = drawCardFromShoe(shoe);
   const dealerUpCard = drawCardFromShoe(shoe);
-  const playerSecondCard = [drawCardFromShoe(shoe)];
+  const playerSecondCard = drawCardFromShoe(shoe);
   const playerCards = [playerFirstCard, playerSecondCard];
   const dealerDownCard = { ...drawCardFromShoe(shoe), faceDown: true };
   const dealerCards = [dealerUpCard, dealerDownCard];
@@ -17,9 +17,11 @@ export function dealRound(shoe, bet) {
   const dealerTotals = getHandTotals(dealerCards);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
   const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
+  if (dealerHasBlackjack) {dealerCards[1].faceDown = false; }
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandEvaluation = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
+  
 
   return {
     hands: [{ 
@@ -49,8 +51,7 @@ export function dealRound(shoe, bet) {
 
 // Settle Hands //
 export function settleHands(hands, dealer) {
-  const dealerTotal = getHandTotals(dealer.cards.map((c) => ({ ...c, faceDown: false }))).total;
-  return hands.map((hand) => settleHand(hand, dealerTotal));
+  return hands.map((hand) => settleHand(hand, dealer));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -82,7 +83,7 @@ export function playerDouble(hand, shoe) {
   const card = drawCardFromShoe(shoe);
   const newCards = [...hand.cards, card];
   const handTotals = getHandTotals(newCards);
-  const handEvaluation = getHandEvaluation(handTotals.total, hand, newCards.length);
+  const handEvaluation = getHandEvaluation(handTotals.totals, hand, newCards.length);
   const newHand = {
     ...hand,
     cards: newCards,
@@ -148,7 +149,7 @@ export function dealerPlay(dealer, shoe, playerAllBust = false) {
   }
 
   const dealerTotals = getHandTotals(dealerCards);
-  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.total, dealer, playerAllBust);
+  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.totals, dealer, playerAllBust);
 
   const newDealer = { 
     ...dealer, 

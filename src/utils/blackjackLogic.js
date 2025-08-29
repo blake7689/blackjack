@@ -1,19 +1,9 @@
 import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 
-// Returns true if the hand is a blackjack //
-export function isTotalBlackjack(total) {
-  if (!total) return false;
-  return (total === 21);
-}
+{/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
 
-export function isHandBlackjack(cards) {
-  if (!cards) return false;
-  const total = getHandTotals(cards).total;
-  return (total === 21);
-}
-
-// Sets player status based on blackjack conditions on deal //
+// Sets initial player status based on blackjack conditions //
 export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack)
 {
   let handStatus = HandStatus.PLAYING;
@@ -33,7 +23,7 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
   return { handStatus, handResult };
 }
 
-// Sets dealer status based on blackjack conditions on deal //
+// Sets initial dealer status based on blackjack conditions //
 export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack)
 {
   let handStatus = HandStatus.NONE;
@@ -53,6 +43,7 @@ export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlac
   return { handStatus, handResult };
 }
 
+// Evaluates player hand //
 export function getHandEvaluation(totals, hand, newCardsLength) {
   let handStatus = hand.status;
   let handResult = hand.result;
@@ -75,16 +66,15 @@ export function getHandEvaluation(totals, hand, newCardsLength) {
   return { handStatus, handResult, isBlackjack, isBusted };
 }
 
+// Evaluates dealer hand //
 export function getDealerHandEvaluation(totals, hand, playerAllBust) {
   let handStatus = hand.status;
   let handResult = hand.result;
   let isBusted = hand.isBusted;
-  let skipSecondEvaluation = false;
 
   if (playerAllBust) {
     handStatus = HandStatus.DONE;
     handResult = HandResult.WIN;
-    skipSecondEvaluation = true;
     return { handStatus, handResult, isBusted };
   }
 
@@ -98,8 +88,25 @@ export function getDealerHandEvaluation(totals, hand, playerAllBust) {
     handStatus = HandStatus.PLAYING;
   }
 
-  return { handStatus, handResult, isBusted, skipSecondEvaluation };
+  return { handStatus, handResult, isBusted };
 }
+
+// Check total for blackjack //
+export function isTotalBlackjack(total) {
+  if (!total) return false;
+  return (total === 21);
+}
+
+// Check hand for blackjack //
+export function isHandBlackjack(cards) {
+  if (!cards) return false;
+  const total = getHandTotals(cards).total;
+  return (total === 21);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+{/* TOTALS CALCULATION */} ////////////////////////////////////////////////////////////////////////
 
 // Returns all valid blackjack totals for a hand (ace as 1 or 11) //
 export function getHandTotals(cards) {
@@ -118,7 +125,7 @@ export function getHandTotals(cards) {
   if (total + aces > 21) return { totals: [total + aces], total: total + aces };
 
   const totals = [];
-  for (let a = 1; a <= aces; a++) {
+  for (let a = 0; a <= aces; a++) {
     const t = total + 1 * (aces - a) + 11 * a;
     totals.push(t);
   }
@@ -129,10 +136,22 @@ export function getHandTotals(cards) {
   return { totals: validTotals, total: Math.max(...validTotals) };
 }
 
-export function settleHand(hand, dealerTotal) {
+///////////////////////////////////////////////////////////////////////////////////////////////////
+
+{/* SETTLEMENT */} ////////////////////////////////////////////////////////////////////////////////
+
+export function settleHand(hand, dealer) {
+  if (dealer.result === HandResult.WIN && hand.result === HandResult.NONE) {
+      hand.result = HandResult.LOSE;
+    }
+  else if (dealer.result === HandResult.LOSE && hand.result === HandResult.NONE) {
+    hand.result = HandResult.WIN;
+  }
+  
   if (hand.result === HandResult.NONE) {
+    const dealerTotal = getHandTotals(dealer.cards.map((c) => ({ ...c, faceDown: false }))).total;
     const handTotal = getHandTotals(hand.cards).total;
-    if (handTotal > dealerTotal) {
+    if (handTotal > dealerTotal && dealerTotal < 22) {
       hand.result = HandResult.WIN;
     } else if (handTotal === dealerTotal) {
       hand.result = HandResult.PUSH;
@@ -154,44 +173,4 @@ export function settleHand(hand, dealerTotal) {
   return hand;
 }
 
-
-
-// // Dealer stands on soft 17 or higher //
-// export function dealerShouldHit(cards) {
-//   // compute best total with aces
-//   let total = 0;
-//   let aces = 0;
-//   for (const c of cards) {
-//     total += c.value;
-//     if (c.rank === "A") aces++;
-//   }
-
-//   // adjust aces down while over 21
-//   while (total > 21 && aces > 0) { total -= 10; aces--; }
-
-//   // Check for soft totals: see if any ace counted as 11 making total >=17
-//   let softTotal = 0;
-//   let aces2 = 0;
-//   for (const c of cards) { softTotal += c.value; if (c.rank === "A") aces2++; }
-
-//   // convert as many aces from 11->1 as needed to not bust
-//   while (softTotal > 21 && aces2 > 0) { softTotal -= 10; aces2--; }
-
-//   // If there's an ace that can be 11 and softTotal (with that ace as 11) between 17-21 -> stand
-//   const canHaveAceAs11 = cards.some(c => c.rank === "A");
-//   if (canHaveAceAs11) {
-
-//     // compute highest possible soft total (count one ace as 11 if possible)
-//     let maxSoft = 0;
-//     let nonAces = cards.filter(c => c.rank !== "A").reduce((s, c) => s + c.value, 0);
-//     const aceCount = cards.filter(c => c.rank === "A").length;
-    
-//     // Try to use one ace as 11, others as 1
-//     if (aceCount > 0) {
-//       maxSoft = nonAces + 11 + (aceCount - 1) * 1;
-//       if (maxSoft >= 17 && maxSoft <= 21) return false; // stand on soft 17+
-//     }
-//   }
-
-//   return total < 17;
-// }
+///////////////////////////////////////////////////////////////////////////////////////////////////
