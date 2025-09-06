@@ -12,7 +12,7 @@ export function GameProvider({ children }) {
   const [shoe, setShoe] = useState(createShoe(deckCount));
   const [hands, setHands] = useState([]);
   const [dealer, setDealer] = useState({ cards: [] });
-  const [gamePhase, setGamePhase] = useState(GamePhases.PRE_DEAL);
+  const [gamePhase, setGamePhase] = useState(/*GamePhases.PRE_DEAL*/);
   const [betCircle, setBetCircle] = useState(0);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const [gameStarted, setGameStarted] = useState(false);
@@ -228,13 +228,14 @@ export function GameProvider({ children }) {
   {/* DEALER ACTIONS */} //////////////////////////////////////////////////////////////////////////
 
   const playDealerStep = useCallback(
-    (currentDealer, currentShoe, playerAllBust, setDealer, setShoe, setGamePhase) => {
+    (currentDealer, currentShoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount) => {
+      tempCount++;
       if (currentDealer.status === HandStatus.PLAYING) {
-        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust);
+        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust, tempCount);
         setDealer(newDealer);
         setShoe(newShoe);
         setTimeout(() => {
-          playDealerStep(newDealer, newShoe, playerAllBust, setDealer, setShoe, setGamePhase);
+          playDealerStep(newDealer, newShoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
         }, 250);
       } else {
         setGamePhase(GamePhases.SETTLING_HANDS);
@@ -245,9 +246,10 @@ export function GameProvider({ children }) {
 
   const dealerTurn = useCallback(() => {
     if (dealer.status !== HandStatus.DONE) {
+      const tempCount = 0;
       dealer.status = HandStatus.PLAYING;
       const playerAllBust = hands.every((h) => h.result === HandResult.BUST);
-      playDealerStep({ ...dealer }, shoe, playerAllBust, setDealer, setShoe, setGamePhase);
+      playDealerStep({ ...dealer }, shoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
     } else {
       setGamePhase(GamePhases.SETTLING_HANDS);
     }
