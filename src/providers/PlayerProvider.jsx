@@ -22,6 +22,7 @@ export function PlayerProvider({ children }) {
       return p;
     } finally {
       setLoading(false);
+      console.log("");
     }
   }, []);
 
@@ -52,6 +53,7 @@ export function PlayerProvider({ children }) {
         return true;
       } finally {
         setLoading(false);
+        console.log("");
       }
     },
     [player]
@@ -78,6 +80,7 @@ export function PlayerProvider({ children }) {
       if (!player) return;
       const updated = await updateCreditsApi(player, newCredits);
       setPlayer(updated);
+      console.log("");
     },
     [player]
   );

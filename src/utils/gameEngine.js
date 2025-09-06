@@ -91,6 +91,7 @@ export function playerDouble(hand, shoe) {
     status: HandStatus.DONE,
     result: handEvaluation.handResult,
     isDouble: true,
+    isBlackjack: handEvaluation.isBlackjack,
     isBusted: handEvaluation.isBusted,
     bet: hand.bet * 2
   };
@@ -130,7 +131,9 @@ export function playerSplit(hand, shoe) {
     isBusted: hand2Evaluation.isBusted
   };
 
-  return [newHand1, newHand2];
+  const newhandArray = [newHand1, newHand2];
+
+  return { newhandArray, shoe };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
