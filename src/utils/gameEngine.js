@@ -1,6 +1,6 @@
-import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
+import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, 
+  getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
-// import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 
 {/* GAME ACTIONS */} //////////////////////////////////////////////////////////////////////////////
@@ -138,8 +138,8 @@ export function playerSplit(hand, shoe) {
 {/* DEALER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
 
 // Dealer logic //
-export function dealerPlay(dealer, shoe, playerAllBust = false) {
-
+export function dealerPlay(dealer, shoe, playerAllBust = false, tempCount) {
+  console.log("Dealer Play Call Count: ", tempCount);
   let dealerCards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
 
   if (!playerAllBust && dealer.status === HandStatus.PLAYING) {
