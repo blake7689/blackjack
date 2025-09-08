@@ -1,6 +1,7 @@
 import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, 
   getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
+import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 
 {/* GAME ACTIONS */} //////////////////////////////////////////////////////////////////////////////
@@ -17,7 +18,7 @@ export function dealRound(shoe, bet) {
   const dealerTotals = getHandTotals(dealerCards);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
   const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
-  if (dealerHasBlackjack) {dealerCards[1].faceDown = false; }
+  if (dealerHasBlackjack) { dealerCards[1].faceDown = false; }
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandEvaluation = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
@@ -26,23 +27,24 @@ export function dealRound(shoe, bet) {
     hands: [{ 
       cards: playerCards, 
       bet: bet, 
-      status: playerHandEvaluation.handStatus, 
+      status: playerHandEvaluation.handStatus ? playerHandEvaluation.handStatus : HandStatus.NONE, 
       isBlackjack: playerHasBlackjack, 
       isDouble: false,
       isBusted: false,
       total: playerTotals.total,
       totals: playerTotals.totals,
-      result: playerHandEvaluation.handResult,
-      payout: undefined
+      result: playerHandEvaluation.handResult ? playerHandEvaluation.handResult : HandResult.NONE,
+      payout: 0
     }],
     dealer: { 
       cards: dealerCards, 
-      status: dealerHandEvaluation.handStatus,
+      status: dealerHandEvaluation.handStatus ? dealerHandEvaluation.handStatus : HandStatus.NONE,
       dealerDisplayTotal: dealerUpCardTotals.total,
       total: dealerTotals.total, 
       totals: dealerTotals.totals,
       isBlackjack: dealerHasBlackjack,
-      result: dealerHandEvaluation.handResult
+      isBusted: false,
+      result: dealerHandEvaluation.handResult ? dealerHandEvaluation.handResult : HandResult.NONE
     },
     shoe,
   };
@@ -106,8 +108,8 @@ export function playerSplit(hand, shoe) {
   const hand2Cards = [hand.cards[1], card2];
   const hand1Totals = getHandTotals(hand1Cards);
   const hand2Totals = getHandTotals(hand2Cards);
-  const hand1Evaluation = getHandEvaluation(hand1Totals.total, hand, hand1Cards.length);
-  const hand2Evaluation = getHandEvaluation(hand2Totals.total, hand, hand2Cards.length);
+  const hand1Evaluation = getHandEvaluation(hand1Totals.totals, hand, hand1Cards.length);
+  const hand2Evaluation = getHandEvaluation(hand2Totals.totals, hand, hand2Cards.length);
 
   const newHand1 = { 
     ...hand, 
@@ -131,9 +133,9 @@ export function playerSplit(hand, shoe) {
     isBusted: hand2Evaluation.isBusted
   };
 
-  const newhandArray = [newHand1, newHand2];
+  const newHandsArray = [newHand1, newHand2];
 
-  return { newhandArray, shoe };
+  return { newHandsArray, shoe };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

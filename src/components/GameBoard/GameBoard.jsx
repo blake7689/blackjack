@@ -18,39 +18,13 @@ export default function GameBoard() {
 
   const { player } = usePlayer();
 
-  // // Handle dealer turn //
-  // useEffect(() => {
-  //   if (gamePhase === GamePhases.DEALER_TURN) {
-  //     dealerTurn();
-  //   }
-  // }, [gamePhase, dealerTurn]);
-
-  // // Handle settling hands //
-  // useEffect(() => {
-  //   if (gamePhase === GamePhases.SETTLING_HANDS) {
-  //     settle();
-  //   }
-  // }, [gamePhase, settle]);
-
-  // // Handle results phase //
-  // useEffect(() => {
-  //   if (gamePhase === GamePhases.RESULTS) {
-  //     calculateResults();
-  //   }
-  // }, [gamePhase, calculateResults]);
-
-  // // Handle end round //
-  // useEffect(() => {
-  //   if (gamePhase === GamePhases.END_ROUND) {
-  //      endRound();
-  //   }
-  // }, [gamePhase, endRound]);
-
   // Only allow click to continue //
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
       setGamePhase(GamePhases.END_ROUND);
-      endRound();
+      setTimeout(() => {
+        endRound();
+      }, 5000);
     }
   };
 
@@ -85,14 +59,7 @@ export default function GameBoard() {
           )}
         </div>
         <div className="center-msg-row">
-          {gamePhase === GamePhases.RESULTS ? (
-            <CenterMessage
-              gamePhase={gamePhase}
-              message={"Click anywhere to continue..."}
-            />
-          ) : (
-            <CenterMessage gamePhase={gamePhase} />
-          )}
+          <CenterMessage gamePhase={gamePhase} />
         </div>
         <div className="player-container">
           <div className="bottom player-hands">

@@ -141,7 +141,10 @@ export function getHandTotals(cards) {
 {/* SETTLEMENT */} ////////////////////////////////////////////////////////////////////////////////
 
 export function settleHand(hand, dealer) {
-  if (dealer.result === HandResult.WIN && hand.result === HandResult.NONE) {
+  if (hand.isBusted) {
+    hand.result = HandResult.LOSE;
+  }
+  else if (dealer.result === HandResult.WIN && hand.result === HandResult.NONE) {
       hand.result = HandResult.LOSE;
     }
   else if (dealer.result === HandResult.LOSE && hand.result === HandResult.NONE) {
@@ -151,9 +154,9 @@ export function settleHand(hand, dealer) {
   if (hand.result === HandResult.NONE) {
     const dealerTotal = getHandTotals(dealer.cards.map((c) => ({ ...c, faceDown: false }))).total;
     const handTotal = getHandTotals(hand.cards).total;
-    if (handTotal > dealerTotal && dealerTotal < 22) {
+    if (handTotal > dealerTotal && dealerTotal < 22 && handTotal < 22) {
       hand.result = HandResult.WIN;
-    } else if (handTotal === dealerTotal) {
+    } else if (handTotal === dealerTotal && dealerTotal < 22 && handTotal < 22) {
       hand.result = HandResult.PUSH;
     } else {
       hand.result = HandResult.LOSE;

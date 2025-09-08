@@ -79,7 +79,8 @@ export function PlayerProvider({ children }) {
     async (newCredits) => {
       if (!player) return;
       const updated = await updateCreditsApi(player, newCredits);
-      setPlayer(updated);
+      if (updated.credits !== player.credits)
+        setPlayer(updated);
       console.log("");
     },
     [player]

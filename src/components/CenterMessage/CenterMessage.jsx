@@ -1,6 +1,6 @@
 import { GamePhases } from "../../utils/constants/gamePhases";
 
-export default function CenterMessage({ gamePhase, message }) {
+export default function CenterMessage({ gamePhase }) {
   let defaultMsg = "";
   switch (gamePhase) {
     case GamePhases.PRE_DEAL:
@@ -22,11 +22,11 @@ export default function CenterMessage({ gamePhase, message }) {
       defaultMsg = "Click anywhere to continue...";
       break;
     default:
-      defaultMsg = "";
+      defaultMsg = "Loading...";
   }
   return (
     <div>
-      {(message ?? defaultMsg).split("\n").map((line, i) => (
+      {defaultMsg.split("\n").map((line, i) => (
         <div key={i}>{line}</div>
       ))}
     </div>
