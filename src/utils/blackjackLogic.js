@@ -27,20 +27,16 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
 export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack)
 {
   let handStatus = HandStatus.NONE;
-  let handResult = HandResult.NONE;
 
   if (dealerHasBlackjack && playerHasBlackjack) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.PUSH;
   } else if (dealerHasBlackjack) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.WIN;
   } else if (playerHasBlackjack) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.LOSE;
   }
 
-  return { handStatus, handResult };
+  return handStatus;
 }
 
 // Evaluates player hand //
@@ -69,18 +65,15 @@ export function getHandEvaluation(totals, hand, newCardsLength) {
 // Evaluates dealer hand //
 export function getDealerHandEvaluation(totals, hand, playerAllBust) {
   let handStatus = hand.status;
-  let handResult = hand.result;
   let isBusted = hand.isBusted;
 
   if (playerAllBust) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.WIN;
-    return { handStatus, handResult, isBusted };
+    return { handStatus, isBusted };
   }
 
   if (totals.every(n => n > 21)) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.LOSE;
     isBusted = true;
   } else if (totals.some(n => n >= 17 && n <= 21)) {
     handStatus = HandStatus.DONE;
@@ -88,7 +81,7 @@ export function getDealerHandEvaluation(totals, hand, playerAllBust) {
     handStatus = HandStatus.PLAYING;
   }
 
-  return { handStatus, handResult, isBusted };
+  return { handStatus, isBusted };
 }
 
 // Check total for blackjack //
@@ -141,22 +134,14 @@ export function getHandTotals(cards) {
 {/* SETTLEMENT */} ////////////////////////////////////////////////////////////////////////////////
 
 export function settleHand(hand, dealer) {
-  if (hand.isBusted) {
-    hand.result = HandResult.LOSE;
-  }
-  else if (dealer.result === HandResult.WIN && hand.result === HandResult.NONE) {
-      hand.result = HandResult.LOSE;
-    }
-  else if (dealer.result === HandResult.LOSE && hand.result === HandResult.NONE) {
-    hand.result = HandResult.WIN;
-  }
-  
   if (hand.result === HandResult.NONE) {
-    const dealerTotal = getHandTotals(dealer.cards.map((c) => ({ ...c, faceDown: false }))).total;
-    const handTotal = getHandTotals(hand.cards).total;
-    if (handTotal > dealerTotal && dealerTotal < 22 && handTotal < 22) {
+    if (hand.isBusted) {
+      hand.result = HandResult.LOSE;
+    } else if (hand.isBlackjack) {
       hand.result = HandResult.WIN;
-    } else if (handTotal === dealerTotal && dealerTotal < 22 && handTotal < 22) {
+    } else if (hand.total > dealer.total) {
+      hand.result = HandResult.WIN;
+    } else if (hand.total === dealer.total) {
       hand.result = HandResult.PUSH;
     } else {
       hand.result = HandResult.LOSE;

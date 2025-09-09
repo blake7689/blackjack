@@ -21,7 +21,7 @@ export function dealRound(shoe, bet) {
   if (dealerHasBlackjack) { dealerCards[1].faceDown = false; }
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
-  const dealerHandEvaluation = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
+  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   
   return {
     hands: [{ 
@@ -38,13 +38,12 @@ export function dealRound(shoe, bet) {
     }],
     dealer: { 
       cards: dealerCards, 
-      status: dealerHandEvaluation.handStatus ? dealerHandEvaluation.handStatus : HandStatus.NONE,
+      status: dealerHandStatus ? dealerHandStatus : HandStatus.NONE,
       dealerDisplayTotal: dealerUpCardTotals.total,
       total: dealerTotals.total, 
       totals: dealerTotals.totals,
       isBlackjack: dealerHasBlackjack,
-      isBusted: false,
-      result: dealerHandEvaluation.handResult ? dealerHandEvaluation.handResult : HandResult.NONE
+      isBusted: false
     },
     shoe,
   };
@@ -161,7 +160,6 @@ export function dealerPlay(dealer, shoe, playerAllBust = false, tempCount) {
     total: dealerTotals.total, 
     totals: dealerTotals.totals,
     status: newHandEvaluation.handStatus, 
-    result: newHandEvaluation.handResult,
     isBusted: newHandEvaluation.isBusted
   };
 
