@@ -46,11 +46,9 @@ export default function PlayerHand({
         ))}
       </div>
       {active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING && (() => {
-        // const totals = getHandTotals(hand.cards).totals; //change to hand.totals
         const totals = hand.totals;
         return !totals.includes(21);
-      // })() && !isHandBlackjack(hand.cards) && (
-      })() && hand.isBlackjack && (
+      })() && !hand.isBlackjack && (
         <PlayerOptions
           onHit={onHit}
           onStay={onStay}

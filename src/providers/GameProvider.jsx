@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { GamePhases } from "../utils/constants/gamePhases"; 
 import { GameContext } from "../context/GameContext";
 import * as gameEngine from "../utils/gameEngine";
@@ -18,6 +18,12 @@ export function GameProvider({ children }) {
   const { player, updateCreditsOnServer } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
+
+  const handsRef = useRef(hands);
+  const dealerRef = useRef(dealer);
+  const gamePhaseRef = useRef(gamePhase);
+  const playerRef = useRef(player);
+  const shoeRef = useRef(shoe);
 
   {/* EFFECTS */} /////////////////////////////////////////////////////////////////////////////////
 
@@ -43,8 +49,11 @@ export function GameProvider({ children }) {
     }
   }, [hands, dealer, playedCards]);
 
-  // Set Game at Start // needed?
-  // useEffect(() => { resetGame(); });
+  useEffect(() => { handsRef.current = hands; }, [hands]);
+  useEffect(() => { dealerRef.current = dealer; }, [dealer]);
+  useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
+  useEffect(() => { playerRef.current = player; }, [player]);
+  useEffect(() => { shoeRef.current = shoe; }, [shoe]);
 
   // Calculate running count from playedCards //
   useEffect(() => {
@@ -90,6 +99,9 @@ export function GameProvider({ children }) {
   const playDealerStep = useCallback(
     (currentDealer, currentShoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount) => {
       tempCount++;
+      setDealer(currentDealer);
+      setShoe(currentShoe);
+      
       if (currentDealer.status === HandStatus.PLAYING) {
         const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust, tempCount);
         console.log("Dealer Play Call Count: ", tempCount);
@@ -98,8 +110,6 @@ export function GameProvider({ children }) {
         }, 5000);
       } else {
         console.log("Dealer has finished playing.");
-        setDealer(currentDealer);
-        setShoe(currentShoe);
         setGamePhase(GamePhases.SETTLING_HANDS);
         setTimeout(() => {
           settle();
@@ -110,15 +120,16 @@ export function GameProvider({ children }) {
   );
 
   const dealerTurn = useCallback(() => {
+    dealer.dealerDisplayTotal = dealer.total;
+    dealer.cards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
+    setDealer(dealer);
+
     if (dealer.status !== HandStatus.DONE) {
       const tempCount = 0;
       dealer.status = HandStatus.PLAYING;
       const playerAllBust = hands.every((h) => h.result === HandResult.BUST);
       playDealerStep({ ...dealer }, shoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
     } else {
-      dealer.dealerDisplayTotal = dealer.total;
-      dealer.cards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
-      setDealer(dealer);
       console.log("Dealer has finished playing.");
       setGamePhase(GamePhases.SETTLING_HANDS);
       setTimeout(() => {

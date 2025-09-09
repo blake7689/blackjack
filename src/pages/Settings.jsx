@@ -32,23 +32,21 @@ export default function Settings() {
     }
   };
 
-  const remove = async (e) => {
+  const remove = async () => {
     if (!player) return;
     if (!confirm("Delete profile? This will inactivate your user.")) return;
     try {
-      await deletePlayer(e);
+      await deletePlayer();
       alert("Deleted");
     } catch (e) {
       alert(e.message || "Delete failed");
     }
-    //check if user that was deleted is current user
-    if (player.id === e.userId) {
-      resetGame();
-      logout();
-    }
+    logout();
+    resetGame();
+    nav("/");
   };
 
-  const changeDecks = (n) => {
+  const changeDecks = (n) => { // re-work //!!
     const v = Math.min(5, Math.max(1, Number(n)));
     if (gamePhase !== GamePhases.PRE_DEAL) {
       if (!confirm("Changing deck size will reset the current game. Continue?")) return;
@@ -73,7 +71,7 @@ export default function Settings() {
 
         <div style={{ marginTop:12 }}>
           <button onClick={save}>Save</button>
-          <button onClick={remove(this)} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
+          <button onClick={remove} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
         </div>
 
         <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
