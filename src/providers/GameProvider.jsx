@@ -9,14 +9,12 @@ import { HandResult } from "../utils/constants/handResult";
 
 export function GameProvider({ children }) {
   const [deckCount, setDeckCount] = useState(2);
-  const [shoe, setShoe] = useState(/*createShoe(deckCount)*/);
+  const [shoe, setShoe] = useState(createShoe(deckCount));
   const [hands, setHands] = useState([]);
   const [dealer, setDealer] = useState({ cards: [] });
-  const [gamePhase, setGamePhase] = useState(/*GamePhases.PRE_DEAL*/);
+  const [gamePhase, setGamePhase] = useState(GamePhases.PRE_DEAL);
   const [betCircle, setBetCircle] = useState(0);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
-  const [gameStarted, setGameStarted] = useState(false);
-  const [gameEnded, setGameEnded] = useState(true);
   const { player, updateCreditsOnServer } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
@@ -45,12 +43,8 @@ export function GameProvider({ children }) {
     }
   }, [hands, dealer, playedCards]);
 
-  // Reset playedCards and runningCount when a new shoe is created //
-  useEffect(() => {
-    setPlayedCards([]);
-    setRunningCount(0);
-    console.log("");
-  }, [gameEnded]);
+  // Set Game at Start // needed?
+  // useEffect(() => { resetGame(); });
 
   // Calculate running count from playedCards //
   useEffect(() => {
@@ -79,7 +73,7 @@ export function GameProvider({ children }) {
   }, [hands, player, updateCreditsOnServer]);
 
   // Settle //
-  const settle = useCallback(() => { //uing the wrong hands and dealer//!!
+  const settle = useCallback(() => { //using the wrong hands and dealer//!!
     const settledHands = gameEngine.settleHands(hands, dealer); //wrong hands and dealer//!!
     setHands(settledHands); //settling wrong hands//!!
     console.log("Hands have been settled. Proceeding to Calculate Results.");
@@ -193,16 +187,16 @@ export function GameProvider({ children }) {
   }, []);
 
 // Start a new shoe (for Home page or reset) //
-  const startNewShoe = useCallback(() => {
-    console.log("Starting a new shoe.");
+  const resetGame = useCallback(() => {
+    console.log("Resetting game.");
     setShoe(createShoe(deckCount));
     setHands([]);
     setDealer({ cards: [] });
     setGamePhase(GamePhases.PRE_DEAL);
     setBetCircle(0);
     setSelectedHandIndex(0);
-    setGameStarted(false); //true
-    setGameEnded(true); //false
+    setPlayedCards([]);
+    setRunningCount(0);
     console.log("");
   }, [deckCount]);
 
@@ -308,33 +302,25 @@ export function GameProvider({ children }) {
   const value = useMemo(
     () => ({
       deckCount,
-      setDeckCount,
       shoe,
-      setShoe,
       hands,
-      setHands,
       dealer,
-      setDealer,
       gamePhase,
-      setGamePhase,
       betCircle,
-      setBetCircle,
       selectedHandIndex,
-      setSelectedHandIndex,
-      gameStarted,
-      setGameStarted,
-      gameEnded,
-      setGameEnded,
+      runningCount,
       deal,
       hit,
       stay,
       double,
       split,
       endRound,
-      startNewShoe,
+      resetGame,
       clearBetAndRefund,
       clearBetAndNoRefund,
-      runningCount,
+      setDeckCount,
+      setGamePhase,
+      setBetCircle,
     }),
     [
       deckCount,
@@ -344,18 +330,19 @@ export function GameProvider({ children }) {
       gamePhase,
       betCircle,
       selectedHandIndex,
-      gameStarted,
-      gameEnded,
+      runningCount,
       deal,
       hit,
       stay,
       double,
       split,
       endRound,
-      startNewShoe,
+      resetGame,
       clearBetAndRefund,
       clearBetAndNoRefund,
-      runningCount,
+      setDeckCount,
+      setGamePhase,
+      setBetCircle,
     ]
   );
 

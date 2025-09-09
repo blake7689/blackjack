@@ -1,17 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGame } from "../hooks/useGame";
+import { GamePhases } from "../utils/constants/gamePhases";
 
 export default function Home() {
   const { player } = usePlayer();
-  const { startNewShoe, setGameStarted, setGameEnded } = useGame();
+  const { setGamePhase } = useGame();
   const nav = useNavigate();
 
   const onStart = () => {
     if (!player) { nav("/login"); return; }
-    startNewShoe();
-    setGameStarted(true);
-    setGameEnded(false);
+    setGamePhase(GamePhases.PRE_DEAL);
     nav("/game");
   };
 

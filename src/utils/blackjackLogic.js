@@ -90,12 +90,12 @@ export function isTotalBlackjack(total) {
   return (total === 21);
 }
 
-// Check hand for blackjack //
-export function isHandBlackjack(cards) {
-  if (!cards) return false;
-  const total = getHandTotals(cards).total;
-  return (total === 21);
-}
+// // Check hand for blackjack //
+// export function isHandBlackjack(cards) {
+//   if (!cards) return false;
+//   const total = getHandTotals(cards).total;
+//   return (total === 21);
+// }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

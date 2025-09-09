@@ -7,7 +7,7 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 
 export default function Header() {
   const { player, logout } = usePlayer();
-  const { gamePhase, setGameStarted, setGameEnded, clearBetAndRefund, clearBetAndNoRefund } = useGame();
+  const { gamePhase, clearBetAndRefund, clearBetAndNoRefund, resetGame } = useGame();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
@@ -22,8 +22,7 @@ export default function Header() {
       else {
         clearBetAndRefund();
       }
-      setGameStarted(false);
-      setGameEnded(true);
+      resetGame();
       nav("/");
     } else {
       if (gamePhase !== GamePhases.PRE_DEAL) {
@@ -39,8 +38,7 @@ export default function Header() {
     const ok = window.confirm("Log out?");
     if (!ok) return;
     logout();
-    setGameStarted(false);
-    setGameEnded(true);
+    resetGame();
     nav("/");
   };
 

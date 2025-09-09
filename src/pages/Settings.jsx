@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import { GamePhases } from "../utils/constants/gamePhases";
 
 export default function Settings() {
-  const { player, updatePlayer, deletePlayer } = usePlayer();
-  const { deckCount, setDeckCount, startNewShoe, gamePhase} = useGame();
+  const { player, updatePlayer, deletePlayer, logout } = usePlayer();
+  const { deckCount, setDeckCount, resetGame, gamePhase} = useGame();
   const [form, setForm] = useState({
     userName: player?.userName || "",
     email: player?.email || "",
@@ -41,6 +41,8 @@ export default function Settings() {
     } catch (e) {
       alert(e.message || "Delete failed");
     }
+    resetGame();
+    logout();
   };
 
   const changeDecks = (n) => {
@@ -49,9 +51,7 @@ export default function Settings() {
       if (!confirm("Changing deck size will reset the current game. Continue?")) return;
     }
     setDeckCount(v);
-    startNewShoe(v);
-    // setGameStarted(false);
-    // setGameEnded(true);
+    resetGame(v); // is this called when deck count changes? prop needed?
   };
 
   if (!player) return <div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div>;
