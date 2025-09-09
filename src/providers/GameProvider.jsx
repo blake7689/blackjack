@@ -9,10 +9,10 @@ import { HandResult } from "../utils/constants/handResult";
 
 export function GameProvider({ children }) {
   const [deckCount, setDeckCount] = useState(2);
-  const [shoe, setShoe] = useState(createShoe(deckCount));
+  const [shoe, setShoe] = useState([]);
   const [hands, setHands] = useState([]);
   const [dealer, setDealer] = useState({ cards: [] });
-  const [gamePhase, setGamePhase] = useState(GamePhases.PRE_DEAL);
+  const [gamePhase, setGamePhase] = useState(GamePhases.NONE);
   const [betCircle, setBetCircle] = useState(0);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
   const { player, updateCreditsOnServer } = usePlayer();
@@ -186,18 +186,25 @@ export function GameProvider({ children }) {
       console.log("");
   }, []);
 
-// Start a new shoe (for Home page or reset) //
+  // Reset Game //
   const resetGame = useCallback(() => {
     console.log("Resetting game.");
     setShoe(createShoe(deckCount));
     setHands([]);
     setDealer({ cards: [] });
-    setGamePhase(GamePhases.PRE_DEAL);
+    setGamePhase(GamePhases.NONE);
     setBetCircle(0);
     setSelectedHandIndex(0);
     setPlayedCards([]);
     setRunningCount(0);
     console.log("");
+  }, [deckCount]);
+
+   // Start Game //
+  const startGame = useCallback(() => {
+    console.log("Starting game.");
+    setShoe(createShoe(deckCount));
+    setGamePhase(GamePhases.PRE_DEAL);
   }, [deckCount]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -316,6 +323,7 @@ export function GameProvider({ children }) {
       split,
       endRound,
       resetGame,
+      startGame,
       clearBetAndRefund,
       clearBetAndNoRefund,
       setDeckCount,
@@ -338,6 +346,7 @@ export function GameProvider({ children }) {
       split,
       endRound,
       resetGame,
+      startGame,
       clearBetAndRefund,
       clearBetAndNoRefund,
       setDeckCount,

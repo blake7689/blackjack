@@ -32,17 +32,20 @@ export default function Settings() {
     }
   };
 
-  const remove = async () => {
+  const remove = async (e) => {
     if (!player) return;
     if (!confirm("Delete profile? This will inactivate your user.")) return;
     try {
-      await deletePlayer();
+      await deletePlayer(e);
       alert("Deleted");
     } catch (e) {
       alert(e.message || "Delete failed");
     }
-    resetGame();
-    logout();
+    //check if user that was deleted is current user
+    if (player.id === e.userId) {
+      resetGame();
+      logout();
+    }
   };
 
   const changeDecks = (n) => {
@@ -70,7 +73,7 @@ export default function Settings() {
 
         <div style={{ marginTop:12 }}>
           <button onClick={save}>Save</button>
-          <button onClick={remove} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
+          <button onClick={remove(this)} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
         </div>
 
         <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />

@@ -5,12 +5,12 @@ import { GamePhases } from "../utils/constants/gamePhases";
 
 export default function Home() {
   const { player } = usePlayer();
-  const { setGamePhase } = useGame();
+  const { startGame } = useGame();
   const nav = useNavigate();
 
   const onStart = () => {
     if (!player) { nav("/login"); return; }
-    setGamePhase(GamePhases.PRE_DEAL);
+    startGame();
     nav("/game");
   };
 
