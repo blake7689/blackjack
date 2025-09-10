@@ -71,26 +71,30 @@ export function GameProvider({ children }) {
   {/* CALCULATE & SETTLE */} //////////////////////////////////////////////////////////////////////
 
   // Calculate Results //
-  const calculateResults = useCallback(() => { //using the wrong hands//!!
+  const calculateResults = useCallback(() => {
     let creditsToAdd = 0;
-    hands.forEach((hand) => { creditsToAdd += hand.payout || 0; }); //wrong hands//!! //maybe use bet circle//!!
-    updateCreditsOnServer(creditsToAdd > 0 ? player.credits + creditsToAdd : player.credits); 
-    console.log("Calculatied results and setting to post round.");
+    handsRef.current.forEach((hand) => { creditsToAdd += hand.payout || 0; });
+    updateCreditsOnServer(
+      creditsToAdd > 0
+        ? playerRef.current.credits + creditsToAdd
+        : playerRef.current.credits
+    );
+    console.log("Calculated results and setting to post round.");
     setGamePhase(GamePhases.POST_ROUND);
     setTimeout(() => {}, 5000);
     console.log("");
-  }, [hands, player, updateCreditsOnServer]);
+  }, [updateCreditsOnServer]);
 
   // Settle //
-  const settle = useCallback(() => { //using the wrong hands and dealer//!!
-    const settledHands = gameEngine.settleHands(hands, dealer); //wrong hands and dealer//!!
-    setHands(settledHands); //settling wrong hands//!!
+  const settle = useCallback(() => {
+    const settledHands = gameEngine.settleHands(handsRef.current, dealerRef.current);
+    setHands(settledHands);
     console.log("Hands have been settled. Proceeding to Calculate Results.");
     setGamePhase(GamePhases.RESULTS);
     setTimeout(() => {
       calculateResults();
     }, 5000);
-  }, [hands, dealer, calculateResults]);
+  }, [calculateResults]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -120,23 +124,24 @@ export function GameProvider({ children }) {
   );
 
   const dealerTurn = useCallback(() => {
-    dealer.dealerDisplayTotal = dealer.total;
-    dealer.cards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
-    setDealer(dealer);
+  const d = { ...dealerRef.current };
+  d.dealerDisplayTotal = d.total;
+  d.cards = d.cards.map((c) => ({ ...c, faceDown: false }));
+  setDealer(d);
 
-    if (dealer.status !== HandStatus.DONE) {
-      const tempCount = 0;
-      dealer.status = HandStatus.PLAYING;
-      const playerAllBust = hands.every((h) => h.result === HandResult.BUST);
-      playDealerStep({ ...dealer }, shoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
-    } else {
-      console.log("Dealer has finished playing.");
-      setGamePhase(GamePhases.SETTLING_HANDS);
-      setTimeout(() => {
-        settle();
-      }, 5000);
-    }
-  }, [dealer, shoe, hands, setDealer, setShoe, setGamePhase, playDealerStep, settle]);
+  if (d.status !== HandStatus.DONE) {
+    const tempCount = 0;
+    d.status = HandStatus.PLAYING;
+    const playerAllBust = handsRef.current.every((h) => h.result === HandResult.BUST);
+    playDealerStep(d, shoeRef.current, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
+  } else {
+    console.log("Dealer has finished playing.");
+    setGamePhase(GamePhases.SETTLING_HANDS);
+    setTimeout(() => {
+      settle();
+    }, 5000);
+  }
+}, [playDealerStep, settle]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
