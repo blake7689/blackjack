@@ -36,8 +36,14 @@ export default function PlayerHand({
           return totals.join(" / ");
         })()}
         {' '}| Bet: ${hand.bet}
-        {gamePhase === GamePhases.POST_ROUND && hand.result && (
+        {(gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result && (
           <span className={`hand-result ${hand.result}`}> {hand.result === "Win" ? "Win" : hand.result === "Lose" ? "Lose" : hand.result === "Push" ? "Push" : ""}</span>
+        )}
+        {hand.isBusted && (
+          <span className={`hand-result busted`}> Busted</span>
+        )}
+        {hand.isBlackjack && (
+          <span className={`hand-result blackjack`}> Blackjack</span>
         )}
       </div>
       <div className="cards">

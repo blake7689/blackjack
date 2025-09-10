@@ -71,7 +71,7 @@ export function drawCardFromShoe(shoe) {
   do {
     card = shoe.shift();
   } while (card && card.type === "cut" && shoe.length > 0);
-  return card;
+  return card; //todo - set cut card found flag and reset game and send to game page after round //!!
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

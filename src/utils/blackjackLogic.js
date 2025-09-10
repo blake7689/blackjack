@@ -139,7 +139,7 @@ export function settleHand(hand, dealer) {
       hand.result = HandResult.LOSE;
     } else if (hand.isBlackjack) {
       hand.result = HandResult.WIN;
-    } else if (hand.total > dealer.total) {
+    } else if (hand.total > dealer.total || dealer.isBusted) {
       hand.result = HandResult.WIN;
     } else if (hand.total === dealer.total) {
       hand.result = HandResult.PUSH;

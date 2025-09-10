@@ -6,6 +6,9 @@ export default function CenterMessage({ gamePhase }) {
     case GamePhases.PRE_DEAL:
       defaultMsg = "Place your bets!";
       break;
+      case GamePhases.DEALING:
+      defaultMsg = "Dealing cards...";
+      break;
     case GamePhases.PLAYER_TURN:
       defaultMsg = "Your turn!";
       break;

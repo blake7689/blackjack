@@ -24,13 +24,14 @@ export default function GameBoard() {
       setGamePhase(GamePhases.END_ROUND);
       setTimeout(() => {
         endRound();
-      }, 5000);
+      }, 2000);
     }
   };
 
   // Update player credits and deal //
   const handleDeal = () => {
     if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; // redundant?
+    setGamePhase(GamePhases.DEALING);
     deal(betCircle);
   };
 

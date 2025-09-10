@@ -1,0 +1,10 @@
+.credit-change.plus {
+  color: #00e600;
+  font-weight: bold;
+  transition: opacity 0.5s;
+}
+.credit-change.minus {
+  color: #e60000;
+  font-weight: bold;
+  transition: opacity 0.5s;
+}

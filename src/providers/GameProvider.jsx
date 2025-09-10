@@ -18,6 +18,7 @@ export function GameProvider({ children }) {
   const { player, updateCreditsOnServer } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
+  const [lastCreditChange, setLastCreditChange] = useState(0);
 
   const handsRef = useRef(hands);
   const dealerRef = useRef(dealer);
@@ -49,11 +50,21 @@ export function GameProvider({ children }) {
     }
   }, [hands, dealer, playedCards]);
 
-  useEffect(() => { handsRef.current = hands; }, [hands]);
-  useEffect(() => { dealerRef.current = dealer; }, [dealer]);
-  useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
-  useEffect(() => { playerRef.current = player; }, [player]);
-  useEffect(() => { shoeRef.current = shoe; }, [shoe]);
+  useEffect(() => { 
+    handsRef.current = hands; 
+  }, [hands]);
+  useEffect(() => { 
+    dealerRef.current = dealer;
+  }, [dealer]);
+  useEffect(() => { 
+    gamePhaseRef.current = gamePhase; 
+  }, [gamePhase]);
+  useEffect(() => { 
+    playerRef.current = player; 
+  }, [player]);
+  useEffect(() => { 
+    shoeRef.current = shoe; 
+  }, [shoe]);
 
   // Calculate running count from playedCards //
   useEffect(() => {
@@ -68,22 +79,31 @@ export function GameProvider({ children }) {
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
+  {/* Update Credits */} //////////////////////////////////////////////////////////////////////////
+
+  const updateCredits = useCallback((newCredits) => {
+    const diff = newCredits - playerRef.current.credits;
+    setLastCreditChange(diff);
+    updateCreditsOnServer(newCredits);
+    setTimeout(() => setLastCreditChange(0), 2000);
+  }, [updateCreditsOnServer]);
+
+  /////////////////////////////////////////////////////////////////////////////////////////////////
+
   {/* CALCULATE & SETTLE */} //////////////////////////////////////////////////////////////////////
 
   // Calculate Results //
   const calculateResults = useCallback(() => {
     let creditsToAdd = 0;
     handsRef.current.forEach((hand) => { creditsToAdd += hand.payout || 0; });
-    updateCreditsOnServer(
-      creditsToAdd > 0
-        ? playerRef.current.credits + creditsToAdd
-        : playerRef.current.credits
-    );
+    if (creditsToAdd > 0) {
+      updateCredits(playerRef.current.credits + creditsToAdd);
+    }
     console.log("Calculated results and setting to post round.");
     setGamePhase(GamePhases.POST_ROUND);
-    setTimeout(() => {}, 5000);
+    setTimeout(() => {}, 1000);
     console.log("");
-  }, [updateCreditsOnServer]);
+  }, [updateCredits]);
 
   // Settle //
   const settle = useCallback(() => {
@@ -93,7 +113,7 @@ export function GameProvider({ children }) {
     setGamePhase(GamePhases.RESULTS);
     setTimeout(() => {
       calculateResults();
-    }, 5000);
+    }, 1000);
   }, [calculateResults]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -101,7 +121,7 @@ export function GameProvider({ children }) {
   {/* DEALER ACTIONS */} //////////////////////////////////////////////////////////////////////////
 
   const playDealerStep = useCallback(
-    (currentDealer, currentShoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount) => {
+    (currentDealer, currentShoe, playerAllBust, tempCount) => {
       tempCount++;
       setDealer(currentDealer);
       setShoe(currentShoe);
@@ -110,14 +130,14 @@ export function GameProvider({ children }) {
         const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust, tempCount);
         console.log("Dealer Play Call Count: ", tempCount);
         setTimeout(() => {
-          playDealerStep(newDealer, newShoe, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
-        }, 5000);
+          playDealerStep(newDealer, newShoe, playerAllBust, tempCount);
+        }, 1000);
       } else {
         console.log("Dealer has finished playing.");
         setGamePhase(GamePhases.SETTLING_HANDS);
         setTimeout(() => {
           settle();
-        }, 5000);
+        }, 1000);
       }
     },
     [settle]
@@ -132,14 +152,16 @@ export function GameProvider({ children }) {
   if (d.status !== HandStatus.DONE) {
     const tempCount = 0;
     d.status = HandStatus.PLAYING;
-    const playerAllBust = handsRef.current.every((h) => h.result === HandResult.BUST);
-    playDealerStep(d, shoeRef.current, playerAllBust, setDealer, setShoe, setGamePhase, tempCount);
+    const playerAllBust = handsRef.current.every((h) => h.isBusted === true);
+    setTimeout(() => {
+      playDealerStep(d, shoeRef.current, playerAllBust, tempCount);
+    }, 1000);
   } else {
     console.log("Dealer has finished playing.");
     setGamePhase(GamePhases.SETTLING_HANDS);
     setTimeout(() => {
       settle();
-    }, 5000);
+    }, 1000);
   }
 }, [playDealerStep, settle]);
 
@@ -159,7 +181,7 @@ export function GameProvider({ children }) {
         setGamePhase(GamePhases.DEALER_TURN); 
         setTimeout(() => {
           dealerTurn();
-        }, 5000);
+        }, 1000);
       }
     },
     [hands.length, dealerTurn]
@@ -172,7 +194,7 @@ export function GameProvider({ children }) {
   // Deal //
   const deal = useCallback(
     (bet) => {
-      updateCreditsOnServer(player.credits);
+      updateCredits(player.credits);
       const result = gameEngine.dealRound(shoe, bet);
       setHands(result.hands);
       setDealer(result.dealer);
@@ -183,13 +205,13 @@ export function GameProvider({ children }) {
         setGamePhase(GamePhases.DEALER_TURN);
         setTimeout(() => {
           dealerTurn();
-        }, 5000);
+        }, 1000);
         return;
       }
       setGamePhase(GamePhases.PLAYER_TURN);
       console.log("");
     },
-    [shoe, selectedHandIndex, player, updateCreditsOnServer, dealerTurn]
+    [shoe, selectedHandIndex, player, updateCredits, dealerTurn]
   );
 
   // End Round //
@@ -229,10 +251,10 @@ export function GameProvider({ children }) {
 
   // Clear bet and refund //
   const clearBetAndRefund = useCallback(() => {
-    updateCreditsOnServer(player.credits + betCircle);
+    updateCredits(player.credits + betCircle);
     setBetCircle(0);
     console.log("");
-  }, [updateCreditsOnServer, player, betCircle]);
+  }, [updateCredits, player, betCircle]);
 
   // Clear bet without refunding //
   const clearBetAndNoRefund = useCallback(() => {
@@ -285,12 +307,11 @@ export function GameProvider({ children }) {
 
       setHands(newHands);
       setShoe(newShoe);
-      const newHandsTemp = newHands.reduce((sum, h) => sum + h.bet, 0) // Check for accurate bet per hand//!!
-      setBetCircle(newHandsTemp);
-      updateCreditsOnServer(player.credits - betCircle); // Change to subtract accurate bet amount per hand (handIdx) //!!
+      setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
+      updateCredits(player.credits - hand.bet); 
       nextHandOrDealer(handIdx);
     },
-    [hands, shoe, nextHandOrDealer, player, updateCreditsOnServer, betCircle]
+    [hands, shoe, nextHandOrDealer, player, updateCredits]
   );
 
   // Split //
@@ -311,12 +332,11 @@ export function GameProvider({ children }) {
       
       setHands(newHands);
       setShoe(newShoe);
-      const newHandsTemp = newHands.reduce((sum, h) => sum + h.bet, 0) // Check for accurate bet per hand //!!
-      setBetCircle(newHandsTemp);
-      updateCreditsOnServer(player.credits - betCircle); // Change to subtract accurate bet amount per hand (handIdx) //!!
+      setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
+      updateCredits(player.credits - hand.bet); 
       console.log("");
     },
-    [hands, shoe, player, updateCreditsOnServer, betCircle]
+    [hands, shoe, player, updateCredits]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -332,6 +352,8 @@ export function GameProvider({ children }) {
       betCircle,
       selectedHandIndex,
       runningCount,
+      lastCreditChange,
+      updateCredits,
       deal,
       hit,
       stay,
@@ -355,6 +377,8 @@ export function GameProvider({ children }) {
       betCircle,
       selectedHandIndex,
       runningCount,
+      lastCreditChange,
+      updateCredits,
       deal,
       hit,
       stay,

@@ -23,6 +23,13 @@ export function dealRound(shoe, bet) {
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   
+  const updatedDealerHandStatus = 
+    dealerHandStatus === HandStatus.NONE ? 
+    getDealerHandEvaluation(
+      dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false
+    ).handStatus : 
+    dealerHandStatus;
+  
   return {
     hands: [{ 
       cards: playerCards, 
@@ -38,7 +45,7 @@ export function dealRound(shoe, bet) {
     }],
     dealer: { 
       cards: dealerCards, 
-      status: dealerHandStatus ? dealerHandStatus : HandStatus.NONE,
+      status: updatedDealerHandStatus ? updatedDealerHandStatus : HandStatus.NONE,
       dealerDisplayTotal: dealerUpCardTotals.total,
       total: dealerTotals.total, 
       totals: dealerTotals.totals,

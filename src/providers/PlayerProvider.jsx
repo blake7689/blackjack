@@ -11,6 +11,7 @@ import {
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [lastLocalCreditChange, setLastLocalCreditChange] = useState(0);
 
   {/* LOGIN */} ///////////////////////////////////////////////////////////////////////////////////
 
@@ -86,9 +87,11 @@ export function PlayerProvider({ children }) {
     [player]
   );
 
-  const addCreditsLocalOnly = useCallback(
-    (delta) => setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev)),
-    []
+  const addCreditsLocalOnly = useCallback((delta) => {
+      setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev));
+      setLastLocalCreditChange(delta);
+      setTimeout(() => setLastLocalCreditChange(0), 2000);
+    },[]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -96,7 +99,7 @@ export function PlayerProvider({ children }) {
   const value = useMemo(
     () => ({
       player,
-      setPlayer,
+      lastLocalCreditChange,
       loading,
       login,
       addPlayer,
@@ -106,7 +109,7 @@ export function PlayerProvider({ children }) {
       logout,
       addCreditsLocalOnly,
     }),
-    [player, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
+    [player, lastLocalCreditChange, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

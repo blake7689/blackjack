@@ -1,4 +1,5 @@
 import Card from "../Card/Card.jsx";
+import { GamePhases } from "../../utils/constants/gamePhases";
 import "./DealerArea.css";
 
 export default function DealerArea({ dealer }) {
@@ -10,6 +11,12 @@ export default function DealerArea({ dealer }) {
         {hasCards && (
           <div className="hand-total">
             Total: {dealer.dealerDisplayTotal}
+            {dealer.isBusted && (
+              <span className={`busted`}> Busted</span>
+            )}
+            {dealer.isBlackjack && (
+              <span className={`blackjack`}> Blackjack</span>
+            )}
           </div>
         )}
         <div className="dealer cards">

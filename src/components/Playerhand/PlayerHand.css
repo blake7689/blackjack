@@ -22,3 +22,11 @@
 .Win {
   color: #00e600 !important;
 }
+
+.busted {
+  color: red !important;
+}
+
+.blackjack {
+  color: gold !important;
+}
