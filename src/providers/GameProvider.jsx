@@ -5,7 +5,6 @@ import * as gameEngine from "../utils/gameEngine";
 import { createShoe } from "../utils/cards";
 import { usePlayer } from "../hooks/usePlayer";
 import { HandStatus } from "../utils/constants/handStatus";
-import { HandResult } from "../utils/constants/handResult";
 
 export function GameProvider({ children }) {
   const [deckCount, setDeckCount] = useState(2);
@@ -15,16 +14,19 @@ export function GameProvider({ children }) {
   const [gamePhase, setGamePhase] = useState(GamePhases.NONE);
   const [betCircle, setBetCircle] = useState(0);
   const [selectedHandIndex, setSelectedHandIndex] = useState(0);
-  const { player, updateCreditsOnServer } = usePlayer();
+  const { player, updateCreditsOnServer, addCreditsLocalOnly } = usePlayer();
   const [runningCount, setRunningCount] = useState(0);
   const [playedCards, setPlayedCards] = useState([]);
   const [lastCreditChange, setLastCreditChange] = useState(0);
+  const [cutCardFound, setCutCardFound] = useState(false);
+  const [includeCutCard, setIncludeCutCard] = useState(true);
 
   const handsRef = useRef(hands);
   const dealerRef = useRef(dealer);
   const gamePhaseRef = useRef(gamePhase);
   const playerRef = useRef(player);
   const shoeRef = useRef(shoe);
+  const cutCardFoundRef = useRef(cutCardFound);
 
   {/* EFFECTS */} /////////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +67,9 @@ export function GameProvider({ children }) {
   useEffect(() => { 
     shoeRef.current = shoe; 
   }, [shoe]);
+  useEffect(() => { 
+    cutCardFoundRef.current = cutCardFound;
+  }, [cutCardFound]);
 
   // Calculate running count from playedCards //
   useEffect(() => {
@@ -78,6 +83,15 @@ export function GameProvider({ children }) {
   }, [playedCards]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
+
+  // Reset Shoe //
+  const resetShoe = useCallback((needsShoe = false) => {
+    setShoe(createShoe(deckCount, includeCutCard));
+    setPlayedCards([]);
+    setRunningCount(0);
+    console.log("");
+    if (needsShoe) { return shoeRef.current; }
+  }, [deckCount, includeCutCard]);
 
   {/* Update Credits */} //////////////////////////////////////////////////////////////////////////
 
@@ -127,7 +141,7 @@ export function GameProvider({ children }) {
       setShoe(currentShoe);
       
       if (currentDealer.status === HandStatus.PLAYING) {
-        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust, tempCount);
+        const { dealer: newDealer, shoe: newShoe } = gameEngine.dealerPlay(currentDealer, currentShoe, playerAllBust, tempCount, setCutCardFound, resetShoe);
         console.log("Dealer Play Call Count: ", tempCount);
         setTimeout(() => {
           playDealerStep(newDealer, newShoe, playerAllBust, tempCount);
@@ -140,7 +154,7 @@ export function GameProvider({ children }) {
         }, 1000);
       }
     },
-    [settle]
+    [settle, resetShoe]
   );
 
   const dealerTurn = useCallback(() => {
@@ -195,7 +209,7 @@ export function GameProvider({ children }) {
   const deal = useCallback(
     (bet) => {
       updateCredits(player.credits);
-      const result = gameEngine.dealRound(shoe, bet);
+      const result = gameEngine.dealRound(shoe, bet, setCutCardFound, resetShoe);
       setHands(result.hands);
       setDealer(result.dealer);
       setShoe(result.shoe);
@@ -211,23 +225,29 @@ export function GameProvider({ children }) {
       setGamePhase(GamePhases.PLAYER_TURN);
       console.log("");
     },
-    [shoe, selectedHandIndex, player, updateCredits, dealerTurn]
+    [shoe, selectedHandIndex, player, updateCredits, dealerTurn, resetShoe]
   );
 
   // End Round //
   const endRound = useCallback(() => {
-      setGamePhase(GamePhases.PRE_DEAL);
-      setHands([]);
-      setDealer({ cards: [] });
-      setBetCircle(0);
-      setSelectedHandIndex(0);
-      console.log("");
-  }, []);
+    setGamePhase(GamePhases.PRE_DEAL);
+    setHands([]);
+    setDealer({ cards: [] });
+    setBetCircle(0);
+    setSelectedHandIndex(0);
+
+    if (cutCardFoundRef.current) { 
+      resetShoe(); 
+      setCutCardFound(false); 
+    }
+
+    console.log("");
+  }, [resetShoe]);
 
   // Reset Game //
   const resetGame = useCallback(() => {
     console.log("Resetting game.");
-    setShoe(createShoe(deckCount));
+    setShoe(createShoe(deckCount, includeCutCard));
     setHands([]);
     setDealer({ cards: [] });
     setGamePhase(GamePhases.NONE);
@@ -236,31 +256,23 @@ export function GameProvider({ children }) {
     setPlayedCards([]);
     setRunningCount(0);
     console.log("");
-  }, [deckCount]);
+  }, [deckCount, includeCutCard]);
 
    // Start Game //
   const startGame = useCallback(() => {
     console.log("Starting game.");
-    setShoe(createShoe(deckCount));
+    setShoe(createShoe(deckCount, includeCutCard));
     setGamePhase(GamePhases.PRE_DEAL);
-  }, [deckCount]);
+  }, [deckCount, includeCutCard]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
   {/* PLAYER CREDITS */} //////////////////////////////////////////////////////////////////////////
 
-  // Clear bet and refund //
-  const clearBetAndRefund = useCallback(() => {
-    updateCredits(player.credits + betCircle);
-    setBetCircle(0);
+  const refundLocal = useCallback(() => {
+    addCreditsLocalOnly(betCircle);
     console.log("");
-  }, [updateCredits, player, betCircle]);
-
-  // Clear bet without refunding //
-  const clearBetAndNoRefund = useCallback(() => {
-    setBetCircle(0);
-    console.log("");
-  }, []);
+  }, [addCreditsLocalOnly, betCircle]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -269,7 +281,7 @@ export function GameProvider({ children }) {
   // Hit //
   const hit = useCallback(
     (handIdx) => {
-      const { hand, shoe: newShoe } = gameEngine.playerHit(hands[handIdx], shoe);
+      const { hand, shoe: newShoe } = gameEngine.playerHit(hands[handIdx], shoe, setCutCardFound, resetShoe);
       const newHands = hands.map((h, idx) => (idx === handIdx ? hand : h));
 
       setHands(newHands);
@@ -279,7 +291,7 @@ export function GameProvider({ children }) {
         nextHandOrDealer(handIdx);
       }
     },
-    [hands, shoe, nextHandOrDealer]
+    [hands, shoe, nextHandOrDealer, resetShoe]
   );
 
   // Stay //
@@ -302,7 +314,7 @@ export function GameProvider({ children }) {
         return; // can't afford bet redundancy
       }
 
-      const { hand: newHand, shoe: newShoe } = gameEngine.playerDouble(hand, shoe);
+      const { hand: newHand, shoe: newShoe } = gameEngine.playerDouble(hand, shoe, setCutCardFound, resetShoe);
       const newHands = hands.map((h, idx) => (idx === handIdx ? newHand : h));
 
       setHands(newHands);
@@ -311,7 +323,7 @@ export function GameProvider({ children }) {
       updateCredits(player.credits - hand.bet); 
       nextHandOrDealer(handIdx);
     },
-    [hands, shoe, nextHandOrDealer, player, updateCredits]
+    [hands, shoe, nextHandOrDealer, player, updateCredits, resetShoe]
   );
 
   // Split //
@@ -323,7 +335,7 @@ export function GameProvider({ children }) {
         return; // can't afford bet redundancy
       }
 
-      const { newHandsArray: newHandsArr, shoe: newShoe } = gameEngine.playerSplit(hand, shoe);
+      const { newHandsArray: newHandsArr, shoe: newShoe } = gameEngine.playerSplit(hand, shoe, setCutCardFound, resetShoe);
       const newHands = [
         ...hands.slice(0, handIdx),
         ...newHandsArr,
@@ -336,7 +348,7 @@ export function GameProvider({ children }) {
       updateCredits(player.credits - hand.bet); 
       console.log("");
     },
-    [hands, shoe, player, updateCredits]
+    [hands, shoe, player, updateCredits, resetShoe]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -353,20 +365,23 @@ export function GameProvider({ children }) {
       selectedHandIndex,
       runningCount,
       lastCreditChange,
+      includeCutCard,
       updateCredits,
       deal,
       hit,
       stay,
       double,
       split,
+      resetShoe,
       endRound,
       resetGame,
       startGame,
-      clearBetAndRefund,
-      clearBetAndNoRefund,
+      refundLocal,
       setDeckCount,
       setGamePhase,
       setBetCircle,
+      setCutCardFound,
+      setIncludeCutCard,
     }),
     [
       deckCount,
@@ -378,20 +393,23 @@ export function GameProvider({ children }) {
       selectedHandIndex,
       runningCount,
       lastCreditChange,
+      includeCutCard,
       updateCredits,
       deal,
       hit,
       stay,
       double,
       split,
+      resetShoe,
       endRound,
       resetGame,
       startGame,
-      clearBetAndRefund,
-      clearBetAndNoRefund,
+      refundLocal,
       setDeckCount,
       setGamePhase,
       setBetCircle,
+      setCutCardFound,
+      setIncludeCutCard,
     ]
   );
 

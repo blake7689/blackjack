@@ -45,7 +45,7 @@ function buildDeck(deckIndex = 0) {
 }
 
 // Build a shoe with n decks and a cut card //
-export function createShoe(deckCount = 2) {
+export function createShoe(deckCount = 2, includeCutCard = true) {
   let shoe = [];
   for (let i = 0; i < deckCount; i++) {
     shoe.push(...buildDeck(i));
@@ -53,10 +53,12 @@ export function createShoe(deckCount = 2) {
   shoe = shuffle(shoe);
   shoe = shuffle(shoe); 
 
-  // Insert cut card at random between 60% - 80% depth
-  const idx = Math.floor(shoe.length * (0.6 + Math.random() * 0.2));
-  const cut = { id: `CUT-1`, type: "cut" };
-  shoe.splice(idx, 0, cut);
+  if (includeCutCard)
+  {
+    const idx = Math.floor(shoe.length * (0.6 + Math.random() * 0.2));
+    const cut = { id: `CUT-1`, type: "cut" };
+    shoe.splice(idx, 0, cut);
+  }
   return shoe;
 }
 
@@ -65,13 +67,21 @@ export function createShoe(deckCount = 2) {
 {/* DRAW CARD */} /////////////////////////////////////////////////////////////////////////////////
 
 // Draw top card from shoe, skipping cut card if encountered //
-export function drawCardFromShoe(shoe) {
-  if (!shoe || shoe.length === 0) throw new Error("Shoe is empty");
+export function drawCardFromShoe(shoe, setCutCardFound, resetShoe) {
+  if (!shoe) throw new Error("Shoe is undefined");
   let card;
+
   do {
+    if (card && card.type === "cut") {
+      setCutCardFound(true);
+    } else if (shoe.length === 0) {
+      shoe = resetShoe(true);
+    }
+
     card = shoe.shift();
-  } while (card && card.type === "cut" && shoe.length > 0);
-  return card; //todo - set cut card found flag and reset game and send to game page after round //!!
+  } while (card && card.type === "cut");
+
+  return card; 
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
