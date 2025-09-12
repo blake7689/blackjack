@@ -99,7 +99,7 @@ export function GameProvider({ children }) {
     const diff = newCredits - playerRef.current.credits;
     setLastCreditChange(diff);
     updateCreditsOnServer(newCredits);
-    setTimeout(() => setLastCreditChange(0), 2000);
+    setTimeout(() => setLastCreditChange(0), 3000);
   }, [updateCreditsOnServer]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -186,19 +186,21 @@ export function GameProvider({ children }) {
   // Move to next hand or dealer phase //
   const nextHandOrDealer = useCallback(
     (handIdx) => {
-      if (handIdx < hands.length - 1) { 
-        setSelectedHandIndex(handIdx + 1); 
-      } 
-      else { 
+      for (let idx = handIdx + 1; idx <= hands.length - 1; idx++) {
+        if (hands[idx].status !== HandStatus.DONE) {
+          setSelectedHandIndex(idx);
+          return;
+        }
+      }
+
         setSelectedHandIndex(0); 
         console.log("All player hands completed.");
         setGamePhase(GamePhases.DEALER_TURN); 
         setTimeout(() => {
           dealerTurn();
         }, 1000);
-      }
     },
-    [hands.length, dealerTurn]
+    [hands, dealerTurn]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -245,12 +247,12 @@ export function GameProvider({ children }) {
   }, [resetShoe]);
 
   // Reset Game //
-  const resetGame = useCallback(() => {
+  const resetGame = useCallback((currentDeckCount = deckCount, currentIncludeCutCard = includeCutCard, newGamePhase = GamePhases.NONE) => {
     console.log("Resetting game.");
-    setShoe(createShoe(deckCount, includeCutCard));
+    setShoe(createShoe(currentDeckCount, currentIncludeCutCard));
     setHands([]);
     setDealer({ cards: [] });
-    setGamePhase(GamePhases.NONE);
+    setGamePhase(newGamePhase);
     setBetCircle(0);
     setSelectedHandIndex(0);
     setPlayedCards([]);
@@ -366,6 +368,7 @@ export function GameProvider({ children }) {
       runningCount,
       lastCreditChange,
       includeCutCard,
+      cutCardFound,
       updateCredits,
       deal,
       hit,
@@ -394,6 +397,7 @@ export function GameProvider({ children }) {
       runningCount,
       lastCreditChange,
       includeCutCard,
+      cutCardFound,
       updateCredits,
       deal,
       hit,

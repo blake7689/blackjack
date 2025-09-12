@@ -70,7 +70,7 @@ export default function Settings() {
       refundLocal();
     }
     setDeckCount(v);
-    resetGame(v);
+    resetGame(v, form.includeCutCard ?? includeCutCard, GamePhases.PRE_DEAL);
     setHasBeenReset(true);
   };
 
@@ -81,7 +81,7 @@ export default function Settings() {
       refundLocal();
     }
     setIncludeCutCard(c);
-    resetGame(); 
+    resetGame(form.deckCount ? Number(form.deckCount) : deckCount, c, GamePhases.PRE_DEAL); 
     setHasBeenReset(true);
   };
 

@@ -6,7 +6,6 @@ export default function StatsPanel({ player }) {
   const { lastCreditChange } = useGame();
   const { lastLocalCreditChange } = usePlayer();
 
-  // Prefer to show the most recent nonzero change (local or server)
   const creditChange = lastCreditChange !== 0 ? lastCreditChange : lastLocalCreditChange;
 
   return (

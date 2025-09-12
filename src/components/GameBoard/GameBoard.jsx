@@ -24,7 +24,7 @@ export default function GameBoard() {
       setGamePhase(GamePhases.END_ROUND);
       setTimeout(() => {
         endRound();
-      }, 2000);
+      }, 1500);
     }
   };
 
