@@ -22,9 +22,7 @@ export default function GameBoard() {
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
       setGamePhase(GamePhases.END_ROUND);
-      setTimeout(() => {
-        endRound();
-      }, 1500);
+      setTimeout(() => { endRound(); }, 1500);
     }
   };
 

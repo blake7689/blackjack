@@ -21,10 +21,7 @@ export function PlayerProvider({ children }) {
       const p = await loginPlayer({ usernameOrEmail, password });
       setPlayer(p);
       return p;
-    } finally {
-      setLoading(false);
-      console.log("");
-    }
+    } finally { setLoading(false); }
   }, []);
 
   const logout = useCallback(() => setPlayer(null), []);
@@ -39,37 +36,30 @@ export function PlayerProvider({ children }) {
       const p = await addPlayerApi(payload);
       setPlayer(p);
       return p;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   const updatePlayer = useCallback(
     async (updates) => {
-      if (!player) throw new Error("Not logged in");
+      if (!player) { throw new Error("Not logged in"); }
       setLoading(true);
       try {
         const updated = await updatePlayerApi(player, updates);
         setPlayer(updated);
         return true;
-      } finally {
-        setLoading(false);
-        console.log("");
-      }
+      } finally { setLoading(false); }
     },
     [player]
   );
 
   const deletePlayer = useCallback(async () => {
-    if (!player) throw new Error("Not logged in");
+    if (!player) { throw new Error("Not logged in"); }
     setLoading(true);
     try {
       await deletePlayerApi(player);
       setPlayer(null);
       return true;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [player]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -78,11 +68,9 @@ export function PlayerProvider({ children }) {
 
   const updateCreditsOnServer = useCallback(
     async (newCredits) => {
-      if (!player) return;
+      if (!player) { return; }
       const updated = await updateCreditsApi(player, newCredits);
-      if (updated.credits !== player.credits)
-        setPlayer(updated);
-      console.log("");
+      if (updated.credits !== player.credits) { setPlayer(updated); }
     },
     [player]
   );

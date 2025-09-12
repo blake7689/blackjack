@@ -18,9 +18,7 @@ export default function Header() {
         const ok = window.confirm("Leave game and return Home? Any bet in the circle will be lost.");
         if (!ok) return;
       }
-      else if (gamePhase === GamePhases.PRE_DEAL) {
-        refundLocal();
-      }
+      else if (gamePhase === GamePhases.PRE_DEAL) { refundLocal(); }
       resetGame();
       nav("/");
     } 

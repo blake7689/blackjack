@@ -1,5 +1,4 @@
 import Card from "../Card/Card.jsx";
-import { GamePhases } from "../../utils/constants/gamePhases";
 import "./DealerArea.css";
 
 export default function DealerArea({ dealer }) {

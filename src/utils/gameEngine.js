@@ -149,8 +149,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe) {
 {/* DEALER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
 
 // Dealer logic //
-export function dealerPlay(dealer, shoe, playerAllBust = false, tempCount, setCutCardFound, resetShoe) {
-  console.log("Dealer Play Call Count: ", tempCount);
+export function dealerPlay(dealer, shoe, playerAllBust = false, setCutCardFound, resetShoe) {
   let dealerCards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
 
   if (!playerAllBust && dealer.status === HandStatus.PLAYING) {

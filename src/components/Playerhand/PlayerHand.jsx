@@ -1,11 +1,9 @@
 import Card from "../Card/Card";
 import PlayerOptions from "../PlayerOptions/PlayerOptions";
 import { usePlayer } from "../../hooks/usePlayer";
-//import { getHandTotals, isHandBlackjack } from "../../utils/blackjackLogic";
 import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
-//import { HandResult } from "../../utils/constants/handResult";
 
 export default function PlayerHand({
   hand,
