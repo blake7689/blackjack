@@ -1,10 +1,13 @@
 import { GamePhases } from "../../utils/constants/gamePhases";
 
-export default function CenterMessage({ gamePhase, message }) {
+export default function CenterMessage({ gamePhase }) {
   let defaultMsg = "";
   switch (gamePhase) {
     case GamePhases.PRE_DEAL:
       defaultMsg = "Place your bets!";
+      break;
+      case GamePhases.DEALING:
+      defaultMsg = "Dealing cards...";
       break;
     case GamePhases.PLAYER_TURN:
       defaultMsg = "Your turn!";
@@ -22,11 +25,11 @@ export default function CenterMessage({ gamePhase, message }) {
       defaultMsg = "Click anywhere to continue...";
       break;
     default:
-      defaultMsg = "";
+      defaultMsg = "Loading...";
   }
   return (
     <div>
-      {(message ?? defaultMsg).split("\n").map((line, i) => (
+      {defaultMsg.split("\n").map((line, i) => (
         <div key={i}>{line}</div>
       ))}
     </div>

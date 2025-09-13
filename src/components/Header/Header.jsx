@@ -7,30 +7,21 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 
 export default function Header() {
   const { player, logout } = usePlayer();
-  const { gamePhase, setGameStarted, setGameEnded, clearBetAndRefund, clearBetAndNoRefund } = useGame();
+  const { gamePhase, refundLocal, resetGame } = useGame();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
 
   const goHome = async () => {
     if (loc.pathname !== "/") {
-      if (gamePhase !== GamePhases.PRE_DEAL && gamePhase !== GamePhases.POST_ROUND && gamePhase !== GamePhases.RESULTS && gamePhase !== GamePhases.END_ROUND) {
+      if (gamePhase !== GamePhases.NONE && gamePhase !== GamePhases.PRE_DEAL) {
         const ok = window.confirm("Leave game and return Home? Any bet in the circle will be lost.");
         if (!ok) return;
-        clearBetAndNoRefund();
       }
-      else {
-        clearBetAndRefund();
-      }
-      setGameStarted(false);
-      setGameEnded(true);
+      else if (gamePhase === GamePhases.PRE_DEAL) { refundLocal(); }
+      resetGame();
       nav("/");
-    } else {
-      if (gamePhase !== GamePhases.PRE_DEAL) {
-        const ok = window.confirm("Reset and return to pre-deal? Any bet in the circle will be lost.");
-        if (!ok) return;
-      }
-    }
+    } 
   };
 
   const goSettings = () => nav("/settings");
@@ -39,8 +30,7 @@ export default function Header() {
     const ok = window.confirm("Log out?");
     if (!ok) return;
     logout();
-    setGameStarted(false);
-    setGameEnded(true);
+    resetGame();
     nav("/");
   };
 

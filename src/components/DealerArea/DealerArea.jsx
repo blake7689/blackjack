@@ -10,6 +10,12 @@ export default function DealerArea({ dealer }) {
         {hasCards && (
           <div className="hand-total">
             Total: {dealer.dealerDisplayTotal}
+            {dealer.isBusted && (
+              <span className={`busted`}> Busted</span>
+            )}
+            {dealer.isBlackjack && (
+              <span className={`blackjack`}> Blackjack</span>
+            )}
           </div>
         )}
         <div className="dealer cards">

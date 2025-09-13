@@ -11,6 +11,7 @@ import {
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [lastLocalCreditChange, setLastLocalCreditChange] = useState(0);
 
   {/* LOGIN */} ///////////////////////////////////////////////////////////////////////////////////
 
@@ -20,9 +21,7 @@ export function PlayerProvider({ children }) {
       const p = await loginPlayer({ usernameOrEmail, password });
       setPlayer(p);
       return p;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   const logout = useCallback(() => setPlayer(null), []);
@@ -37,36 +36,30 @@ export function PlayerProvider({ children }) {
       const p = await addPlayerApi(payload);
       setPlayer(p);
       return p;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   const updatePlayer = useCallback(
     async (updates) => {
-      if (!player) throw new Error("Not logged in");
+      if (!player) { throw new Error("Not logged in"); }
       setLoading(true);
       try {
         const updated = await updatePlayerApi(player, updates);
         setPlayer(updated);
         return true;
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
     },
     [player]
   );
 
   const deletePlayer = useCallback(async () => {
-    if (!player) throw new Error("Not logged in");
+    if (!player) { throw new Error("Not logged in"); }
     setLoading(true);
     try {
       await deletePlayerApi(player);
       setPlayer(null);
       return true;
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, [player]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -75,16 +68,18 @@ export function PlayerProvider({ children }) {
 
   const updateCreditsOnServer = useCallback(
     async (newCredits) => {
-      if (!player) return;
+      if (!player) { return; }
       const updated = await updateCreditsApi(player, newCredits);
-      setPlayer(updated);
+      if (updated.credits !== player.credits) { setPlayer(updated); }
     },
     [player]
   );
 
-  const addCreditsLocalOnly = useCallback(
-    (delta) => setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev)),
-    []
+  const addCreditsLocalOnly = useCallback((delta) => {
+      setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev));
+      setLastLocalCreditChange(delta);
+      setTimeout(() => setLastLocalCreditChange(0), 2000);
+    },[]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -92,7 +87,7 @@ export function PlayerProvider({ children }) {
   const value = useMemo(
     () => ({
       player,
-      setPlayer,
+      lastLocalCreditChange,
       loading,
       login,
       addPlayer,
@@ -102,7 +97,7 @@ export function PlayerProvider({ children }) {
       logout,
       addCreditsLocalOnly,
     }),
-    [player, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
+    [player, lastLocalCreditChange, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

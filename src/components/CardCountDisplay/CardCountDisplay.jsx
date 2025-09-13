@@ -1,4 +1,3 @@
-import React from "react";
 import "./CardCountDisplay.css";
 
 const CardCountDisplay = ({ hands, dealer, runningCount, deckCount }) => {

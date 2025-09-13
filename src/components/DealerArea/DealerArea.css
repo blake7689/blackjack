@@ -41,3 +41,11 @@
   flex-wrap: nowrap;
   overflow-x: auto;
 }
+
+.busted {
+  color: red !important;
+}
+
+.blackjack {
+  color: gold !important;
+}

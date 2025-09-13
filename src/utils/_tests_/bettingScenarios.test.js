@@ -1,16 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-function makeCard(rank, value) {
-  return { rank, suit: 'spades', value, type: 'card' };
-}
-
-const Ace = () => makeCard('A', 11);
-const Ten = () => makeCard('10', 10);
-const Nine = () => makeCard('9', 9);
-const Eight = () => makeCard('8', 8);
-const King = () => makeCard('K', 10);
-const Two = () => makeCard('2', 2);
-
 function mockPlayer(credits) {
   return { credits };
 }

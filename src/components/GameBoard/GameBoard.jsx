@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+// import { useEffect } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -13,49 +13,23 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    deckCount, runningCount , dealerTurn, settle, calculateResults, endRound, setBetCircle,
+    deckCount, runningCount, endRound, setBetCircle,
     hit, stay, double, split, deal } = useGame();
 
   const { player } = usePlayer();
-
-  // Handle dealer turn //
-  useEffect(() => {
-    if (gamePhase === GamePhases.DEALER_TURN) {
-      dealerTurn();
-    }
-  }, [gamePhase, dealerTurn]);
-
-  // Handle settling hands //
-  useEffect(() => {
-    if (gamePhase === GamePhases.SETTLING_HANDS) {
-      settle();
-    }
-  }, [gamePhase, settle]);
-
-  // Handle results phase //
-  useEffect(() => {
-    if (gamePhase === GamePhases.RESULTS) {
-      calculateResults();
-    }
-  }, [gamePhase, calculateResults]);
-
-  // Handle end round //
-  useEffect(() => {
-    if (gamePhase === GamePhases.END_ROUND) {
-      endRound();
-    }
-  }, [gamePhase, endRound]);
 
   // Only allow click to continue //
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
       setGamePhase(GamePhases.END_ROUND);
+      setTimeout(() => { endRound(); }, 1500);
     }
   };
 
   // Update player credits and deal //
   const handleDeal = () => {
     if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; // redundant?
+    setGamePhase(GamePhases.DEALING);
     deal(betCircle);
   };
 
@@ -84,14 +58,7 @@ export default function GameBoard() {
           )}
         </div>
         <div className="center-msg-row">
-          {gamePhase === GamePhases.RESULTS ? (
-            <CenterMessage
-              gamePhase={gamePhase}
-              message={"Click anywhere to continue..."}
-            />
-          ) : (
-            <CenterMessage gamePhase={gamePhase} />
-          )}
+          <CenterMessage gamePhase={gamePhase} />
         </div>
         <div className="player-container">
           <div className="bottom player-hands">
