@@ -22,6 +22,7 @@ function shuffle(arr) {
   }
   return a;
 }
+export { shuffle }; //for testing
 
 // Build a single deck //
 function buildDeck(deckIndex = 0) {
@@ -43,6 +44,7 @@ function buildDeck(deckIndex = 0) {
   }
   return deck;
 }
+export { buildDeck }; //for testing
 
 // Build a shoe with n decks and a cut card //
 export function createShoe(deckCount = 2, includeCutCard = true) {

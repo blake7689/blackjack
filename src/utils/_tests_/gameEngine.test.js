@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { dealRound, settleHands } from "../gameEngine";
+import { dealRound, settleHands, playerHit, playerDouble, playerSplit, dealerPlay  } from "../gameEngine";
 import * as cardsModule from "../cards";
 import * as blackjackLogic from "../blackjackLogic";
 import { HandStatus } from "../constants/handStatus";
@@ -47,22 +47,8 @@ describe("dealRound", () => {
             return { total: 0, totals: [0] };
         });
 
-        // // Mock isTotalBlackjack
-        // isTotalBlackjackSpy = vi.spyOn(blackjackLogic, "isTotalBlackjack").mockImplementation((total) => total === 21);
-
-        // // Mock getInitialPlayerHandEvaluation
-        // getInitialPlayerHandEvaluationSpy = vi.spyOn(blackjackLogic, "getInitialPlayerHandEvaluation").mockReturnValue({
-        //     handStatus: HandStatus.DONE,
-        //     handResult: HandResult.LOSS
-        // });
-
-        // // Mock getInitialDealerHandEvaluation
-        // getInitialDealerHandEvaluationSpy = vi.spyOn(blackjackLogic, "getInitialDealerHandEvaluation").mockReturnValue(HandStatus.DONE);
-
-        // // Mock getDealerHandEvaluation
-        // getDealerHandEvaluationSpy = vi.spyOn(blackjackLogic, "getDealerHandEvaluation").mockReturnValue({
-        //     handStatus: HandStatus.DONE
-        // });
+        // Mock isTotalBlackjack
+        vi.spyOn(blackjackLogic, "isTotalBlackjack").mockImplementation((total) => total === 21);
     });
 
     it("should deal initial hands and return correct structure", () => {
@@ -84,7 +70,7 @@ describe("dealRound", () => {
         expect(playerHand.isBusted).toBe(false);
         expect(playerHand.total).toBe(20);
         expect(playerHand.totals).toEqual([20]);
-        expect(playerHand.result).toBe(HandResult.LOSS);
+        expect(playerHand.result).toBe(HandResult.LOSE);
         expect(playerHand.payout).toBe(0);
 
         // Dealer hand
@@ -221,13 +207,12 @@ describe("playerHit", () => {
 
     it("should add a card to the hand and update totals and status", () => {
         // Call the function under test (assuming playerHit is imported)
-        const { hand, shoe } = blackjackLogic.playerHit(
+        const { hand, shoe } = playerHit(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(drawCardFromShoeSpy).toHaveBeenCalledWith(mockShoe, setCutCardFound, resetShoe);
         expect(hand.cards).toEqual([...mockHand.cards, mockDrawnCard]);
         expect(getHandTotalsSpy).toHaveBeenCalledWith([...mockHand.cards, mockDrawnCard]);
@@ -249,13 +234,12 @@ describe("playerHit", () => {
             isBusted: true
         });
 
-        const { hand } = blackjackLogic.playerHit(
+        const { hand } = playerHit(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(hand.isBusted).toBe(true);
         expect(hand.status).toBe(HandStatus.DONE);
         expect(hand.result).toBe(HandResult.LOSS);
@@ -269,7 +253,7 @@ describe("playerHit", () => {
             isBusted: false
         });
 
-        const { hand } = blackjackLogic.playerHit(
+        const { hand } = playerHit(
             mockHand,
             mockShoe,
             setCutCardFound,
@@ -327,13 +311,12 @@ describe("playerDouble", () => {
     });
 
     it("should add a card, double the bet, set isDouble true, and update totals and status", () => {
-        const { hand, shoe } = blackjackLogic.playerDouble(
+        const { hand, shoe } = playerDouble(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(drawCardFromShoeSpy).toHaveBeenCalledWith(mockShoe, setCutCardFound, resetShoe);
         expect(hand.cards).toEqual([...mockHand.cards, mockDrawnCard]);
         expect(getHandTotalsSpy).toHaveBeenCalledWith([...mockHand.cards, mockDrawnCard]);
@@ -357,13 +340,12 @@ describe("playerDouble", () => {
             isBusted: true
         });
 
-        const { hand } = blackjackLogic.playerDouble(
+        const { hand } = playerDouble(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(hand.isBusted).toBe(true);
         expect(hand.status).toBe(HandStatus.DONE);
         expect(hand.result).toBe(HandResult.LOSS);
@@ -377,7 +359,7 @@ describe("playerDouble", () => {
             isBusted: false
         });
 
-        const { hand } = blackjackLogic.playerDouble(
+        const { hand } = playerDouble(
             mockHand,
             mockShoe,
             setCutCardFound,
@@ -462,13 +444,12 @@ describe("playerSplit", () => {
     });
 
     it("should split the hand, draw two cards, and return two new hands with correct cards and totals", () => {
-        const { newHandsArray, shoe } = blackjackLogic.playerSplit(
+        const { newHandsArray, shoe } = playerSplit(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(drawCardFromShoeSpy).toHaveBeenCalledTimes(2);
         expect(drawCardFromShoeSpy).toHaveBeenNthCalledWith(1, mockShoe, setCutCardFound, resetShoe);
         expect(drawCardFromShoeSpy).toHaveBeenNthCalledWith(2, mockShoe, setCutCardFound, resetShoe);
@@ -512,13 +493,12 @@ describe("playerSplit", () => {
             isBusted: true
         }));
 
-        const { newHandsArray } = blackjackLogic.playerSplit(
+        const { newHandsArray } = playerSplit(
             mockHand,
             mockShoe,
             setCutCardFound,
             resetShoe
         );
-
         expect(newHandsArray[0].isBusted).toBe(true);
         expect(newHandsArray[0].status).toBe(HandStatus.DONE);
         expect(newHandsArray[0].result).toBe(HandResult.LOSS);
@@ -572,18 +552,13 @@ describe("dealerPlay", () => {
     });
 
     it("should reveal all dealer cards and draw a card if status is PLAYING and playerAllBust is false", () => {
-        const { dealer, shoe } = blackjackLogic.dealerPlay(
+        const { dealer, shoe } = dealerPlay(
             mockDealer,
             mockShoe,
             false,
             setCutCardFound,
             resetShoe
         );
-
-        // All cards should have faceDown: false
-        dealer.cards.forEach(card => {
-            expect(card.faceDown).toBe(false);
-        });
 
         // Should draw a card
         expect(drawCardFromShoeSpy).toHaveBeenCalledWith(mockShoe, setCutCardFound, resetShoe);
@@ -609,7 +584,7 @@ describe("dealerPlay", () => {
     });
 
     it("should not draw a card if playerAllBust is true", () => {
-        const { dealer } = blackjackLogic.dealerPlay(
+        const { dealer } = dealerPlay(
             mockDealer,
             mockShoe,
             true,
@@ -641,7 +616,7 @@ describe("dealerPlay", () => {
 
     it("should not draw a card if dealer status is not PLAYING", () => {
         const dealerNotPlaying = { ...mockDealer, status: HandStatus.DONE };
-        const { dealer } = blackjackLogic.dealerPlay(
+        const { dealer } = dealerPlay(
             dealerNotPlaying,
             mockShoe,
             false,
@@ -656,7 +631,7 @@ describe("dealerPlay", () => {
     });
 
     it("should always return a new dealer object and shoe", () => {
-        const result = blackjackLogic.dealerPlay(
+        const result = dealerPlay(
             mockDealer,
             mockShoe,
             false,

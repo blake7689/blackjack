@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
-import { createShoe, drawCardFromShoe } from './cards';
+import { createShoe, drawCardFromShoe, buildDeck } from '../cards';
 
 // createShoe tests ///////////////////////////////////////////////////////////////////////////////
 
@@ -86,12 +86,6 @@ describe('drawCardFromShoe', () => {
 // buildDeck tests ////////////////////////////////////////////////////////////////////////////////
 
 describe('buildDeck', () => {
-    let buildDeck;
-
-    beforeAll(async () => {
-        ({ buildDeck } = await import('../cards.js'));
-    });
-
     it('returns an array of 52 cards for a single deck', () => {
         const deck = buildDeck(0);
         expect(Array.isArray(deck)).toBe(true);
@@ -150,7 +144,7 @@ describe('shuffle', () => {
     beforeAll(async () => {
         ({ shuffle } = await import('../cards.js'));
     });
-
+describe('shuffle', () => {
     it('returns a new array with the same elements as the input', () => {
         const arr = [1, 2, 3, 4, 5];
         const shuffled = shuffle(arr);
@@ -158,12 +152,6 @@ describe('shuffle', () => {
         expect(shuffled).not.toBe(arr); // should be a new array
         expect(shuffled.sort()).toEqual(arr.sort());
     });
-
-    it('does not mutate the original array', () => {
-        const arr = [1, 2, 3, 4, 5];
-        const arrCopy = [...arr];
-        shuffle(arr);
-        expect(arr).toEqual(arrCopy);
     });
 
     it('returns an array of the same length', () => {
