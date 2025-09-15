@@ -1,4 +1,12 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5166";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5166/api";
+
+async function handleResponse(res, url, method) {
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(txt || `${method} ${url} failed`);
+  }
+  return res.status === 204 ? null : res.json().catch(() => null);
+}
 
 export async function apiPut(url, body) {
   const res = await fetch(`${API_BASE}${url}`, {
@@ -6,11 +14,7 @@ export async function apiPut(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || `PUT ${url} failed`);
-  }
-  return res.status === 204 ? null : res.json().catch(() => null);
+  return handleResponse(res, url, "PUT");
 }
 
 export async function apiPost(url, body) {
@@ -19,11 +23,7 @@ export async function apiPost(url, body) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || `POST ${url} failed`);
-  }
-  return res.json();
+  return handleResponse(res, url, "POST");
 }
 
 export async function apiDelete(url, body) {
@@ -32,9 +32,5 @@ export async function apiDelete(url, body) {
     headers: { "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(txt || `DELETE ${url} failed`);
-  }
-  return null;
+  return handleResponse(res, url, "DELETE");
 }
