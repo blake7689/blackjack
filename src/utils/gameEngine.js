@@ -4,7 +4,7 @@ import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 
-{/* GAME ACTIONS */} //////////////////////////////////////////////////////////////////////////////
+{/* GAME ACTIONS */} ///////////////////////////////////////////////////////////////////////////////
 
 // Deal Initial Hands //
 export function dealRound(shoe, bet, setCutCardFound, resetShoe) {
