@@ -107,3 +107,5 @@ Unit tests for game logic and edge cases are located in `src/utils/_tests_/`. Ru
 ```bash
 npm test
 ```
+
+Deplyed with Azure at: https://brave-beach-0e74c4603.1.azurestaticapps.net/
