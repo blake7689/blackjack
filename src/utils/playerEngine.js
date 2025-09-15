@@ -15,7 +15,7 @@ export function normalizePlayer(apiPlayer) {
 }
 
 export async function loginPlayer({ usernameOrEmail, password }) {
-  const data = await apiPost(`/api/Player/login`, { usernameOrEmail, password });
+  const data = await apiPost(`/Player/login`, { usernameOrEmail, password });
   return normalizePlayer(data);
 }
 
@@ -30,7 +30,7 @@ export async function addPlayerApi(payload) {
     credits: payload.credits ?? 0,
     inActive: null,
   };
-  const data = await apiPost(`/api/Player`, body);
+  const data = await apiPost(`/Player`, body);
   return normalizePlayer(data);
 }
 
@@ -45,7 +45,7 @@ export async function updatePlayerApi(player, updates) {
     credits: updates.credits ?? player.credits,
     inActive: updates.inActive ?? player.inActive ?? null,
   };
-  await apiPut(`/api/Player/${player.playerId}`, body);
+  await apiPut(`/Player/${player.playerId}`, body);
   return normalizePlayer(body);
 }
 
@@ -60,11 +60,11 @@ export async function updateCreditsApi(player, newCredits) {
     credits: Number(newCredits),
     inActive: player.inActive ?? null,
   };
-  await apiPut(`/api/Player/${player.playerId}`, body);
+  await apiPut(`/Player/${player.playerId}`, body);
   return { ...player, credits: Number(newCredits) };
 }
 
 export async function deletePlayerApi(player) {
   const body = { playerId: player.playerId, inActive: new Date().toISOString() };
-  await apiDelete(`/api/Player/${player.playerId}`, body);
+  await apiDelete(`/Player/${player.playerId}`, body);
 }
