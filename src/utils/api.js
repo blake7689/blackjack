@@ -1,5 +1,5 @@
 // const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5166/api";
-const API_BASE = "https://brave-beach-0e74c4603.1.azurestaticapps.net";
+const API_BASE = "https://blackjack-api-blake.azurewebsites.net/api";
 
 async function handleResponse(res, url, method) {
   if (!res.ok) {
