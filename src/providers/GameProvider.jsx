@@ -271,8 +271,11 @@ export function GameProvider({ children }) {
       setShoe(newShoe);
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
       updateCredits(player.credits - hand.bet); 
+      if (newHands[handIdx].status === HandStatus.DONE) {
+        nextHandOrDealer(handIdx);
+      }
     },
-    [hands, shoe, player, updateCredits, resetShoe]
+    [hands, shoe, player, updateCredits, resetShoe, nextHandOrDealer]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
