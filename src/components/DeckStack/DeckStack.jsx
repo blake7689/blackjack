@@ -5,7 +5,7 @@ export default function DeckStack({ shoe }) {
   return (
     <div>
       { <div> Decks: {deckCount}</div> }
-      <div>Cards Left in Shoe: {shoe?.length ? shoe.length - 1 : 0}</div>
+      <div>Shoe: {shoe?.length ? shoe.length - 1 : 0}</div>
       { cutCardFound && <div>Cut Card Found. Resetting Shoe After Round.</div> }
     </div>
   );

@@ -1,13 +1,13 @@
 .card-count-display {
   display: flex;
-  flex-wrap: wrap;  
+  flex-wrap: nowrap;  
   align-items: center;
   justify-content: center;
-  font-size: clamp(1rem, 2.5vw, 1.3rem); 
+  font-size: clamp(0.5rem, 2vw, 1rem); 
   font-weight: bold;
   background: rgba(0,0,0,0.08);
   border-radius: 8px;
-  padding: 0.3em 1em;
+  padding: 0.3em 0.3em;
   color: #2d2d2d;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   min-width: 0; 
