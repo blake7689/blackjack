@@ -14,9 +14,8 @@ html, body, #root, .app-root {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-    /* Prevent content from being hidden behind fixed footers on mobile */
+    
     padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-    /* 80px should match or slightly exceed your BettingFooter height */
 }
 
 a { 
