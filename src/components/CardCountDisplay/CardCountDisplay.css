@@ -21,7 +21,7 @@
 .count-value, .true-count-value {
   color: #1976d2;
   font-size: 1em;
-  min-width: 1.25em;
+  min-width: 1.5em;
   text-align: center;
   word-break: break-all;
 }
