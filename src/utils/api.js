@@ -1,5 +1,3 @@
-// const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5166/api";
-// const API_BASE = "https://blackjack-api-blake.azurewebsites.net/api";\
 const API_BASE = import.meta.env.VITE_API_URL;
 
 async function handleResponse(res, url, method) {
