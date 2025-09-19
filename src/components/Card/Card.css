@@ -1,14 +1,24 @@
 .card-img {
-	width: 86px;
-	height: 120px;
-	border-radius: 8px;
-	object-fit: contain;
-	user-select: none;
-	display: block;
+  width: clamp(48px, 12vw, 86px);
+  aspect-ratio: 86 / 120;
+  border-radius: 2px;
+  object-fit: contain;
+  user-select: none;
+  display: block;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
 }
 .card-img.small {
-	width: 64px;
-	height: 90px;
+  width: clamp(40px, 9.5vw, 64px);
+  aspect-ratio: 86 / 120;
 }
-.card-skel { width: 86px; height: 120px; background: #072113; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.06); }
-.card-skel.small { width: 64px; height: 90px; }
+.card-skel {
+  width: clamp(48px, 12vw, 86px);
+  aspect-ratio: 86 / 120;
+  background: #072113;
+  border-radius: 8px;
+  border: 1px dashed rgba(255,255,255,0.06);
+}
+.card-skel.small {
+  width: clamp(40px, 9.5vw, 64px);
+  aspect-ratio: 86 / 120;
+}
