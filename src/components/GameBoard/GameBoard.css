@@ -20,11 +20,24 @@
   overflow: hidden;
 }
 
-.board > .footer-spacer {
+/* .board > .footer-spacer {
   grid-area: footer;
   height: var(--bet-footer-space);
   min-height: var(--bet-footer-space);
   pointer-events: none;
+  box-sizing: border-box;
+} */
+
+.betting-spacer {
+  grid-area: footer;
+  height: var(--bet-footer-space);
+  min-height: var(--bet-footer-space);
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none; 
   box-sizing: border-box;
 }
 
@@ -96,6 +109,7 @@
   overflow: hidden;
 }
 
+/* dealer and player container: horizontal scroll only */
 .dealer-container,
 .player-container {
   display: flex;
@@ -114,6 +128,9 @@
   padding-bottom: 6px;
 }
 
+
+
+/* dealer internals: horizontal scroll only */
 .dealer-container .cards,
 .dealer-container .deck-info {
   display: flex;
@@ -154,6 +171,7 @@
   min-height: 0;
 }
 
+/* Player hands area (inside player-container) */
 .bottom.player-hands {
   box-sizing: border-box;
   min-height: 0;
@@ -166,13 +184,12 @@
   -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
   padding-bottom: 6px;
+  scroll-padding-right: 12px;
   padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
 }
+.bottom.player-hands.overflow { justify-content: flex-start; }
 
-.bottom.player-hands.overflow {
-  justify-content: flex-start;
-}
-
+/* Individual hand */
 .player-hand {
   display: flex;
   flex-direction: column;
@@ -188,6 +205,7 @@
   overflow: hidden;
 }
 
+/* cards row inside a hand: horizontal scroll only and vertically centered */
 .player-hand .cards {
   display: flex;
   gap: 8px;
@@ -199,6 +217,7 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* card sizing scale with available main height */
 .player-hand .card-img,
 .card-img {
   width: clamp(40px, 10vw, 86px);
@@ -206,19 +225,6 @@
   max-height: calc(var(--avail-main-height) * 0.28);
   object-fit: contain;
   display: block;
-}
-
-/* --- BETTING SPACER --- */
-
-.betting-spacer {
-  grid-area: footer;
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none; /* allow fixed footer to receive clicks */
-  box-sizing: border-box;
 }
 
 /* --- LAYOUT ADJUSTMENTS FOR LANDSCAPE OR WIDE SCREENS --- */
@@ -274,7 +280,7 @@
 }
 
 @media (max-height: 520px) {
-  .player-hand { min-width: 90px; padding: 6px; gap: 6px; }
+  .player-hand { min-width: 80px; padding: 6px; gap: 6px; }
   .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
   .top-bar { font-size: 14px; padding: 6px 10px; }
 }
@@ -286,13 +292,34 @@
   .bottom.player-hands { max-height: calc(var(--avail-main-height) * 0.45); }
 } */
 
-@media (max-height: 520px) {
+/* @media (max-height: 520px) {
   .player-hand { min-width: 90px; padding: 6px; gap: 6px; }
   .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
   .top-bar { font-size: 14px; padding: 6px 10px; }
-}
+} */
 
 /* --- WIDTH-BASED TUNING --- */
+
+@media (max-width: 680px) {
+  .player-hand { min-width: 100px; max-width: 260px; }
+  .player-hand .card-img { width: clamp(24px, 12vw, 52px); }
+  .main-area { padding: 8px 10px; gap: 8px; }
+  .center-msg-row { font-size: 14px; padding: 6px; }
+}
+
+@media (max-width: 450px) {
+  .player-hand { min-width: 84px; padding: 6px; }
+  .center-msg-row { font-size: 13px; padding: 4px; }
+}
+
+/* safety: ensure no element in main area can force page vertical scroll */
+.board, .main-area, .betting-spacer, .top-bar, .dealer-container, .player-container, .bottom.player-hands, .center-msg-row {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* 
 @media (max-width: 680px) {
   .player-hand { min-width: 100px; max-width: 260px; }
   .player-hand .card-img { width: clamp(36px, 14vw, 64px); }
@@ -305,9 +332,8 @@
   .center-msg-row { font-size: 13px; padding: 4px; }
 }
 
-/* safety: ensure no element in main area can force page vertical scroll */
 .board, .main-area, .board > .betting-spacer, .top-bar, .dealer-container, .player-container, .bottom.player-hands, .center-msg-row {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-}
+} */

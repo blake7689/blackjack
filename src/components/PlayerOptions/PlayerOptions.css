@@ -28,7 +28,7 @@
 }
 
 /* small screen */
-@media (max-width: 480px) {
+@media (max-width: 680px) {
   .options-wrap { gap:8px; padding:8px; }
   .opt { padding:6px 8px; font-size: 0.85rem; min-width: 48px; }
 }

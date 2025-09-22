@@ -1,4 +1,5 @@
 import "./BettingFooter.css";
+import React, { useEffect, useRef } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { usePlayer } from "../../hooks/usePlayer";
 
@@ -21,6 +22,33 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
   const chipValues = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000];
   const credits = player ? Number(player.credits) : 0;
 
+  const footerRef = useRef(null);
+
+  useEffect(() => {
+    const el = footerRef.current;
+    if (!el) return;
+
+    const setVar = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      // sync the CSS variable so GameBoard's spacer row always matches
+      document.documentElement.style.setProperty("--bet-footer-space", `${h}px`);
+    };
+
+    // initial and observe
+    setVar();
+    let ro;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(setVar);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", setVar);
+
+    return () => {
+      try { ro && ro.disconnect(); } catch { /* ignore errors */ }
+      window.removeEventListener("resize", setVar);
+    };
+  }, []);
+
   const addChip = (val) => {
     if (!player || credits < val) return;
     setBetCircle(betCircle + val);
@@ -33,7 +61,7 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
   };
 
   return (
-    <div className="bet-footer">
+    <div className="bet-footer" ref={footerRef}>
       <div className="betting-footer">
         {/* always render footer-left, but hide the chips when not PRE_DEAL */}
         <div className="footer-left">
