@@ -18,7 +18,7 @@ function Chip({ value, onClick, disabled }) {
 
 export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePhase }) {
   const { player, addCreditsLocalOnly } = usePlayer();
-  const chipValues = [1, 5, 10, 25, 50, 100];
+  const chipValues = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000];
   const credits = player ? Number(player.credits) : 0;
 
   const addChip = (val) => {
@@ -35,15 +35,23 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
   return (
     <div className="bet-footer">
       <div className="betting-footer">
+        {/* always render footer-left, but hide the chips when not PRE_DEAL */}
         <div className="footer-left">
-          <div className="chips">
-            {chipValues
-              .filter((v) => v <= credits)
-              .map((v) => (
-                <Chip key={v} value={v} onClick={() => addChip(v)}
-                  disabled={gamePhase !== GamePhases.PRE_DEAL}
-                />
-              ))}
+          <div
+            className={`chips ${gamePhase !== GamePhases.PRE_DEAL ? "hidden" : ""}`}
+            aria-hidden={gamePhase !== GamePhases.PRE_DEAL}
+          >
+            {gamePhase === GamePhases.PRE_DEAL &&
+              chipValues
+                .filter((v) => v <= credits)
+                .map((v) => (
+                  <Chip
+                    key={v}
+                    value={v}
+                    onClick={() => addChip(v)}
+                    disabled={gamePhase !== GamePhases.PRE_DEAL}
+                  />
+                ))}
           </div>
         </div>
         <div className="footer-middle">

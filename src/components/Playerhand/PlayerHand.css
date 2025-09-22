@@ -47,9 +47,10 @@
   display: flex;
   gap: 8px;
   align-items: center;
-  justify-content: center;
+  justify-content: center; 
   flex-wrap: nowrap;
   overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 4px;
 }

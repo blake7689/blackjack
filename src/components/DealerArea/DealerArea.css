@@ -20,6 +20,15 @@
   box-sizing: border-box;
 }
 
+.dealer-area .cards {
+  display:flex;
+  gap:12px;
+  align-items:center;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 .dealer-hand {
   background: rgba(0,0,0,0.24);
   padding: 8px;

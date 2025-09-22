@@ -1,8 +1,15 @@
+:root {
+  --top-bar-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  --bet-footer-space: calc(88px + env(safe-area-inset-bottom, 0px));
+  --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space));
+}
+
 .board {
+  /* full viewport; reserve explicit footer row to align with fixed footer */
   height: 100vh;
   width: 100vw;
   display: grid;
-  grid-template-rows: auto 1fr auto; /* header, main, footer */
+  grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space); /* header, main, footer spacer */
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
@@ -13,13 +20,22 @@
   overflow: hidden;
 }
 
+.board > .footer-spacer {
+  grid-area: footer;
+  height: var(--bet-footer-space);
+  min-height: var(--bet-footer-space);
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
 /* --- TOP AREA --- */
+
 .top-bar {
   grid-area: header;
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
-  min-height: 60px;
+  align-items: center;
+  min-height: var(--top-bar-height);
   position: relative;
   flex-wrap: wrap;
   padding: 8px 12px;
@@ -57,44 +73,58 @@
 }
 
 /* --- MIDDLE AREA --- */
+
 .main-area {
   grid-area: main;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  gap: 12px;
   align-items: stretch;
-  gap: 16px;
-  overflow-y: hidden;
-  padding: 12px 12px 20px 12px; 
+  justify-content: stretch;
+  overflow: hidden;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  padding: 10px 12px; 
+}
+
+.dealer-container,
+.center-msg-row,
+.player-container {
+  box-sizing: border-box;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dealer-container,
 .player-container {
-  /* flex: 0 1 auto; */
-  flex: 1 1 0;
   display: flex;
+  flex-direction: row;
+  align-items: center;  
   justify-content: center;
-  align-items: center;
+  gap: 12px;
   width: 100%;
+  flex: 1 1 0; 
   min-height: 0;
-  box-sizing: border-box;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  padding-inline: calc(6px + env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-right, 0px));
+  padding-bottom: 6px;
 }
 
-.center-msg-row {
-  flex: 0 0 auto;
+.dealer-container .cards,
+.dealer-container .deck-info {
   display: flex;
-  justify-content: center;
+  gap: 12px;
   align-items: center;
-  width: 100%;
-  min-height: 0;
-  padding-bottom: calc(50px + env(safe-area-inset-bottom, 0px));
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
-.top-center.dealer {
+/* .top-center.dealer {
   display: flex;
   justify-content: center;
   gap: 8px;
@@ -111,26 +141,32 @@
   text-align: center;
   max-width: 90vw;
   word-break: break-word;
+} */
+
+.center-msg-row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 8px;
+  text-align: center;
+  gap: 8px;
+  min-height: 0;
 }
 
-/* --- PLAYER HANDS --- */
 .bottom.player-hands {
-  display: flex;
-  justify-content: center;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: nowrap;
-  width: 100%;
-  min-height: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 8px 6px;
   box-sizing: border-box;
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-
-  padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
-  scroll-padding-inline: calc(12px + env(safe-area-inset-left, 0px));
+  min-height: 0;
+  display: flex;
+  align-items: center;       /* center player-hands vertically inside player-container */
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  overflow-x: auto;          /* only horizontal scroll allowed when many hands */
+  -webkit-overflow-scrolling: touch;
   scroll-snap-type: x proximity;
+  padding-bottom: 6px;
+  padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
 }
 
 .bottom.player-hands.overflow {
@@ -138,69 +174,140 @@
 }
 
 .player-hand {
-  flex: 0 0 auto; 
-  min-width: 140px;
-  max-width: calc(100vw - 48px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;   /* center content vertically inside each hand */
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;            /* do not grow vertically; horizontal layout handled by parent */
+  min-width: 120px;
+  max-width: 360px;
+  max-height: 100%;
   box-sizing: border-box;
   scroll-snap-align: start;
-  margin-left: 0;
+  overflow: hidden;
 }
 
 .player-hand .cards {
   display: flex;
-  flex-direction: row;  
   gap: 8px;
+  align-items: center;       /* vertical center of card row */
   justify-content: center;
-  align-items: center;
-  flex-wrap: nowrap;   
-  overflow-x: auto;  
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
-/* --- BETTING FOOTER --- */
-.bottom-bar {
+.player-hand .card-img,
+.card-img {
+  width: clamp(40px, 10vw, 86px);
+  aspect-ratio: 86 / 120;
+  max-height: calc(var(--avail-main-height) * 0.28);
+  object-fit: contain;
+  display: block;
+}
+
+/* --- BETTING SPACER --- */
+
+.betting-spacer {
   grid-area: footer;
   width: 100%;
-  background: transparent; 
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 80px; 
-  padding: 8px 12px;
-  box-sizing: border-box;
-  overflow: visible;
-  z-index: 100;
-}
-
-.betting-footer {
-  width: 100%;
-  max-width: 100%;
-  display: flex;
-  justify-content: space-evenly;
-  align-items: center;
   gap: 12px;
-  flex-wrap: nowrap;
+  pointer-events: none; /* allow fixed footer to receive clicks */
+  box-sizing: border-box;
 }
 
-/* small screen adjustments */
-@media (max-width: 900px) {
-  .top-center.card-count { max-width: 60%; }
-  /* .bottom.player-hands { gap: 10px; padding: 6px; } */
-}
+/* --- LAYOUT ADJUSTMENTS FOR LANDSCAPE OR WIDE SCREENS --- */
 
-@media (max-width: 680px) {
-  .top-bar, .main-area, .bottom-bar {
-    min-height: 28px;
-    font-size: 12px;
+@media (orientation: landscape), (min-aspect-ratio: 1/1) {
+  .main-area {
+    flex-direction: row;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 12px;
   }
-  .center-msg { font-size: 12px; padding: 6px 6px; }
+
+  .dealer-container,
+  .bottom.player-hands {
+    flex: 1 1 0; 
+    min-width: 160px;
+    align-items: center;
+    justify-content: center;
+    overflow-y: hidden;
+  }
+
+  .center-msg-row {
+    flex: 0 0 clamp(100px, 12vw, 220px);
+    min-width: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+  }
+
+  /* ensure internal scrolling remains horizontal */
+  .dealer-container .cards,
+  .bottom.player-hands,
+  .player-hand .cards {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+}
+
+/* --- SMALL SCREEN ADJUSTMENTS --- */
+
+/* --- HEIGHT-BASED TUNING --- */
+
+/* @media (max-width: 900px) {
+  .top-center.card-count { max-width: 60%; }
+  .bottom.player-hands { gap: 10px; padding: 6px; } 
+} */
+
+@media (max-height: 760px) {
+  :root { --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space)); }
   .player-hand { min-width: 110px; }
-  .bottom.player-hands { gap: 8px; padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
+}
+
+@media (max-height: 520px) {
+  .player-hand { min-width: 90px; padding: 6px; gap: 6px; }
+  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
+  .top-bar { font-size: 14px; padding: 6px 10px; }
+}
+
+/* @media (max-height: 700px) {
+  :root { --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space)); }
+  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); width: clamp(36px, 9vw, 72px); }
+  .dealer-container { max-height: calc(var(--avail-main-height) * 0.45); }
+  .bottom.player-hands { max-height: calc(var(--avail-main-height) * 0.45); }
+} */
+
+@media (max-height: 520px) {
+  .player-hand { min-width: 90px; padding: 6px; gap: 6px; }
+  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
+  .top-bar { font-size: 14px; padding: 6px 10px; }
+}
+
+/* --- WIDTH-BASED TUNING --- */
+@media (max-width: 680px) {
+  .player-hand { min-width: 100px; max-width: 260px; }
+  .player-hand .card-img { width: clamp(36px, 14vw, 64px); }
+  .main-area { padding: 8px 10px; gap: 8px; }
+  .center-msg-row { font-size: 14px; padding: 6px; }
 }
 
 @media (max-width: 450px) {
-  .player-hand { min-width: 90px; padding: 6px; }
-  .center-msg { font-size: 11px; padding: 6px; }
-  .top-center.card-count { left: 50%; transform: translateX(-50%); top: 8px; }
+  .player-hand { min-width: 84px; padding: 6px; }
+  .center-msg-row { font-size: 13px; padding: 4px; }
 }
 
+/* safety: ensure no element in main area can force page vertical scroll */
+.board, .main-area, .board > .betting-spacer, .top-bar, .dealer-container, .player-container, .bottom.player-hands, .center-msg-row {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}

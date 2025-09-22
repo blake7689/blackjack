@@ -133,8 +133,8 @@ export default function GameBoard() {
       </div>
 
       {/* Bottom Bar */}
-      <div className="bottom-bar" style={{ gridArea: "footer" }}>
-        <div className="betting-footer">
+      {/* <div className="bottom-bar" style={{ gridArea: "footer" }}> */}
+        <div className="betting-spacer">
           <BettingFooter
             betCircle={betCircle}
             setBetCircle={setBetCircle}
@@ -143,6 +143,6 @@ export default function GameBoard() {
           />
         </div>
       </div>
-    </div>
+    // </div>
   );
 }
