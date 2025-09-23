@@ -15,14 +15,21 @@ export default function PlayerHand({
   gamePhase
 }) {
   const { player } = usePlayer();
-  const showDouble = active && gamePhase === GamePhases.PLAYER_TURN && hand.cards.length === 2; 
+
+  const canAffordDouble = player && player.credits >= hand.bet;
+  const canAffordSplit = player && player.credits >= hand.bet;
+
+  const showDouble = active && 
+    gamePhase === GamePhases.PLAYER_TURN && 
+    hand.cards.length === 2 && 
+    canAffordDouble; 
+
   const showSplit =
     active &&
     gamePhase === GamePhases.PLAYER_TURN &&
     hand.cards.length === 2 && 
-    hand.cards[0].value === hand.cards[1].value;
-  const canAffordDouble = player && player.credits >= hand.bet;
-  const canAffordSplit = player && player.credits >= hand.bet;
+    hand.cards[0].value === hand.cards[1].value && 
+    canAffordSplit;
 
   return (
     <div className={`player-hand${active ? " active" : ""}`}>

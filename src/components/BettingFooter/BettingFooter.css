@@ -15,7 +15,7 @@
   z-index: 1200;
   width: 100%;
   height: auto;
-  max-height: calc(var(--bet-footer-space) + env(safe-area-inset-bottom, 0px));
+  max-height: --bet-footer-space;
   background: linear-gradient(180deg, rgba(6,22,14,0.98), rgba(2,6,3,0.98));
   display: flex;
   align-items: center;
@@ -128,15 +128,10 @@
   cursor:pointer; flex: 0 0 auto; }
 .deal:disabled, .clear:disabled { opacity:0.5; cursor:not-allowed; }
 
-/* @media (max-width: 900px) {
-  :root { --bet-footer-space: calc(92px + env(safe-area-inset-bottom, 0px)); } 
-} */
-
 /* WIDTH breakpoints */
 
 @media (max-width: 680px) {
   :root {
-    /* --bet-footer-space: calc(76px + env(safe-area-inset-bottom,0px)); */
     --bet-footer-pad-vert: 10px;
     --chip-size: 44px;
     --bet-circle-size: 60px;
@@ -152,7 +147,7 @@
     --chip-size: 32px;
     --bet-circle-size: 48px;
     --footer-gap: 8px;
-    --chip-font: 14px;
+    --chip-font: 18px;
   }
   .bet-footer { padding: var(--bet-footer-pad-vert) 8px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom, 0px)); }
   .clear, .deal { padding: 8px 10px; font-size: 13px; }
@@ -166,7 +161,7 @@
     --chip-size: 44px;
     --bet-circle-size: 56px;
     --footer-gap: 10px;
-    --chip-font: 18px;
+    --chip-font: 20px;
   }
 }
 
@@ -176,45 +171,7 @@
     --chip-size: 32px;
     --bet-circle-size: 48px;
     --footer-gap: 8px;
-    --chip-font: 14px;
+    --chip-font: 18px;
   }
   .clear, .deal { padding: 8px 10px; font-size: 13px; }
 }
-
-/* @media (max-height: 600px) {
-  :root {
-    --bet-footer-space: 76px;
-    --bet-footer-pad-vert: 5px;
-    --chip-size: 56px;
-    --bet-circle-size: 60px;
-    --footer-gap: 10px;
-    --chip-font: 24px;
-  }
-  .bet-footer { padding: var(--bet-footer-pad-vert) 10px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px)); }
-} */
-
-/* @media (max-width: 460px) {
-  :root {
-    --bet-footer-space: 64px;
-    --bet-footer-pad-vert: 5px;
-    --chip-size: 48px;
-    --bet-circle-size: 48px;
-    --footer-gap: 8px;
-    --chip-font: 20px;
-  }
-  .bet-footer { padding: var(--bet-footer-pad-vert) 8px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px)); }
-  .clear, .deal { padding: 8px 10px; font-size: 13px; }
-}
-
-@media (max-height: 460px) {
-  :root {
-    --bet-footer-space: 64px;
-    --bet-footer-pad-vert: 5px;
-    --chip-size: 48px;
-    --bet-circle-size: 48px;
-    --footer-gap: 8px;
-    --chip-font: 20px;
-  }
-  .bet-footer { padding: var(--bet-footer-pad-vert) 8px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px)); }
-  .clear, .deal { padding: 8px 10px; font-size: 13px; }
-} */

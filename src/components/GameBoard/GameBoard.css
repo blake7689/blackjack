@@ -5,11 +5,10 @@
 }
 
 .board {
-  /* full viewport; reserve explicit footer row to align with fixed footer */
   height: 100vh;
   width: 100vw;
   display: grid;
-  grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space); /* header, main, footer spacer */
+  grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space);
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
@@ -20,14 +19,6 @@
   overflow: hidden;
 }
 
-/* .board > .footer-spacer {
-  grid-area: footer;
-  height: var(--bet-footer-space);
-  min-height: var(--bet-footer-space);
-  pointer-events: none;
-  box-sizing: border-box;
-} */
-
 .betting-spacer {
   grid-area: footer;
   height: var(--bet-footer-space);
@@ -37,7 +28,7 @@
   justify-content: center;
   align-items: center;
   gap: 12px;
-  pointer-events: none; 
+  pointer-events: none;
   box-sizing: border-box;
 }
 
@@ -51,7 +42,6 @@
   min-height: var(--top-bar-height);
   position: relative;
   flex-wrap: wrap;
-  padding: 8px 12px;
   box-sizing: border-box;
 }
 
@@ -74,7 +64,7 @@
   align-items: center;
   justify-content: center;
   max-width: 70%;
-  pointer-events: none; 
+  pointer-events: none;
 }
 
 .top-right.deck-stack {
@@ -92,132 +82,131 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
-  padding: 10px 12px; 
 }
 
-.dealer-container,
+/* .dealer-container,
 .center-msg-row,
 .player-container {
   box-sizing: border-box;
   min-height: 0;
   overflow: hidden;
-}
+} */
 
-/* dealer and player container: horizontal scroll only */
-.dealer-container,
-.player-container {
+/* dealer: horizontal scroll */
+.dealer-container {
   display: flex;
   flex-direction: row;
-  align-items: center;  
+  align-items: center;
   justify-content: center;
   gap: 12px;
   width: 100%;
-  flex: 1 1 0; 
+  flex: 1 1 0;
   min-height: 0;
-  overflow-x: auto;
+  min-width: 0;
+  overflow-x: auto;  
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
-  padding-inline: calc(6px + env(safe-area-inset-left, 0px)) calc(6px + env(safe-area-inset-right, 0px));
-  padding-bottom: 6px;
+  /* scroll-snap-type: x mandatory;
+  overscroll-behavior-inline: contain; */
+  scrollbar-gutter: stable both-edges;
+}
+.dealer-container > * {
+  flex: 0 0 auto;
+  width: max-content;
 }
 
+.player-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden; 
+}
 
-
-/* dealer internals: horizontal scroll only */
 .dealer-container .cards,
 .dealer-container .deck-info {
   display: flex;
   gap: 12px;
   align-items: center;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* .top-center.dealer {
-  display: flex;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
   flex-wrap: nowrap;
-  min-height: 48px;
+  /* width: max-content;  */
+  overflow: visible; 
 }
-
-.center-msg {
-  background: rgba(0,0,0,0.45);
-  padding: 12px 18px;
-  border-radius: 10px;
-  min-width: 120px;
-  text-align: center;
-  max-width: 90vw;
-  word-break: break-word;
-} */
 
 .center-msg-row {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 8px;
   text-align: center;
   gap: 8px;
   min-height: 0;
 }
 
-/* Player hands area (inside player-container) */
+/* Player hands row (scrollable) */
 .bottom.player-hands {
   box-sizing: border-box;
   min-height: 0;
   display: flex;
-  align-items: center;       /* center player-hands vertically inside player-container */
+  align-items: center;
   justify-content: center;
   gap: 12px;
+  min-width: 0;
   width: 100%;
-  overflow-x: auto;          /* only horizontal scroll allowed when many hands */
+  overflow-x: auto; 
+  overflow-y: hidden; 
   -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x proximity;
-  padding-bottom: 6px;
-  scroll-padding-right: 12px;
-  padding-inline: calc(12px + env(safe-area-inset-left, 0px)) calc(12px + env(safe-area-inset-right, 0px));
+  /* -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 50%;
+  touch-action: pan-x;
+  scrollbar-gutter: stable both-edges; */
 }
-.bottom.player-hands.overflow { justify-content: flex-start; }
+.bottom.player-hands > * {
+  flex: 0 0 auto;
+}
 
 /* Individual hand */
 .player-hand {
   display: flex;
   flex-direction: column;
-  justify-content: center;   /* center content vertically inside each hand */
-  align-items: center;
+  align-items: center;  
   gap: 8px;
-  flex: 0 0 auto;            /* do not grow vertically; horizontal layout handled by parent */
+  flex: 0 0 auto;
   min-width: 120px;
-  max-width: 360px;
-  max-height: 100%;
+  max-width: none;      
+  max-height: none;
   box-sizing: border-box;
-  scroll-snap-align: start;
-  overflow: hidden;
+  position: relative;
+  /* scroll-snap-align: center;
+  scroll-snap-stop: always; */
 }
 
-/* cards row inside a hand: horizontal scroll only and vertically centered */
+/* Cards inside a hand: scroll confined within the hand */
 .player-hand .cards {
   display: flex;
   gap: 8px;
-  align-items: center;       /* vertical center of card row */
-  justify-content: center;
+  align-items: center;
+  /* justify-content: center; */
   flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
+  width: max-content;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
-/* card sizing scale with available main height */
+/* Card sizing */
 .player-hand .card-img,
 .card-img {
   width: clamp(40px, 10vw, 86px);
@@ -233,17 +222,15 @@
   .main-area {
     flex-direction: row;
     align-items: stretch;
-    justify-content: space-between;
+    /* justify-content: space-between; */
     gap: 12px;
   }
 
   .dealer-container,
   .bottom.player-hands {
-    flex: 1 1 0; 
+    flex: 1 1 0;
     min-width: 160px;
     align-items: center;
-    justify-content: center;
-    overflow-y: hidden;
   }
 
   .center-msg-row {
@@ -252,26 +239,10 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 6px;
-  }
-
-  /* ensure internal scrolling remains horizontal */
-  .dealer-container .cards,
-  .bottom.player-hands,
-  .player-hand .cards {
-    overflow-x: auto;
-    overflow-y: hidden;
   }
 }
 
-/* --- SMALL SCREEN ADJUSTMENTS --- */
-
 /* --- HEIGHT-BASED TUNING --- */
-
-/* @media (max-width: 900px) {
-  .top-center.card-count { max-width: 60%; }
-  .bottom.player-hands { gap: 10px; padding: 6px; } 
-} */
 
 @media (max-height: 760px) {
   :root { --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space)); }
@@ -280,60 +251,33 @@
 }
 
 @media (max-height: 520px) {
-  .player-hand { min-width: 80px; padding: 6px; gap: 6px; }
+  .player-hand { min-width: 80px; gap: 6px; }
   .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
-  .top-bar { font-size: 14px; padding: 6px 10px; }
+  .top-bar { font-size: 14px; }
 }
-
-/* @media (max-height: 700px) {
-  :root { --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space)); }
-  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); width: clamp(36px, 9vw, 72px); }
-  .dealer-container { max-height: calc(var(--avail-main-height) * 0.45); }
-  .bottom.player-hands { max-height: calc(var(--avail-main-height) * 0.45); }
-} */
-
-/* @media (max-height: 520px) {
-  .player-hand { min-width: 90px; padding: 6px; gap: 6px; }
-  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
-  .top-bar { font-size: 14px; padding: 6px 10px; }
-} */
 
 /* --- WIDTH-BASED TUNING --- */
 
 @media (max-width: 680px) {
-  .player-hand { min-width: 100px; max-width: 260px; }
+  .player-hand { min-width: 100px; }
   .player-hand .card-img { width: clamp(24px, 12vw, 52px); }
-  .main-area { padding: 8px 10px; gap: 8px; }
-  .center-msg-row { font-size: 14px; padding: 6px; }
+  .main-area { gap: 8px; }
+  .center-msg-row { font-size: 14px; }
 }
 
 @media (max-width: 450px) {
-  .player-hand { min-width: 84px; padding: 6px; }
-  .center-msg-row { font-size: 13px; padding: 4px; }
+  .player-hand { min-width: 84px; }
+  .center-msg-row { font-size: 13px; }
 }
 
 /* safety: ensure no element in main area can force page vertical scroll */
-.board, .main-area, .betting-spacer, .top-bar, .dealer-container, .player-container, .bottom.player-hands, .center-msg-row {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
-/* 
-@media (max-width: 680px) {
-  .player-hand { min-width: 100px; max-width: 260px; }
-  .player-hand .card-img { width: clamp(36px, 14vw, 64px); }
-  .main-area { padding: 8px 10px; gap: 8px; }
-  .center-msg-row { font-size: 14px; padding: 6px; }
-}
-
-@media (max-width: 450px) {
-  .player-hand { min-width: 84px; padding: 6px; }
-  .center-msg-row { font-size: 13px; padding: 4px; }
-}
-
-.board, .main-area, .board > .betting-spacer, .top-bar, .dealer-container, .player-container, .bottom.player-hands, .center-msg-row {
+/* .board, .main-area, .betting-spacer, .top-bar, .dealer-container, .player-container,
+.bottom.player-hands, 
+.center-msg-row {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 } */
+
+/* Final override to ensure hands can always grow */
+.player-hand { max-width: none; }
