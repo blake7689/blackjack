@@ -19,21 +19,7 @@
   overflow: hidden;
 }
 
-.betting-spacer {
-  grid-area: footer;
-  height: var(--bet-footer-space);
-  min-height: var(--bet-footer-space);
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  box-sizing: border-box;
-}
-
-/* --- TOP AREA --- */
-
+/* TOP BAR */
 .top-bar {
   grid-area: header;
   display: flex;
@@ -44,7 +30,6 @@
   flex-wrap: wrap;
   box-sizing: border-box;
 }
-
 .top-left.stats {
   position: absolute;
   top: 12px;
@@ -53,7 +38,6 @@
   z-index: 2;
   min-width: 0;
 }
-
 .top-center.card-count {
   position: absolute;
   left: 50%;
@@ -66,7 +50,6 @@
   max-width: 70%;
   pointer-events: none;
 }
-
 .top-right.deck-stack {
   position: absolute;
   top: 12px;
@@ -75,8 +58,7 @@
   z-index: 2;
 }
 
-/* --- MIDDLE AREA --- */
-
+/* MAIN AREA LAYOUT */
 .main-area {
   grid-area: main;
   display: flex;
@@ -90,59 +72,6 @@
   box-sizing: border-box;
 }
 
-/* .dealer-container,
-.center-msg-row,
-.player-container {
-  box-sizing: border-box;
-  min-height: 0;
-  overflow: hidden;
-} */
-
-/* dealer: horizontal scroll */
-.dealer-container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 0;
-  min-height: 0;
-  min-width: 0;
-  overflow-x: auto;  
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  /* scroll-snap-type: x mandatory;
-  overscroll-behavior-inline: contain; */
-  scrollbar-gutter: stable both-edges;
-}
-.dealer-container > * {
-  flex: 0 0 auto;
-  width: max-content;
-}
-
-.player-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  width: 100%;
-  flex: 1 1 0;
-  min-height: 0;
-  overflow: hidden; 
-}
-
-.dealer-container .cards,
-.dealer-container .deck-info {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: nowrap;
-  /* width: max-content;  */
-  overflow: visible; 
-}
-
 .center-msg-row {
   flex: 0 0 auto;
   display: flex;
@@ -153,86 +82,103 @@
   min-height: 0;
 }
 
-/* Player hands row (scrollable) */
-.bottom.player-hands {
-  box-sizing: border-box;
-  min-height: 0;
+/* DEALER: centered wrapper + inner scroll rail */
+.dealer-container {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: center; 
   gap: 12px;
-  min-width: 0;
   width: 100%;
-  overflow-x: auto; 
-  overflow-y: hidden; 
-  -webkit-overflow-scrolling: touch;
-  /* -webkit-overflow-scrolling: touch;
-  scroll-snap-type: x mandatory;
-  scroll-padding-inline: 50%;
-  touch-action: pan-x;
-  scrollbar-gutter: stable both-edges; */
-}
-.bottom.player-hands > * {
-  flex: 0 0 auto;
-}
-
-/* Individual hand */
-.player-hand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;  
-  gap: 8px;
-  flex: 0 0 auto;
-  min-width: 120px;
-  max-width: none;      
-  max-height: none;
-  box-sizing: border-box;
-  position: relative;
-  /* scroll-snap-align: center;
-  scroll-snap-stop: always; */
-}
-
-/* Cards inside a hand: scroll confined within the hand */
-.player-hand .cards {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  /* justify-content: center; */
-  flex-wrap: nowrap;
-  width: max-content;
-  max-width: none;
+  flex: 1 1 0;
+  min-height: 0;
   min-width: 0;
+  overflow: hidden; 
   box-sizing: border-box;
-  overflow: visible;
 }
-
-/* Card sizing */
-.player-hand .card-img,
-.card-img {
-  width: clamp(40px, 10vw, 86px);
-  aspect-ratio: 86 / 120;
-  max-height: calc(var(--avail-main-height) * 0.28);
-  object-fit: contain;
+.dealer-scroll {
   display: block;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  text-align: center; 
+  box-sizing: border-box;
+}
+.dealer-scroll > * {
+  flex: 0 0 auto;   
 }
 
-/* --- LAYOUT ADJUSTMENTS FOR LANDSCAPE OR WIDE SCREENS --- */
+.dealer-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.dealer-track > * { flex: 0 0 auto; }
 
+/* PLAYER: centered wrapper + inner scroll rail */
+.player-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;   
+  gap: 12px;
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;   
+  box-sizing: border-box;
+}
+.hands-scroll {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  text-align: center; 
+  box-sizing: border-box;
+}
+.hands-scroll > * {
+  flex: 0 0 auto;   
+}
+
+.hands-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+.hands-track > * { flex: 0 0 auto; }
+
+/* BOTTOM BAR */
+.betting-spacer {
+  grid-area: footer;
+  height: var(--bet-footer-space);
+  min-height: var(--bet-footer-space);
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* LANDSCAPE/WIDE: put dealer and player on sides with center message fixed */
 @media (orientation: landscape), (min-aspect-ratio: 1/1) {
   .main-area {
     flex-direction: row;
     align-items: stretch;
-    /* justify-content: space-between; */
     gap: 12px;
   }
-
   .dealer-container,
-  .bottom.player-hands {
+  .player-container {
     flex: 1 1 0;
-    min-width: 160px;
+    min-width: 0;
     align-items: center;
   }
-
   .center-msg-row {
     flex: 0 0 clamp(100px, 12vw, 220px);
     min-width: 100px;

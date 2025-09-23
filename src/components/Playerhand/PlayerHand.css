@@ -27,6 +27,23 @@
   box-sizing: border-box;
 }
 
+.player-hand .cards,
+.player.cards {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: max-content;     /* size to content so cards don’t wrap */
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.player-hand .card-wrap {
+  flex: 0 0 auto;         /* keep each card from shrinking */
+}
+
 .player-hand.active {
   box-shadow: 0 6px 18px rgba(0,0,0,0.35);
   border-color: rgba(255,255,255,0.12);
