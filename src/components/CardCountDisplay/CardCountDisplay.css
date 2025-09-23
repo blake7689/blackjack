@@ -8,7 +8,6 @@
   background: rgba(0,0,0,0.08);
   border-radius: 8px;
   padding: 0.25em 0.6em;
-  /* color: #2d2d2d; */
   color: #e6f0ea;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   min-width: 0; 
@@ -18,13 +17,11 @@
 
 .count-label, .true-count-label {
   margin-right: 0.25em;
-  /* color: #555; */
   color: #bbb;
   font-size: inherit;
 }
 
 .count-value, .true-count-value {
-  /* color: #1976d2; */
   color: #58a6ff;
   font-size: 1em;
   min-width: 1.4em;
@@ -33,7 +30,7 @@
 }
 
 /* ensure the count won't overlap by allowing wrap under tight conditions */
-@media (max-width: 420px) {
+@media (max-width: 550px) {
   .card-count-display { font-size: 0.8rem; gap: 6px; padding: 4px 8px; }
   .count-label, .true-count-label { font-size: 0.9em; }
 }

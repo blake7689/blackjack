@@ -192,27 +192,27 @@
 
 @media (max-height: 760px) {
   :root { --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space)); }
-  .player-hand { min-width: 110px; }
-  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
+  .player-hand, .dealer-hand { min-width: 110px; }
+  .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
 }
 
 @media (max-height: 520px) {
-  .player-hand { min-width: 80px; gap: 6px; }
-  .player-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
+  .player-hand, .dealer-hand { min-width: 80px; gap: 6px; }
+  .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
   .top-bar { font-size: 14px; }
 }
 
 /* --- WIDTH-BASED TUNING --- */
 
 @media (max-width: 680px) {
-  .player-hand { min-width: 100px; }
-  .player-hand .card-img { width: clamp(24px, 12vw, 52px); }
+  .player-hand, .dealer-hand { min-width: 100px; }
+  .player-hand .card-img, .dealer-hand .card-img { width: clamp(24px, 12vw, 52px); }
   .main-area { gap: 8px; }
   .center-msg-row { font-size: 14px; }
 }
 
 @media (max-width: 450px) {
-  .player-hand { min-width: 84px; }
+  .player-hand, .dealer-hand { min-width: 84px; }
   .center-msg-row { font-size: 13px; }
 }
 
@@ -226,4 +226,4 @@
 } */
 
 /* Final override to ensure hands can always grow */
-.player-hand { max-width: none; }
+.player-hand, .dealer-hand { max-width: none; }

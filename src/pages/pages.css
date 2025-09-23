@@ -1,0 +1,21 @@
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  vertical-align: -3px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.page-bg {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
+  color: #fff;
+}
