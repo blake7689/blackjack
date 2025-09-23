@@ -1,3 +1,12 @@
+:root {
+  --bet-footer-space: calc(88px + env(safe-area-inset-bottom,0px));
+  --bet-footer-pad-vert: 12px; 
+  --chip-size: 64px;
+  --bet-circle-size: 72px;
+  --footer-gap: 12px;
+  --chip-font: 28px;
+}
+
 .bet-footer {
   position: fixed;
   left: 0;
@@ -5,16 +14,18 @@
   bottom: 0;
   z-index: 1200;
   width: 100%;
-  min-height: 64px; 
+  height: auto;
+  max-height: --bet-footer-space;
   background: linear-gradient(180deg, rgba(6,22,14,0.98), rgba(2,6,3,0.98));
   display: flex;
-  align-items: stretch;
+  align-items: center;
   justify-content: center;
-  padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
-  gap: 12px;
+  flex-wrap: nowrap;
+  padding: var(--bet-footer-pad-vert) 14px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px));
+  gap: var(--footer-gap);
   box-sizing: border-box;
   pointer-events: auto;
-  backdrop-filter: none; 
+  overflow: hidden;
 }
 
 /* inner wrapper used by GameBoard */
@@ -24,8 +35,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--footer-gap);
   box-sizing: border-box;
+  overflow: hidden;
+  flex-wrap: nowrap;
 }
 
 .footer-left {
@@ -34,13 +47,35 @@
   align-items: center;
   justify-content: flex-start;
   min-width: 0;
+  overflow: hidden;
 }
 
 .chips {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap; 
   align-items: center;
+  overflow-x: auto;  
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch; 
+  padding-bottom: 4px; 
+  scroll-snap-type: x proximity;  
+  flex: 1 1 auto;      
+  min-width: 0;
+}
+
+.chips.hidden {
+  display: none !important;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.chips::-webkit-scrollbar {
+  height: 6px;
+}
+.chips::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.08);
+  border-radius: 6px;
 }
 
 .footer-middle {
@@ -60,25 +95,27 @@
 }
 
 .chip {
-  width:64px;
-  height:64px;
+  width: var(--chip-size);
+  height: var(--chip-size);
   border-radius:50%;
   border:none;
   background:transparent;
   padding:0;
   cursor:pointer;
   flex: 0 0 auto;
+  scroll-snap-align: start;
 }
 
 .chip svg { width:100%; height:100%; }
 .chip circle:first-child { fill:#e2ad03; }
 .chip circle:last-child { fill:#f6d44d; }
-.chip text { fill:#ffffff; }
+.chip text { fill:#ffffff; font-size: var(--chip-font); }
 .chip:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .bet-info { display:flex; align-items:center; gap:10px; min-width:0; }
 .bet-circle {
-  width:76px; height:76px; border-radius:50%; background:#0b2b1a; border:3px solid #ffd54d; 
+  width: var(--bet-circle-size); height: var(--bet-circle-size); 
+  border-radius:50%; background:#0b2b1a; border:3px solid #ffd54d; 
   display:grid; place-items:center; position:relative; cursor: default; flex: 0 0 auto;
 }
 .bet-total { font-weight:800; color: #fff; }
@@ -91,17 +128,50 @@
   cursor:pointer; flex: 0 0 auto; }
 .deal:disabled, .clear:disabled { opacity:0.5; cursor:not-allowed; }
 
+/* WIDTH breakpoints */
+
 @media (max-width: 680px) {
-  .bet-footer { padding: 10px 10px calc(10px + env(safe-area-inset-bottom, 0px)); }
-  .chip { width:40px; height:40px; }
-  .bet-circle { width:60px; height:60px; }
-  .betting-footer { gap: 8px; }
+  :root {
+    --bet-footer-pad-vert: 10px;
+    --chip-size: 44px;
+    --bet-circle-size: 60px;
+    --footer-gap: 10px;
+    --chip-font: 20px;
+  }
+  .bet-footer { padding: var(--bet-footer-pad-vert) 10px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px)); }
 }
 
 @media (max-width: 460px) {
-  .bet-footer { padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)); min-height: 56px; }
-  .chips { gap: 6px; }
-  .chip { width:28px; height:28px; }
-  .bet-circle { width:48px; height:48px; border-width:2px; }
+  :root {
+    --bet-footer-pad-vert: 8px;
+    --chip-size: 32px;
+    --bet-circle-size: 48px;
+    --footer-gap: 8px;
+    --chip-font: 18px;
+  }
+  .bet-footer { padding: var(--bet-footer-pad-vert) 8px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom, 0px)); }
+  .clear, .deal { padding: 8px 10px; font-size: 13px; }
+}
+
+/* HEIGHT breakpoints */
+
+@media (max-height: 600px) {
+  :root {
+    --bet-footer-pad-vert: 8px;
+    --chip-size: 44px;
+    --bet-circle-size: 56px;
+    --footer-gap: 10px;
+    --chip-font: 20px;
+  }
+}
+
+@media (max-height: 460px) {
+  :root {
+    --bet-footer-pad-vert: 6px;
+    --chip-size: 32px;
+    --bet-circle-size: 48px;
+    --footer-gap: 8px;
+    --chip-font: 18px;
+  }
   .clear, .deal { padding: 8px 10px; font-size: 13px; }
 }

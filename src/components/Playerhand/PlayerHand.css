@@ -24,43 +24,27 @@
   border-radius: 12px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.04);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 8px;
   box-sizing: border-box;
-  min-width: 140px;
-  max-width: 320px;
+}
 
-  /* new rules */
-  flex-shrink: 0;
-  max-height: none;
-  scroll-snap-align: start;
+.player-hand .cards,
+.player.cards {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: max-content;     /* size to content so cards don’t wrap */
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.player-hand .card-wrap {
+  flex: 0 0 auto;         /* keep each card from shrinking */
 }
 
 .player-hand.active {
   box-shadow: 0 6px 18px rgba(0,0,0,0.35);
   border-color: rgba(255,255,255,0.12);
-}
-
-.player-hand .cards {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 4px;
-}
-
-.player-hand .card-img { 
-  max-width: 86px;
-}
-
-/* responsive tweaks for very small screens */
-@media (max-width: 480px) {
-  .player-hand { min-width: 100px; padding: 6px; gap:6px; flex-shrink: 0;  }
-  .player-hand .cards { gap: 6px; }
-  .hand-total { font-size: 12px; padding: 3px 6px; }
 }

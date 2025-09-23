@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -18,49 +18,6 @@ export default function GameBoard() {
 
   const { player } = usePlayer();
 
-  const playerHandsRef = useRef(null);
-  const [handsOverflow, setHandsOverflow] = useState(false);
-
-  useEffect(() => {
-    const el = playerHandsRef.current;
-    if (!el) return;
-
-    const checkOverflow = () => {
-      const hasMultipleHands = Array.isArray(hands) && hands.length > 1;
-      // small tolerance for rounding differences
-      const overflow = el.scrollWidth > el.clientWidth + 1;
-      setHandsOverflow(Boolean(hasMultipleHands && overflow));
-    };
-
-    // initial check
-    checkOverflow();
-
-    let ro;
-    if (typeof ResizeObserver !== "undefined") {
-      ro = new ResizeObserver(checkOverflow);
-      try {
-        ro.observe(el);
-        ro.observe(document.body); // observe body in case fonts/images change layout
-      } catch {
-        // ignore if observe fails on body in some environments
-      }
-    } else {
-      window.addEventListener("resize", checkOverflow);
-    }
-
-    return () => {
-      if (ro) {
-        try {
-          ro.disconnect();
-        } catch {
-          // ignore errors
-        }
-      } else {
-        window.removeEventListener("resize", checkOverflow);
-      }
-    };
-  }, [hands]);
-
   // Only allow click to continue //
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
@@ -71,7 +28,7 @@ export default function GameBoard() {
 
   // Update player credits and deal //
   const handleDeal = () => {
-    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; // redundant?
+    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; 
     setGamePhase(GamePhases.DEALING);
     deal(betCircle);
   };
@@ -84,11 +41,11 @@ export default function GameBoard() {
           <StatsPanel player={player} />
         </div>
         <div className="top-center card-count">
-          <CardCountDisplay 
-            hands={hands} 
-            dealer={dealer} 
-            runningCount={runningCount} 
-            deckCount={deckCount} 
+          <CardCountDisplay
+            hands={hands}
+            dealer={dealer}
+            runningCount={runningCount}
+            deckCount={deckCount}
           />
         </div>
         <div className="top-right deck-stack">
@@ -99,49 +56,50 @@ export default function GameBoard() {
       {/* MAIN GAME AREA */}
       <div className="main-area" style={{ gridArea: "main" }}>
         <div className="dealer-container">
-          {gamePhase !== GamePhases.PRE_DEAL && dealer.cards && dealer.cards.length > 0 && (
-            <div className="top-center dealer">
-              <DealerArea dealer={dealer} />
+          <div className="dealer-scroll">
+            <div className="dealer-track">
+              {gamePhase !== GamePhases.PRE_DEAL &&
+                dealer.cards &&
+                dealer.cards.length > 0 && <DealerArea dealer={dealer} />}
             </div>
-          )}
+          </div>
         </div>
+
         <div className="center-msg-row">
           <CenterMessage gamePhase={gamePhase} />
         </div>
+
         <div className="player-container">
-          <div
-            ref={playerHandsRef}
-            className={`bottom player-hands${handsOverflow ? " overflow" : ""}`}
-          >
-            {Array.isArray(hands) && hands.length > 0
-              ? hands.map((hand, idx) => (
-                  <PlayerHand
-                    key={idx}
-                    hand={hand}
-                    active={selectedHandIndex === idx}
-                    onHit={() => hit(idx)}
-                    onStay={() => stay(idx)}
-                    onDouble={() => double(idx)}
-                    onSplit={() => split(idx)}
-                    gamePhase={gamePhase}
-                    disableActions={dealer && dealer.blackjack}
-                  />
-                ))
-              : null}
+          <div className="hands-scroll">
+            <div className="hands-track">
+              {Array.isArray(hands) && hands.length > 0
+                ? hands.map((hand, idx) => (
+                    <PlayerHand
+                      key={idx}
+                      hand={hand}
+                      active={selectedHandIndex === idx}
+                      onHit={() => hit(idx)}
+                      onStay={() => stay(idx)}
+                      onDouble={() => double(idx)}
+                      onSplit={() => split(idx)}
+                      gamePhase={gamePhase}
+                      disableActions={dealer && dealer.blackjack}
+                    />
+                  ))
+                : null}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom Bar */}
-      <div className="bottom-bar" style={{ gridArea: "footer" }}>
-        <div className="betting-footer">
-          <BettingFooter
-            betCircle={betCircle}
-            setBetCircle={setBetCircle}
-            onDeal={handleDeal}
-            gamePhase={gamePhase}
-          />
-        </div>
+      {/* BOTTOM BAR */}
+      <div className="betting-spacer" style={{ gridArea: "footer" }}>
+        <BettingFooter
+          betCircle={betCircle}
+          setBetCircle={setBetCircle}
+          onDeal={handleDeal}
+          gamePhase={gamePhase}
+        />
       </div>
     </div>
   );

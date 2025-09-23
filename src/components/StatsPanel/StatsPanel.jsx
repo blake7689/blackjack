@@ -10,9 +10,9 @@ export default function StatsPanel({ player }) {
 
   return (
     <div>
-      <div>Player: {player ? player.userName : "Guest"}</div>
+      <div>Credits: </div>
       <div>
-        Credits: ${player ? Number(player.credits).toLocaleString() : 0}
+        ${player ? Number(player.credits).toLocaleString() : 0}
         {creditChange !== 0 && (
           <span
             className={`credit-change ${creditChange > 0 ? "plus" : "minus"}`}
