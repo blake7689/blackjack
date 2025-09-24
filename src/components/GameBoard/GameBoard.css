@@ -1,11 +1,18 @@
 :root {
+  --vh100: 100vh;
+}
+@supports (height: 100dvh) {
+  :root { --vh100: 100dvh; }
+}
+
+:root {
   --top-bar-height: calc(56px + env(safe-area-inset-bottom, 0px));
   --bet-footer-space: calc(88px + env(safe-area-inset-bottom, 0px));
   --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space));
 }
 
 .board {
-  height: 100vh;
+  height: var(--vh100); 
   width: 100vw;
   display: grid;
   grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space);

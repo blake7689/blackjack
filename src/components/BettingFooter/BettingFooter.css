@@ -15,7 +15,7 @@
   z-index: 1200;
   width: 100%;
   height: auto;
-  max-height: --bet-footer-space;
+  max-height: var(--bet-footer-space);
   background: linear-gradient(180deg, rgba(6,22,14,0.98), rgba(2,6,3,0.98));
   display: flex;
   align-items: center;

@@ -23,7 +23,7 @@ export default function Login() {
     }, 4000);
     const tip2 = setTimeout(() => {
       setStatusMsg("Still waiting… the server might be paused. Please try again in a minute.");
-    }, 12000);
+    }, 15000);
     return [tip1, tip2];
   };
 
