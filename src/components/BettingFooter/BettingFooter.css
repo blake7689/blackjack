@@ -199,7 +199,6 @@
   :root {
     --bet-footer-pad-vert: 10px;
     --chip-size: 44px;
-    --bet-circle-size: 60px;
     --footer-gap: 10px;
     --chip-font: 20px;
   }
@@ -211,7 +210,6 @@
   :root {
     --bet-footer-pad-vert: 8px;
     --chip-size: 32px;
-    --bet-circle-size: 48px;
     --footer-gap: 8px;
     --chip-font: 18px;
   }
@@ -228,7 +226,6 @@
   :root {
     --bet-footer-pad-vert: 6px;
     --chip-size: 32px;
-    --bet-circle-size: 48px;
     --footer-gap: 8px;
     --chip-font: 18px;
   }
