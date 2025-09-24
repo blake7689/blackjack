@@ -1,4 +1,4 @@
-import React from "react";
+import { useEffect } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGame } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -12,6 +12,40 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const footerEl = () => document.querySelector(".bet-footer");
+
+    const setVH = () => {
+      const vh = window.visualViewport?.height || window.innerHeight;
+      root.style.setProperty("--vh100", `${vh}px`);
+    };
+    const setFooterSpace = () => {
+      const el = footerEl();
+      if (!el) return;
+      const h = el.offsetHeight || 0;
+      root.style.setProperty("--bet-footer-space", `${h}px`);
+    };
+
+    setVH();
+    setFooterSpace();
+
+    const ro = footerEl() ? new ResizeObserver(setFooterSpace) : null;
+    footerEl() && ro?.observe(footerEl());
+
+    const onVV = () => { setVH(); setFooterSpace(); };
+    window.visualViewport?.addEventListener("resize", onVV);
+    window.addEventListener("orientationchange", onVV);
+    window.addEventListener("resize", onVV);
+
+    return () => {
+      ro?.disconnect();
+      window.visualViewport?.removeEventListener("resize", onVV);
+      window.removeEventListener("orientationchange", onVV);
+      window.removeEventListener("resize", onVV);
+    };
+  }, []);
+
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
     deckCount, runningCount, endRound, setBetCircle,
     hit, stay, double, split, deal } = useGame();

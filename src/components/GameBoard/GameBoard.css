@@ -6,9 +6,9 @@
 }
 
 :root {
-  --top-bar-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  --top-bar-height: calc(56px + env(safe-area-inset-top, 0px));
   --bet-footer-space: calc(88px + env(safe-area-inset-bottom, 0px));
-  --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space));
+  --avail-main-height: calc(var(--vh100) - var(--top-bar-height) - var(--bet-footer-space));
 }
 
 .board {

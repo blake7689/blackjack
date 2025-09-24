@@ -48,6 +48,7 @@
   justify-content: flex-start;
   min-width: 0;
   overflow: hidden;
+  max-height: var(--bet-footer-space);
 }
 
 .chips {
@@ -84,6 +85,7 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
+  max-height: var(--bet-footer-space);
 }
 
 .footer-right {
@@ -92,6 +94,7 @@
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
+  max-height: var(--bet-footer-space);
 }
 
 .chip {
