@@ -1,5 +1,5 @@
 :root {
-  --top-bar-height: calc(56px + env(safe-area-inset-bottom, 0px));
+  --top-bar-height: calc(56px + env(safe-area-inset-top, 0px));
   --bet-footer-space: calc(88px + env(safe-area-inset-bottom, 0px));
   --avail-main-height: calc(100vh - var(--top-bar-height) - var(--bet-footer-space));
 }
@@ -17,6 +17,8 @@
   background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
   color: #fff;
   overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
 }
 
 /* TOP BAR */
