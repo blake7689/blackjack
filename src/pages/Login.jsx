@@ -19,11 +19,11 @@ export default function Login() {
   const startStatusTimers = () => {
     setStatusMsg("Contacting server...");
     const tip1 = setTimeout(() => {
-      setStatusMsg("Server may be waking up… this can take ~30–60s.");
-    }, 4000);
+      setStatusMsg("Server may be waking up… this can take ~30s.");
+    }, 5000);
     const tip2 = setTimeout(() => {
-      setStatusMsg("Still waiting… the server might be paused. Please try again in a minute.");
-    }, 15000);
+      setStatusMsg("Still waiting… the server is booting up. Please wait or try again in a minute.");
+    }, 30000);
     return [tip1, tip2];
   };
 
