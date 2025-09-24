@@ -13,48 +13,47 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   useEffect(() => {
-    const root = document.documentElement;
-    const footerEl = () => document.querySelector(".bet-footer");
+  const root = document.documentElement;
+  const footer = () => document.querySelector(".bet-footer");
 
-    const setVH = () => {
-      const vh = window.visualViewport?.height || window.innerHeight;
-      root.style.setProperty("--vh100", `${vh}px`);
-    };
+  const setVH = () => {
+    const vh = window.visualViewport?.height || window.innerHeight;
+    root.style.setProperty("--vh100", `${vh}px`);
+  };
 
-    const setFooterSpace = () => {
-      const el = footerEl();
-      if (!el) return;
-      root.style.setProperty("--bet-footer-space", `${el.offsetHeight || 0}px`);
-    };
+  const setFooterSpace = () => {
+    const el = footer();
+    if (el) root.style.setProperty("--bet-footer-space", `${el.offsetHeight}px`);
+  };
 
-    const setFooterLift = () => {
-      const vv = window.visualViewport;
-      // How much of the layout viewport height is taken by bottom UI (toolbar, etc.)
-      const lift = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
-      root.style.setProperty("--footer-lift", `${Math.round(lift)}px`);
-    };
+  const setFooterLift = () => {
+    const vv = window.visualViewport;
+    // lift is how much bottom browser UI reduces usable layout
+    const lift = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
+    root.style.setProperty("--footer-lift", `${Math.round(lift)}px`);
+  };
 
-    const updateAll = () => { setVH(); setFooterSpace(); setFooterLift(); };
+  const update = () => { setVH(); setFooterSpace(); setFooterLift(); };
 
-    updateAll();
+  update();
 
-    const el = footerEl();
-    const ro = el && "ResizeObserver" in window ? new ResizeObserver(setFooterSpace) : null;
-    el && ro?.observe(el);
+  const el = footer();
+  const ro = el && "ResizeObserver" in window ? new ResizeObserver(setFooterSpace) : null;
+  el && ro?.observe(el);
 
-    window.visualViewport?.addEventListener("resize", updateAll);
-    window.visualViewport?.addEventListener("scroll", updateAll);
-    window.addEventListener("orientationchange", updateAll);
-    window.addEventListener("resize", updateAll);
+  window.visualViewport?.addEventListener("resize", update);
+  window.visualViewport?.addEventListener("scroll", update); // iOS toolbar show/hide
+  window.addEventListener("orientationchange", update);
+  window.addEventListener("resize", update);
 
-    return () => {
-      ro?.disconnect();
-      window.visualViewport?.removeEventListener("resize", updateAll);
-      window.visualViewport?.removeEventListener("scroll", updateAll);
-      window.removeEventListener("orientationchange", updateAll);
-      window.removeEventListener("resize", updateAll);
-    };
-  }, []);
+  return () => {
+    ro?.disconnect();
+    window.visualViewport?.removeEventListener("resize", update);
+    window.visualViewport?.removeEventListener("scroll", update);
+    window.removeEventListener("orientationchange", update);
+    window.removeEventListener("resize", update);
+  };
+}, []);
 
   const {
     dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle,

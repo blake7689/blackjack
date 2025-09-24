@@ -16,7 +16,8 @@
   height: var(--vh100); 
   width: 100vw;
   display: grid;
-  grid-template-rows: var(--top-bar-height) 1fr;
+  grid-template-rows: var(--top-bar-height)
+    minmax(0, calc(var(--vh100) - var(--top-bar-height) - var(--bet-footer-space) - var(--footer-lift)));
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
@@ -73,11 +74,11 @@
   gap: 12px;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  overflow: clip;
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
-  padding-bottom: calc(var(--bet-footer-space) + var(--footer-lift));
+  padding-bottom: 0;
 }
 
 .center-msg-row {
