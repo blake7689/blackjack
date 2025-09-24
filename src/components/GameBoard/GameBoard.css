@@ -74,6 +74,7 @@
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 .center-msg-row {
@@ -198,7 +199,7 @@
   :root { --avail-main-height: calc(var(--app-vh) - var(--top-bar-height) - var(--bet-footer-space)); }
   .player-hand, .dealer-hand { min-width: 110px; }
   .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
-  .player-hand .cards, .player.cards { padding-bottom: 4px; }
+.player-hand .cards, .player.cards { padding-bottom: 4px; }
 }
 
 @media (max-height: 520px) {
@@ -211,9 +212,6 @@
 /* --- WIDTH-BASED TUNING --- */
 
 @media (max-width: 680px) {
-  :root {
-    --bet-footer-space: calc(64px + env(safe-area-inset-bottom, 0px));
-  }
   .player-hand, .dealer-hand { min-width: 100px; }
   .player-hand .card-img, .dealer-hand .card-img { width: clamp(24px, 12vw, 52px); }
   .main-area { gap: 8px; }
@@ -222,9 +220,6 @@
 }
 
 @media (max-width: 450px) {
-  :root {
-    --bet-footer-space: calc(48px + env(safe-area-inset-bottom, 0px));
-  }
   .player-hand, .dealer-hand { min-width: 84px; }
   .center-msg-row { font-size: 13px; }
   .player-hand .cards, .player.cards { padding-bottom: 2px; }
@@ -232,9 +227,3 @@
 
 /* Final override to ensure hands can always grow */
 .player-hand, .dealer-hand { max-width: none; }
-
-@media (max-height: 650px) {
-  :root {
-    --bet-footer-space: calc(44px + env(safe-area-inset-bottom, 0px));
-  }
-}
