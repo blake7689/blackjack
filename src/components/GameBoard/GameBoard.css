@@ -1,9 +1,5 @@
 :root {
-  --vh100: 100vh;
-  --footer-lift: 0px;
-}
-@supports (height: 100dvh) {
-  :root { --vh100: 100dvh; }
+  --top-bar-height: calc(56px + env(safe-area-inset-top, 0px));
 }
 
 :root {
@@ -13,28 +9,25 @@
 }
 
 .board {
-  height: var(--vh100); 
+  min-height: 100vh;
+  min-height: 100dvh; 
   width: 100vw;
-  display: grid;
-  grid-template-rows: var(--top-bar-height)
-    minmax(0, calc(var(--vh100) - var(--top-bar-height) - var(--bet-footer-space) - var(--footer-lift)));
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "header"
-    "main";
+  display: flex;
+  flex-direction: column;
   background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
   color: #fff;
-  overflow: hidden;
+  position: relative;
 }
 
 /* TOP BAR */
 .top-bar {
-  grid-area: header;
+  height: var(--top-bar-height);
+  min-height: var(--top-bar-height);
+  width: 100%;
+  position: relative;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: var(--top-bar-height);
-  position: relative;
   flex-wrap: wrap;
   box-sizing: border-box;
 }
@@ -68,17 +61,15 @@
 
 /* MAIN AREA LAYOUT */
 .main-area {
-  grid-area: main;
+  flex: 1; 
   display: flex;
   flex-direction: column;
   gap: 12px;
   align-items: center;
   justify-content: center;
-  overflow: clip;
-  height: 100%;
-  min-height: 0;
+  overflow: hidden;
   box-sizing: border-box;
-  padding-bottom: 0;
+  transition: padding-bottom 0.1s;
 }
 
 .center-msg-row {
