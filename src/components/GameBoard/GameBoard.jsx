@@ -23,36 +23,37 @@ export default function GameBoard() {
     const setFooterSpace = () => {
       const el = footerEl();
       if (!el) return;
-      const h = el.offsetHeight || 0;
-      root.style.setProperty("--bet-footer-space", `${h}px`);
+      root.style.setProperty("--bet-footer-space", `${el.offsetHeight || 0}px`);
     };
 
     setVH();
     setFooterSpace();
 
-    const ro = footerEl() ? new ResizeObserver(setFooterSpace) : null;
-    footerEl() && ro?.observe(footerEl());
+    const el = footerEl();
+    const ro = el && "ResizeObserver" in window ? new ResizeObserver(setFooterSpace) : null;
+    el && ro?.observe(el);
 
     const onVV = () => { setVH(); setFooterSpace(); };
     window.visualViewport?.addEventListener("resize", onVV);
+    window.visualViewport?.addEventListener("scroll", onVV); // helps iOS when bars show/hide
     window.addEventListener("orientationchange", onVV);
     window.addEventListener("resize", onVV);
 
     return () => {
       ro?.disconnect();
       window.visualViewport?.removeEventListener("resize", onVV);
+      window.visualViewport?.removeEventListener("scroll", onVV);
       window.removeEventListener("orientationchange", onVV);
       window.removeEventListener("resize", onVV);
     };
   }, []);
 
-  const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    deckCount, runningCount, endRound, setBetCircle,
-    hit, stay, double, split, deal } = useGame();
-
+  const {
+    dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle,
+    deckCount, runningCount, endRound, setBetCircle, hit, stay, double, split, deal
+  } = useGame();
   const { player } = usePlayer();
 
-  // Only allow click to continue //
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
       setGamePhase(GamePhases.END_ROUND);
@@ -60,9 +61,8 @@ export default function GameBoard() {
     }
   };
 
-  // Update player credits and deal //
   const handleDeal = () => {
-    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; 
+    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return;
     setGamePhase(GamePhases.DEALING);
     deal(betCircle);
   };
@@ -70,71 +70,53 @@ export default function GameBoard() {
   return (
     <div className="board" onClick={handleBoardClick}>
       {/* TOP BAR */}
-      <div className="top-bar" style={{ gridArea: "header" }}>
-        <div className="top-left stats">
-          <StatsPanel player={player} />
-        </div>
+      <div className="top-bar">
+        <div className="top-left stats"><StatsPanel player={player} /></div>
         <div className="top-center card-count">
-          <CardCountDisplay
-            hands={hands}
-            dealer={dealer}
-            runningCount={runningCount}
-            deckCount={deckCount}
-          />
+          <CardCountDisplay hands={hands} dealer={dealer} runningCount={runningCount} deckCount={deckCount} />
         </div>
-        <div className="top-right deck-stack">
-          <DeckStack shoe={shoe} />
-        </div>
+        <div className="top-right deck-stack"><DeckStack shoe={shoe} /></div>
       </div>
 
-      {/* MAIN GAME AREA */}
-      <div className="main-area" style={{ gridArea: "main" }}>
+      {/* MAIN */}
+      <div className="main-area">
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
-              {gamePhase !== GamePhases.PRE_DEAL &&
-                dealer.cards &&
-                dealer.cards.length > 0 && <DealerArea dealer={dealer} />}
+              {gamePhase !== GamePhases.PRE_DEAL && dealer.cards?.length > 0 && <DealerArea dealer={dealer} />}
             </div>
           </div>
         </div>
 
-        <div className="center-msg-row">
-          <CenterMessage gamePhase={gamePhase} />
-        </div>
+        <div className="center-msg-row"><CenterMessage gamePhase={gamePhase} /></div>
 
         <div className="player-container">
           <div className="hands-scroll">
             <div className="hands-track">
-              {Array.isArray(hands) && hands.length > 0
-                ? hands.map((hand, idx) => (
-                    <PlayerHand
-                      key={idx}
-                      hand={hand}
-                      active={selectedHandIndex === idx}
-                      onHit={() => hit(idx)}
-                      onStay={() => stay(idx)}
-                      onDouble={() => double(idx)}
-                      onSplit={() => split(idx)}
-                      gamePhase={gamePhase}
-                      disableActions={dealer && dealer.blackjack}
-                    />
-                  ))
-                : null}
+              {Array.isArray(hands) && hands.length > 0 && hands.map((hand, idx) => (
+                <PlayerHand
+                  key={idx}
+                  hand={hand}
+                  active={selectedHandIndex === idx}
+                  onHit={() => hit(idx)}
+                  onStay={() => stay(idx)}
+                  onDouble={() => double(idx)}
+                  onSplit={() => split(idx)}
+                  gamePhase={gamePhase}
+                  disableActions={dealer && dealer.blackjack}
+                />
+              ))}
             </div>
           </div>
         </div>
       </div>
 
-      {/* BOTTOM BAR */}
-      <div className="betting-spacer" style={{ gridArea: "footer" }}>
-        <BettingFooter
-          betCircle={betCircle}
-          setBetCircle={setBetCircle}
-          onDeal={handleDeal}
-          gamePhase={gamePhase}
-        />
-      </div>
+      <BettingFooter
+        betCircle={betCircle}
+        setBetCircle={setBetCircle}
+        onDeal={handleDeal}
+        gamePhase={gamePhase}
+      />
     </div>
   );
 }

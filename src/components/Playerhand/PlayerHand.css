@@ -38,6 +38,7 @@
   width: max-content;     /* size to content so cards don’t wrap */
   margin: 0 auto;
   box-sizing: border-box;
+  padding-bottom: 6px;
 }
 
 .player-hand .card-wrap {
