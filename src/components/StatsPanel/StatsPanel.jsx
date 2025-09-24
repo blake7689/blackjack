@@ -10,7 +10,7 @@ export default function StatsPanel({ player }) {
 
   return (
     <div>
-      <div>Credits: </div>
+      <div>Credit: </div>
       <div>
         ${player ? Number(player.credits).toLocaleString() : 0}
         {creditChange !== 0 && (
