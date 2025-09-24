@@ -177,6 +177,7 @@
     flex-direction: row;
     align-items: stretch;
     gap: 12px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .dealer-container,
   .player-container {
