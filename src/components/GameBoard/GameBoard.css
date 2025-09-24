@@ -1,5 +1,6 @@
 :root {
   --vh100: 100vh;
+  --footer-lift: 0px;
 }
 @supports (height: 100dvh) {
   :root { --vh100: 100dvh; }
@@ -76,7 +77,7 @@
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
-  padding-bottom: var(--bet-footer-space); 
+  padding-bottom: calc(var(--bet-footer-space) + var(--footer-lift));
 }
 
 .center-msg-row {

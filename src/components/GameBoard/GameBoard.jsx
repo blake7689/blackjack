@@ -20,31 +20,39 @@ export default function GameBoard() {
       const vh = window.visualViewport?.height || window.innerHeight;
       root.style.setProperty("--vh100", `${vh}px`);
     };
+
     const setFooterSpace = () => {
       const el = footerEl();
       if (!el) return;
       root.style.setProperty("--bet-footer-space", `${el.offsetHeight || 0}px`);
     };
 
-    setVH();
-    setFooterSpace();
+    const setFooterLift = () => {
+      const vv = window.visualViewport;
+      // How much of the layout viewport height is taken by bottom UI (toolbar, etc.)
+      const lift = vv ? Math.max(0, window.innerHeight - (vv.height + vv.offsetTop)) : 0;
+      root.style.setProperty("--footer-lift", `${Math.round(lift)}px`);
+    };
+
+    const updateAll = () => { setVH(); setFooterSpace(); setFooterLift(); };
+
+    updateAll();
 
     const el = footerEl();
     const ro = el && "ResizeObserver" in window ? new ResizeObserver(setFooterSpace) : null;
     el && ro?.observe(el);
 
-    const onVV = () => { setVH(); setFooterSpace(); };
-    window.visualViewport?.addEventListener("resize", onVV);
-    window.visualViewport?.addEventListener("scroll", onVV); // helps iOS when bars show/hide
-    window.addEventListener("orientationchange", onVV);
-    window.addEventListener("resize", onVV);
+    window.visualViewport?.addEventListener("resize", updateAll);
+    window.visualViewport?.addEventListener("scroll", updateAll);
+    window.addEventListener("orientationchange", updateAll);
+    window.addEventListener("resize", updateAll);
 
     return () => {
       ro?.disconnect();
-      window.visualViewport?.removeEventListener("resize", onVV);
-      window.visualViewport?.removeEventListener("scroll", onVV);
-      window.removeEventListener("orientationchange", onVV);
-      window.removeEventListener("resize", onVV);
+      window.visualViewport?.removeEventListener("resize", updateAll);
+      window.visualViewport?.removeEventListener("scroll", updateAll);
+      window.removeEventListener("orientationchange", updateAll);
+      window.removeEventListener("resize", updateAll);
     };
   }, []);
 
