@@ -8,8 +8,6 @@
   border-radius:10px;
   box-sizing: border-box;
   flex-wrap: wrap;
-
-  /* new: ensure options push layout instead of overlaying or using absolute positioning */
   position: relative;
   width: 100%;
   max-width: 360px;

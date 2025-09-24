@@ -29,7 +29,6 @@
   word-break: break-all;
 }
 
-/* ensure the count won't overlap by allowing wrap under tight conditions */
 @media (max-width: 550px) {
   .card-count-display { font-size: 0.8rem; gap: 6px; padding: 4px 8px; }
   .count-label, .true-count-label { font-size: 0.9em; }

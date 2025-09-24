@@ -15,7 +15,6 @@
   z-index: 1200;
   width: 100%;
   height: auto;
-  max-height: var(--bet-footer-space);
   background: linear-gradient(180deg, rgba(6,22,14,0.98), rgba(2,6,3,0.98));
   display: flex;
   align-items: center;
@@ -48,7 +47,6 @@
   justify-content: flex-start;
   min-width: 0;
   overflow: hidden;
-  max-height: var(--bet-footer-space);
 }
 
 .chips {
@@ -85,7 +83,6 @@
   align-items: center;
   justify-content: center;
   min-width: 0;
-  max-height: var(--bet-footer-space);
 }
 
 .footer-right {
@@ -94,7 +91,6 @@
   align-items: center;
   justify-content: flex-end;
   min-width: 0;
-  max-height: var(--bet-footer-space);
 }
 
 .chip {
@@ -157,16 +153,6 @@
 }
 
 /* HEIGHT breakpoints */
-/* 
-@media (max-height: 600px) {
-  :root {
-    --bet-footer-pad-vert: 8px;
-    --chip-size: 44px;
-    --bet-circle-size: 56px;
-    --footer-gap: 10px;
-    --chip-font: 20px;
-  }
-} */
 
 @media (max-height: 650px) {
   :root {
