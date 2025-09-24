@@ -12,7 +12,7 @@ export default function Login() {
     userName: "", email: "", firstName: "", lastName: "", credits: 1000
   });
   const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState("");   // << add
+  const [statusMsg, setStatusMsg] = useState("");
 
   const onChange = e => setForm({ ...form, [e.target.name]: e.target.value });
 
@@ -22,7 +22,7 @@ export default function Login() {
       setStatusMsg("Server may be waking up… this can take ~30s.");
     }, 5000);
     const tip2 = setTimeout(() => {
-      setStatusMsg("Still waiting… the server is booting up. Please wait or try again in a minute.");
+      setStatusMsg("Server is still waking up... Please wait or try again in a minute.");
     }, 30000);
     return [tip1, tip2];
   };
@@ -37,7 +37,6 @@ export default function Login() {
       await login({ usernameOrEmail: form.usernameOrEmail, password: form.password });
       nav("/");
     } catch (err) {
-      // Network/timeout style errors usually mean no response from server
       const msg = (err?.message || "").toLowerCase();
       if (msg.includes("failed to fetch") || msg.includes("network") || msg.includes("timeout")) {
         setStatusMsg("No response from server. It may be paused; try again in a minute.");

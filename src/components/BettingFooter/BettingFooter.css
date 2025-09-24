@@ -157,7 +157,7 @@
 }
 
 /* HEIGHT breakpoints */
-
+/* 
 @media (max-height: 600px) {
   :root {
     --bet-footer-pad-vert: 8px;
@@ -166,9 +166,9 @@
     --footer-gap: 10px;
     --chip-font: 20px;
   }
-}
+} */
 
-@media (max-height: 460px) {
+@media (max-height: 650px) {
   :root {
     --bet-footer-pad-vert: 6px;
     --chip-size: 32px;

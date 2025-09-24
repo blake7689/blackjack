@@ -20,7 +20,7 @@
 
 .player-hand {
   background: rgba(0,0,0,0.24);
-  padding: 8px;
+  padding: 12px;
   border-radius: 12px;
   text-align: center;
   border: 1px solid rgba(255,255,255,0.04);
@@ -35,7 +35,7 @@
   justify-content: center;
   flex-wrap: nowrap;
   gap: 8px;
-  width: max-content;     /* size to content so cards don’t wrap */
+  width: max-content;
   margin: 0 auto;
   box-sizing: border-box;
   padding-bottom: 6px;

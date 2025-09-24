@@ -32,3 +32,23 @@
   .options-wrap { gap:8px; padding:8px; }
   .opt { padding:6px 8px; font-size: 0.85rem; min-width: 48px; }
 }
+
+@media (max-width: 460px) {
+  .options-wrap { gap:6px; padding:6px; }
+  .opt { padding:4px 6px; font-size: 0.65rem; min-width: 32px; }
+}
+
+@media (max-height: 650px) and (max-width: 600px) {
+  .options-wrap { gap:6px; padding:6px; }
+  .opt { padding:4px 6px; font-size: 0.65rem; min-width: 32px; }
+}
+
+@media (max-height: 520px) {
+  .options-wrap { gap:6px; padding:6px; }
+  .opt { padding:4px 6px; font-size: 0.65rem; min-width: 32px; }
+}
+
+@media (max-height: 340px) {
+  .options-wrap { gap:4px; padding:4px; }
+  .opt { padding:2px 4px; font-size: 0.65rem; min-width: 32px; }
+}
