@@ -27,14 +27,10 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
   useEffect(() => {
     const el = footerRef.current;
     if (!el) return;
-
     const setVar = () => {
       const h = Math.ceil(el.getBoundingClientRect().height);
-      // sync the CSS variable so GameBoard's spacer row always matches
       document.documentElement.style.setProperty("--bet-footer-space", `${h}px`);
     };
-
-    // initial and observe
     setVar();
     let ro;
     if (typeof ResizeObserver !== "undefined") {
@@ -42,7 +38,6 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
       ro.observe(el);
     }
     window.addEventListener("resize", setVar);
-
     return () => {
       try { ro && ro.disconnect(); } catch { /* ignore errors */ }
       window.removeEventListener("resize", setVar);
@@ -55,21 +50,23 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
     addCreditsLocalOnly(-val);
   };
 
-  const clearBet = async () => {
+  const clearBet = () => {
     setBetCircle(0);
     addCreditsLocalOnly(betCircle);
   };
 
+  const isPreDeal = gamePhase === GamePhases.PRE_DEAL;
+  const formattedBet = betCircle.toLocaleString();
+
   return (
-    <div className="bet-footer" ref={footerRef}>
+    <div className={`bet-footer ${!isPreDeal ? "compact" : ""}`} ref={footerRef}>
       <div className="betting-footer">
-        {/* always render footer-left, but hide the chips when not PRE_DEAL */}
         <div className="footer-left">
           <div
-            className={`chips ${gamePhase !== GamePhases.PRE_DEAL ? "hidden" : ""}`}
-            aria-hidden={gamePhase !== GamePhases.PRE_DEAL}
+            className={`chips ${!isPreDeal ? "hidden" : ""}`}
+            aria-hidden={!isPreDeal}
           >
-            {gamePhase === GamePhases.PRE_DEAL &&
+            {isPreDeal &&
               chipValues
                 .filter((v) => v <= credits)
                 .map((v) => (
@@ -77,27 +74,32 @@ export default function BettingFooter({ betCircle, setBetCircle, onDeal, gamePha
                     key={v}
                     value={v}
                     onClick={() => addChip(v)}
-                    disabled={gamePhase !== GamePhases.PRE_DEAL}
+                    disabled={!isPreDeal}
                   />
                 ))}
           </div>
         </div>
         <div className="footer-middle">
           <div className="bet-info">
-            <div className="bet-circle">
-              <span className="bet-total">${betCircle}</span>
-              {betCircle > 0}
+            <div className="bet-box" aria-live="polite" aria-label={`Current bet ${formattedBet}`}>
+              <span className="bet-total">${formattedBet}</span>
             </div>
-            <button className="clear" onClick={clearBet} disabled={betCircle === 0 || gamePhase !== GamePhases.PRE_DEAL}>
+            <button
+              className={`clear ${!isPreDeal ? "hidden" : ""}`}
+              onClick={clearBet}
+              disabled={betCircle === 0 || !isPreDeal}
+              aria-hidden={!isPreDeal}
+            >
               Clear
             </button>
           </div>
         </div>
         <div className="footer-right">
           <button
-            className="deal"
-            disabled={betCircle === 0 || gamePhase !== GamePhases.PRE_DEAL}
+            className={`deal ${!isPreDeal ? "hidden" : ""}`}
+            disabled={betCircle === 0 || !isPreDeal}
             onClick={onDeal}
+            aria-hidden={!isPreDeal}
           >
             Deal
           </button>
