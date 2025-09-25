@@ -18,7 +18,7 @@ export default function Home() {
     <div className="page-bg">
       <div style={{ padding: 24 }}>
         <div style={{ textAlign:"center", marginTop:36 }}>
-          <h1 style={{ color:"#fff" }}>Blackjack</h1>
+          <h1 style={{ color:"#fff" }}>BlakeJack</h1>
           {!player ? (
             <p style={{ color:"#fff" }}>Please log in to start playing.</p>
           ) : (
