@@ -67,9 +67,10 @@
   grid-area: main;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  flex-wrap: wrap;
+  align-content: space-evenly;
   align-items: center;
-  justify-content: center;
+  gap: 12px;
   overflow: hidden;
   height: 100%;
   min-height: 0;
