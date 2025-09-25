@@ -9,7 +9,7 @@ export default function Login() {
   const [tab, setTab] = useState("login");
   const [form, setForm] = useState({
     usernameOrEmail: "", password: "",
-    userName: "", email: "", firstName: "", lastName: "", credits: 1000
+    userName: "", email: "", firstName: "", lastName: "", credits: null
   });
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
