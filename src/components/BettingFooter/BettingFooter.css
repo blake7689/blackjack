@@ -54,7 +54,6 @@
   justify-content: center;
 }
 
-
 .footer-left {
   flex: 1 1 0;
   display: flex;
@@ -143,11 +142,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 4px 14px;
+  padding: 4px 8px;
   background: rgba(11,43,26,0.45);
   border: 1px solid #ffd54d;
   border-radius: 8px;
-  min-height: 32px;
+  min-height: 10px;
   min-width: 110px;
   box-sizing: border-box;
   font-weight: 600;
@@ -163,7 +162,7 @@
   text-overflow: ellipsis;
 }
 .bet-footer.compact .bet-box {
-  padding: 6px 20px;
+  padding: 3px 6px;
 }
 .bet-box:hover { border-color: #ffe07a; }
 
@@ -203,7 +202,7 @@
     --chip-font: 20px;
   }
   .bet-footer { padding: var(--bet-footer-pad-vert) 10px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom,0px)); }
-  .bet-box { font-size: 16px; padding: 6px 14px; }
+  .bet-footer.compact .bet-box { font-size: 16px; padding: 4px 12px; }
 }
 
 @media (max-width: 460px) {
@@ -215,12 +214,17 @@
   }
   .bet-footer { padding: var(--bet-footer-pad-vert) 8px calc(var(--bet-footer-pad-vert) + env(safe-area-inset-bottom, 0px)); }
   .clear, .deal { padding: 8px 10px; font-size: 13px; }
-  .bet-box { font-size: 15px; padding: 6px 12px; }
+  .bet-footer.compact .bet-box { font-size: 10px; padding: 2px 6px; }
 }
 
-
-
 /* HEIGHT breakpoints */
+
+@media (max-height: 800px) {
+  :root {
+    --bet-footer-pad-vert: 6px;
+  }
+  .bet-footer.compact .bet-box { font-size: 10px; padding: 2px 6px; min-height: 18px; }
+}
 
 @media (max-height: 650px) {
   :root {
@@ -230,7 +234,7 @@
     --chip-font: 18px;
   }
   .clear, .deal { padding: 8px 10px; font-size: 13px; }
-  .bet-box { font-size: 15px; padding: 5px 12px; min-height: 40px; }
+  .bet-footer.compact .bet-box { font-size: 10px; padding: 2px 6px; min-height: 18px; }
 }
 
 @media (max-width: 350px) {

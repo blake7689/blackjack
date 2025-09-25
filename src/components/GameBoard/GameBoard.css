@@ -1,6 +1,6 @@
 :root {
   --top-bar-height: calc(56px + env(safe-area-inset-top, 0px));
-  --bet-footer-space: calc(88px + env(safe-area-inset-bottom, 0px));
+  --bet-footer-space: calc(56px + env(safe-area-inset-bottom, 0px));
   --app-vh: 100vh;
   --avail-main-height: calc(var(--app-vh) - var(--top-bar-height) - var(--bet-footer-space));
 }
@@ -91,6 +91,7 @@
 .dealer-container {
   display: flex;
   align-items: center;
+  align-self: center;
   justify-content: center; 
   gap: 12px;
   width: 100%;
@@ -183,6 +184,7 @@
     flex: 1 1 0;
     min-width: 0;
     align-items: center;
+    transform: translateY(-10px);
   }
   .center-msg-row {
     flex: 0 0 clamp(100px, 12vw, 220px);
@@ -199,7 +201,7 @@
   :root { --avail-main-height: calc(var(--app-vh) - var(--top-bar-height) - var(--bet-footer-space)); }
   .player-hand, .dealer-hand { min-width: 110px; }
   .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
-.player-hand .cards, .player.cards { padding-bottom: 4px; }
+  .player-hand .cards, .player.cards { padding-bottom: 4px; }
 }
 
 @media (max-height: 520px) {
