@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useGame } from "../../hooks/useGame";
@@ -11,6 +11,28 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const nav = useNavigate();
+
+  const headerRef = useRef(null);
+
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const setVar = () => {
+      const h = Math.ceil(el.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--header-height", `${h}px`);
+    };
+    setVar();
+    let ro;
+    if (typeof ResizeObserver !== "undefined") {
+      ro = new ResizeObserver(setVar);
+      ro.observe(el);
+    }
+    window.addEventListener("resize", setVar);
+    return () => {
+      try { ro && ro.disconnect(); } catch { /* ignore errors */ }
+      window.removeEventListener("resize", setVar);
+    };
+  }, []);
 
   const goHome = async () => {
     if (loc.pathname !== "/") {
@@ -35,7 +57,7 @@ export default function Header() {
   };
 
   return (
-    <header className="bj-header">
+    <header className="bj-header" ref={headerRef}>
       <div className="bj-left">
         <button className="nav-btn" onClick={goHome}>Home</button>
         <button className="nav-btn" onClick={goSettings}>Settings</button>
