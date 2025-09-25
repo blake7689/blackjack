@@ -1,3 +1,11 @@
+:root {
+  --app-vh: 100vh;
+  --header-height: 0px;
+}
+@supports (height: 100dvh) {
+  :root { --app-vh: 100dvh; }
+}
+
 .spinner {
   display: inline-block;
   width: 16px;
@@ -15,7 +23,11 @@
 }
 
 .page-bg {
-  min-height: 100vh;
+  height: calc(var(--app-vh) - var(--header-height));
+  padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
   background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
   color: #fff;
 }
