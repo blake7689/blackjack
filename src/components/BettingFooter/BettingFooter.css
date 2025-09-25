@@ -131,12 +131,6 @@
 .chip:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .bet-info { display:flex; align-items:center; gap:10px; min-width:0; }
-/* .bet-circle {
-  width: var(--bet-circle-size); height: var(--bet-circle-size); 
-  border-radius:50%; background:#0b2b1a; border:3px solid #ffd54d; 
-  display:grid; place-items:center; position:relative; cursor: default; flex: 0 0 auto;
-}
-.bet-total { font-weight:600; color: #fff; } */
 
 .bet-box {
   display: inline-flex;
