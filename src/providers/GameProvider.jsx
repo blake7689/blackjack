@@ -198,9 +198,9 @@ export function GameProvider({ children }) {
 
   // Move to next hand or dealer phase //
   const nextHandOrDealer = useCallback(
-    (handIdx) => {
-      for (let idx = handIdx + 1; idx <= hands.length - 1; idx++) {
-        if (hands[idx].status !== HandStatus.DONE) {
+    (handIdx, currentHands = handsRef.current) => {
+      for (let idx = handIdx + 1; idx <= currentHands.length - 1; idx++) {
+        if (currentHands[idx].status !== HandStatus.DONE) {
           setSelectedHandIndex(idx);
           return;
         }
@@ -209,7 +209,7 @@ export function GameProvider({ children }) {
       setGamePhase(GamePhases.DEALER_TURN); 
       setTimeout(() => { dealerTurn(); }, 1000);
     },
-    [hands, dealerTurn]
+    [dealerTurn]
   );
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -272,7 +272,7 @@ export function GameProvider({ children }) {
       setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
       updateCredits(player.credits - hand.bet); 
       if (newHands[handIdx].status === HandStatus.DONE) {
-        nextHandOrDealer(handIdx);
+        nextHandOrDealer(handIdx, newHands);
       }
     },
     [hands, shoe, player, updateCredits, resetShoe, nextHandOrDealer]

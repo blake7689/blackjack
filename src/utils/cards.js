@@ -31,7 +31,6 @@ function buildDeck(deckIndex = 0) {
     for (const rank of RANKS) {
       let count = 0;
       deck.push({
-        // id: `${rank.code}-${suit}-${deckIndex}-${Math.random().toString(36).slice(2)}`,
         id: `${rank.code}-${suit}-${deckIndex}-${++count}`,
         rank: rank.code,
         suit,
