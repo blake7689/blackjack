@@ -12,7 +12,7 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    deckCount, runningCount, endRound, setBetCircle,
+    deckCount, runningCount, endRound, setBetCircle, initialBet, resetInitialBet,
     hit, stay, double, split, deal } = useGame();
 
   const { player } = usePlayer();
@@ -98,6 +98,8 @@ export default function GameBoard() {
           setBetCircle={setBetCircle}
           onDeal={handleDeal}
           gamePhase={gamePhase}
+          initialBet={initialBet}
+          resetInitialBet={resetInitialBet}
         />
       </div>
     </div>

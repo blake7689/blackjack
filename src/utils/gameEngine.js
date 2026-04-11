@@ -157,7 +157,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
 // Dealer logic //
 export function dealerPlay(dealer, hole, shoe, playerAllBust = false, setCutCardFound, resetShoe) {
   let dealerCards =  hole.cards.length === 0 ? [...dealer.cards] : [...dealer.cards, ...hole.cards];
-  hole.cards = { cards: [] };
+  hole.cards = [];
 
   if (!playerAllBust && dealer.status === HandStatus.PLAYING) {
     dealerCards = [...dealerCards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];

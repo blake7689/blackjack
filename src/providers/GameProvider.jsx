@@ -25,6 +25,8 @@ export function GameProvider({ children }) {
   const [playTimeout, setPlayTimeout] = useState(1000);
   const [dealerHoleBehaviour, setDealerHoleBehaviour] = useState(DealerHoleOptions["Draw Early - Check_US"]);
   const [blackJackOnSplit, setBlackJackOnSplit] = useState(false);
+  const [resetInitialBet, setResetInitialBet] = useState(false);
+  const [initialBet, setInitialBet] = useState(0);
 
   const handsRef = useRef(hands);
   const dealerRef = useRef(dealer);
@@ -33,6 +35,7 @@ export function GameProvider({ children }) {
   const playerRef = useRef(player);
   const shoeRef = useRef(shoe);
   const cutCardFoundRef = useRef(cutCardFound);
+  const initialBetRef = useRef(initialBet);
 
   {/* EFFECTS */} /////////////////////////////////////////////////////////////////////////////////
 
@@ -52,6 +55,7 @@ export function GameProvider({ children }) {
   useEffect(() => { playerRef.current = player; }, [player]);
   useEffect(() => { shoeRef.current = shoe; }, [shoe]);
   useEffect(() => { cutCardFoundRef.current = cutCardFound; }, [cutCardFound]);
+  useEffect(() => { initialBetRef.current = initialBet; }, [initialBet]);
 
   // Calculate running count from playedCards //
   useEffect(() => {
@@ -95,13 +99,18 @@ export function GameProvider({ children }) {
     setGamePhase(GamePhases.PRE_DEAL);
     setHands([]);
     setDealer({ cards: [] });
-    setBetCircle(0);
     setSelectedHandIndex(0);
+    if (playerRef.current.credits >= initialBetRef.current && resetInitialBet) {
+      const bet = initialBetRef.current;
+      setBetCircle(bet);
+      addCreditsLocalOnly(-bet);
+    }
+    else { setBetCircle(0); }
     if (cutCardFoundRef.current) { 
       resetShoe(); 
       setCutCardFound(false); 
     }
-  }, [resetShoe]);
+  }, [resetShoe, setCutCardFound, addCreditsLocalOnly, resetInitialBet]);
 
   // Reset Game //
   const resetGame = useCallback((currentDeckCount = deckCount, currentIncludeCutCard = includeCutCard, newGamePhase = GamePhases.NONE) => {
@@ -191,6 +200,7 @@ export function GameProvider({ children }) {
       setDealer(result.dealer);
       setShoe(result.shoe);
       setDealerHole(result.dealerHoleCards);
+      setInitialBet(bet);
 
       if (result.hands[selectedHandIndex] && result.hands[selectedHandIndex].status === HandStatus.DONE) {
         setGamePhase(GamePhases.DEALER_TURN);
@@ -308,6 +318,8 @@ export function GameProvider({ children }) {
       playTimeout,
       dealerHoleBehaviour,
       blackJackOnSplit,
+      initialBet,
+      resetInitialBet,
       updateCredits,
       deal,
       hit,
@@ -328,6 +340,7 @@ export function GameProvider({ children }) {
       setDealerHoleBehaviour,
       setBlackJackOnSplit,
       setDealerHole,
+      setResetInitialBet,
     }),
     [
       deckCount,
@@ -345,6 +358,8 @@ export function GameProvider({ children }) {
       playTimeout,
       dealerHoleBehaviour,
       blackJackOnSplit,
+      initialBet,
+      resetInitialBet,
       updateCredits,
       deal,
       hit,
@@ -365,6 +380,7 @@ export function GameProvider({ children }) {
       setDealerHoleBehaviour,
       setBlackJackOnSplit,
       setDealerHole,
+      setResetInitialBet,
     ]
   );
 

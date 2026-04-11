@@ -10,7 +10,7 @@ export default function Settings() {
   const [hasBeenReset, setHasBeenReset] = useState(false);
   const loc = useLocation();
   const { player, updatePlayer, deletePlayer, logout } = usePlayer();
-  const { deckCount, setDeckCount, resetGame, gamePhase, includeCutCard, setIncludeCutCard, refundLocal, playTimeout, setPlayTimeout, dealerHoleBehaviour, setDealerHoleBehaviour, blackJackOnSplit, setBlackJackOnSplit } = useGame();
+  const { deckCount, setDeckCount, resetGame, gamePhase, includeCutCard, setIncludeCutCard, refundLocal, playTimeout, setPlayTimeout, dealerHoleBehaviour, setDealerHoleBehaviour, blackJackOnSplit, setBlackJackOnSplit, resetInitialBet, setResetInitialBet } = useGame();
   const [form, setForm] = useState({
     userName: player?.userName || "",
     email: player?.email || "",
@@ -23,6 +23,7 @@ export default function Settings() {
     playTimeout: playTimeout,
     dealerHoleBehaviour: dealerHoleBehaviour,
     blackJackOnSplit: blackJackOnSplit,
+    resetInitialBet: resetInitialBet
 
   });
   const [errors, setErrors] = useState({});
@@ -159,6 +160,10 @@ export default function Settings() {
     setHasBeenReset(true);
   };
 
+  const changeResetInitialBet = (c) => { 
+    setResetInitialBet(c); 
+  };
+
   const changePlayTimeout= (t) => { 
     setPlayTimeout(t);
   };
@@ -274,6 +279,39 @@ export default function Settings() {
                 }}
                 onClick={() => changeIncludeCutCard(form.includeCutCard)}
                 disabled={form.includeCutCard === includeCutCard}
+              >
+              Save
+              </button>
+            </div>
+          </div>
+
+          <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+
+          <div>
+            <label>
+              <input
+                type="checkbox"
+                checked={form.resetInitialBet}
+                onChange={(e) => setForm({ ...form, resetInitialBet: e.target.checked })}
+                style={{ marginRight: 8 }}
+              />
+              Reset Bet
+            </label>
+            {/* <div>
+              {form.resetInitialBet !== resetInitialBet && gamePhase !== GamePhases.NONE && (
+                <div style={{ color: "red", marginTop: 4, marginBottom: 4 }}>
+                  Changing reset bet option will reset the current game.
+                </div>
+              )}
+            </div> */}
+            <div>
+              <button
+                style={{
+                  marginTop: 4,
+                  cursor: form.resetInitialBet !== resetInitialBet ? "pointer" : "not-allowed"
+                }}
+                onClick={() => changeResetInitialBet(form.resetInitialBet)}
+                disabled={form.resetInitialBet === resetInitialBet}
               >
               Save
               </button>
