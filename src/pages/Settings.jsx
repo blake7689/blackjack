@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGame } from "../hooks/useGame";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -31,22 +31,7 @@ export default function Settings() {
   // Track previous location
   const [prevLocation] = useState(() => window.sessionStorage.getItem("prevLocation") || "/game");
 
-  useEffect(() => {
-    // Validate initial values
-    Object.keys(form).forEach(key => {
-      if (['userName', 'email', 'password', 'firstName', 'lastName', 'credits'].includes(key)) {
-        validateField(key, form[key]);
-      }
-    });
-  }, []);
-
-  const onChange = e => {
-    const { name, value } = e.target;
-    setForm({ ...form, [name]: value });
-    validateField(name, value);
-  };
-
-  const validateField = (name, value) => {
+  const validateField = useCallback((name, value) => {
     let error = "";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const num = Number(value);
@@ -74,7 +59,22 @@ export default function Settings() {
       default:
         break;
     }
-    setErrors({ ...errors, [name]: error });
+    setErrors(prevErrors => ({ ...prevErrors, [name]: error }));
+  }, []);
+
+  useEffect(() => {
+    // Validate initial values
+    Object.keys(form).forEach(key => {
+      if (['userName', 'email', 'password', 'firstName', 'lastName', 'credits'].includes(key)) {
+        validateField(key, form[key]);
+      }
+    });
+  }, [form, validateField]);
+
+  const onChange = e => {
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
+    validateField(name, value);
   };
 
   const onExit = () => { 
