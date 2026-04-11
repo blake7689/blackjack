@@ -3,22 +3,23 @@ import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPla
 import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
+import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions"; 
 
 {/* GAME ACTIONS */} ///////////////////////////////////////////////////////////////////////////////
 
 // Deal Initial Hands //
-export function dealRound(shoe, bet, setCutCardFound, resetShoe) {
+export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehaviour) {
   const playerFirstCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerCards = [playerFirstCard, playerSecondCard];
-  const dealerDownCard = { ...drawCardFromShoe(shoe, setCutCardFound, resetShoe), faceDown: true };
-  const dealerCards = [dealerUpCard, dealerDownCard];
+  const dealerHoleCard = dealerHoleBehaviour !== DealerHoleOptions["Draw After_EU"] ? [drawCardFromShoe(shoe, setCutCardFound, resetShoe)] : [];
+  const dealerCardsAll = dealerHoleCard.length > 0 ? [dealerUpCard, dealerHoleCard[0]] : [dealerUpCard]; 
   const playerTotals = getHandTotals(playerCards);
-  const dealerTotals = getHandTotals(dealerCards);
+  const dealerTotals = getHandTotals(dealerCardsAll);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
   const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
-  if (dealerHasBlackjack) { dealerCards[1].faceDown = false; }
+  const dealerCardsShowing = dealerHasBlackjack ? dealerCardsAll : [dealerUpCard];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
   const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
@@ -44,7 +45,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe) {
       payout: 0
     }],
     dealer: { 
-      cards: dealerCards, 
+      cards: dealerCardsShowing, 
       status: updatedDealerHandStatus ? updatedDealerHandStatus : HandStatus.NONE,
       dealerDisplayTotal: dealerUpCardTotals.total,
       total: dealerTotals.total, 
@@ -53,6 +54,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe) {
       isBusted: false
     },
     shoe,
+    dealerHoleCards: { cards: dealerHoleCard },
   };
 }
 
@@ -107,7 +109,7 @@ export function playerDouble(hand, shoe, setCutCardFound, resetShoe) {
 }
 
 // Player Split //
-export function playerSplit(hand, shoe, setCutCardFound, resetShoe) {
+export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnSplit) {
   const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const card2 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const hand1Cards = [hand.cards[0], card1];
@@ -116,6 +118,10 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe) {
   const hand2Totals = getHandTotals(hand2Cards);
   const hand1Evaluation = getHandEvaluation(hand1Totals.totals, hand, hand1Cards.length);
   const hand2Evaluation = getHandEvaluation(hand2Totals.totals, hand, hand2Cards.length);
+
+  // If blackJackOnSplit is false, then a blackjack on the initial two cards after split should be treated as a regular 21, not a blackjack. //
+  if (!blackJackOnSplit && hand1Evaluation.isBlackjack) { hand1Evaluation.isBlackjack = false; }
+  if (!blackJackOnSplit && hand2Evaluation.isBlackjack) { hand2Evaluation.isBlackjack = false; }
 
   const newHand1 = { 
     ...hand, 
@@ -149,8 +155,9 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe) {
 {/* DEALER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
 
 // Dealer logic //
-export function dealerPlay(dealer, shoe, playerAllBust = false, setCutCardFound, resetShoe) {
-  let dealerCards = dealer.cards.map((c) => ({ ...c, faceDown: false }));
+export function dealerPlay(dealer, hole, shoe, playerAllBust = false, setCutCardFound, resetShoe) {
+  let dealerCards =  hole.cards.length === 0 ? [...dealer.cards] : [...dealer.cards, ...hole.cards];
+  hole.cards = { cards: [] };
 
   if (!playerAllBust && dealer.status === HandStatus.PLAYING) {
     dealerCards = [...dealerCards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
@@ -169,7 +176,7 @@ export function dealerPlay(dealer, shoe, playerAllBust = false, setCutCardFound,
     isBusted: newHandEvaluation.isBusted
   };
 
-  return { dealer: newDealer, shoe };
+  return { dealer: newDealer, shoe, hole };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
