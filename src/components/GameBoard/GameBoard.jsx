@@ -13,7 +13,7 @@ import "./GameBoard.css";
 export default function GameBoard() {
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
     deckCount, runningCount, endRound, setBetCircle, initialBet, resetInitialBet,
-    hit, stay, double, split, deal } = useGame();
+    hit, stay, double, split, deal, playTimeout } = useGame();
 
   const { player } = usePlayer();
 
@@ -21,7 +21,7 @@ export default function GameBoard() {
   const handleBoardClick = () => {
     if (gamePhase === GamePhases.POST_ROUND) {
       setGamePhase(GamePhases.END_ROUND);
-      setTimeout(() => { endRound(); }, 1500);
+      setTimeout(() => { endRound(); }, playTimeout);
     }
   };
 
