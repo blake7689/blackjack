@@ -1,10 +1,11 @@
 import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
+import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 
 {/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
 
 // Sets initial player status based on blackjack conditions //
-export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack)
+export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, noDealerDrawHoleIf21)
 {
   let handStatus = HandStatus.PLAYING;
   let handResult = HandResult.NONE;
@@ -17,22 +18,22 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
     handResult = HandResult.LOSE;
   } else if (playerHasBlackjack) {
     handStatus = HandStatus.DONE;
-    handResult = HandResult.WIN;
+    handResult = noDealerDrawHoleIf21 ? HandResult.WIN : handResult;
   }
 
   return { handStatus, handResult };
 }
 
 // Sets initial dealer status based on blackjack conditions //
-export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack)
+export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour)
 {
-  let handStatus = HandStatus.NONE;
+  let handStatus = dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"] || dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"] ? HandStatus.DRAW_HOLE : HandStatus.NONE;
 
   if (dealerHasBlackjack && playerHasBlackjack) {
     handStatus = HandStatus.DONE;
   } else if (dealerHasBlackjack) {
     handStatus = HandStatus.DONE;
-  } else if (playerHasBlackjack) {
+  } else if (playerHasBlackjack && dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"]) {
     handStatus = HandStatus.DONE;
   }
 
@@ -66,22 +67,26 @@ export function getHandEvaluation(totals, hand, newCardsLength) {
 export function getDealerHandEvaluation(totals, hand, playerAllBust) {
   let handStatus = hand.status;
   let isBusted = hand.isBusted;
+  let isBlackjack = hand.isBlackjack;
 
   if (playerAllBust) {
     handStatus = HandStatus.DONE;
     return { handStatus, isBusted };
   }
-
+  
   if (totals.every(n => n > 21)) {
     handStatus = HandStatus.DONE;
     isBusted = true;
+  } else if (handStatus === HandStatus.DRAW_HOLE && totals.some(n => n === 21)) {
+    handStatus = HandStatus.DONE;
+    isBlackjack = true; 
   } else if (totals.some(n => n >= 17 && n <= 21)) {
     handStatus = HandStatus.DONE;
   } else {
     handStatus = HandStatus.PLAYING;
   }
 
-  return { handStatus, isBusted };
+  return { handStatus, isBusted, isBlackjack };
 }
 
 // Check total for blackjack //
@@ -137,6 +142,8 @@ export function settleHand(hand, dealer) {
   if (hand.result === HandResult.NONE) {
     if (hand.isBusted) {
       hand.result = HandResult.LOSE;
+    } else if (hand.isBlackjack && dealer.isBlackjack) {
+      hand.result = HandResult.PUSH;
     } else if (hand.isBlackjack) {
       hand.result = HandResult.WIN;
     } else if (hand.total > dealer.total || dealer.isBusted) {

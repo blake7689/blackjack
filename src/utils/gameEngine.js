@@ -13,7 +13,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehav
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerCards = [playerFirstCard, playerSecondCard];
-  const dealerHoleCard = dealerHoleBehaviour !== DealerHoleOptions["Draw After_EU"] ? [drawCardFromShoe(shoe, setCutCardFound, resetShoe)] : [];
+  const dealerHoleCard = dealerHoleBehaviour !== DealerHoleOptions["Draw After_EU"] || dealerHoleBehaviour !== DealerHoleOptions["Draw_After - NoDraw21 EU"] ? [drawCardFromShoe(shoe, setCutCardFound, resetShoe)] : [];
   const dealerCardsAll = dealerHoleCard.length > 0 ? [dealerUpCard, dealerHoleCard[0]] : [dealerUpCard]; 
   const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCardsAll);
@@ -21,8 +21,8 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehav
   const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
   const dealerCardsShowing = dealerHasBlackjack ? dealerCardsAll : [dealerUpCard];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
-  const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
-  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack);
+  const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"]);
+  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour);
   
   const updatedDealerHandStatus = 
     dealerHandStatus === HandStatus.NONE ? 
@@ -173,7 +173,8 @@ export function dealerPlay(dealer, hole, shoe, playerAllBust = false, setCutCard
     total: dealerTotals.total, 
     totals: dealerTotals.totals,
     status: newHandEvaluation.handStatus, 
-    isBusted: newHandEvaluation.isBusted
+    isBusted: newHandEvaluation.isBusted,
+    isBlackjack: newHandEvaluation.isBlackjack
   };
 
   return { dealer: newDealer, shoe, hole };

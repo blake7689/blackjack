@@ -160,7 +160,7 @@ export function GameProvider({ children }) {
       setDealer(currentDealer);
       setShoe(currentShoe);
       setDealerHole(currentHole);
-      if (currentDealer.status === HandStatus.PLAYING) {
+      if (currentDealer.status === HandStatus.PLAYING || currentDealer.status === HandStatus.DRAW_HOLE) {
         const { dealer: newDealer, shoe: newShoe, hole: newHole } = gameEngine.dealerPlay(currentDealer, currentHole, currentShoe, playerAllBust, setCutCardFound, resetShoe);
         setTimeout(() => { playDealerStep(newDealer, newHole, newShoe, playerAllBust); }, playTimeout);
       } else {
@@ -178,7 +178,7 @@ export function GameProvider({ children }) {
     // d.cards = d.cards.map((c) => ({ ...c, faceDown: false }));
     setDealer(d);
     if (d.status !== HandStatus.DONE) {
-      d.status = HandStatus.PLAYING;
+      d.status = d.status === HandStatus.DRAW_HOLE ? d.status : HandStatus.PLAYING;
       const playerAllBust = handsRef.current.every((h) => h.isBusted === true);
       setTimeout(() => { playDealerStep(d, dHole, shoeRef.current, playerAllBust); }, playTimeout);
     } else {
