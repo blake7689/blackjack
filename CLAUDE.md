@@ -33,7 +33,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek and EU NoDraw21:
   the modes where no dealer blackjack can still appear. US no peek hides a dealer blackjack until
   `revealDealerHole`, and it then wins every bet, doubles and splits included.
-- Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).- Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
+- Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
+- Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
 
