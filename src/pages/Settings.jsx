@@ -11,8 +11,7 @@ import "./pages.css";
 const PROFILE_FIELDS = [
   { name: "userName", label: "Username" },
   { name: "email", label: "Email" },
-  { name: "password", label: "New password", type: "password", placeholder: "Leave blank to keep" },
-  { name: "firstName", label: "First name" },
+ { name: "firstName", label: "First name" },
   { name: "lastName", label: "Last name" },
 ];
 
@@ -45,33 +44,44 @@ function SettingInput({ setting, value, onChange }) {
 }
 
 export default function Settings() {
-  const { player, updatePlayer, deletePlayer } = usePlayer();
+  const { player, updatePlayer, changePassword, deletePlayer } = usePlayer();
   const { settings, phase } = useGameState();
   const { changeSetting, resetGame } = useGameActions();
   const nav = useNavigate();
   const [form, setForm] = useState(() => ({
     userName: player?.userName ?? "",
     email: player?.email ?? "",
-    password: "",
     firstName: player?.firstName ?? "",
     lastName: player?.lastName ?? "",
   }));
   const [drafts, setDrafts] = useState(settings);
+  const [passwords, setPasswords] = useState({ current: "", next: "" });
 
   if (!player) return <div className="page-bg"><div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div></div>;
 
   const errors = Object.fromEntries(PROFILE_FIELDS.map(({ name }) => [name, validateField(name, form[name])]));
   const hasErrors = Object.values(errors).some(Boolean);
-  const isUnchanged = PROFILE_FIELDS.every(({ name }) => (name === "password" ? form.password === "" : form[name] === player[name]));
+  const isUnchanged = PROFILE_FIELDS.every(({ name }) => form[name] === player[name]);
+  const newPasswordError = validateField("password", passwords.next);
+  const canChangePassword = passwords.current !== "" && passwords.next !== "" && !newPasswordError;
   const midRound = phase !== GamePhases.NONE && phase !== GamePhases.PRE_DEAL;
 
   const save = async () => {
     try {
       await updatePlayer(form);
-      setForm((f) => ({ ...f, password: "" }));
       alert("Saved");
     } catch (err) {
       alert(err.message || "Save failed");
+    }
+  };
+
+  const savePassword = async () => {
+    try {
+      await changePassword(passwords.current, passwords.next);
+      setPasswords({ current: "", next: "" });
+      alert("Password changed");
+    } catch (err) {
+      alert(err.message || "Password change failed");
     }
   };
 
@@ -113,6 +123,20 @@ export default function Settings() {
             <button onClick={save} disabled={isUnchanged || hasErrors} style={{ cursor: (isUnchanged || hasErrors) ? "not-allowed" : "pointer" }}>Save</button>
             <button onClick={remove} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
           </div>
+
+          <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+          <div>
+            <label>Current password <input type="password" name="currentPassword" value={passwords.current}
+              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} style={{ marginLeft: "8px" }} /></label>
+          </div>
+          <div>
+            <label>New password <input type="password" name="newPassword" value={passwords.next}
+              onChange={(e) => setPasswords({ ...passwords, next: e.target.value })} style={{ marginLeft: "8px" }} /></label>
+            {newPasswordError && <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>{newPasswordError}</div>}
+          </div>
+          <button onClick={savePassword} disabled={!canChangePassword} style={{ marginTop: 4, cursor: canChangePassword ? "pointer" : "not-allowed" }}>
+            Change password
+          </button>
 
           {GAME_SETTINGS.map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];

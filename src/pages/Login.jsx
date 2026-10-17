@@ -11,7 +11,7 @@ export default function Login() {
   const [tab, setTab] = useState("login");
   const [form, setForm] = useState({
     usernameOrEmail: "", password: "",
-    userName: "", email: "", firstName: "", lastName: "", credits: ""
+    userName: "", email: "", firstName: "", lastName: ""
   });
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
@@ -49,8 +49,7 @@ export default function Login() {
     password: form.password,
     email: form.email,
     firstName: form.firstName,
-    lastName: form.lastName,
-    credits: Number(form.credits)
+    lastName: form.lastName
   }), "Signup failed");
 
   const status = loading && (
@@ -84,7 +83,6 @@ export default function Login() {
               <input type="password" name="password" placeholder="Password" value={form.password} onChange={onChange} required />
               <input name="firstName" placeholder="First name" value={form.firstName} onChange={onChange} />
               <input name="lastName" placeholder="Last name" value={form.lastName} onChange={onChange} />
-              <input type="number" name="credits" placeholder="Starting credits" value={form.credits} onChange={onChange} />
               <button type="submit" disabled={loading}>
                 {loading ? <><span className="spinner" /> Creating…</> : "Create & sign in"}
               </button>
