@@ -6,11 +6,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Install: `npm ci`
 - Run locally: `npm run dev` -> <http://localhost:5173> (API: run blackJackAPI, `https://localhost:7248`)
 - Test: `npm test -- --run`
+- Coverage: `npm run coverage` (v8, report in `coverage/`; `src/main.jsx` and tests excluded)
 - Lint: `npm run lint`
 - Build: `npm run build` (output `dist/`)
 
 ## Architecture
-- Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 3, ESLint 9. Node 22+.
+- Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 3 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
 - `src/context/` + `src/providers/` GameContext/PlayerContext; `src/hooks/` useGame, usePlayer.
 - Game rules are pure functions in `src/utils/`: `blackjackLogic.js` (hand evaluation), `gameEngine.js`
@@ -32,8 +33,6 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
-- `.github/workflows/` still has a deploy workflow for a Static Web App (`brave-beach`) that no longer
-  exists in Azure; only `lively-sky` is live.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.
