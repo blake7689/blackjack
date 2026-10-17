@@ -1,0 +1,21 @@
+# CI for the React app. Adjust node-version and scripts to match package.json.
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --if-present
+      - run: npm test --if-present -- --run
+        env:
+          CI: true
+      - run: npm run build
