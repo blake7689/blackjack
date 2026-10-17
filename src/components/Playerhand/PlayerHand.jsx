@@ -4,71 +4,37 @@ import { usePlayer } from "../../hooks/usePlayer";
 import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
+import { HandResult } from "../../utils/constants/handResult";
 import { canSplit } from "../../utils/blackjackLogic";
 
-export default function PlayerHand({
-  hand,
-  active,
-  onHit,
-  onStay,
-  onDouble,
-  onSplit,
-  gamePhase
-}) {
+export default function PlayerHand({ hand, active, onHit, onStay, onDouble, onSplit, gamePhase }) {
   const { player } = usePlayer();
-
-  const canAffordDouble = player && player.credits >= hand.bet;
-  const canAffordSplit = player && player.credits >= hand.bet;
-
-  const showDouble = active && 
-    gamePhase === GamePhases.PLAYER_TURN && 
-    hand.cards.length === 2 && 
-    canAffordDouble; 
-
-  const showSplit =
-    active &&
-    gamePhase === GamePhases.PLAYER_TURN &&
-    canSplit(hand) &&
-    canAffordSplit;
+  const canAffordStake = player.credits >= hand.bet;
+  const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
+  const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
 
   return (
     <div className={`player-hand${active ? " active" : ""}`}>
       <div className="hand-total">
-        Total: {(() => {
-          // const totals = getHandTotals(hand.cards).totals; //change to hand.totals
-          const totals = hand.totals;
-          if (totals.length === 1) return totals[0];
-          return totals.join(" / ");
-        })()}
+        Total: {hand.totals.join(" / ")}
         {' '}| Bet: ${hand.bet}
-        {(gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result && (
-          <span className={`hand-result ${hand.result}`}> {hand.result === "Win" ? "Win" : hand.result === "Lose" ? "Lose" : hand.result === "Push" ? "Push" : ""}</span>
-        )}
-        {hand.isBusted && (
-          <span className={`hand-result busted`}> Busted</span>
-        )}
-        {hand.isBlackjack && (
-          <span className={`hand-result blackjack`}> Blackjack</span>
-        )}
+        {showResult && <span className={`hand-result ${hand.result}`}> {hand.result}</span>}
+        {hand.isBusted && <span className={`hand-result busted`}> Busted</span>}
+        {hand.isBlackjack && <span className={`hand-result blackjack`}> Blackjack</span>}
       </div>
       <div className="cards">
-        {hand.cards.map((card, idx) => (
-          <Card key={idx} card={card} />
+        {hand.cards.map((card) => (
+          <Card key={card.id} card={card} />
         ))}
       </div>
-      {active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING && (() => {
-        const totals = hand.totals;
-        return !totals.includes(21);
-      })() && !hand.isBlackjack && (
+      {canAct && (
         <PlayerOptions
           onHit={onHit}
           onStay={onStay}
           onDouble={onDouble}
           onSplit={onSplit}
-          showDouble={showDouble}
-          showSplit={showSplit}
-          disableDouble={!canAffordDouble}
-          disableSplit={!canAffordSplit}
+          showDouble={hand.cards.length === 2 && canAffordStake}
+          showSplit={canSplit(hand) && canAffordStake}
         />
       )}
     </div>

@@ -1,395 +1,69 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
-import { GamePhases } from "../utils/constants/gamePhases"; 
-import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions"; 
-import { GameContext } from "../context/GameContext";
-import * as gameEngine from "../utils/gameEngine";
+import { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import { GameStateContext, GameActionsContext } from "../context/GameContext";
+import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS } from "../utils/gameReducer";
+import { GamePhases } from "../utils/constants/gamePhases";
 import { createShoe } from "../utils/cards";
 import { usePlayer } from "../hooks/usePlayer";
-import { HandStatus } from "../utils/constants/handStatus";
 
 export function GameProvider({ children }) {
-  const [deckCount, setDeckCount] = useState(2);
-  const [shoe, setShoe] = useState([]);
-  const [hands, setHands] = useState([]);
-  const [dealer, setDealer] = useState({ cards: [] });
-  const [dealerHole, setDealerHole] = useState({ cards: [] });
-  const [gamePhase, setGamePhase] = useState(GamePhases.NONE);
-  const [betCircle, setBetCircle] = useState(0);
-  const [selectedHandIndex, setSelectedHandIndex] = useState(0);
-  const { player, updateCreditsOnServer, addCreditsLocalOnly } = usePlayer();
-  const [runningCount, setRunningCount] = useState(0);
-  const [playedCards, setPlayedCards] = useState([]);
-  const [lastCreditChange, setLastCreditChange] = useState(0);
-  const [cutCardFound, setCutCardFound] = useState(false);
-  const [includeCutCard, setIncludeCutCard] = useState(true);
-  const [playTimeout, setPlayTimeout] = useState(1000);
-  const [dealerHoleBehaviour, setDealerHoleBehaviour] = useState(DealerHoleOptions["Draw Early - Check_US"]);
-  const [blackJackOnSplit, setBlackJackOnSplit] = useState(false);
-  const [resetInitialBet, setResetInitialBet] = useState(false);
-  const [initialBet, setInitialBet] = useState(0);
+  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const { getCredits, adjustCredits } = usePlayer();
+  const { deckCount, includeCutCard, playTimeout } = state.settings;
 
-  const handsRef = useRef(hands);
-  const dealerRef = useRef(dealer);
-  const dealerHoleRef = useRef(dealerHole);
-  const gamePhaseRef = useRef(gamePhase);
-  const playerRef = useRef(player);
-  const shoeRef = useRef(shoe);
-  const cutCardFoundRef = useRef(cutCardFound);
-  const initialBetRef = useRef(initialBet);
+  // Read only from event handlers (never during render), so lagging one commit behind is fine.
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
 
-  {/* EFFECTS */} /////////////////////////////////////////////////////////////////////////////////
+  const makeShoe = useCallback(() => createShoe(deckCount, includeCutCard), [deckCount, includeCutCard]);
 
-  // Add new cards to playedCards after every deal, hit, double, split, dealerTurn // 
+  // Apply each credit event from the reducer exactly once. //
+  const appliedSeq = useRef(0);
   useEffect(() => {
-    const roundCards = [];
-    hands.forEach((hand) => { if (hand.cards) roundCards.push(...hand.cards); }); // Push hand.cards to roundCards
-    if (dealer && dealer.cards) { dealer.cards.forEach((card) => { if (card) roundCards.push(card); }); } // Push dealer.cards to roundCards
-    const newCards = roundCards.filter((card) => card && card.id && !playedCards.some((c) => c.id === card.id)); // Find new cards not already in playedCards
-    if (newCards.length > 0) { setPlayedCards((prev) => [...prev, ...newCards]); } // Set PlayedCards if new cards found
-  }, [hands, dealer, playedCards]);
+    for (const event of state.creditEvents) {
+      if (event.seq <= appliedSeq.current) continue;
+      adjustCredits(event.delta, event.persist);
+      appliedSeq.current = event.seq;
+    }
+  }, [state.creditEvents, adjustCredits]);
 
-  useEffect(() => { handsRef.current = hands; }, [hands]);
-  useEffect(() => { dealerRef.current = dealer; }, [dealer]);
-  useEffect(() => { dealerHoleRef.current = dealerHole; }, [dealerHole]);
-  useEffect(() => { gamePhaseRef.current = gamePhase; }, [gamePhase]);
-  useEffect(() => { playerRef.current = player; }, [player]);
-  useEffect(() => { shoeRef.current = shoe; }, [shoe]);
-  useEffect(() => { cutCardFoundRef.current = cutCardFound; }, [cutCardFound]);
-  useEffect(() => { initialBetRef.current = initialBet; }, [initialBet]);
-
-  // Calculate running count from playedCards //
+  // One timer drives the automatic steps (dealer, settle, results, next round). Its cleanup cancels it
+  // whenever the state moves on or the provider unmounts, so a stale step can never fire into a new game.
+  const auto = nextAutoAction(state);
+  const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}`;
   useEffect(() => {
-    let count = 0;
-    playedCards.forEach((card) => {
-      if (!card || card.type !== "card") count += 0;
-      count += card.count || 0;
-    });
-    setRunningCount(count);
-  }, [playedCards]);
+    if (!autoKey) return;
+    const type = autoKey.split("|")[0];
+    const timer = setTimeout(() => {
+      dispatch({ type, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
+    }, Number(playTimeout));
+    return () => clearTimeout(timer);
+  }, [autoKey, playTimeout, makeShoe, getCredits]);
 
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* PLAYER CREDITS */} //////////////////////////////////////////////////////////////////////////
-
-  const refundLocal = useCallback(() => {
-    addCreditsLocalOnly(betCircle);
-  }, [addCreditsLocalOnly, betCircle]);
-
-  const updateCredits = useCallback((newCredits) => {
-    const diff = newCredits - playerRef.current.credits;
-    setLastCreditChange(diff);
-    updateCreditsOnServer(newCredits);
-    setTimeout(() => setLastCreditChange(0), 3000);
-  }, [updateCreditsOnServer]);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* GAME ACTIONS */} ////////////////////////////////////////////////////////////////////////////
-
-  // Reset Shoe //
-  const resetShoe = useCallback((needsShoe = false) => {
-    const newShoe = createShoe(deckCount, includeCutCard);
-    setPlayedCards([]);
-    setRunningCount(0);
-    // Mid-round: drawCardFromShoe refills the shoe in play with these cards, so don't replace it.
-    if (needsShoe) { return newShoe; }
-    setShoe(newShoe);
-  }, [deckCount, includeCutCard]);
-
-  // End Round //
-  const endRound = useCallback(() => {
-    setGamePhase(GamePhases.PRE_DEAL);
-    setHands([]);
-    setDealer({ cards: [] });
-    setSelectedHandIndex(0);
-    if (playerRef.current.credits >= initialBetRef.current && resetInitialBet) {
-      const bet = initialBetRef.current;
-      setBetCircle(bet);
-      addCreditsLocalOnly(-bet);
-    }
-    else { setBetCircle(0); }
-    if (cutCardFoundRef.current) { 
-      resetShoe(); 
-      setCutCardFound(false); 
-    }
-  }, [resetShoe, setCutCardFound, addCreditsLocalOnly, resetInitialBet]);
-
-  // Reset Game //
-  const resetGame = useCallback((currentDeckCount = deckCount, currentIncludeCutCard = includeCutCard, newGamePhase = GamePhases.NONE) => {
-    setShoe(createShoe(currentDeckCount, currentIncludeCutCard));
-    setHands([]);
-    setDealer({ cards: [] });
-    setGamePhase(newGamePhase);
-    setBetCircle(0);
-    setSelectedHandIndex(0);
-    setPlayedCards([]);
-    setRunningCount(0);
-  }, [deckCount, includeCutCard]);
-
-   // Start Game //
-  const startGame = useCallback(() => {
-    setShoe(createShoe(deckCount, includeCutCard));
-    setGamePhase(GamePhases.PRE_DEAL);
-  }, [deckCount, includeCutCard]);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* CALCULATE & SETTLE */} //////////////////////////////////////////////////////////////////////
-
-  // Calculate Results //
-  const calculateResults = useCallback((settledHands) => {
-    const creditsToAdd = settledHands.reduce((sum, hand) => sum + hand.payout, 0);
-    if (creditsToAdd > 0) { updateCredits(playerRef.current.credits + creditsToAdd); }
-    setGamePhase(GamePhases.POST_ROUND);
-  }, [updateCredits]);
-
-  // Settle //
-  const settle = useCallback(() => {
-    const settledHands = gameEngine.settleHands(handsRef.current, dealerRef.current);
-    setHands(settledHands);
-    setGamePhase(GamePhases.RESULTS);
-    setTimeout(() => { calculateResults(settledHands); }, playTimeout);
-  }, [calculateResults, playTimeout]);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* DEALER ACTIONS */} //////////////////////////////////////////////////////////////////////////
-
-  const playDealerStep = useCallback(
-    (currentDealer, currentHole, currentShoe, playerAllBust) => {
-      setDealer(currentDealer);
-      setShoe(currentShoe);
-      setDealerHole(currentHole);
-      if (currentDealer.status === HandStatus.PLAYING || currentDealer.status === HandStatus.DRAW_HOLE) {
-        const { dealer: newDealer, shoe: newShoe, hole: newHole } = gameEngine.dealerPlay(currentDealer, currentHole, currentShoe, playerAllBust, setCutCardFound, resetShoe);
-        setTimeout(() => { playDealerStep(newDealer, newHole, newShoe, playerAllBust); }, playTimeout);
-      } else {
-        setGamePhase(GamePhases.SETTLING_HANDS);
-        setTimeout(() => { settle(); }, playTimeout);
-      }
+  const actions = useMemo(() => ({
+    startGame: () => dispatch({ type: "START_GAME", shoe: makeShoe() }),
+    resetGame: (phase = GamePhases.NONE) => dispatch({ type: "RESET_GAME", shoe: makeShoe(), phase }),
+    addBet: (amount) => dispatch({ type: "ADD_BET", amount, credits: getCredits() }),
+    clearBet: () => dispatch({ type: "CLEAR_BET" }),
+    deal: () => dispatch({ type: "DEAL", refill: makeShoe }),
+    hit: (handIdx) => dispatch({ type: "HIT", handIdx, refill: makeShoe }),
+    stand: (handIdx) => dispatch({ type: "STAND", handIdx }),
+    double: (handIdx) => dispatch({ type: "DOUBLE", handIdx, credits: getCredits(), refill: makeShoe }),
+    split: (handIdx) => dispatch({ type: "SPLIT", handIdx, credits: getCredits(), refill: makeShoe }),
+    continueRound: () => dispatch({ type: "CONTINUE" }),
+    // Table settings deal a fresh shoe built with the new values and reset the table.
+    changeSetting: (key, value) => {
+      const next = { ...stateRef.current.settings, [key]: value };
+      const shoe = RESET_SETTINGS.includes(key) ? createShoe(next.deckCount, next.includeCutCard) : undefined;
+      dispatch({ type: "SET_SETTING", key, value, shoe });
     },
-    [settle, resetShoe, playTimeout]
-  );
-
-  const dealerTurn = useCallback(() => {
-    const d = gameEngine.revealDealerHole(dealerRef.current, dealerHoleRef.current);
-    const dHole = { cards: [] };
-    setDealer(d);
-    setDealerHole(dHole);
-    if (d.status !== HandStatus.DONE) {
-      const playing = {
-        ...d,
-        status: d.status === HandStatus.DRAW_HOLE ? d.status : HandStatus.PLAYING,
-        checkBlackjackOnly: gameEngine.dealerOnlyChecksBlackjack(handsRef.current),
-      };
-      const skipDraw = !gameEngine.dealerNeedsToPlay(handsRef.current);
-      setTimeout(() => { playDealerStep(playing, dHole, shoeRef.current, skipDraw); }, playTimeout);
-    } else {
-      setGamePhase(GamePhases.SETTLING_HANDS);
-      setTimeout(() => { settle(); }, playTimeout);
-    }
-  }, [playDealerStep, settle, playTimeout]);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* DEAL */} ////////////////////////////////////////////////////////////////////////////////////
-
-  // Deal //
-  const deal = useCallback(
-    (bet) => {
-      updateCredits(player.credits);
-      const result = gameEngine.dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehaviour);
-      setHands(result.hands);
-      setDealer(result.dealer);
-      setShoe(result.shoe);
-      setDealerHole(result.dealerHoleCards);
-      setInitialBet(bet);
-
-      if (result.hands[selectedHandIndex] && result.hands[selectedHandIndex].status === HandStatus.DONE) {
-        setGamePhase(GamePhases.DEALER_TURN);
-        setTimeout(() => { dealerTurn(); }, playTimeout);
-        return;
-      }
-      setGamePhase(GamePhases.PLAYER_TURN);
-    },
-    [shoe, selectedHandIndex, player, playTimeout, dealerHoleBehaviour, updateCredits, dealerTurn, resetShoe]
-  );
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* HELPERS */} /////////////////////////////////////////////////////////////////////////////////
-
-  // Move to next hand or dealer phase //
-  const nextHandOrDealer = useCallback(
-    (handIdx, currentHands = handsRef.current) => {
-      for (let idx = handIdx + 1; idx <= currentHands.length - 1; idx++) {
-        if (currentHands[idx].status !== HandStatus.DONE) {
-          setSelectedHandIndex(idx);
-          return;
-        }
-      }
-      setSelectedHandIndex(0); 
-      setGamePhase(GamePhases.DEALER_TURN); 
-      setTimeout(() => { dealerTurn(); }, playTimeout);
-    },
-    [dealerTurn, playTimeout]
-  );
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* PLAYER ACTIONS */} //////////////////////////////////////////////////////////////////////////
-
-  // Hit //
-  const hit = useCallback(
-    (handIdx) => {
-      const { hand, shoe: newShoe } = gameEngine.playerHit(hands[handIdx], shoe, setCutCardFound, resetShoe);
-      const newHands = hands.map((h, idx) => (idx === handIdx ? hand : h));
-      setHands(newHands);
-      setShoe(newShoe);
-      if (hand.status === HandStatus.DONE) {
-        nextHandOrDealer(handIdx);
-      }
-    },
-    [hands, shoe, nextHandOrDealer, resetShoe]
-  );
-
-  // Stay //
-  const stay = useCallback(
-    (handIdx) => {
-      const newHands = hands.map((h, idx) => (idx === handIdx ? { ...h, status: HandStatus.DONE } : h));
-      setHands(newHands);
-      nextHandOrDealer(handIdx);
-    },
-    [hands, nextHandOrDealer]
-  );
-
-  // Double //
-  const double = useCallback(
-    (handIdx) => {
-      const hand = hands[handIdx];
-      if (!player || player.credits < hand.bet) { return; }
-      const { hand: newHand, shoe: newShoe } = gameEngine.playerDouble(hand, shoe, setCutCardFound, resetShoe);
-      const newHands = hands.map((h, idx) => (idx === handIdx ? newHand : h));
-      setHands(newHands);
-      setShoe(newShoe);
-      setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      updateCredits(player.credits - hand.bet); 
-      nextHandOrDealer(handIdx);
-    },
-    [hands, shoe, nextHandOrDealer, player, updateCredits, resetShoe]
-  );
-
-  // Split //
-  const split = useCallback(
-    (handIdx) => {
-      const hand = hands[handIdx];
-      if (!player || player.credits < hand.bet) { return; }
-      const { newHandsArray: newHandsArr, shoe: newShoe } = gameEngine.playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnSplit);
-      const newHands = [
-        ...hands.slice(0, handIdx),
-        ...newHandsArr,
-        ...hands.slice(handIdx + 1),
-      ];
-      setHands(newHands);
-      setShoe(newShoe);
-      setBetCircle(newHands.reduce((sum, h) => sum + h.bet, 0));
-      updateCredits(player.credits - hand.bet); 
-      if (newHands[handIdx].status === HandStatus.DONE) {
-        nextHandOrDealer(handIdx, newHands);
-      }
-    },
-    [hands, shoe, player, updateCredits, resetShoe, nextHandOrDealer, blackJackOnSplit]
-  );
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  // Memoized context value //
-  const value = useMemo(
-    () => ({
-      deckCount,
-      shoe,
-      hands,
-      dealer,
-      dealerHole,
-      gamePhase,
-      betCircle,
-      selectedHandIndex,
-      runningCount,
-      lastCreditChange,
-      includeCutCard,
-      cutCardFound,
-      playTimeout,
-      dealerHoleBehaviour,
-      blackJackOnSplit,
-      initialBet,
-      resetInitialBet,
-      updateCredits,
-      deal,
-      hit,
-      stay,
-      double,
-      split,
-      resetShoe,
-      endRound,
-      resetGame,
-      startGame,
-      refundLocal,
-      setDeckCount,
-      setGamePhase,
-      setBetCircle,
-      setCutCardFound,
-      setIncludeCutCard,
-      setPlayTimeout,
-      setDealerHoleBehaviour,
-      setBlackJackOnSplit,
-      setDealerHole,
-      setResetInitialBet,
-    }),
-    [
-      deckCount,
-      shoe,
-      hands,
-      dealer,
-      dealerHole,
-      gamePhase,
-      betCircle,
-      selectedHandIndex,
-      runningCount,
-      lastCreditChange,
-      includeCutCard,
-      cutCardFound,
-      playTimeout,
-      dealerHoleBehaviour,
-      blackJackOnSplit,
-      initialBet,
-      resetInitialBet,
-      updateCredits,
-      deal,
-      hit,
-      stay,
-      double,
-      split,
-      resetShoe,
-      endRound,
-      resetGame,
-      startGame,
-      refundLocal,
-      setDeckCount,
-      setGamePhase,
-      setBetCircle,
-      setCutCardFound,
-      setIncludeCutCard,
-      setPlayTimeout,
-      setDealerHoleBehaviour,
-      setBlackJackOnSplit,
-      setDealerHole,
-      setResetInitialBet,
-    ]
-  );
+    getPhase: () => stateRef.current.phase,
+  }), [makeShoe, getCredits]);
 
   return (
-    <GameContext.Provider value={value}>
-      {children}
-    </GameContext.Provider>
+    <GameActionsContext.Provider value={actions}>
+      <GameStateContext.Provider value={state}>
+        {children}
+      </GameStateContext.Provider>
+    </GameActionsContext.Provider>
   );
 }

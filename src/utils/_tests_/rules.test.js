@@ -117,6 +117,12 @@ describe("splits", () => {
     expect(r.payout).toBe(40);
   });
 
+  it("a 21 on either split hand is not blackjack by default", () => {
+    const r = playRound({ cards: ["K", "9", "10", "8", "A", "A"], actions: ["split"] });
+    expect(r.hands.map((h) => h.isBlackjack)).toEqual([false, false]);
+    expect(r.payout).toBe(40);
+  });
+
   it("a split 21 pays 3:2 when blackjack-on-split is on", () => {
     const r = playRound({ cards: ["A", "10", "A", "7", "K", "9"], actions: ["split"], blackJackOnSplit: true });
     expect(r.hands[0].isBlackjack).toBe(true);

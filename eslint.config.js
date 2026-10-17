@@ -29,4 +29,9 @@ export default defineConfig([
       "react-hooks/exhaustive-deps": "warn"
     },
   },
+  {
+    // Test helpers mix components and functions; fast refresh never loads them.
+    files: ['src/**/_tests_/**'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ])

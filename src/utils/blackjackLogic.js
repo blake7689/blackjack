@@ -132,8 +132,8 @@ export function getHandTotals(cards) {
   }
 
   const uniqueTotals = Array.from(new Set(totals)).sort((a, b) => b - a);
+  // Never empty: all aces as 1 is at most 21 here (checked above).
   const validTotals = uniqueTotals.filter(t => t <= 21);
-  if (validTotals.length === 0) return { totals: [Math.min(...uniqueTotals)], total: Math.min(...uniqueTotals) };
   return { totals: validTotals, total: Math.max(...validTotals) };
 }
 

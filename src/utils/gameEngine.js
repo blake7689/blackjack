@@ -39,18 +39,18 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehav
     hands: [{ 
       cards: playerCards, 
       bet: bet, 
-      status: playerHandEvaluation.handStatus ? playerHandEvaluation.handStatus : HandStatus.NONE, 
+      status: playerHandEvaluation.handStatus,
       isBlackjack: playerHasBlackjack, 
       isDouble: false,
       isBusted: false,
       total: playerTotals.total,
       totals: playerTotals.totals,
-      result: playerHandEvaluation.handResult ? playerHandEvaluation.handResult : HandResult.NONE,
+      result: playerHandEvaluation.handResult,
       payout: 0
     }],
     dealer: { 
       cards: dealerCardsShowing, 
-      status: updatedDealerHandStatus ? updatedDealerHandStatus : HandStatus.NONE,
+      status: updatedDealerHandStatus,
       dealerDisplayTotal: dealerBlackjackRevealed ? dealerTotals.total : dealerUpCardTotals.total,
       total: dealerTotals.total,
       totals: dealerTotals.totals,

@@ -1,5 +1,5 @@
 import { GamePhases } from "../../utils/constants/gamePhases";
-import { useGame } from "../../hooks/useGame";
+import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
 import DealerArea from "../DealerArea/DealerArea";
@@ -11,25 +11,13 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    runningCount, endRound, setBetCircle, initialBet, resetInitialBet,
-    hit, stay, double, split, deal, playTimeout } = useGame();
-
+  const { dealer, shoe, hands, selectedHandIndex, phase, runningCount } = useGameState();
+  const { continueRound, hit, stand, double, split } = useGameActions();
   const { player } = usePlayer();
 
-  // Only allow click to continue //
+  // Any click on the table moves on from the results //
   const handleBoardClick = () => {
-    if (gamePhase === GamePhases.POST_ROUND) {
-      setGamePhase(GamePhases.END_ROUND);
-      setTimeout(() => { endRound(); }, playTimeout);
-    }
-  };
-
-  // Update player credits and deal //
-  const handleDeal = () => {
-    if (gamePhase !== GamePhases.PRE_DEAL || betCircle === 0 || !player) return; 
-    setGamePhase(GamePhases.DEALING);
-    deal(betCircle);
+    if (phase === GamePhases.POST_ROUND) continueRound();
   };
 
   return (
@@ -40,10 +28,7 @@ export default function GameBoard() {
           <StatsPanel player={player} />
         </div>
         <div className="top-center card-count">
-          <CardCountDisplay
-            shoe={shoe}
-            runningCount={runningCount}
-          />
+          <CardCountDisplay shoe={shoe} runningCount={runningCount} />
         </div>
         <div className="top-right deck-stack">
           <DeckStack shoe={shoe} />
@@ -55,33 +40,30 @@ export default function GameBoard() {
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
-              {gamePhase !== GamePhases.PRE_DEAL &&
-                dealer.cards &&
-                dealer.cards.length > 0 && <DealerArea dealer={dealer} />}
+              {dealer.cards.length > 0 && <DealerArea dealer={dealer} />}
             </div>
           </div>
         </div>
 
         <div className="center-msg-row">
-          <CenterMessage gamePhase={gamePhase} />
+          <CenterMessage gamePhase={phase} />
         </div>
 
         <div className="player-container">
           <div className="hands-scroll">
             <div className="hands-track">
-              {Array.isArray(hands) && hands.length > 0
-                ? hands.map((hand, idx) => (
-                    <PlayerHand
-                      key={idx}
-                      hand={hand}
-                      active={selectedHandIndex === idx}
-                      onHit={() => hit(idx)}
-                      onStay={() => stay(idx)}
-                      onDouble={() => double(idx)}
-                      onSplit={() => split(idx)}
-                      gamePhase={gamePhase}                    />
-                  ))
-                : null}
+              {hands.map((hand, idx) => (
+                <PlayerHand
+                  key={idx}
+                  hand={hand}
+                  active={selectedHandIndex === idx}
+                  onHit={() => hit(idx)}
+                  onStay={() => stand(idx)}
+                  onDouble={() => double(idx)}
+                  onSplit={() => split(idx)}
+                  gamePhase={phase}
+                />
+              ))}
             </div>
           </div>
         </div>
@@ -89,14 +71,7 @@ export default function GameBoard() {
 
       {/* BOTTOM BAR */}
       <div className="betting-spacer" style={{ gridArea: "footer" }}>
-        <BettingFooter
-          betCircle={betCircle}
-          setBetCircle={setBetCircle}
-          onDeal={handleDeal}
-          gamePhase={gamePhase}
-          initialBet={initialBet}
-          resetInitialBet={resetInitialBet}
-        />
+        <BettingFooter />
       </div>
     </div>
   );

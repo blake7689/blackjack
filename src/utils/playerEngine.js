@@ -1,21 +1,19 @@
 import { apiPost, apiPut, apiDelete } from "./api";
 
+// The API returns camelCase JSON and never a password. //
 export function normalizePlayer(apiPlayer) {
-  if (!apiPlayer) return null;
   return {
-    playerId: apiPlayer.playerId ?? apiPlayer.PlayerId ?? null,
-    userName: apiPlayer.userName ?? apiPlayer.UserName ?? "",
-    email: apiPlayer.email ?? apiPlayer.Email ?? "",
-    firstName: apiPlayer.firstName ?? apiPlayer.FirstName ?? "",
-    lastName: apiPlayer.lastName ?? apiPlayer.LastName ?? "",
-    credits: Number(apiPlayer.credits ?? apiPlayer.Credits ?? 0),
-    inActive: apiPlayer.inActive ?? apiPlayer.InActive ?? null,
+    playerId: apiPlayer.playerId,
+    userName: apiPlayer.userName,
+    email: apiPlayer.email,
+    firstName: apiPlayer.firstName ?? "",
+    lastName: apiPlayer.lastName ?? "",
+    credits: Number(apiPlayer.credits),
   };
 }
 
 export async function loginPlayer({ usernameOrEmail, password }) {
-  const data = await apiPost(`/Player/login`, { usernameOrEmail, password });
-  return normalizePlayer(data);
+  return normalizePlayer(await apiPost(`/Player/login`, { usernameOrEmail, password }));
 }
 
 export async function addPlayerApi(payload) {
@@ -24,45 +22,31 @@ export async function addPlayerApi(payload) {
     userName: payload.userName,
     password: payload.password,
     email: payload.email,
-    firstName: payload.firstName ?? null,
-    lastName: payload.lastName ?? null,
-    credits: payload.credits ?? 0,
-    inActive: null,
+    firstName: payload.firstName || null,
+    lastName: payload.lastName || null,
+    credits: payload.credits,
   };
-  const data = await apiPost(`/Player`, body);
-  return normalizePlayer(data);
+  return normalizePlayer(await apiPost(`/Player`, body));
 }
 
-export async function updatePlayerApi(player, updates) {
+// profile: userName, email, firstName, lastName, and password (blank keeps the current one). //
+export async function updatePlayerApi(player, profile) {
+  const { password, ...fields } = profile;
   const body = {
+    ...fields,
     playerId: player.playerId,
-    userName: updates.userName ?? player.userName,
-    password: updates.password || undefined, // empty keeps the current password; JSON.stringify drops undefined
-    email: updates.email ?? player.email,
-    firstName: updates.firstName ?? player.firstName,
-    lastName: updates.lastName ?? player.lastName,
-    credits: updates.credits ?? player.credits,
-    inActive: updates.inActive ?? player.inActive ?? null,
+    password: password || undefined, // JSON.stringify drops undefined, so the API keeps the password
+    credits: player.credits,
   };
   await apiPut(`/Player/${player.playerId}`, body);
-  return normalizePlayer(body);
+  return normalizePlayer({ ...player, ...fields });
 }
 
 export async function updateCreditsApi(player, newCredits) {
-  const body = {
-    playerId: player.playerId,
-    userName: player.userName,
-    email: player.email,
-    firstName: player.firstName,
-    lastName: player.lastName,
-    credits: Number(newCredits),
-    inActive: player.inActive ?? null,
-  };
-  await apiPut(`/Player/${player.playerId}`, body);
-  return { ...player, credits: Number(newCredits) };
+  const { playerId, userName, email, firstName, lastName } = player;
+  await apiPut(`/Player/${playerId}`, { playerId, userName, email, firstName, lastName, credits: Number(newCredits) });
 }
 
 export async function deletePlayerApi(player) {
-  const body = { playerId: player.playerId, inActive: new Date().toISOString() };
-  await apiDelete(`/Player/${player.playerId}`, body);
+  await apiDelete(`/Player/${player.playerId}`, { playerId: player.playerId });
 }
