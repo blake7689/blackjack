@@ -8,7 +8,6 @@ export function normalizePlayer(apiPlayer) {
     email: apiPlayer.email ?? apiPlayer.Email ?? "",
     firstName: apiPlayer.firstName ?? apiPlayer.FirstName ?? "",
     lastName: apiPlayer.lastName ?? apiPlayer.LastName ?? "",
-    password: apiPlayer.password ?? apiPlayer.Password ?? "",
     credits: Number(apiPlayer.credits ?? apiPlayer.Credits ?? 0),
     inActive: apiPlayer.inActive ?? apiPlayer.InActive ?? null,
   };
@@ -38,7 +37,7 @@ export async function updatePlayerApi(player, updates) {
   const body = {
     playerId: player.playerId,
     userName: updates.userName ?? player.userName,
-    password: updates.password ?? player.password,
+    password: updates.password || undefined, // empty keeps the current password; JSON.stringify drops undefined
     email: updates.email ?? player.email,
     firstName: updates.firstName ?? player.firstName,
     lastName: updates.lastName ?? player.lastName,
@@ -53,7 +52,6 @@ export async function updateCreditsApi(player, newCredits) {
   const body = {
     playerId: player.playerId,
     userName: player.userName,
-    password: player.password,
     email: player.email,
     firstName: player.firstName,
     lastName: player.lastName,
