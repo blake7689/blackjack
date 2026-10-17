@@ -12,7 +12,7 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   const { dealer, shoe, hands, selectedHandIndex, gamePhase, setGamePhase, betCircle, 
-    deckCount, runningCount, endRound, setBetCircle, initialBet, resetInitialBet,
+    runningCount, endRound, setBetCircle, initialBet, resetInitialBet,
     hit, stay, double, split, deal, playTimeout } = useGame();
 
   const { player } = usePlayer();
@@ -41,10 +41,8 @@ export default function GameBoard() {
         </div>
         <div className="top-center card-count">
           <CardCountDisplay
-            hands={hands}
-            dealer={dealer}
+            shoe={shoe}
             runningCount={runningCount}
-            deckCount={deckCount}
           />
         </div>
         <div className="top-right deck-stack">
@@ -81,9 +79,7 @@ export default function GameBoard() {
                       onStay={() => stay(idx)}
                       onDouble={() => double(idx)}
                       onSplit={() => split(idx)}
-                      gamePhase={gamePhase}
-                      disableActions={dealer && dealer.blackjack}
-                    />
+                      gamePhase={gamePhase}                    />
                   ))
                 : null}
             </div>

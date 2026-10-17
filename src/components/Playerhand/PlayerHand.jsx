@@ -4,6 +4,7 @@ import { usePlayer } from "../../hooks/usePlayer";
 import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
+import { canSplit } from "../../utils/blackjackLogic";
 
 export default function PlayerHand({
   hand,
@@ -27,8 +28,7 @@ export default function PlayerHand({
   const showSplit =
     active &&
     gamePhase === GamePhases.PLAYER_TURN &&
-    hand.cards.length === 2 && 
-    hand.cards[0].value === hand.cards[1].value && 
+    canSplit(hand) &&
     canAffordSplit;
 
   return (

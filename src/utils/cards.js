@@ -73,16 +73,24 @@ export function drawCardFromShoe(shoe, setCutCardFound, resetShoe) {
   let card;
 
   do {
-    if (card && card.type === "cut") {
-      setCutCardFound(true);
-    } else if (shoe.length === 0) {
-      shoe = resetShoe(true);
-    }
-
+    // Refill in place so every caller holding this shoe keeps drawing from it.
+    // shortcut: a fresh shoe can repeat cards still on the table; fine for play, upgrade when discards are tracked.
+    if (shoe.length === 0) shoe.push(...resetShoe(true));
     card = shoe.shift();
-  } while (card && card.type === "cut");
+    if (card.type === "cut") setCutCardFound(true);
+  } while (card.type === "cut");
 
-  return card; 
+  return card;
+}
+
+// Real cards left in the shoe (the cut card is not a card) //
+export function cardsRemaining(shoe) {
+  return shoe.filter((c) => c.type === "card").length;
+}
+
+// Running count per deck left in the shoe (at least one deck) //
+export function trueCount(runningCount, shoe) {
+  return Math.round(runningCount / Math.max(1, cardsRemaining(shoe) / 52));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
