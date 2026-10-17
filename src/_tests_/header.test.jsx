@@ -64,4 +64,30 @@ describe("Header", () => {
     fireEvent.click(screen.getByText("tester"));
     expect(screen.queryByText("Log out")).toBeNull();
   });
+
+  it("closes the user menu on a click outside it, but not inside it", () => {
+    renderUI(<Header />);
+    fireEvent.click(screen.getByText("tester"));
+    fireEvent.mouseDown(screen.getByText("Log out"));
+    expect(screen.getByText("Log out")).toBeTruthy();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByText("Log out")).toBeNull();
+  });
+
+  it("closes the user menu on Escape only", () => {
+    renderUI(<Header />);
+    fireEvent.click(screen.getByText("tester"));
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(screen.getByText("Log out")).toBeTruthy();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByText("Log out")).toBeNull();
+  });
+
+  it("closes the user menu on a route change", () => {
+    renderUI(<Header />, { path: "/game" });
+    fireEvent.click(screen.getByText("tester"));
+    fireEvent.click(screen.getByText("Settings"));
+    expect(location()).toBe("/settings");
+    expect(screen.queryByText("Log out")).toBeNull();
+  });
 });

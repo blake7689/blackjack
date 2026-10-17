@@ -1,7 +1,7 @@
 import Card from "../Card/Card.jsx";
 import "./DealerArea.css";
 
-export default function DealerArea({ dealer }) {
+export default function DealerArea({ dealer, hiddenCount = 0 }) {
   return (
     <div className="dealer-area">
       <div className="dealer-hand">
@@ -14,6 +14,12 @@ export default function DealerArea({ dealer }) {
           {dealer.cards.map((c) => (
             <div key={c.id} className="card-wrap up">
               <Card card={c} />
+            </div>
+          ))}
+          {/* Face down: the hidden card itself never reaches the DOM */}
+          {Array.from({ length: hiddenCount }, (_, i) => (
+            <div key={`hidden-${i}`} className="card-wrap down">
+              <Card faceDown />
             </div>
           ))}
         </div>

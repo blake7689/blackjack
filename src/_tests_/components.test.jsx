@@ -28,6 +28,8 @@ describe("Card", () => {
     expect(screen.getByAltText("ace of hearts").getAttribute("src")).toBe("/cards/ace_of_hearts.png");
     rerender(<Card card={ace} faceDown small />);
     expect(screen.getByAltText("Card back").className).toContain("small");
+    rerender(<Card faceDown />);
+    expect(screen.getByAltText("Card back").getAttribute("src")).toBe("/cards/back.png");
     rerender(<Card />);
     expect(container.querySelector(".card-skel")).not.toBeNull();
     rerender(<Card small />);
@@ -61,6 +63,16 @@ describe("DealerArea", () => {
     rerender(<DealerArea dealer={{ ...dealer, isBusted: true, isBlackjack: true }} />);
     expect(screen.getByText(/Busted/)).toBeTruthy();
     expect(screen.getByText(/Blackjack/)).toBeTruthy();
+  });
+
+  it("shows one card back per hidden card, after the up card", () => {
+    const dealer = { cards: stackedShoe(["10"]), dealerDisplayTotal: 10 };
+    const { container, rerender } = renderUI(<DealerArea dealer={dealer} />);
+    expect(screen.queryByAltText("Card back")).toBeNull();
+    rerender(<DealerArea dealer={dealer} hiddenCount={1} />);
+    const imgs = [...container.querySelectorAll(".dealer img")].map((img) => img.alt);
+    expect(imgs).toEqual(["10 of hearts", "Card back"]);
+    expect(screen.getByText("Total: 10")).toBeTruthy();
   });
 });
 
@@ -214,6 +226,13 @@ describe("GameBoard", () => {
     expect(gameActions.split).toHaveBeenCalledWith(0);
     expect(gameActions.continueRound).not.toHaveBeenCalled();
     expect(screen.getByText("Total: 10")).toBeTruthy();
+    expect(screen.queryByAltText("Card back")).toBeNull();
+  });
+
+  it("shows the US hole card face down", () => {
+    renderUI(<GameBoard />, { game: { ...playing, dealerHole: { cards: stackedShoe(["A"]) } } });
+    expect(screen.getByAltText("Card back")).toBeTruthy();
+    expect(screen.queryByAltText("ace of hearts")).toBeNull();
   });
 
   it("continues on a table click after the round, and hides an empty dealer", () => {

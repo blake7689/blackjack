@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useGameActions } from "../../hooks/useGame";
@@ -13,7 +13,24 @@ export default function Header() {
   const loc = useLocation();
   const nav = useNavigate();
   const headerRef = useRef(null);
+  const menuRef = useRef(null);
   useCssVarHeight(headerRef, "--header-height");
+
+  // Closing on logout too keeps menuRef mounted while the outside-click listener runs.
+  const loggedIn = Boolean(player);
+  useEffect(() => setOpen(false), [loc.pathname, loggedIn]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e) => { if (!menuRef.current.contains(e.target)) setOpen(false); };
+    const onKeyDown = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
 
   const goHome = () => {
     if (loc.pathname === "/") return;
@@ -42,7 +59,7 @@ export default function Header() {
 
       <div className="bj-right">
         {player ? (
-          <div className="user-menu">
+          <div className="user-menu" ref={menuRef}>
             <button className="user-btn" onClick={() => setOpen((v) => !v)}>{player.userName}</button>
             {open && (
               <div className="dropdown">

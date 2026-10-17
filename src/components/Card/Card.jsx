@@ -1,7 +1,7 @@
 import "./Card.css";
 
 export default function Card({ card, faceDown = false, small = false }) {
-  if (!card) {
+  if (!card && !faceDown) {
     return <div className={`card-skel ${small ? "small" : ""}`} />;
   }
   const src = faceDown ? "/cards/back.png" : `/cards/${card.rank}_of_${card.suit}.png`;
