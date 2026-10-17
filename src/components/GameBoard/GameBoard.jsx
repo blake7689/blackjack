@@ -11,7 +11,7 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const { dealer, shoe, hands, selectedHandIndex, phase, runningCount } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount } = useGameState();
   const { continueRound, hit, stand, double, split } = useGameActions();
   const { player } = usePlayer();
 
@@ -40,7 +40,7 @@ export default function GameBoard() {
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
-              {dealer.cards.length > 0 && <DealerArea dealer={dealer} />}
+              {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} />}
             </div>
           </div>
         </div>
