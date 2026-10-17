@@ -2,6 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
+import { DealerHoleOptions } from "../../utils/constants/dealerHoleOptions";
 import {
   getInitialPlayerHandEvaluation, 
   getInitialDealerHandEvaluation, 
@@ -29,10 +30,16 @@ describe("getInitialPlayerHandEvaluation", () => {
     expect(result.handResult).toBe(HandResult.LOSE);
   });
 
-  it("returns WIN and DONE if only player has blackjack", () => {
-    const result = getInitialPlayerHandEvaluation(true, false);
+  it("returns WIN and DONE if only player has blackjack and dealer does not draw hole on 21", () => {
+    const result = getInitialPlayerHandEvaluation(true, false, true);
     expect(result.handStatus).toBe(HandStatus.DONE);
     expect(result.handResult).toBe(HandResult.WIN);
+  });
+
+  it("returns DONE and NONE if only player has blackjack and dealer draws hole on 21", () => {
+    const result = getInitialPlayerHandEvaluation(true, false, false);
+    expect(result.handStatus).toBe(HandStatus.DONE);
+    expect(result.handResult).toBe(HandResult.NONE);
   });
 
   it("returns PLAYING and NONE if neither has blackjack", () => {
@@ -49,22 +56,27 @@ describe("getInitialPlayerHandEvaluation", () => {
 
 describe("getInitialDealerHandEvaluation", () => {
     it("returns DONE if both player and dealer have blackjack", () => {
-      const result = getInitialDealerHandEvaluation(true, true);
+      const result = getInitialDealerHandEvaluation(true, true, DealerHoleOptions["Draw Early - Check_US"]);
       expect(result).toBe(HandStatus.DONE);
     });
 
     it("returns DONE if only dealer has blackjack", () => {
-      const result = getInitialDealerHandEvaluation(false, true);
+      const result = getInitialDealerHandEvaluation(false, true, DealerHoleOptions["Draw Early - No Check_US"]);
       expect(result).toBe(HandStatus.DONE);
     });
 
-    it("returns DONE if only player has blackjack", () => {
-      const result = getInitialDealerHandEvaluation(true, false);
+    it("returns DONE if only player has blackjack and dealer does not draw hole on 21", () => {
+      const result = getInitialDealerHandEvaluation(true, false, DealerHoleOptions["Draw_After - NoDraw21 EU"]);
       expect(result).toBe(HandStatus.DONE);
+    });
+
+    it("returns DRAW_HOLE if only player has blackjack and dealer draws hole after EU", () => {
+      const result = getInitialDealerHandEvaluation(true, false, DealerHoleOptions["Draw After_EU"]);
+      expect(result).toBe(HandStatus.DRAW_HOLE);
     });
 
     it("returns NONE if neither player nor dealer has blackjack", () => {
-      const result = getInitialDealerHandEvaluation(false, false);
+      const result = getInitialDealerHandEvaluation(false, false, DealerHoleOptions["Draw Early - No Check_US"]);
       expect(result).toBe(HandStatus.NONE);
     });
   });

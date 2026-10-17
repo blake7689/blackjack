@@ -12,4 +12,11 @@ export default defineConfig({
       },
     },
   },
+  test: {
+    coverage: {
+      provider: 'v8',
+      include: ['src/**'],
+      exclude: ['src/main.jsx', 'src/**/_tests_/**', 'src/**/*.test.{js,jsx}'],
+    },
+  },
 });
