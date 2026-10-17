@@ -13,22 +13,26 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehav
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerCards = [playerFirstCard, playerSecondCard];
-  const dealerHoleCard = dealerHoleBehaviour !== DealerHoleOptions["Draw After_EU"] || dealerHoleBehaviour !== DealerHoleOptions["Draw_After - NoDraw21 EU"] ? [drawCardFromShoe(shoe, setCutCardFound, resetShoe)] : [];
-  const dealerCardsAll = dealerHoleCard.length > 0 ? [dealerUpCard, dealerHoleCard[0]] : [dealerUpCard]; 
+  const isEU = dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"] || dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"];
+  const dealerPeeks = dealerHoleBehaviour === DealerHoleOptions["Draw Early - Check_US"];
+  const dealerHoleCard = isEU ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  const dealerCardsAll = [dealerUpCard, ...dealerHoleCard];
   const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCardsAll);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
-  const dealerHasBlackjack = isTotalBlackjack(dealerTotals.total);
-  const dealerCardsShowing = dealerHasBlackjack ? dealerCardsAll : [dealerUpCard];
+  // Only a peek reveals a dealer blackjack now; with no peek it stays hidden until the dealer's turn.
+  const dealerBlackjackRevealed = dealerPeeks && dealerCardsAll.length === 2 && isTotalBlackjack(dealerTotals.total);
+  const dealerCardsShowing = dealerBlackjackRevealed ? dealerCardsAll : [dealerUpCard];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
-  const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"]);
-  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour);
-  
-  const updatedDealerHandStatus = 
-    dealerHandStatus === HandStatus.NONE ? 
+  const blackjackPaysNow = dealerPeeks || dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"];
+  const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, blackjackPaysNow);
+  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, dealerHoleBehaviour);
+
+  const updatedDealerHandStatus =
+    dealerHandStatus === HandStatus.NONE ?
     getDealerHandEvaluation(
-      dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false
-    ).handStatus : 
+      dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false, dealerCardsAll.length
+    ).handStatus :
     dealerHandStatus;
   
   return {
@@ -47,15 +51,25 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, dealerHoleBehav
     dealer: { 
       cards: dealerCardsShowing, 
       status: updatedDealerHandStatus ? updatedDealerHandStatus : HandStatus.NONE,
-      dealerDisplayTotal: dealerUpCardTotals.total,
-      total: dealerTotals.total, 
+      dealerDisplayTotal: dealerBlackjackRevealed ? dealerTotals.total : dealerUpCardTotals.total,
+      total: dealerTotals.total,
       totals: dealerTotals.totals,
-      isBlackjack: dealerHasBlackjack,
+      isBlackjack: dealerBlackjackRevealed,
       isBusted: false
     },
     shoe,
-    dealerHoleCards: { cards: dealerHoleCard },
+    dealerHoleCards: { cards: dealerBlackjackRevealed ? [] : dealerHoleCard },
   };
+}
+
+// Dealer only plays when a hand still depends on the dealer's total //
+export function dealerNeedsToPlay(hands) {
+  return hands.some((h) => !h.isBusted && h.result === HandResult.NONE);
+}
+
+// When every hand still waiting is a blackjack, only a dealer blackjack matters: two cards, no more //
+export function dealerOnlyChecksBlackjack(hands) {
+  return hands.filter((h) => !h.isBusted && h.result === HandResult.NONE).every((h) => h.isBlackjack);
 }
 
 // Settle Hands //
@@ -123,23 +137,28 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
   if (!blackJackOnSplit && hand1Evaluation.isBlackjack) { hand1Evaluation.isBlackjack = false; }
   if (!blackJackOnSplit && hand2Evaluation.isBlackjack) { hand2Evaluation.isBlackjack = false; }
 
-  const newHand1 = { 
-    ...hand, 
-    cards: hand1Cards, 
+  // Split aces get one card each and stand. //
+  const splitAces = hand.cards[0].rank === "ace";
+
+  const newHand1 = {
+    ...hand,
+    isSplit: true,
+    cards: hand1Cards,
     total: hand1Totals.total,
     totals: hand1Totals.totals,
-    status: hand1Evaluation.handStatus, 
+    status: splitAces ? HandStatus.DONE : hand1Evaluation.handStatus,
     result: hand1Evaluation.handResult,
     isBlackjack: hand1Evaluation.isBlackjack,
     isBusted: hand1Evaluation.isBusted
   };
 
-  const newHand2 = { 
-    ...hand, 
-    cards: hand2Cards, 
+  const newHand2 = {
+    ...hand,
+    isSplit: true,
+    cards: hand2Cards,
     total: hand2Totals.total,
     totals: hand2Totals.totals,
-    status: hand2Evaluation.handStatus, 
+    status: splitAces ? HandStatus.DONE : hand2Evaluation.handStatus,
     result: hand2Evaluation.handResult,
     isBlackjack: hand2Evaluation.isBlackjack,
     isBusted: hand2Evaluation.isBusted
@@ -154,17 +173,33 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
 
 {/* DEALER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
 
-// Dealer logic //
-export function dealerPlay(dealer, hole, shoe, playerAllBust = false, setCutCardFound, resetShoe) {
-  let dealerCards =  hole.cards.length === 0 ? [...dealer.cards] : [...dealer.cards, ...hole.cards];
-  hole.cards = [];
+// Turns the hole card face up at the start of the dealer's turn (no-op in EU, which has no hole card yet) //
+export function revealDealerHole(dealer, hole) {
+  const cards = [...dealer.cards, ...hole.cards];
+  const totals = getHandTotals(cards);
+  return {
+    ...dealer,
+    cards,
+    dealerDisplayTotal: totals.total,
+    total: totals.total,
+    totals: totals.totals,
+    isBlackjack: cards.length === 2 && totals.total === 21,
+  };
+}
 
-  if (!playerAllBust && dealer.status === HandStatus.PLAYING) {
+// Dealer logic: one step (reveal any hole card, then draw at most one card) //
+export function dealerPlay(dealer, hole, shoe, skipDraw = false, setCutCardFound, resetShoe) {
+  let dealerCards = [...dealer.cards, ...hole.cards];
+  const needsCard = dealer.status === HandStatus.PLAYING || (dealer.status === HandStatus.DRAW_HOLE && dealerCards.length < 2);
+  const atTwoForBlackjackCheck = () => dealer.checkBlackjackOnly && dealerCards.length >= 2;
+
+  if (!skipDraw && needsCard && !atTwoForBlackjackCheck()) {
     dealerCards = [...dealerCards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
   }
 
   const dealerTotals = getHandTotals(dealerCards);
-  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.totals, dealer, playerAllBust);
+  const stopAtTwo = atTwoForBlackjackCheck();
+  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.totals, dealer, skipDraw || stopAtTwo, dealerCards.length);
 
   const newDealer = { 
     ...dealer, 
@@ -177,7 +212,7 @@ export function dealerPlay(dealer, hole, shoe, playerAllBust = false, setCutCard
     isBlackjack: newHandEvaluation.isBlackjack
   };
 
-  return { dealer: newDealer, shoe, hole };
+  return { dealer: newDealer, shoe, hole: { cards: [] } };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

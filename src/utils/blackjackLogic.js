@@ -5,7 +5,8 @@ import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 {/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
 
 // Sets initial player status based on blackjack conditions //
-export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, noDealerDrawHoleIf21)
+// blackjackPaysNow: true when no dealer blackjack can still appear (US peek found none, or EU NoDraw21). //
+export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, blackjackPaysNow)
 {
   let handStatus = HandStatus.PLAYING;
   let handResult = HandResult.NONE;
@@ -18,7 +19,7 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
     handResult = HandResult.LOSE;
   } else if (playerHasBlackjack) {
     handStatus = HandStatus.DONE;
-    handResult = noDealerDrawHoleIf21 ? HandResult.WIN : handResult;
+    handResult = blackjackPaysNow ? HandResult.WIN : handResult;
   }
 
   return { handStatus, handResult };
@@ -63,23 +64,20 @@ export function getHandEvaluation(totals, hand, newCardsLength) {
   return { handStatus, handResult, isBlackjack, isBusted };
 }
 
-// Evaluates dealer hand //
-export function getDealerHandEvaluation(totals, hand, playerAllBust) {
+// Evaluates dealer hand (stands on all 17s) //
+export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount) {
   let handStatus = hand.status;
   let isBusted = hand.isBusted;
-  let isBlackjack = hand.isBlackjack;
+  const isBlackjack = cardCount === 2 && totals.includes(21);
 
-  if (playerAllBust) {
+  if (skipDraw) {
     handStatus = HandStatus.DONE;
-    return { handStatus, isBusted };
+    return { handStatus, isBusted, isBlackjack };
   }
-  
+
   if (totals.every(n => n > 21)) {
     handStatus = HandStatus.DONE;
     isBusted = true;
-  } else if (handStatus === HandStatus.DRAW_HOLE && totals.some(n => n === 21)) {
-    handStatus = HandStatus.DONE;
-    isBlackjack = true; 
   } else if (totals.some(n => n >= 17 && n <= 21)) {
     handStatus = HandStatus.DONE;
   } else {
@@ -87,6 +85,11 @@ export function getDealerHandEvaluation(totals, hand, playerAllBust) {
   }
 
   return { handStatus, isBusted, isBlackjack };
+}
+
+// One split per round: two cards of equal value (10-J-Q-K pair), not already a split hand //
+export function canSplit(hand) {
+  return hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value && !hand.isSplit;
 }
 
 // Check total for blackjack //
@@ -138,34 +141,37 @@ export function getHandTotals(cards) {
 
 {/* SETTLEMENT */} ////////////////////////////////////////////////////////////////////////////////
 
+// Returns a settled copy; never mutates the hand (it lives in React state) //
 export function settleHand(hand, dealer) {
-  if (hand.result === HandResult.NONE) {
+  let result = hand.result;
+  if (result === HandResult.NONE) {
     if (hand.isBusted) {
-      hand.result = HandResult.LOSE;
+      result = HandResult.LOSE;
     } else if (hand.isBlackjack && dealer.isBlackjack) {
-      hand.result = HandResult.PUSH;
+      result = HandResult.PUSH;
     } else if (hand.isBlackjack) {
-      hand.result = HandResult.WIN;
+      result = HandResult.WIN;
+    } else if (dealer.isBlackjack) {
+      result = HandResult.LOSE; // dealer blackjack beats any non-blackjack 21
     } else if (hand.total > dealer.total || dealer.isBusted) {
-      hand.result = HandResult.WIN;
+      result = HandResult.WIN;
     } else if (hand.total === dealer.total) {
-      hand.result = HandResult.PUSH;
+      result = HandResult.PUSH;
     } else {
-      hand.result = HandResult.LOSE;
+      result = HandResult.LOSE;
     }
   }
 
-  if (hand.result === HandResult.WIN && hand.isBlackjack) {
-    hand.payout = hand.bet * 2.5;
-  } else if (hand.result === HandResult.WIN) {
-    hand.payout = hand.bet * 2;
-  } else if (hand.result === HandResult.PUSH) {
-    hand.payout = hand.bet;
-  } else {
-    hand.payout = 0;
+  let payout = 0;
+  if (result === HandResult.WIN && hand.isBlackjack) {
+    payout = hand.bet * 2.5;
+  } else if (result === HandResult.WIN) {
+    payout = hand.bet * 2;
+  } else if (result === HandResult.PUSH) {
+    payout = hand.bet;
   }
 
-  return hand;
+  return { ...hand, result, payout };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

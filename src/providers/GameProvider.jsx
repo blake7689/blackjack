@@ -88,10 +88,12 @@ export function GameProvider({ children }) {
 
   // Reset Shoe //
   const resetShoe = useCallback((needsShoe = false) => {
-    setShoe(createShoe(deckCount, includeCutCard));
+    const newShoe = createShoe(deckCount, includeCutCard);
     setPlayedCards([]);
     setRunningCount(0);
-    if (needsShoe) { return shoeRef.current; }
+    // Mid-round: drawCardFromShoe refills the shoe in play with these cards, so don't replace it.
+    if (needsShoe) { return newShoe; }
+    setShoe(newShoe);
   }, [deckCount, includeCutCard]);
 
   // End Round //
@@ -135,20 +137,18 @@ export function GameProvider({ children }) {
   {/* CALCULATE & SETTLE */} //////////////////////////////////////////////////////////////////////
 
   // Calculate Results //
-  const calculateResults = useCallback(() => {
-    let creditsToAdd = 0;
-    handsRef.current.forEach((hand) => { creditsToAdd += hand.payout || 0; });
+  const calculateResults = useCallback((settledHands) => {
+    const creditsToAdd = settledHands.reduce((sum, hand) => sum + hand.payout, 0);
     if (creditsToAdd > 0) { updateCredits(playerRef.current.credits + creditsToAdd); }
     setGamePhase(GamePhases.POST_ROUND);
-    setTimeout(() => {}, playTimeout);
-  }, [updateCredits, playTimeout]);
+  }, [updateCredits]);
 
   // Settle //
   const settle = useCallback(() => {
     const settledHands = gameEngine.settleHands(handsRef.current, dealerRef.current);
     setHands(settledHands);
     setGamePhase(GamePhases.RESULTS);
-    setTimeout(() => { calculateResults(); }, playTimeout);
+    setTimeout(() => { calculateResults(settledHands); }, playTimeout);
   }, [calculateResults, playTimeout]);
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -172,15 +172,18 @@ export function GameProvider({ children }) {
   );
 
   const dealerTurn = useCallback(() => {
-    const d = { ...dealerRef.current };
-    const dHole = { ...dealerHoleRef.current };
-    d.dealerDisplayTotal = d.total;
-    // d.cards = d.cards.map((c) => ({ ...c, faceDown: false }));
+    const d = gameEngine.revealDealerHole(dealerRef.current, dealerHoleRef.current);
+    const dHole = { cards: [] };
     setDealer(d);
+    setDealerHole(dHole);
     if (d.status !== HandStatus.DONE) {
-      d.status = d.status === HandStatus.DRAW_HOLE ? d.status : HandStatus.PLAYING;
-      const playerAllBust = handsRef.current.every((h) => h.isBusted === true);
-      setTimeout(() => { playDealerStep(d, dHole, shoeRef.current, playerAllBust); }, playTimeout);
+      const playing = {
+        ...d,
+        status: d.status === HandStatus.DRAW_HOLE ? d.status : HandStatus.PLAYING,
+        checkBlackjackOnly: gameEngine.dealerOnlyChecksBlackjack(handsRef.current),
+      };
+      const skipDraw = !gameEngine.dealerNeedsToPlay(handsRef.current);
+      setTimeout(() => { playDealerStep(playing, dHole, shoeRef.current, skipDraw); }, playTimeout);
     } else {
       setGamePhase(GamePhases.SETTLING_HANDS);
       setTimeout(() => { settle(); }, playTimeout);

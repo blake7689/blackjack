@@ -23,13 +23,17 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 
 ## Conventions
 - Rules logic stays in `src/utils/` (no React); components only render and dispatch.
-- Tests live in `src/utils/_tests_/`, named `<module>.test.js`.
+- Tests live in `src/utils/_tests_/`, named `<module>.test.js`; whole-round rule scenarios live in
+  `rules.test.js`, using the `stackedShoe.js` helper (`stackedShoe`, `playRound`).
 - Branches: `feature/<issue>-<slug>`, `fix/<slug>`, `chore/<slug>`. Default branch `main`.
 
 ## Gotchas
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts; "NoDraw21" EU skips the hole card when the player has blackjack. Test each mode.
-- `getInitialPlayerHandEvaluation` third arg is true only for the EU NoDraw21 mode (see `gameEngine.js`).
+- `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek and EU NoDraw21:
+  the modes where no dealer blackjack can still appear. US no peek hides a dealer blackjack until
+  `revealDealerHole`, and it then wins every bet, doubles and splits included.
+- Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
