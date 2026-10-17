@@ -1,3 +1,5 @@
 import { createContext } from "react";
 
-export const GameContext = createContext(null);
+// State and actions are separate so components that only act (Header) don't re-render on every card.
+export const GameStateContext = createContext(null);
+export const GameActionsContext = createContext(null);

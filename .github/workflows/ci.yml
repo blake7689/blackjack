@@ -15,7 +15,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run lint --if-present
-      - run: npm test --if-present -- --run
+      # Fails below 100% line, branch, function or statement coverage (thresholds in vite.config.js).
+      - name: Tests with the 100% coverage gate
+        run: npm run coverage
         env:
           CI: true
       - run: npm run build

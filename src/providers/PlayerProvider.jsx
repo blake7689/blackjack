@@ -1,103 +1,52 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { PlayerContext } from "../context/PlayerContext";
-import {
-  loginPlayer,
-  addPlayerApi,
-  updatePlayerApi,
-  updateCreditsApi,
-  deletePlayerApi,
-} from "../utils/playerEngine";
+import { loginPlayer, addPlayerApi, updatePlayerApi, updateCreditsApi, deletePlayerApi } from "../utils/playerEngine";
 
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [lastLocalCreditChange, setLastLocalCreditChange] = useState(0);
+  const [creditChange, setCreditChange] = useState(null);
+  // The latest player, updated synchronously so back-to-back credit changes never read a stale balance.
+  const playerRef = useRef(null);
 
-  {/* LOGIN */} ///////////////////////////////////////////////////////////////////////////////////
-
-  const login = useCallback(async ({ usernameOrEmail, password }) => {
-    setLoading(true);
-    try {
-      const p = await loginPlayer({ usernameOrEmail, password });
-      setPlayer(p);
-      return p;
-    } finally { setLoading(false); }
+  const signIn = useCallback((p) => {
+    playerRef.current = p;
+    setPlayer(p);
+    return p;
   }, []);
 
-  const logout = useCallback(() => setPlayer(null), []);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
-
-  {/* PLAYER C.U.D. */} ///////////////////////////////////////////////////////////////////////////
-
-  const addPlayer = useCallback(async (payload) => {
-    setLoading(true);
-    try {
-      const p = await addPlayerApi(payload);
-      setPlayer(p);
-      return p;
-    } finally { setLoading(false); }
-  }, []);
-
-  const updatePlayer = useCallback(
-    async (updates) => {
-      if (!player) { throw new Error("Not logged in"); }
-      setLoading(true);
-      try {
-        const updated = await updatePlayerApi(player, updates);
-        setPlayer(updated);
-        return true;
-      } finally { setLoading(false); }
-    },
-    [player]
-  );
-
+  const login = useCallback(async (credentials) => signIn(await loginPlayer(credentials)), [signIn]);
+  const addPlayer = useCallback(async (payload) => signIn(await addPlayerApi(payload)), [signIn]);
+  const updatePlayer = useCallback(async (profile) => signIn(await updatePlayerApi(playerRef.current, profile)), [signIn]);
   const deletePlayer = useCallback(async () => {
-    if (!player) { throw new Error("Not logged in"); }
-    setLoading(true);
-    try {
-      await deletePlayerApi(player);
-      setPlayer(null);
-      return true;
-    } finally { setLoading(false); }
-  }, [player]);
-
-  /////////////////////////////////////////////////////////////////////////////////////////////////
+    await deletePlayerApi(playerRef.current);
+    signIn(null);
+  }, [signIn]);
+  const logout = useCallback(() => signIn(null), [signIn]);
 
   {/* CREDITS */} /////////////////////////////////////////////////////////////////////////////////
 
-  const updateCreditsOnServer = useCallback(
-    async (newCredits) => {
-      if (!player) { return; }
-      const updated = await updateCreditsApi(player, newCredits);
-      if (updated.credits !== player.credits) { setPlayer(updated); }
-    },
-    [player]
-  );
+  const getCredits = useCallback(() => playerRef.current?.credits ?? 0, []);
 
-  const addCreditsLocalOnly = useCallback((delta) => {
-      setPlayer((prev) => (prev ? { ...prev, credits: Number(prev.credits) + Number(delta) } : prev));
-      setLastLocalCreditChange(delta);
-      setTimeout(() => setLastLocalCreditChange(0), 2000);
-    },[]
-  );
+  // delta: change to the balance; persist: also save the new balance to the server. //
+  const adjustCredits = useCallback((delta, persist) => {
+    const current = playerRef.current;
+    if (!current) return;
+    signIn({ ...current, credits: current.credits + delta });
+    if (delta !== 0) setCreditChange((prev) => ({ delta, seq: (prev?.seq ?? 0) + 1 }));
+    // shortcut: a failed save is only logged; Phase 4's server ledger makes the server the source of truth.
+    if (persist) updateCreditsApi(playerRef.current, playerRef.current.credits).catch((err) => console.error("Saving credits failed", err));
+  }, [signIn]);
 
-  /////////////////////////////////////////////////////////////////////////////////////////////////
+  // The +/- badge next to the balance fades after a moment. //
+  useEffect(() => {
+    if (!creditChange) return;
+    const timer = setTimeout(() => setCreditChange(null), 2500);
+    return () => clearTimeout(timer);
+  }, [creditChange]);
 
   const value = useMemo(
-    () => ({
-      player,
-      lastLocalCreditChange,
-      loading,
-      login,
-      addPlayer,
-      updatePlayer,
-      updateCreditsOnServer,
-      deletePlayer,
-      logout,
-      addCreditsLocalOnly,
-    }),
-    [player, lastLocalCreditChange, loading, login, addPlayer, updatePlayer, updateCreditsOnServer, deletePlayer, logout, addCreditsLocalOnly]
+    () => ({ player, creditChange, login, addPlayer, updatePlayer, deletePlayer, logout, getCredits, adjustCredits }),
+    [player, creditChange, login, addPlayer, updatePlayer, deletePlayer, logout, getCredits, adjustCredits]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

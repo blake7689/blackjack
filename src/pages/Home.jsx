@@ -1,15 +1,14 @@
 import { useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
-import { useGame } from "../hooks/useGame";
+import { useGameActions } from "../hooks/useGame";
 import "./pages.css";
 
 export default function Home() {
   const { player } = usePlayer();
-  const { startGame } = useGame();
+  const { startGame } = useGameActions();
   const nav = useNavigate();
 
   const onStart = () => {
-    if (!player) { nav("/login"); return; }
     startGame();
     nav("/game");
   };

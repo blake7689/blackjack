@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { normalizePlayer, loginPlayer, updatePlayerApi, updateCreditsApi } from "../playerEngine";
+import { normalizePlayer, loginPlayer, updatePlayerApi, updateCreditsApi, addPlayerApi, deletePlayerApi } from "../playerEngine";
 
 const player = {
   playerId: 7, userName: "player", email: "p@example.com",
@@ -42,5 +42,25 @@ describe("password is never kept or re-sent", () => {
     const p = await updatePlayerApi(player, { password: "newpass" });
     expect(sentBody().password).toBe("newpass");
     expect(p).not.toHaveProperty("password");
+  });
+});
+
+describe("player calls", () => {
+  it("normalizePlayer turns missing names into empty strings and credits into a number", () => {
+    expect(normalizePlayer({ playerId: 1, userName: "u", email: "e", firstName: null, credits: "12.5" }))
+      .toEqual({ playerId: 1, userName: "u", email: "e", firstName: "", lastName: "", credits: 12.5 });
+  });
+
+  it("addPlayerApi sends blank names as null with the starting credits", async () => {
+    await addPlayerApi({ userName: "n", password: "secret1", email: "n@example.com", firstName: "", lastName: "L", credits: 500 });
+    expect(sentBody()).toEqual({ playerId: 0, userName: "n", password: "secret1", email: "n@example.com", firstName: null, lastName: "L", credits: 500 });
+    await addPlayerApi({ userName: "n", password: "secret1", email: "n@example.com", firstName: "F", lastName: "", credits: 0 });
+    expect(sentBody()).toMatchObject({ firstName: "F", lastName: null });
+  });
+
+  it("deletePlayerApi deletes by id", async () => {
+    await deletePlayerApi(player);
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/Player\/7$/);
+    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
   });
 });

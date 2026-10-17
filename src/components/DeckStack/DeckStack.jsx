@@ -1,13 +1,13 @@
-import { useGame } from "../../hooks/useGame";
+import { useGameState } from "../../hooks/useGame";
 import { cardsRemaining } from "../../utils/cards";
 
 export default function DeckStack({ shoe }) {
-  const { deckCount, cutCardFound } = useGame();
+  const { settings, cutCardFound } = useGameState();
   return (
     <div>
-      { <div> Decks: {deckCount}</div> }
-      <div>Shoe: {shoe ? cardsRemaining(shoe) : 0}</div>
-      { cutCardFound && <div>Cut Card Found. Resetting Shoe After Round</div> }
+      <div> Decks: {settings.deckCount}</div>
+      <div>Shoe: {cardsRemaining(shoe)}</div>
+      {cutCardFound && <div>Cut Card Found. Resetting Shoe After Round</div>}
     </div>
   );
 }

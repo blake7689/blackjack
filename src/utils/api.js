@@ -1,6 +1,11 @@
 const API_BASE = import.meta.env.VITE_API_URL;
 
-async function handleResponse(res, url, method) {
+async function request(method, url, body) {
+  const res = await fetch(`${API_BASE}${url}`, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
   if (!res.ok) {
     const txt = await res.text();
     throw new Error(txt || `${method} ${url} failed`);
@@ -8,29 +13,6 @@ async function handleResponse(res, url, method) {
   return res.status === 204 ? null : res.json().catch(() => null);
 }
 
-export async function apiPut(url, body) {
-  const res = await fetch(`${API_BASE}${url}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return handleResponse(res, url, "PUT");
-}
-
-export async function apiPost(url, body) {
-  const res = await fetch(`${API_BASE}${url}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  return handleResponse(res, url, "POST");
-}
-
-export async function apiDelete(url, body) {
-  const res = await fetch(`${API_BASE}${url}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return handleResponse(res, url, "DELETE");
-}
+export const apiPost = (url, body) => request("POST", url, body);
+export const apiPut = (url, body) => request("PUT", url, body);
+export const apiDelete = (url, body) => request("DELETE", url, body);

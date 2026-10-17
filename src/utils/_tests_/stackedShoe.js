@@ -1,11 +1,9 @@
 import { buildDeck } from "../cards";
 import { HandStatus } from "../constants/handStatus";
 import { HandResult } from "../constants/handResult";
+import { GamePhases } from "../constants/gamePhases";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
-import {
-  dealRound, playerHit, playerDouble, playerSplit, dealerPlay, settleHands,
-  revealDealerHole, dealerNeedsToPlay, dealerOnlyChecksBlackjack,
-} from "../gameEngine";
+import { gameReducer, initialGameState, nextAutoAction } from "../gameReducer";
 
 const RANK_CODES = { A: "ace", K: "king", Q: "queen", J: "jack" };
 const DECK = buildDeck(0);
@@ -21,8 +19,8 @@ export function stackedShoe(codes) {
   });
 }
 
-const noop = () => {};
-const outOfCards = () => { throw new Error("Scenario shoe ran out of cards"); };
+export const outOfCards = () => { throw new Error("Scenario shoe ran out of cards"); };
+const RICH = 1e9;
 
 export const Modes = {
   PEEK: DealerHoleOptions["Draw Early - Check_US"],
@@ -31,41 +29,35 @@ export const Modes = {
   EU_NO_DRAW_21: DealerHoleOptions["Draw_After - NoDraw21 EU"],
 };
 
-// Plays one round with the engine the way GameProvider sequences it: deal, each hand in order
-// (actions are consumed in order; a hand with no action left stands), dealer, settle.
-// shortcut: mirrors GameProvider's orchestration by hand; Phase 3 moves it into gameReducer and these tests target that.
+// Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order
+// (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
 export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false }) {
-  const shoe = stackedShoe(cards);
-  const dealt = dealRound(shoe, bet, noop, outOfCards, mode);
-  const afterDeal = { hands: dealt.hands.map((h) => ({ ...h })), dealer: { ...dealt.dealer } };
-  const hands = [...dealt.hands];
+  const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
+  let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
+  s = step(s, { type: "SET_SETTING", key: "dealerHoleBehaviour", value: mode });
+  s = step(s, { type: "SET_SETTING", key: "blackJackOnSplit", value: blackJackOnSplit });
+  s = step(s, { type: "ADD_BET", amount: bet });
+  s = step(s, { type: "DEAL" });
+  const afterDeal = s;
+
   const queue = [...actions];
-
-  for (let i = 0; i < hands.length; i++) {
-    while (hands[i].status === HandStatus.PLAYING) {
-      const action = queue.shift() ?? "stand";
-      if (action === "hit") hands[i] = playerHit(hands[i], shoe, noop, outOfCards).hand;
-      else if (action === "double") hands[i] = playerDouble(hands[i], shoe, noop, outOfCards).hand;
-      else if (action === "split") hands.splice(i, 1, ...playerSplit(hands[i], shoe, noop, outOfCards, blackJackOnSplit).newHandsArray);
-      else hands[i] = { ...hands[i], status: HandStatus.DONE };
-    }
+  while (s.phase === GamePhases.PLAYER_TURN) {
+    s = step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
+  }
+  while (nextAutoAction(s)) {
+    s = step(s, { type: nextAutoAction(s) });
+    if (s.phase === GamePhases.POST_ROUND) break;
   }
 
-  let dealer = { ...revealDealerHole(dealt.dealer, dealt.dealerHoleCards), checkBlackjackOnly: dealerOnlyChecksBlackjack(hands) };
-  const skipDraw = !dealerNeedsToPlay(hands);
-  while (dealer.status === HandStatus.PLAYING || dealer.status === HandStatus.DRAW_HOLE) {
-    dealer = dealerPlay(dealer, { cards: [] }, shoe, skipDraw, noop, outOfCards).dealer;
-  }
-
-  const settled = settleHands(hands, dealer);
   return {
     afterDeal,
-    hands: settled,
-    dealer,
-    results: settled.map((h) => h.result),
-    payout: settled.reduce((sum, h) => sum + h.payout, 0),
-    staked: settled.reduce((sum, h) => sum + h.bet, 0),
-    cardsLeft: shoe.length,
+    state: s,
+    hands: s.hands,
+    dealer: s.dealer,
+    results: s.hands.map((h) => h.result),
+    payout: s.hands.reduce((sum, h) => sum + h.payout, 0),
+    staked: s.hands.reduce((sum, h) => sum + h.bet, 0),
+    cardsLeft: s.shoe.length,
   };
 }
 

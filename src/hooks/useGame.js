@@ -1,6 +1,10 @@
 import { useContext } from "react";
-import { GameContext } from "../context/GameContext";
+import { GameStateContext, GameActionsContext } from "../context/GameContext";
 
-export function useGame() {
-  return useContext(GameContext);
+export function useGameState() {
+  return useContext(GameStateContext);
+}
+
+export function useGameActions() {
+  return useContext(GameActionsContext);
 }
