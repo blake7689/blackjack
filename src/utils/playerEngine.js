@@ -1,52 +1,45 @@
-import { apiPost, apiPut, apiDelete } from "./api";
+import { apiGet, apiPost, apiPut, apiDelete, setToken, clearToken } from "./api";
 
-// The API returns camelCase JSON and never a password. //
-export function normalizePlayer(apiPlayer) {
+// The API's /api/player/me profile; it never includes a password or a player id. //
+export function normalizePlayer(profile) {
   return {
-    playerId: apiPlayer.playerId,
-    userName: apiPlayer.userName,
-    email: apiPlayer.email,
-    firstName: apiPlayer.firstName ?? "",
-    lastName: apiPlayer.lastName ?? "",
-    credits: Number(apiPlayer.credits),
+    userName: profile.userName,
+    email: profile.email,
+    firstName: profile.firstName ?? "",
+    lastName: profile.lastName ?? "",
+    credits: Number(profile.credits),
   };
 }
 
-export async function loginPlayer({ usernameOrEmail, password }) {
-  return normalizePlayer(await apiPost(`/Player/login`, { usernameOrEmail, password }));
+export async function getMe() {
+  return normalizePlayer(await apiGet("/player/me"));
 }
 
-export async function addPlayerApi(payload) {
-  const body = {
-    playerId: 0,
-    userName: payload.userName,
-    password: payload.password,
-    email: payload.email,
-    firstName: payload.firstName || null,
-    lastName: payload.lastName || null,
-    credits: payload.credits,
-  };
-  return normalizePlayer(await apiPost(`/Player`, body));
+async function signInWith(url, body) {
+  const { accessToken } = await apiPost(url, body);
+  setToken(accessToken);
+  return getMe();
 }
 
-// profile: userName, email, firstName, lastName, and password (blank keeps the current one). //
-export async function updatePlayerApi(player, profile) {
-  const { password, ...fields } = profile;
-  const body = {
-    ...fields,
-    playerId: player.playerId,
-    password: password || undefined, // JSON.stringify drops undefined, so the API keeps the password
-    credits: player.credits,
-  };
-  await apiPut(`/Player/${player.playerId}`, body);
-  return normalizePlayer({ ...player, ...fields });
+export const loginPlayer = ({ usernameOrEmail, password }) => signInWith("/auth/login", { usernameOrEmail, password });
+
+// The server sets the starting balance; signup never sends one.
+export const registerPlayer = ({ userName, email, password, firstName, lastName }) =>
+  signInWith("/auth/register", { userName, email, password, firstName: firstName || null, lastName: lastName || null });
+
+export async function updateProfile({ userName, email, firstName, lastName }) {
+  return normalizePlayer(await apiPut("/player/me", { userName, email, firstName: firstName || null, lastName: lastName || null }));
 }
 
-export async function updateCreditsApi(player, newCredits) {
-  const { playerId, userName, email, firstName, lastName } = player;
-  await apiPut(`/Player/${playerId}`, { playerId, userName, email, firstName, lastName, credits: Number(newCredits) });
+export const changePassword = (currentPassword, newPassword) => apiPut("/player/me/password", { currentPassword, newPassword });
+
+export async function deleteMe() {
+  await apiDelete("/player/me");
+  clearToken();
 }
 
-export async function deletePlayerApi(player) {
-  await apiDelete(`/Player/${player.playerId}`, { playerId: player.playerId });
-}
+export const logoutPlayer = () => clearToken();
+
+// Ledger (ADR-0003): the server owns the balance and answers with it. //
+export const placeBet = (amount, newRound) => apiPost("/ledger/bet", { amount, newRound });
+export const settleRound = (payout) => apiPost("/ledger/settle", { payout });

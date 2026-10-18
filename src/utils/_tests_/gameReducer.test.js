@@ -6,13 +6,17 @@ import { stackedShoe, outOfCards, playRound } from "./stackedShoe";
 const run = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1000, ...a }), state);
 const started = (cards) => run(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
 const dealt = (cards, bet = 10) => run(started(cards), { type: "ADD_BET", amount: bet }, { type: "DEAL" });
-const events = (s) => s.creditEvents.map(({ delta, persist }) => [delta, persist]);
+const withoutSeq = (e) => { const copy = { ...e }; delete copy.seq; return copy; };
+const events = (s) => s.creditEvents.map(withoutSeq);
+const local = (amount) => ({ kind: "local", amount });
+const bet = (amount, newRound, alreadyDeducted) => ({ kind: "bet", amount, newRound, alreadyDeducted });
+const settle = (amount) => ({ kind: "settle", amount });
 
 describe("betting", () => {
   it("takes a bet from the balance locally and refunds it on clear", () => {
     const s = run(started(["5"]), { type: "ADD_BET", amount: 10 }, { type: "ADD_BET", amount: 5 }, { type: "CLEAR_BET" });
     expect(s.betCircle).toBe(0);
-    expect(events(s)).toEqual([[-10, false], [-5, false], [15, false]]);
+    expect(events(s)).toEqual([local(-10), local(-5), local(15)]);
   });
 
   it("refuses a bet above the balance, outside PRE_DEAL, and an empty clear", () => {
@@ -28,7 +32,7 @@ describe("betting", () => {
     const s = dealt(["10", "10", "9", "7"]);
     expect(s.phase).toBe(GamePhases.PLAYER_TURN);
     expect(s.initialBet).toBe(10);
-    expect(events(s).at(-1)).toEqual([0, true]);
+    expect(events(s).at(-1)).toEqual(bet(10, true, true));
     expect(run(s, { type: "DEAL" })).toBe(s);
   });
 });
@@ -54,10 +58,10 @@ describe("player actions", () => {
 
   it("double and split take the extra stake once and persist it", () => {
     const doubled = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
-    expect(events(doubled).at(-1)).toEqual([-10, true]);
+    expect(events(doubled).at(-1)).toEqual(bet(10, false, false));
     expect(doubled.betCircle).toBe(20);
     const split = run(dealt(["8", "10", "8", "7", "3", "10"]), { type: "SPLIT", handIdx: 0 });
-    expect(events(split).at(-1)).toEqual([-10, true]);
+    expect(events(split).at(-1)).toEqual(bet(10, false, false));
     expect(split.betCircle).toBe(20);
     expect(split.hands).toHaveLength(2);
     expect(split.selectedHandIndex).toBe(0);
@@ -83,7 +87,7 @@ describe("dealer and settlement steps", () => {
       s = run(s, { type: nextAutoAction(s) });
     }
     expect(order).toEqual(["DEALER_REVEAL", "DEALER_STEP", "SETTLE", "FINISH_RESULTS"]);
-    expect(events(s).at(-1)).toEqual([20, true]);
+    expect(events(s).at(-1)).toEqual(settle(20));
   });
 
   it("goes straight to settling when the revealed dealer stands", () => {
@@ -92,10 +96,10 @@ describe("dealer and settlement steps", () => {
     expect(s.dealer.cards).toHaveLength(2);
   });
 
-  it("queues no credit when nothing is won", () => {
+  it("still settles a total loss, so the server closes the round", () => {
     const r = playRound({ cards: ["10", "10", "6", "7", "K"], actions: ["stand"] });
     expect(r.payout).toBe(0);
-    expect(events(r.state).at(-1)).toEqual([0, true]);
+    expect(events(r.state).at(-1)).toEqual(settle(0));
   });
 
   it("has no automatic step while waiting for the player", () => {
@@ -126,7 +130,7 @@ describe("end of round", () => {
   it("re-places the last bet when the setting is on and it is affordable", () => {
     const s = run(finished({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
     expect(s.betCircle).toBe(10);
-    expect(events(s).at(-1)).toEqual([-10, false]);
+    expect(events(s).at(-1)).toEqual(local(-10));
     const poor = run(finished({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND", credits: 5 });
     expect(poor.betCircle).toBe(0);
   });
@@ -169,7 +173,7 @@ describe("shoe, count and purity", () => {
 
   it("resetting refunds a bet still on the table, but not one in play", () => {
     const betting = run(started(["5"]), { type: "ADD_BET", amount: 10 });
-    expect(events(run(betting, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).at(-1)).toEqual([10, false]);
+    expect(events(run(betting, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).at(-1)).toEqual(local(10));
     const playing = dealt(["10", "10", "9", "7"]);
     const reset = run(playing, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE });
     expect(reset.creditEvents).toEqual(playing.creditEvents);

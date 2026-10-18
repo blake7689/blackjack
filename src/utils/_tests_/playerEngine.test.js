@@ -1,66 +1,104 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { normalizePlayer, loginPlayer, updatePlayerApi, updateCreditsApi, addPlayerApi, deletePlayerApi } from "../playerEngine";
+import {
+  normalizePlayer, getMe, loginPlayer, registerPlayer, updateProfile, changePassword,
+  deleteMe, logoutPlayer, placeBet, settleRound,
+} from "../playerEngine";
+import { getToken, setToken } from "../api";
 
-const player = {
-  playerId: 7, userName: "player", email: "p@example.com",
-  firstName: "P", lastName: "Q", credits: 100, inActive: null,
-};
+const profile = { userName: "tester", email: "t@example.com", firstName: "T", lastName: null, credits: 1000 };
 
 let fetchMock;
-const sentBody = () => JSON.parse(fetchMock.mock.calls.at(-1)[1].body);
+const call = (i = -1) => {
+  const [url, init] = fetchMock.mock.calls.at(i);
+  return { url, method: init.method, body: init.body && JSON.parse(init.body), auth: init.headers.Authorization };
+};
+const respond = (body, status = 200) => ({ ok: status < 400, status, json: async () => body, text: async () => JSON.stringify(body) });
 
 beforeEach(() => {
-  fetchMock = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ...player, password: "leaked" }) }));
+  sessionStorage.clear();
+  // Token endpoints answer with a bearer token; everything else with the profile.
+  fetchMock = vi.fn(async (url) => respond(url.includes("/auth/") ? { tokenType: "Bearer", accessToken: "tok-1" } : profile));
   vi.stubGlobal("fetch", fetchMock);
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("password is never kept or re-sent", () => {
-  it("normalizePlayer drops any password the API returns", () => {
-    expect(normalizePlayer({ ...player, password: "leaked" })).not.toHaveProperty("password");
+describe("profile", () => {
+  it("normalizePlayer turns missing names into empty strings and credits into a number", () => {
+    expect(normalizePlayer({ userName: "u", email: "e", firstName: null, credits: "12.5" }))
+      .toEqual({ userName: "u", email: "e", firstName: "", lastName: "", credits: 12.5 });
   });
 
-  it("loginPlayer sends the typed password but does not keep it", async () => {
-    const p = await loginPlayer({ usernameOrEmail: "player", password: "secret1" });
-    expect(sentBody()).toEqual({ usernameOrEmail: "player", password: "secret1" });
-    expect(p).not.toHaveProperty("password");
-  });
-
-  it("updateCreditsApi omits the password", async () => {
-    await updateCreditsApi(player, 90);
-    expect(sentBody()).not.toHaveProperty("password");
-    expect(sentBody().credits).toBe(90);
-  });
-
-  it("updatePlayerApi omits an empty password", async () => {
-    await updatePlayerApi(player, { userName: "renamed", password: "" });
-    expect(sentBody()).not.toHaveProperty("password");
-    expect(sentBody().userName).toBe("renamed");
-  });
-
-  it("updatePlayerApi sends a new password once, without keeping it", async () => {
-    const p = await updatePlayerApi(player, { password: "newpass" });
-    expect(sentBody().password).toBe("newpass");
-    expect(p).not.toHaveProperty("password");
+  it("getMe reads the signed-in player's profile with the token", async () => {
+    setToken("tok-9");
+    expect(await getMe()).toEqual({ ...profile, lastName: "" });
+    expect(call()).toMatchObject({ method: "GET", auth: "Bearer tok-9" });
+    expect(call().url).toMatch(/\/player\/me$/);
   });
 });
 
-describe("player calls", () => {
-  it("normalizePlayer turns missing names into empty strings and credits into a number", () => {
-    expect(normalizePlayer({ playerId: 1, userName: "u", email: "e", firstName: null, credits: "12.5" }))
-      .toEqual({ playerId: 1, userName: "u", email: "e", firstName: "", lastName: "", credits: 12.5 });
+describe("signing in", () => {
+  it("loginPlayer stores the token, then loads the profile with it", async () => {
+    const p = await loginPlayer({ usernameOrEmail: "tester", password: "secret1" });
+
+    expect(call(0)).toMatchObject({ method: "POST", body: { usernameOrEmail: "tester", password: "secret1" } });
+    expect(call(0).url).toMatch(/\/auth\/login$/);
+    expect(getToken()).toBe("tok-1");
+    expect(call(1).auth).toBe("Bearer tok-1");
+    expect(p).not.toHaveProperty("password");
+    expect(p.credits).toBe(1000);
   });
 
-  it("addPlayerApi sends blank names as null with the starting credits", async () => {
-    await addPlayerApi({ userName: "n", password: "secret1", email: "n@example.com", firstName: "", lastName: "L", credits: 500 });
-    expect(sentBody()).toEqual({ playerId: 0, userName: "n", password: "secret1", email: "n@example.com", firstName: null, lastName: "L", credits: 500 });
-    await addPlayerApi({ userName: "n", password: "secret1", email: "n@example.com", firstName: "F", lastName: "", credits: 0 });
-    expect(sentBody()).toMatchObject({ firstName: "F", lastName: null });
+  it("registerPlayer never sends a balance and sends blank names as null", async () => {
+    await registerPlayer({ userName: "n", email: "n@example.com", password: "secret1", firstName: "", lastName: "L", credits: 1e9 });
+
+    expect(call(0).url).toMatch(/\/auth\/register$/);
+    expect(call(0).body).toEqual({ userName: "n", email: "n@example.com", password: "secret1", firstName: null, lastName: "L" });
+    expect(getToken()).toBe("tok-1");
+    await registerPlayer({ userName: "m", email: "m@example.com", password: "secret1", firstName: "F", lastName: "" });
+    expect(call(-2).body).toMatchObject({ firstName: "F", lastName: null });
   });
 
-  it("deletePlayerApi deletes by id", async () => {
-    await deletePlayerApi(player);
-    expect(fetchMock.mock.calls[0][0]).toMatch(/\/Player\/7$/);
-    expect(fetchMock.mock.calls[0][1].method).toBe("DELETE");
+  it("logoutPlayer and deleteMe drop the token", async () => {
+    setToken("tok-2");
+    logoutPlayer();
+    expect(getToken()).toBeNull();
+
+    setToken("tok-3");
+    fetchMock.mockResolvedValueOnce(respond(null, 204));
+    await deleteMe();
+    expect(call()).toMatchObject({ method: "DELETE", auth: "Bearer tok-3" });
+    expect(getToken()).toBeNull();
+  });
+});
+
+describe("account changes", () => {
+  it("updateProfile sends the profile without a password or balance", async () => {
+    const p = await updateProfile({ userName: "renamed", email: "r@example.com", firstName: "R", lastName: "" });
+
+    expect(call()).toMatchObject({ method: "PUT", body: { userName: "renamed", email: "r@example.com", firstName: "R", lastName: null } });
+    expect(p.userName).toBe("tester");
+    await updateProfile({ userName: "renamed", email: "r@example.com", firstName: "", lastName: "L" });
+    expect(call().body).toMatchObject({ firstName: null, lastName: "L" });
+  });
+
+  it("changePassword sends the current and the new password", async () => {
+    fetchMock.mockResolvedValueOnce(respond(null, 204));
+    await changePassword("old-pass", "new-pass");
+
+    expect(call()).toMatchObject({ method: "PUT", body: { currentPassword: "old-pass", newPassword: "new-pass" } });
+    expect(call().url).toMatch(/\/player\/me\/password$/);
+  });
+});
+
+describe("ledger", () => {
+  it("placeBet and settleRound post to the ledger and return the server's balance", async () => {
+    fetchMock.mockResolvedValueOnce(respond({ credits: 990, openStake: 10 }));
+    expect(await placeBet(10, true)).toEqual({ credits: 990, openStake: 10 });
+    expect(call()).toMatchObject({ method: "POST", body: { amount: 10, newRound: true } });
+
+    fetchMock.mockResolvedValueOnce(respond({ credits: 1015, openStake: 0 }));
+    expect(await settleRound(25)).toEqual({ credits: 1015, openStake: 0 });
+    expect(call().url).toMatch(/\/ledger\/settle$/);
+    expect(call().body).toEqual({ payout: 25 });
   });
 });

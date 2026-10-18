@@ -18,7 +18,7 @@ function setup() {
   const credits = { value: 100 };
   const player = {
     getCredits: vi.fn(() => credits.value),
-    adjustCredits: vi.fn((delta) => { credits.value += delta; }),
+    applyCreditEvent: vi.fn((event) => { credits.value += event.kind === "bet" && !event.alreadyDeducted ? -event.amount : event.kind === "bet" ? 0 : event.amount; }),
   };
   const ctx = {};
   function Probe() {
@@ -34,6 +34,7 @@ function setup() {
   return { ctx, player, ...utils };
 }
 
+const events = (player) => player.applyCreditEvent.mock.calls.map(([e]) => { const copy = { ...e }; delete copy.seq; return copy; });
 const tick = () => act(() => { vi.advanceTimersByTime(1000); });
 
 beforeEach(() => {
@@ -60,11 +61,11 @@ describe("GameProvider", () => {
     tick(); // settle
     tick(); // results
     expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
-    expect(player.adjustCredits.mock.calls).toEqual([[-10, false], [0, true], [20, true]]);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true }, { kind: "settle", amount: 20 }]);
     act(() => ctx.actions.continueRound());
     tick();
     expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
-    expect(player.adjustCredits).toHaveBeenCalledTimes(3);
+    expect(player.applyCreditEvent).toHaveBeenCalledTimes(3);
   });
 
   it("cancels pending dealer steps when the game is reset mid-round", () => {
@@ -78,7 +79,7 @@ describe("GameProvider", () => {
     for (let i = 0; i < 5; i++) tick();
     expect(ctx.state.phase).toBe(GamePhases.NONE);
     expect(ctx.state.dealer.cards).toEqual([]);
-    expect(player.adjustCredits.mock.calls).toEqual([[-10, false], [0, true]]);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true }]);
   });
 
   it("stops its timer on unmount", () => {
@@ -106,7 +107,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.double(0));
     act(() => ctx.actions.hit(1));
     expect(ctx.state.hands[1].cards).toHaveLength(3);
-    expect(player.adjustCredits).toHaveBeenCalledWith(-10, true);
+    expect(events(player)).toContainEqual({ kind: "bet", amount: 10, newRound: false, alreadyDeducted: false });
   });
 
   it("deals a fresh shoe for table settings and just updates the others", () => {

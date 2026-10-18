@@ -96,27 +96,59 @@ describe("Login", () => {
     expect(location()).toBe("/login");
   });
 
-  it("signs up with the typed details and starting credits", async () => {
+  it("signs up with the typed details; the server sets the starting balance", async () => {
     const addPlayer = vi.fn().mockResolvedValue(testPlayer);
     renderUI(<Login />, { path: "/login", player: { addPlayer } });
     fireEvent.click(screen.getByText("Add player"));
+    expect(screen.queryByPlaceholderText("Starting credits")).toBeNull();
     type("Username", "newbie");
     type("Email", "n@example.com");
     type("Password", "secret1");
     type("First name", "New");
     type("Last name", "Bie");
-    type("Starting credits", "500");
     fireEvent.click(screen.getByText("Create & sign in"));
     expect(screen.getByText("Creating…")).toBeTruthy();
     await flush();
-    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret1", email: "n@example.com", firstName: "New", lastName: "Bie", credits: 500 });
+    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret1", email: "n@example.com", firstName: "New", lastName: "Bie" });
     expect(location()).toBe("/");
+  });
+
+  it("shows each signup field's error and blocks the form until it is valid", () => {
+    const addPlayer = vi.fn();
+    renderUI(<Login />, { path: "/login", player: { addPlayer } });
+    fireEvent.click(screen.getByText("Add player"));
+    const button = screen.getByText("Create & sign in");
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByText(/is required/)).toBeNull(); // nothing shown before the player touches a field
+
+    type("Username", "ab");
+    expect(screen.getByText("Username must be at least 3 characters.")).toBeTruthy();
+    type("Email", "not-an-email");
+    expect(screen.getByText("Invalid email format.")).toBeTruthy();
+    type("Password", "123");
+    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    type("Password", "");
+    expect(screen.getByText("Password is required.")).toBeTruthy();
+    fireEvent.blur(screen.getByPlaceholderText("First name"));
+    expect(screen.getByText("First name is required.")).toBeTruthy();
+
+    // Enter still submits a form: it shows every problem instead of signing up.
+    fireEvent.submit(button.closest("form"));
+    expect(screen.getByText("Last name is required.")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Last name").getAttribute("aria-invalid")).toBe("true");
+    expect(addPlayer).not.toHaveBeenCalled();
+    expect(button.disabled).toBe(true);
   });
 
   it("alerts a failed signup", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     renderUI(<Login />, { path: "/login", player: { addPlayer: vi.fn().mockRejectedValue(new Error("")) } });
     fireEvent.click(screen.getByText("Add player"));
+    type("Username", "newbie");
+    type("Email", "n@example.com");
+    type("Password", "secret1");
+    type("First name", "New");
+    type("Last name", "Bie");
     fireEvent.submit(screen.getByText("Create & sign in").closest("form"));
     await flush();
     expect(alert).toHaveBeenCalledWith("Signup failed");
@@ -150,21 +182,48 @@ describe("Settings", () => {
     expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
   });
 
-  it("enables Save only for a valid change, saves it, and clears the password", async () => {
+  it("enables Save only for a valid profile change, and saves it", async () => {
     vi.spyOn(window, "alert").mockImplementation(() => {});
     const updatePlayer = vi.fn().mockResolvedValue(true);
-    renderUI(<Settings />, { player: { updatePlayer } });
+    const { container } = renderUI(<Settings />, { player: { updatePlayer } });
+    const userName = container.querySelector('input[name="userName"]');
     expect(saveButton().disabled).toBe(true);
-    type("Leave blank to keep", "123");
-    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    fireEvent.change(userName, { target: { value: "ab" } });
+    expect(screen.getByText("Username must be at least 3 characters.")).toBeTruthy();
     expect(saveButton().disabled).toBe(true);
-    type("Leave blank to keep", "newpass1");
+    fireEvent.change(userName, { target: { value: "renamed" } });
     expect(saveButton().disabled).toBe(false);
     fireEvent.click(saveButton());
     await flush();
-    expect(updatePlayer).toHaveBeenCalledWith({ userName: "tester", email: "t@example.com", password: "newpass1", firstName: "Test", lastName: "Er" });
+    expect(updatePlayer).toHaveBeenCalledWith({ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er" });
     expect(window.alert).toHaveBeenCalledWith("Saved");
-    expect(screen.getByPlaceholderText("Leave blank to keep").value).toBe("");
+  });
+
+  it("changes the password only with the current one and a valid new one", async () => {
+    vi.spyOn(window, "alert").mockImplementation(() => {});
+    const changePassword = vi.fn().mockResolvedValueOnce(null).mockRejectedValueOnce(new Error("Incorrect password.")).mockRejectedValueOnce(new Error(""));
+    const { container } = renderUI(<Settings />, { player: { changePassword } });
+    const current = container.querySelector('input[name="currentPassword"]');
+    const next = container.querySelector('input[name="newPassword"]');
+    const button = screen.getByText("Change password");
+    expect(current.type).toBe("password");
+    expect(button.disabled).toBe(true);
+    fireEvent.change(current, { target: { value: "old-pass" } });
+    fireEvent.change(next, { target: { value: "123" } });
+    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    expect(button.disabled).toBe(true);
+    fireEvent.change(next, { target: { value: "new-pass" } });
+    fireEvent.click(button);
+    await flush();
+    expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass");
+    expect(current.value).toBe("");
+    for (let i = 0; i < 2; i++) {
+      fireEvent.change(current, { target: { value: "wrong" } });
+      fireEvent.change(next, { target: { value: "new-pass" } });
+      fireEvent.click(button);
+      await flush();
+    }
+    expect(window.alert.mock.calls.map(([m]) => m)).toEqual(["Password changed", "Incorrect password.", "Password change failed"]);
   });
 
   it("alerts a failed save, with a fallback message", async () => {

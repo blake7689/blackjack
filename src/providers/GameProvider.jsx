@@ -7,7 +7,7 @@ import { usePlayer } from "../hooks/usePlayer";
 
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
-  const { getCredits, adjustCredits } = usePlayer();
+  const { getCredits, applyCreditEvent } = usePlayer();
   const { deckCount, includeCutCard, playTimeout } = state.settings;
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
@@ -21,10 +21,10 @@ export function GameProvider({ children }) {
   useEffect(() => {
     for (const event of state.creditEvents) {
       if (event.seq <= appliedSeq.current) continue;
-      adjustCredits(event.delta, event.persist);
+      applyCreditEvent(event);
       appliedSeq.current = event.seq;
     }
-  }, [state.creditEvents, adjustCredits]);
+  }, [state.creditEvents, applyCreditEvent]);
 
   // One timer drives the automatic steps (dealer, settle, results, next round). Its cleanup cancels it
   // whenever the state moves on or the provider unmounts, so a stale step can never fire into a new game.

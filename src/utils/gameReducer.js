@@ -45,11 +45,16 @@ const emptyRound = {
   selectedHandIndex: 0,
 };
 
-// Queues a balance change; GameProvider applies each event exactly once. //
-function credit(state, delta, persist) {
+// Queues a balance change; GameProvider hands each event to PlayerProvider exactly once. Kinds:
+//   local:  chips moved on the table only ({ amount } is the change to the shown balance)
+//   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted })
+//   settle: the round's payout for the server ledger ({ amount }, sent even when 0 to close the round)
+function credit(state, event) {
   const creditSeq = state.creditSeq + 1;
-  return { ...state, creditSeq, creditEvents: [...state.creditEvents, { seq: creditSeq, delta, persist }].slice(-20) };
+  return { ...state, creditSeq, creditEvents: [...state.creditEvents, { seq: creditSeq, ...event }].slice(-20) };
 }
+
+const local = (amount) => ({ kind: "local", amount });
 
 // Runs an engine draw on a copy of the shoe, so the state's shoe is never mutated. //
 function draw(state, refill, fn) {
@@ -73,7 +78,7 @@ function countSeen(state, reset = false) {
 }
 
 function resetTable(state, shoe, phase) {
-  const refunded = state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 ? credit(state, state.betCircle, false) : state;
+  const refunded = state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 ? credit(state, local(state.betCircle)) : state;
   return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false }, true);
 }
 
@@ -115,14 +120,14 @@ function playerAction(state, action) {
   if (action.type === "DOUBLE") {
     if (hand.cards.length !== 2) return state;
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill));
-    return countSeen(advance(credit(next, -hand.bet, true), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
+    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   // SPLIT
   if (!canSplit(hand)) return state;
   const { result, next, refilled } = draw(state, action.refill,
     (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, state.settings.blackJackOnSplit));
-  return countSeen(advance(credit(next, -hand.bet, true), replaceHand(state.hands, handIdx, ...result.newHandsArray), handIdx), refilled);
+  return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, ...result.newHandsArray), handIdx), refilled);
 }
 
 export function gameReducer(state, action) {
@@ -140,11 +145,11 @@ export function gameReducer(state, action) {
 
     case "ADD_BET":
       if (state.phase !== GamePhases.PRE_DEAL || action.amount > action.credits) return state;
-      return credit({ ...state, betCircle: state.betCircle + action.amount }, -action.amount, false);
+      return credit({ ...state, betCircle: state.betCircle + action.amount }, local(-action.amount));
 
     case "CLEAR_BET":
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
-      return credit({ ...state, betCircle: 0 }, state.betCircle, false);
+      return credit({ ...state, betCircle: 0 }, local(state.betCircle));
 
     case "DEAL": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
@@ -159,8 +164,8 @@ export function gameReducer(state, action) {
         initialBet: state.betCircle,
         phase: result.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN,
       };
-      // Persist the balance the bet was taken from.
-      return countSeen(credit(dealt, 0, true), refilled);
+      // The chips already left the shown balance; this stakes them on the server and opens the round.
+      return countSeen(credit(dealt, { kind: "bet", amount: state.betCircle, newRound: true, alreadyDeducted: true }), refilled);
     }
 
     case "HIT":
@@ -197,9 +202,9 @@ export function gameReducer(state, action) {
       return { ...state, hands: engine.settleHands(state.hands, state.dealer), phase: GamePhases.RESULTS };
 
     case "FINISH_RESULTS": {
+      // Always settle, even a total loss, so the server closes the round.
       const payout = state.hands.reduce((sum, h) => sum + h.payout, 0);
-      const next = { ...state, phase: GamePhases.POST_ROUND };
-      return payout > 0 ? credit(next, payout, true) : next;
+      return credit({ ...state, phase: GamePhases.POST_ROUND }, { kind: "settle", amount: payout });
     }
 
     case "CONTINUE":
@@ -209,7 +214,7 @@ export function gameReducer(state, action) {
       const { initialBet } = state;
       const rebet = state.settings.resetInitialBet && initialBet > 0 && action.credits >= initialBet;
       let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0 };
-      if (rebet) next = credit(next, -initialBet, false);
+      if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;
     }

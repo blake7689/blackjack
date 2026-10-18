@@ -12,7 +12,7 @@ export function fakePlayer(overrides = {}) {
   return {
     player: testPlayer, creditChange: null,
     login: vi.fn(), addPlayer: vi.fn(), updatePlayer: vi.fn(), deletePlayer: vi.fn(), logout: vi.fn(),
-    getCredits: vi.fn(() => 100), adjustCredits: vi.fn(),
+    getCredits: vi.fn(() => 100), applyCreditEvent: vi.fn(), changePassword: vi.fn(),
     ...overrides,
   };
 }

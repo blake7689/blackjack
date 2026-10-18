@@ -18,8 +18,13 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `GameProvider` = `useReducer` + one timer effect (cleanup cancels it on reset or unmount) + a credit-event
   effect that applies each balance change once. Two contexts: `useGameState()` and `useGameActions()`
   (stable; components that only act, like Header, use just this).
-- `PlayerProvider` keeps the latest player in a ref; `adjustCredits(delta, persist)` and `getCredits()`
-  never read a stale balance.
+- Sign-in (ADR-0002): `api.js` sends the bearer token from `sessionStorage` (`bj.token`); a 401 on a
+  signed-in request clears it and signs out. `PlayerProvider` restores the session on load via
+  `GET /api/player/me`.
+- Credits (ADR-0003): the reducer emits `local` / `bet` / `settle` credit events; `PlayerProvider.applyCreditEvent`
+  sends ledger calls one at a time and shows server balance + chips still on the table + optimistic
+  changes awaiting an answer. Any ledger error reloads the balance from `/me`. `getCredits()` never reads
+  a stale balance.
 - Game rules are pure functions in `src/utils/`: `blackjackLogic.js` (hand evaluation), `gameEngine.js`
   (deal, hit, settle), `cards.js` (shoe), `playerEngine.js`, `validation.js`. Constants in `src/utils/constants/`.
 - API client: `src/utils/api.js` (`apiPost/Put/Delete`), base URL from `VITE_API_URL`.
