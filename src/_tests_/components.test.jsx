@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { initialGameState } from "../utils/gameReducer";
 import { screen, fireEvent } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
@@ -227,6 +228,16 @@ describe("GameBoard", () => {
     expect(gameActions.continueRound).not.toHaveBeenCalled();
     expect(screen.getByText("Total: 10")).toBeTruthy();
     expect(screen.queryByAltText("Card back")).toBeNull();
+  });
+
+  it("shows the card count by default", () => {
+    renderUI(<GameBoard />, { game: playing });
+    expect(screen.getByText("Count:")).toBeTruthy();
+  });
+
+  it("hides the card count when it is turned off (Dev tab)", () => {
+    renderUI(<GameBoard />, { game: { ...playing, settings: { ...initialGameState.settings, showCardCount: false } } });
+    expect(screen.queryByText("Count:")).toBeNull();
   });
 
   it("shows the US hole card face down", () => {

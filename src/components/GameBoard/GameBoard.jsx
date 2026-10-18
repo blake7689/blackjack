@@ -11,7 +11,7 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings } = useGameState();
   const { continueRound, hit, stand, double, split } = useGameActions();
   const { player } = usePlayer();
 
@@ -28,7 +28,7 @@ export default function GameBoard() {
           <StatsPanel player={player} />
         </div>
         <div className="top-center card-count">
-          <CardCountDisplay shoe={shoe} runningCount={runningCount} />
+          {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} />}
         </div>
         <div className="top-right deck-stack">
           <DeckStack shoe={shoe} />

@@ -19,6 +19,7 @@ export const initialGameState = {
     dealerDrawsOnPlayerBlackjack: true,
     dealerDrawsOnPlayerBust: false,
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
+    showCardCount: true,
   },
   phase: GamePhases.NONE,
   shoe: [],
