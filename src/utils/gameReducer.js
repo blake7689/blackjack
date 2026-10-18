@@ -20,6 +20,7 @@ export const initialGameState = {
     dealerDrawsOnPlayerBust: false,
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
     showCardCount: true,
+    maxSplitHands: 2, // 2 = one split per round
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -40,7 +41,7 @@ export const initialGameState = {
 
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
-  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately"];
+  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands"];
 
 const emptyRound = {
   hands: [],
@@ -130,7 +131,7 @@ function playerAction(state, action) {
   }
 
   // SPLIT
-  if (!canSplit(hand)) return state;
+  if (!canSplit(hand, state.hands.length, state.settings.maxSplitHands)) return state;
   const { result, next, refilled } = draw(state, action.refill,
     (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, state.settings.blackJackOnSplit));
   return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, ...result.newHandsArray), handIdx), refilled);

@@ -30,6 +30,7 @@ const GAME_SETTINGS = [
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select" },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
+  { key: "maxSplitHands", label: (v) => `Max Hands After Splits: ${v}`, input: "range", min: 2, max: 4 },
   { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
   // With no dealer card to compare against, a blackjack must pay at once.
   { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
