@@ -1,13 +1,18 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
-import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS } from "../utils/gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS, sanitizeSettings } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { createShoe } from "../utils/cards";
 import { usePlayer } from "../hooks/usePlayer";
+import { getToken } from "../utils/api";
+import { getSettings, saveSettings } from "../utils/playerEngine";
+
+const SETTINGS_VERSION = 1;
 
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
-  const { getCredits, applyCreditEvent } = usePlayer();
+  const { player, getCredits, applyCreditEvent } = usePlayer();
+  const signedIn = player != null;
   const { deckCount, includeCutCard, playTimeout } = state.settings;
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
@@ -15,6 +20,18 @@ export function GameProvider({ children }) {
   useEffect(() => { stateRef.current = state; }, [state]);
 
   const makeShoe = useCallback(() => createShoe(deckCount, includeCutCard), [deckCount, includeCutCard]);
+
+  // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there. //
+  useEffect(() => {
+    if (!signedIn) return;
+    let current = true;
+    getSettings().then((saved) => {
+      if (!current) return;
+      const settings = sanitizeSettings(saved);
+      dispatch({ type: "LOAD_SETTINGS", saved, shoe: createShoe(settings.deckCount, settings.includeCutCard) });
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [signedIn]);
 
   // Apply each credit event from the reducer exactly once. //
   const appliedSeq = useRef(0);
@@ -52,10 +69,12 @@ export function GameProvider({ children }) {
     continueRound: () => dispatch({ type: "CONTINUE" }),
     // Table settings deal a fresh shoe built with the new values and reset the table.
     changeSetting: (key, value) => actions.changeSettings({ [key]: value }),
+    // Applies at once; when signed in, also saves the whole settings object. The promise rejects if the save fails.
     changeSettings: (values) => {
       const next = { ...stateRef.current.settings, ...values };
       const shoe = Object.keys(values).some((k) => RESET_SETTINGS.includes(k)) ? createShoe(next.deckCount, next.includeCutCard) : undefined;
       dispatch({ type: "SET_SETTING", values, shoe });
+      return getToken() ? saveSettings({ v: SETTINGS_VERSION, ...next }) : Promise.resolve();
     },
     getPhase: () => stateRef.current.phase,
   }), [makeShoe, getCredits]);

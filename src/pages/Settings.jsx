@@ -4,7 +4,7 @@ import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
-import { RESET_SETTINGS } from "../utils/gameReducer";
+import { RESET_SETTINGS, SETTING_RANGES } from "../utils/gameReducer";
 import { isEU } from "../utils/blackjackLogic";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
 import { validateField } from "../utils/validation";
@@ -25,7 +25,7 @@ const TABS = [{ id: "player", label: "Player" }, { id: "game", label: "Game" }, 
 
 // Game settings with a tab of their own; the rest are on the Game tab.
 const GAME_SETTINGS = [
-  { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", min: 1, max: 5 },
+  { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", range: SETTING_RANGES.deckCount },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
@@ -39,7 +39,7 @@ const GAME_SETTINGS = [
     forcedOn: (s) => isEU(s) && !s.dealerDrawsOnPlayerBlackjack },
   { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
   { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
-  { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", min: 250, max: 5000, tab: "dev" },
+  { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.playTimeout, tab: "dev" },
   { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];
 
@@ -57,7 +57,7 @@ function SettingInput({ setting, value, forced, onChange }) {
     );
   }
   return (
-    <input type="range" aria-label={setting.key} min={setting.min} max={setting.max} value={value}
+    <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} value={value}
       onChange={(e) => onChange(Number(e.target.value))} style={{ marginLeft: 8, verticalAlign: "middle" }} />
   );
 }
@@ -77,6 +77,7 @@ export default function Settings() {
   }));
   const [drafts, setDrafts] = useState(settings);
   const [passwords, setPasswords] = useState({ current: "", next: "" });
+  const [saveError, setSaveError] = useState(null);
 
   if (!player) return <div className="page-bg"><div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div></div>;
 
@@ -120,14 +121,18 @@ export default function Settings() {
 
   const saveSetting = (key) => {
     if (RESET_SETTINGS.includes(key) && midRound && !confirm(RESET_CONFIRM)) return;
-    changeSetting(key, drafts[key]);
+    remember(changeSetting(key, drafts[key]));
   };
+
+  // A setting applies at once; if saving it to the server fails it still applies here, and we say so.
+  const remember = (saving) => saving.then(() => setSaveError(null),
+    () => setSaveError("Couldn't save your settings to your account. They apply here until you reload."));
 
   // A preset changes every rule at once, with one reset confirmation.
   const applyPreset = (name) => {
     if (midRound && !confirm(RESET_CONFIRM)) return;
     setDrafts({ ...drafts, ...RULE_PRESETS[name] });
-    changeSettings(RULE_PRESETS[name]);
+    remember(changeSettings(RULE_PRESETS[name]));
   };
 
   return (
@@ -145,6 +150,7 @@ export default function Settings() {
             </button>
           ))}
         </div>
+        {saveError && <div role="status" style={{ color: "#ff8a80", marginTop: 8 }}>{saveError}</div>}
         <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
         <div role="tabpanel" style={{ maxWidth: 720 }}>
           {tab === "player" && <>

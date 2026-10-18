@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act, waitFor } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import Home from "../pages/Home";
 import Game from "../pages/Game";
@@ -402,6 +402,16 @@ describe("Settings", () => {
     expect(screen.getByText("Max Hands After Splits: 3")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Save maxSplitHands"));
     expect(gameActions.changeSetting).toHaveBeenCalledWith("maxSplitHands", 3);
+  });
+
+  it("says so when a setting can't be saved to the account, and clears it after a good save", async () => {
+    const changeSetting = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+    renderUI(<Settings />, { path: "/settings?tab=dev", actions: { changeSetting } });
+    fireEvent.click(screen.getByLabelText("showCardCount"));
+    fireEvent.click(screen.getByLabelText("Save showCardCount"));
+    expect((await screen.findByRole("status")).textContent).toContain("Couldn't save your settings");
+    fireEvent.click(screen.getByLabelText("Save showCardCount"));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
   it("toggles the card count from the Dev tab without resetting the game", () => {

@@ -7,6 +7,11 @@ import { GamePhases } from "../utils/constants/gamePhases";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import * as cards from "../utils/cards";
 
+// Saved settings on the server (#36), controlled per test.
+const remote = vi.hoisted(() => ({ getSettings: vi.fn(), saveSettings: vi.fn(), token: null }));
+vi.mock("../utils/playerEngine", () => ({ getSettings: remote.getSettings, saveSettings: remote.saveSettings }));
+vi.mock("../utils/api", () => ({ getToken: () => remote.token }));
+
 // Every new shoe comes from the next stacked list, so rounds are scripted.
 const shoes = [];
 vi.mock("../utils/cards", async (importOriginal) => {
@@ -14,21 +19,23 @@ vi.mock("../utils/cards", async (importOriginal) => {
   return { ...actual, createShoe: vi.fn((...args) => (shoes.length ? shoes.shift() : actual.createShoe(...args))) };
 });
 
-function setup() {
+function Probe({ ctx }) {
+  ctx.state = useGameState();
+  ctx.actions = useGameActions();
+  return null;
+}
+
+function setup({ signedIn = false } = {}) {
   const credits = { value: 100 };
   const player = {
+    player: signedIn ? { userName: "alice" } : null,
     getCredits: vi.fn(() => credits.value),
     applyCreditEvent: vi.fn((event) => { credits.value += event.kind === "bet" && !event.alreadyDeducted ? -event.amount : event.kind === "bet" ? 0 : event.amount; }),
   };
   const ctx = {};
-  function Probe() {
-    ctx.state = useGameState();
-    ctx.actions = useGameActions();
-    return null;
-  }
   const utils = render(
     <PlayerContext.Provider value={player}>
-      <GameProvider><Probe /></GameProvider>
+      <GameProvider><Probe ctx={ctx} /></GameProvider>
     </PlayerContext.Provider>
   );
   return { ctx, player, ...utils };
@@ -41,7 +48,12 @@ beforeEach(() => {
   vi.useFakeTimers();
   shoes.length = 0;
   cards.createShoe.mockClear();
+  remote.getSettings.mockReset().mockResolvedValue({});
+  remote.saveSettings.mockReset().mockResolvedValue(undefined);
+  remote.token = null;
 });
+
+const flush = () => act(async () => {});
 afterEach(() => vi.useRealTimers());
 
 describe("GameProvider", () => {
@@ -112,23 +124,63 @@ describe("GameProvider", () => {
 
   it("deals a fresh shoe for table settings and just updates the others", () => {
     const { ctx } = setup();
-    act(() => ctx.actions.changeSetting("deckCount", 3));
+    act(() => { ctx.actions.changeSetting("deckCount", 3); });
     expect(ctx.state.shoe.filter((c) => c.type === "card")).toHaveLength(156);
     expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
     expect(cards.createShoe).toHaveBeenLastCalledWith(3, true);
-    act(() => ctx.actions.changeSetting("playTimeout", 500));
+    act(() => { ctx.actions.changeSetting("playTimeout", 500); });
     expect(ctx.state.settings.playTimeout).toBe(500);
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
 
   it("changes several settings in one step, dealing one fresh shoe (rule presets)", () => {
     const { ctx } = setup();
-    act(() => ctx.actions.changeSettings({ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }));
+    act(() => { ctx.actions.changeSettings({ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }); });
     expect(ctx.state.settings).toMatchObject({ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false });
     expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
-    act(() => ctx.actions.changeSettings({ playTimeout: 750 }));
+    act(() => { ctx.actions.changeSettings({ playTimeout: 750 }); });
     expect(ctx.state.settings.playTimeout).toBe(750);
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads the player's saved settings on sign-in, cleaned of unknown or bad values", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, deckCount: 4, resetInitialBet: true, dealerHoleBehaviour: "drawAfter_noDraw21", bogus: 1 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ deckCount: 4, resetInitialBet: true, dealerHoleBehaviour: "drawEarly_Check" });
+    expect(ctx.state.settings).not.toHaveProperty("bogus");
+  });
+
+  it("keeps the defaults when loading fails, and loads nothing when signed out", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.deckCount).toBe(2);
+    setup();
+    expect(remote.getSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores saved settings that arrive after signing out", async () => {
+    let answer;
+    remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const { ctx, rerender } = setup({ signedIn: true });
+    rerender(
+      <PlayerContext.Provider value={{ player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    );
+    await act(async () => answer({ deckCount: 5 }));
+    expect(ctx.state.settings.deckCount).toBe(2);
+  });
+
+  it("saves the whole settings object when signed in, and nothing when signed out", async () => {
+    const { ctx } = setup();
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 500); });
+    expect(remote.saveSettings).not.toHaveBeenCalled();
+    remote.token = "token";
+    await act(async () => { await ctx.actions.changeSetting("deckCount", 3); });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 1, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
 });
