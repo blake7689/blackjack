@@ -51,10 +51,11 @@ export function GameProvider({ children }) {
     split: (handIdx) => dispatch({ type: "SPLIT", handIdx, credits: getCredits(), refill: makeShoe }),
     continueRound: () => dispatch({ type: "CONTINUE" }),
     // Table settings deal a fresh shoe built with the new values and reset the table.
-    changeSetting: (key, value) => {
-      const next = { ...stateRef.current.settings, [key]: value };
-      const shoe = RESET_SETTINGS.includes(key) ? createShoe(next.deckCount, next.includeCutCard) : undefined;
-      dispatch({ type: "SET_SETTING", key, value, shoe });
+    changeSetting: (key, value) => actions.changeSettings({ [key]: value }),
+    changeSettings: (values) => {
+      const next = { ...stateRef.current.settings, ...values };
+      const shoe = Object.keys(values).some((k) => RESET_SETTINGS.includes(k)) ? createShoe(next.deckCount, next.includeCutCard) : undefined;
+      dispatch({ type: "SET_SETTING", values, shoe });
     },
     getPhase: () => stateRef.current.phase,
   }), [makeShoe, getCredits]);

@@ -45,7 +45,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),
-  `blackjackPaysImmediately`. Test each mode with each toggle.
+  `blackjackPaysImmediately`. Test each mode with each toggle. Rule presets (A5) live in `utils/rulePresets.js`;
+  the default settings equal the US preset, and `playRound` starts from the bare mode (pays-immediately off).
 - `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek, `blackjackPaysImmediately`,
   or EU with `dealerDrawsOnPlayerBlackjack` off. US no peek hides a dealer blackjack until
   `revealDealerHole`, and it then wins every bet, doubles and splits included.

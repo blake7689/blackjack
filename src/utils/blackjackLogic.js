@@ -2,6 +2,9 @@ import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 
+// The dealer draws its second card after the player acts. //
+export const isEU = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
+
 {/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
 
 // Sets initial player status based on blackjack conditions //
@@ -28,14 +31,13 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
 // Sets initial dealer status based on blackjack conditions //
 export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, settings)
 {
-  const isEU = settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
-  let handStatus = isEU ? HandStatus.DRAW_HOLE : HandStatus.NONE;
+  let handStatus = isEU(settings) ? HandStatus.DRAW_HOLE : HandStatus.NONE;
 
   if (dealerHasBlackjack && playerHasBlackjack) {
     handStatus = HandStatus.DONE;
   } else if (dealerHasBlackjack) {
     handStatus = HandStatus.DONE;
-  } else if (playerHasBlackjack && isEU && !settings.dealerDrawsOnPlayerBlackjack) {
+  } else if (playerHasBlackjack && isEU(settings) && !settings.dealerDrawsOnPlayerBlackjack) {
     handStatus = HandStatus.DONE;
   }
 
