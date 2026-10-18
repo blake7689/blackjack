@@ -75,7 +75,9 @@ export default function Settings() {
     firstName: player?.firstName ?? "",
     lastName: player?.lastName ?? "",
   }));
-  const [drafts, setDrafts] = useState(settings);
+  // Only unsaved edits are kept here, so settings that load after the page opens (#36) still show.
+  const [edits, setEdits] = useState({});
+  const drafts = { ...settings, ...edits };
   const [passwords, setPasswords] = useState({ current: "", next: "" });
   const [saveError, setSaveError] = useState(null);
 
@@ -131,7 +133,7 @@ export default function Settings() {
   // A preset changes every rule at once, with one reset confirmation.
   const applyPreset = (name) => {
     if (midRound && !confirm(RESET_CONFIRM)) return;
-    setDrafts({ ...drafts, ...RULE_PRESETS[name] });
+    setEdits({ ...edits, ...RULE_PRESETS[name] });
     remember(changeSettings(RULE_PRESETS[name]));
   };
 
@@ -200,7 +202,7 @@ export default function Settings() {
                 <label>
                   {setting.label(drafts[setting.key])}
                   <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
-                    onChange={(v) => setDrafts({ ...drafts, [setting.key]: v })} />
+                    onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
                 </label>
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (
                   <div style={{ color: "red", marginTop: 4, marginBottom: 4 }}>Changing this setting will reset the current game.</div>

@@ -404,6 +404,16 @@ describe("Settings", () => {
     expect(gameActions.changeSetting).toHaveBeenCalledWith("maxSplitHands", 3);
   });
 
+  it("shows settings that finish loading after the page opened, keeping unsaved edits", () => {
+    const { gameState, rerender } = renderUI(<Settings />, { path: "/settings?tab=game" });
+    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    gameState.settings = { ...gameState.settings, deckCount: 4, resetInitialBet: true };
+    rerender(<Settings />);
+    expect(screen.getByLabelText("deckCount").value).toBe("4");
+    expect(screen.getByLabelText("resetInitialBet").checked).toBe(true);
+    expect(screen.getByLabelText("blackJackOnSplit").checked).toBe(true);
+  });
+
   it("says so when a setting can't be saved to the account, and clears it after a good save", async () => {
     const changeSetting = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
     renderUI(<Settings />, { path: "/settings?tab=dev", actions: { changeSetting } });
