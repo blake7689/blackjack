@@ -392,6 +392,18 @@ describe("Settings", () => {
     expect(screen.getByRole("tab", { name: "Player" }).getAttribute("aria-selected")).toBe("true");
   });
 
+  it("offers 2, 3, 4 or Unlimited hands after splits, Unlimited by default", () => {
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const select = screen.getByLabelText("maxSplitHands");
+    expect([...select.options].map((o) => o.text)).toEqual(["2", "3", "4", "Unlimited"]);
+    expect(select.value).toBe("0");
+    expect(screen.getByText("Max Hands After Splits: Unlimited")).toBeTruthy();
+    fireEvent.change(select, { target: { value: "3" } });
+    expect(screen.getByText("Max Hands After Splits: 3")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Save maxSplitHands"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("maxSplitHands", 3);
+  });
+
   it("toggles the card count from the Dev tab without resetting the game", () => {
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=dev", game: { phase: GamePhases.PLAYER_TURN } });
     fireEvent.click(screen.getByLabelText("showCardCount"));

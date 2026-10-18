@@ -230,6 +230,19 @@ describe("GameBoard", () => {
     expect(screen.queryByAltText("Card back")).toBeNull();
   });
 
+  it("scrolls the hand in play into view (many split hands scroll sideways)", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      const { rerender } = renderUI(<GameBoard />, { game: { ...playing, hands: [hand(["8", "8"]), hand(["8", "3"])] } });
+      expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      rerender(<GameBoard />);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    } finally {
+      delete Element.prototype.scrollIntoView;
+    }
+  });
+
   it("shows the card count by default", () => {
     renderUI(<GameBoard />, { game: playing });
     expect(screen.getByText("Count:")).toBeTruthy();

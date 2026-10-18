@@ -90,9 +90,11 @@ export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount) {
   return { handStatus, isBusted, isBlackjack };
 }
 
-// Two cards of equal value (10-J-Q-K pair), while the round has fewer than maxSplitHands hands. Split aces never resplit. //
+// Two cards of equal value (10-J-Q-K pair), while the round has fewer than maxSplitHands hands (0 = unlimited). //
+// Split aces never resplit. //
 export function canSplit(hand, handCount, maxSplitHands) {
-  return hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value && handCount < maxSplitHands
+  return hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value
+    && (maxSplitHands === 0 || handCount < maxSplitHands)
     && !(hand.isSplit && hand.cards[0].rank === "ace");
 }
 
