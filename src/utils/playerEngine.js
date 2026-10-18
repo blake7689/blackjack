@@ -41,5 +41,9 @@ export async function deleteMe() {
 export const logoutPlayer = () => clearToken();
 
 // Ledger (ADR-0003): the server owns the balance and answers with it. //
+// Game settings saved on the server (#36): one flat object, or {} when none are saved.
+export const getSettings = () => apiGet("/player/me/settings");
+export const saveSettings = (settings) => apiPut("/player/me/settings", settings);
+
 export const placeBet = (amount, newRound) => apiPost("/ledger/bet", { amount, newRound });
 export const settleRound = (payout) => apiPost("/ledger/settle", { payout });

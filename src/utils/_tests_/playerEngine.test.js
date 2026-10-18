@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   normalizePlayer, getMe, loginPlayer, registerPlayer, updateProfile, changePassword,
-  deleteMe, logoutPlayer, placeBet, settleRound,
+  deleteMe, logoutPlayer, placeBet, settleRound, getSettings, saveSettings,
 } from "../playerEngine";
 import { getToken, setToken } from "../api";
 
@@ -100,5 +100,20 @@ describe("ledger", () => {
     expect(await settleRound(25)).toEqual({ credits: 1015, openStake: 0 });
     expect(call().url).toMatch(/\/ledger\/settle$/);
     expect(call().body).toEqual({ payout: 25 });
+  });
+});
+
+describe("settings", () => {
+  it("getSettings reads and saveSettings replaces the signed-in player's saved settings", async () => {
+    setToken("tok-9");
+    fetchMock.mockResolvedValueOnce(respond({ v: 1, deckCount: 4 }));
+    expect(await getSettings()).toEqual({ v: 1, deckCount: 4 });
+    expect(call()).toMatchObject({ method: "GET", auth: "Bearer tok-9" });
+    expect(call().url).toMatch(/\/player\/me\/settings$/);
+
+    fetchMock.mockResolvedValueOnce(respond(null, 204));
+    await saveSettings({ v: 1, deckCount: 3 });
+    expect(call()).toMatchObject({ method: "PUT", body: { v: 1, deckCount: 3 }, auth: "Bearer tok-9" });
+    expect(call().url).toMatch(/\/player\/me\/settings$/);
   });
 });

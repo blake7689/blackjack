@@ -43,6 +43,22 @@ export const initialGameState = {
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
   "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands"];
 
+// Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
+export const SETTING_RANGES = { deckCount: [1, 5], playTimeout: [250, 5000], maxSplitHands: [2, 4] };
+
+// Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
+// fall back to the default for anything else, and fill what's missing from the defaults.
+export function sanitizeSettings(saved) {
+  return Object.fromEntries(Object.entries(initialGameState.settings).map(([key, fallback]) => {
+    const value = saved?.[key];
+    if (typeof value !== typeof fallback) return [key, fallback];
+    if (key === "dealerHoleBehaviour") return [key, Object.values(DealerHoleOptions).includes(value) ? value : fallback];
+    const range = SETTING_RANGES[key];
+    if (!range || (key === "maxSplitHands" && value === 0)) return [key, value];
+    return [key, Math.min(range[1], Math.max(range[0], Math.round(value)))];
+  }));
+}
+
 const emptyRound = {
   hands: [],
   dealer: { cards: [] },
@@ -149,6 +165,14 @@ export function gameReducer(state, action) {
       // { key, value } for one setting, or { values } for several at once (a rules preset).
       const next = { ...state, settings: { ...state.settings, ...(action.values ?? { [action.key]: action.value }) } };
       return action.shoe ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
+    }
+
+    case "LOAD_SETTINGS": {
+      // Saved settings arrive after sign-in. Between rounds a changed table setting deals the new shoe;
+      // a round in progress is never reset.
+      const next = { ...state, settings: sanitizeSettings(action.saved) };
+      const tableChanged = RESET_SETTINGS.some((key) => next.settings[key] !== state.settings[key]);
+      return tableChanged && state.phase === GamePhases.PRE_DEAL ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
     }
 
     case "ADD_BET":

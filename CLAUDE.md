@@ -16,6 +16,11 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
 - Settings has Player / Game / Dev tabs (`?tab=`; "Back to game" carries it so the header's Settings reopens it).
   A new game setting goes in `GAME_SETTINGS` (`tab: "dev"` for developer options; Game otherwise).
+- Saved settings (#36): `GameProvider` loads `GET /api/player/me/settings` on sign-in and applies it with one
+  `LOAD_SETTINGS` (cleaned by `sanitizeSettings`: unknown keys dropped, wrong types and unknown dealer modes fall
+  back to defaults, numbers clamped to `SETTING_RANGES`, `maxSplitHands` 0 kept). `changeSettings` saves the whole
+  `{ v: 1, ...settings }` object when signed in and returns the save promise. A new setting needs only a default
+  in `initialGameState.settings` (and a range if it is a number).
 - Round state: `src/utils/gameReducer.js` (pure reducer; `nextAutoAction` names the next automatic step).
   `GameProvider` = `useReducer` + one timer effect (cleanup cancels it on reset or unmount) + a credit-event
   effect that applies each balance change once. Two contexts: `useGameState()` and `useGameActions()`
