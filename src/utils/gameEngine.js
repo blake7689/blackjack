@@ -5,7 +5,7 @@ import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions"; 
 
-{/* GAME ACTIONS */} ///////////////////////////////////////////////////////////////////////////////
+// ---- GAME ACTIONS ----
 
 // Deal Initial Hands //
 export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
@@ -14,7 +14,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerCards = [playerFirstCard, playerSecondCard];
   const drawsAfter = isEU(settings);
-  const dealerPeeks = settings.dealerHoleBehaviour === DealerHoleOptions["Draw Early - Check_US"];
+  const dealerPeeks = settings.dealerHoleBehaviour === DealerHoleOptions.US_PEEK;
   const dealerHoleCard = drawsAfter ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
   const dealerCardsAll = [dealerUpCard, ...dealerHoleCard];
   const playerTotals = getHandTotals(playerCards);
@@ -88,7 +88,7 @@ export function settleHands(hands, dealer) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-{/* PLAYER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
+// ---- PLAYER ACTIONS ----
 
 // Player Hit //
 export function playerHit(hand, shoe, setCutCardFound, resetShoe) {
@@ -180,7 +180,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-{/* DEALER ACTIONS */} ////////////////////////////////////////////////////////////////////////////
+// ---- DEALER ACTIONS ----
 
 // Turns the hole card face up at the start of the dealer's turn (no-op in EU, which has no hole card yet) //
 export function revealDealerHole(dealer, hole) {

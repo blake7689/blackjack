@@ -1,4 +1,4 @@
-{/* BUILD DECK */} ////////////////////////////////////////////////////////////////////////////////
+// ---- BUILD DECK ----
 
 const SUITS = ["hearts", "diamonds", "clubs", "spades"];
 const RANKS = [
@@ -65,7 +65,7 @@ export function createShoe(deckCount = 2, includeCutCard = true) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-{/* DRAW CARD */} /////////////////////////////////////////////////////////////////////////////////
+// ---- DRAW CARD ----
 
 // Draw top card from shoe, skipping cut card if encountered //
 export function drawCardFromShoe(shoe, setCutCardFound, resetShoe) {

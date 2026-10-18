@@ -3,14 +3,14 @@ import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 // Rules presets (#35 A5): each sets every rule setting at once. Any other combination is "Custom".
 export const RULE_PRESETS = {
   US: {
-    dealerHoleBehaviour: DealerHoleOptions["Draw Early - Check_US"],
+    dealerHoleBehaviour: DealerHoleOptions.US_PEEK,
     blackjackPaysImmediately: true,
     dealerDrawsOnPlayerBlackjack: true,
     dealerDrawsOnPlayerBust: false,
     dealerDrawsOnceOn21: false,
   },
   EU: {
-    dealerHoleBehaviour: DealerHoleOptions["Draw After_EU"],
+    dealerHoleBehaviour: DealerHoleOptions.EU,
     blackjackPaysImmediately: false,
     dealerDrawsOnPlayerBlackjack: true,
     dealerDrawsOnPlayerBust: false,

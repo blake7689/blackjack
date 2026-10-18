@@ -12,7 +12,7 @@ export const initialGameState = {
     deckCount: 2,
     includeCutCard: true,
     playTimeout: 1000,
-    dealerHoleBehaviour: DealerHoleOptions["Draw Early - Check_US"],
+    dealerHoleBehaviour: DealerHoleOptions.US_PEEK,
     blackJackOnSplit: false,
     resetInitialBet: false,
     dealerDrawsOnceOn21: false,
