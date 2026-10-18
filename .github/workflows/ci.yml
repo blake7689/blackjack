@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Lets the Static Web App deploy workflow run this as its test gate.
+  workflow_call:
 jobs:
   build-test:
     runs-on: ubuntu-latest
