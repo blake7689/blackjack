@@ -27,6 +27,7 @@ export default function Login() {
   });
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
+  const [error, setError] = useState(null);
   // Signup fields show their error once the player has typed in or left them.
   const [touched, setTouched] = useState({});
 
@@ -43,6 +44,7 @@ export default function Login() {
   const submit = async (e, work, failure) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     setStatusMsg("Contacting server...");
     const timers = [
       setTimeout(() => setStatusMsg("Server may be waking up… this can take ~30s."), 5000),
@@ -56,7 +58,7 @@ export default function Login() {
         ? "No response from server. It may be paused; try again in a minute."
         : err.message || failure;
       setStatusMsg(msg);
-      alert(msg);
+      setError(msg);
     } finally {
       timers.forEach(clearTimeout);
       setLoading(false);
@@ -84,42 +86,44 @@ export default function Login() {
   }), "Signup failed");
 
   const status = loading && (
-    <div style={{ marginTop: 8, opacity: 0.9, fontSize: 14 }}>
+    <div className="load-status">
       <span className="spinner" /> {statusMsg}
     </div>
   );
 
   return (
     <div className="page-bg">
-      <div style={{ padding: 24 }}>
-        <div style={{ maxWidth: 680, margin: "0 auto", color: "#fff" }}>
-          <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-            <button onClick={() => setTab("login")} style={{ padding:8, borderRadius:8, background: tab==="login" ? "#2e7bff":"#2b3a44", color:"#fff", border:"none" }}>Login</button>
-            <button onClick={() => setTab("signup")} style={{ padding:8, borderRadius:8, background: tab==="signup" ? "#2e7bff":"#2b3a44", color:"#fff", border:"none" }}>Add player</button>
+      <div className="page-body">
+        <div className="login-panel">
+          <div className="tabs">
+            <button onClick={() => setTab("login")} className={`tab-btn${tab === "login" ? " active" : ""}`}>Login</button>
+            <button onClick={() => setTab("signup")} className={`tab-btn${tab === "signup" ? " active" : ""}`}>Add player</button>
           </div>
 
           {tab === "login" ? (
-            <form onSubmit={handleLogin} style={{ display:"grid", gap:10 }}>
+            <form onSubmit={handleLogin} className="stack-form">
               <input name="usernameOrEmail" placeholder="Username or Email" value={form.usernameOrEmail} onChange={onChange} />
               <input type="password" name="password" placeholder="Password" value={form.password} onChange={onChange} />
               <button type="submit" disabled={loading}>
                 {loading ? <><span className="spinner" /> Logging in…</> : "Log in"}
               </button>
               {status}
+              {error && <div role="alert" className="notice error">{error}</div>}
             </form>
           ) : (
-            <form onSubmit={handleSignup} style={{ display:"grid", gap:10 }}>
+            <form onSubmit={handleSignup} className="stack-form">
               {SIGNUP_FIELDS.map(({ name, placeholder, type }) => (
                 <div key={name}>
                   <input name={name} type={type} placeholder={placeholder} value={form[name]} onChange={onChange} onBlur={onBlur}
-                    aria-invalid={Boolean(touched[name] && signupErrors[name])} style={{ width: "100%" }} />
-                  {touched[name] && signupErrors[name] && <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>{signupErrors[name]}</div>}
+                    aria-invalid={Boolean(touched[name] && signupErrors[name])} className="full-width" />
+                  {touched[name] && signupErrors[name] && <div className="field-error">{signupErrors[name]}</div>}
                 </div>
               ))}
               <button type="submit" disabled={loading || signupInvalid}>
                 {loading ? <><span className="spinner" /> Creating…</> : "Create & sign in"}
               </button>
               {status}
+              {error && <div role="alert" className="notice error">{error}</div>}
             </form>
           )}
         </div>

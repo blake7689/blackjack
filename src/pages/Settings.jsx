@@ -45,11 +45,11 @@ const GAME_SETTINGS = [
 function SettingInput({ setting, value, forced, onChange }) {
   if (setting.input === "checkbox") {
     return <input type="checkbox" aria-label={setting.key} checked={value || forced} disabled={forced}
-      onChange={(e) => onChange(e.target.checked)} style={{ marginRight: 8 }} />;
+      onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
   }
   if (setting.input === "select") {
     return (
-      <select aria-label={setting.key} value={value} style={{ marginLeft: 8 }}
+      <select aria-label={setting.key} value={value} className="field-input"
         onChange={(e) => onChange(setting.options.find((o) => String(o.value) === e.target.value).value)}>
         {setting.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -57,7 +57,7 @@ function SettingInput({ setting, value, forced, onChange }) {
   }
   return (
     <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} value={value}
-      onChange={(e) => onChange(Number(e.target.value))} style={{ marginLeft: 8, verticalAlign: "middle" }} />
+      onChange={(e) => onChange(Number(e.target.value))} className="range-input" />
   );
 }
 
@@ -78,9 +78,12 @@ export default function Settings() {
   const [edits, setEdits] = useState({});
   const drafts = { ...settings, ...edits };
   const [passwords, setPasswords] = useState({ current: "", next: "" });
-  const [saveError, setSaveError] = useState(null);
+  // One inline message line for the page's results (instead of alerts).
+  const [notice, setNotice] = useState(null);
+  const done = (text) => setNotice({ text });
+  const failed = (text) => setNotice({ text, error: true });
 
-  if (!player) return <div className="page-bg"><div style={{ padding: 16, color:"#fff" }}>Please log in to manage settings.</div></div>;
+  if (!player) return <div className="page-bg"><div className="page-message">Please log in to manage settings.</div></div>;
 
   const errors = Object.fromEntries(PROFILE_FIELDS.map(({ name }) => [name, validateField(name, form[name])]));
   const hasErrors = Object.values(errors).some(Boolean);
@@ -92,9 +95,9 @@ export default function Settings() {
   const save = async () => {
     try {
       await updatePlayer(form);
-      alert("Saved");
+      done("Saved");
     } catch (err) {
-      alert(err.message || "Save failed");
+      failed(err.message || "Save failed");
     }
   };
 
@@ -102,9 +105,9 @@ export default function Settings() {
     try {
       await changePassword(passwords.current, passwords.next);
       setPasswords({ current: "", next: "" });
-      alert("Password changed");
+      done("Password changed");
     } catch (err) {
-      alert(err.message || "Password change failed");
+      failed(err.message || "Password change failed");
     }
   };
 
@@ -112,11 +115,10 @@ export default function Settings() {
     if (!confirm("Delete profile? This will inactivate your user.")) return;
     try {
       await deletePlayer();
-      alert("Deleted");
       resetGame();
       nav("/");
     } catch (err) {
-      alert(err.message || "Delete failed");
+      failed(err.message || "Delete failed");
     }
   };
 
@@ -126,8 +128,8 @@ export default function Settings() {
   };
 
   // A setting applies at once; if saving it to the server fails it still applies here, and we say so.
-  const remember = (saving) => saving.then(() => setSaveError(null),
-    () => setSaveError("Couldn't save your settings to your account. They apply here until you reload."));
+  const remember = (saving) => saving.then(() => setNotice(null),
+    () => failed("Couldn't save your settings to your account. They apply here until you reload."));
 
   // A preset changes every rule at once, with one reset confirmation.
   const applyPreset = (name) => {
@@ -138,47 +140,47 @@ export default function Settings() {
 
   return (
     <div className="page-bg">
-      <div style={{ padding: 18, color: "#fff" }}>
-        <button style={{marginBottom:16, background:'#1976d2', color:'#fff', padding:'8px 18px', borderRadius:8, fontWeight:'bold', float: 'right'}} onClick={() => nav("/game", { state: { settingsTab: tab } })}>
+      <div className="settings-body">
+        <button className="back-btn" onClick={() => nav("/game", { state: { settingsTab: tab } })}>
           Back to game
         </button>
         <h2>Settings</h2>
-        <div role="tablist" style={{ display: "flex", gap: 8 }}>
+        <div role="tablist" className="tabs">
           {TABS.map(({ id, label }) => (
             <button key={id} role="tab" aria-selected={tab === id} onClick={() => setParams({ tab: id }, { replace: true })}
-              style={{ padding: 8, borderRadius: 8, background: tab === id ? "#2e7bff" : "#2b3a44", color: "#fff", border: "none" }}>
+              className={`tab-btn${tab === id ? " active" : ""}`}>
               {label}
             </button>
           ))}
         </div>
-        {saveError && <div role="status" style={{ color: "#ff8a80", marginTop: 8 }}>{saveError}</div>}
-        <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
-        <div role="tabpanel" style={{ maxWidth: 720 }}>
+        {notice && <div role="status" className={`notice${notice.error ? " error" : ""}`}>{notice.text}</div>}
+        <hr className="divider" />
+        <div role="tabpanel" className="settings-panel">
           {tab === "player" && <>
           {PROFILE_FIELDS.map(({ name, label, type, placeholder }) => (
             <div key={name}>
               <label>{label} <input name={name} type={type} placeholder={placeholder} value={form[name]}
-                onChange={(e) => setForm({ ...form, [name]: e.target.value })} style={{ marginLeft: '8px'}} /></label>
-              {errors[name] && <div style={{ color: 'red', fontSize: '12px', marginTop: '4px' }}>{errors[name]}</div>}
+                onChange={(e) => setForm({ ...form, [name]: e.target.value })} className="field-input" /></label>
+              {errors[name] && <div className="field-error">{errors[name]}</div>}
             </div>
           ))}
 
-          <div style={{ marginTop:12 }}>
-            <button onClick={save} disabled={isUnchanged || hasErrors} style={{ cursor: (isUnchanged || hasErrors) ? "not-allowed" : "pointer" }}>Save</button>
-            <button onClick={remove} style={{ marginLeft:8, background:"#b22", color:"#fff" }}>Delete Profile</button>
+          <div className="actions-row">
+            <button onClick={save} disabled={isUnchanged || hasErrors} className="save-btn">Save</button>
+            <button onClick={remove} className="danger-btn">Delete Profile</button>
           </div>
 
-          <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+          <hr className="divider" />
           <div>
             <label>Current password <input type="password" name="currentPassword" value={passwords.current}
-              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} style={{ marginLeft: "8px" }} /></label>
+              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} className="field-input" /></label>
           </div>
           <div>
             <label>New password <input type="password" name="newPassword" value={passwords.next}
-              onChange={(e) => setPasswords({ ...passwords, next: e.target.value })} style={{ marginLeft: "8px" }} /></label>
-            {newPasswordError && <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>{newPasswordError}</div>}
+              onChange={(e) => setPasswords({ ...passwords, next: e.target.value })} className="field-input" /></label>
+            {newPasswordError && <div className="field-error">{newPasswordError}</div>}
           </div>
-          <button onClick={savePassword} disabled={!canChangePassword} style={{ marginTop: 4, cursor: canChangePassword ? "pointer" : "not-allowed" }}>
+          <button onClick={savePassword} disabled={!canChangePassword} className="save-btn spaced">
             Change password
           </button>
           </>}
@@ -186,7 +188,7 @@ export default function Settings() {
           {tab === "game" && (
           <label>
             Rules preset
-            <select aria-label="rulePreset" value={rulePresetOf(drafts)} onChange={(e) => applyPreset(e.target.value)} style={{ marginLeft: 8 }}>
+            <select aria-label="rulePreset" value={rulePresetOf(drafts)} onChange={(e) => applyPreset(e.target.value)} className="field-input">
               {Object.keys(RULE_PRESETS).map((name) => <option key={name} value={name}>{name}</option>)}
               <option value={CUSTOM} disabled>{CUSTOM}</option>
             </select>
@@ -197,17 +199,17 @@ export default function Settings() {
             const changed = drafts[setting.key] !== settings[setting.key];
             return (
               <div key={setting.key}>
-                <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+                <hr className="divider" />
                 <label>
                   {setting.label(drafts[setting.key])}
                   <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
                     onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
                 </label>
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (
-                  <div style={{ color: "red", marginTop: 4, marginBottom: 4 }}>Changing this setting will reset the current game.</div>
+                  <div className="reset-warning">Changing this setting will reset the current game.</div>
                 )}
                 <div>
-                  <button aria-label={`Save ${setting.key}`} style={{ marginTop: 4, cursor: changed ? "pointer" : "not-allowed" }}
+                  <button aria-label={`Save ${setting.key}`} className="save-btn spaced"
                     disabled={!changed} onClick={() => saveSetting(setting.key)}>
                     Save
                   </button>

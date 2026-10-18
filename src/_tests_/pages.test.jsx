@@ -79,8 +79,9 @@ describe("Login", () => {
     expect(location()).toBe("/");
   });
 
-  it("alerts the actual failure: network, server message, or a fallback", async () => {
+  it("shows the actual failure inline: network, server message, or a fallback", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const shown = [];
     const login = vi.fn()
       .mockRejectedValueOnce(new Error("Failed to fetch"))
       .mockRejectedValueOnce(new Error("Invalid username/email or password."))
@@ -89,8 +90,10 @@ describe("Login", () => {
     for (let i = 0; i < 3; i++) {
       fireEvent.click(screen.getByText("Log in"));
       await flush();
+      shown.push(screen.getByRole("alert").textContent);
     }
-    expect(alert.mock.calls.map(([m]) => m)).toEqual([
+    expect(alert).not.toHaveBeenCalled();
+    expect(shown).toEqual([
       "No response from server. It may be paused; try again in a minute.",
       "Invalid username/email or password.",
       "Login failed",
@@ -142,7 +145,7 @@ describe("Login", () => {
     expect(button.disabled).toBe(true);
   });
 
-  it("alerts a failed signup", async () => {
+  it("shows a failed signup inline", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     renderUI(<Login />, { path: "/login", player: { addPlayer: vi.fn().mockRejectedValue(new Error("")) } });
     fireEvent.click(screen.getByText("Add player"));
@@ -153,7 +156,8 @@ describe("Login", () => {
     type("Last name", "Bie");
     fireEvent.submit(screen.getByText("Create & sign in").closest("form"));
     await flush();
-    expect(alert).toHaveBeenCalledWith("Signup failed");
+    expect(screen.getByRole("alert").textContent).toBe("Signup failed");
+    expect(alert).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Login"));
     expect(screen.getByPlaceholderText("Username or Email")).toBeTruthy();
   });
@@ -198,7 +202,8 @@ describe("Settings", () => {
     fireEvent.click(saveButton());
     await flush();
     expect(updatePlayer).toHaveBeenCalledWith({ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er" });
-    expect(window.alert).toHaveBeenCalledWith("Saved");
+    expect(screen.getByRole("status").textContent).toBe("Saved");
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
   it("changes the password only with the current one and a valid new one", async () => {
@@ -219,25 +224,31 @@ describe("Settings", () => {
     await flush();
     expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass");
     expect(current.value).toBe("");
+    const shown = [screen.getByRole("status").textContent];
     for (let i = 0; i < 2; i++) {
       fireEvent.change(current, { target: { value: "wrong" } });
       fireEvent.change(next, { target: { value: "new-pass" } });
       fireEvent.click(button);
       await flush();
+      shown.push(screen.getByRole("status").textContent);
     }
-    expect(window.alert.mock.calls.map(([m]) => m)).toEqual(["Password changed", "Incorrect password.", "Password change failed"]);
+    expect(shown).toEqual(["Password changed", "Incorrect password.", "Password change failed"]);
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
-  it("alerts a failed save, with a fallback message", async () => {
+  it("shows a failed save inline, with a fallback message", async () => {
     vi.spyOn(window, "alert").mockImplementation(() => {});
     const updatePlayer = vi.fn().mockRejectedValueOnce(new Error("Name taken")).mockRejectedValueOnce(new Error(""));
     const { container } = renderUI(<Settings />, { player: { updatePlayer } });
     fireEvent.change(container.querySelector('input[name="firstName"]'), { target: { value: "Changed" } });
     fireEvent.click(saveButton());
     await flush();
+    expect(screen.getByRole("status").textContent).toBe("Name taken");
+    expect(screen.getByRole("status").className).toBe("notice error");
     fireEvent.click(saveButton());
     await flush();
-    expect(window.alert.mock.calls.map(([m]) => m)).toEqual(["Name taken", "Save failed"]);
+    expect(screen.getByRole("status").textContent).toBe("Save failed");
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
   it("deletes the profile only after confirming", async () => {
@@ -249,21 +260,23 @@ describe("Settings", () => {
     expect(deletePlayer).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("Delete Profile"));
     await flush();
-    expect(window.alert).toHaveBeenCalledWith("Deleted");
+    expect(window.alert).not.toHaveBeenCalled();
     expect(gameActions.resetGame).toHaveBeenCalled();
     expect(location()).toBe("/");
   });
 
-  it("alerts a failed delete, with a fallback message", async () => {
+  it("shows a failed delete inline, with a fallback message", async () => {
     vi.spyOn(window, "alert").mockImplementation(() => {});
     vi.spyOn(window, "confirm").mockReturnValue(true);
     const deletePlayer = vi.fn().mockRejectedValueOnce(new Error("Gone")).mockRejectedValueOnce(new Error(""));
     renderUI(<Settings />, { player: { deletePlayer } });
     fireEvent.click(screen.getByText("Delete Profile"));
     await flush();
+    expect(screen.getByRole("status").textContent).toBe("Gone");
     fireEvent.click(screen.getByText("Delete Profile"));
     await flush();
-    expect(window.alert.mock.calls.map(([m]) => m)).toEqual(["Gone", "Delete failed"]);
+    expect(screen.getByRole("status").textContent).toBe("Delete failed");
+    expect(window.alert).not.toHaveBeenCalled();
   });
 
   it("saves a table setting, confirming first when a round is in play", () => {

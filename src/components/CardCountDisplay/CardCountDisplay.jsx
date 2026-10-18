@@ -6,7 +6,7 @@ const CardCountDisplay = ({ shoe, runningCount }) => {
     <div className="card-count-display">
       <span className="count-label">Count:</span>
       <span className="count-value">{runningCount}</span>
-      <span className="true-count-label" style={{marginLeft:8}}>True:</span>
+      <span className="true-count-label">True:</span>
       <span className="true-count-value">{trueCount(runningCount, shoe)}</span>
     </div>
   );
