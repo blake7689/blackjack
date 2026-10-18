@@ -18,7 +18,7 @@ export const initialGameState = {
     dealerDrawsOnceOn21: false,
     dealerDrawsOnPlayerBlackjack: true,
     dealerDrawsOnPlayerBust: false,
-    blackjackPaysImmediately: false,
+    blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -144,7 +144,8 @@ export function gameReducer(state, action) {
       return resetTable(state, action.shoe, action.phase);
 
     case "SET_SETTING": {
-      const next = { ...state, settings: { ...state.settings, [action.key]: action.value } };
+      // { key, value } for one setting, or { values } for several at once (a rules preset).
+      const next = { ...state, settings: { ...state.settings, ...(action.values ?? { [action.key]: action.value }) } };
       return action.shoe ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
     }
 

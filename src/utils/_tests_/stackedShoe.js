@@ -36,7 +36,8 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   s = step(s, { type: "SET_SETTING", key: "dealerHoleBehaviour", value: mode });
   s = step(s, { type: "SET_SETTING", key: "blackJackOnSplit", value: blackJackOnSplit });
-  for (const [key, value] of Object.entries(rules)) s = step(s, { type: "SET_SETTING", key, value });
+  // Scenarios start from the bare mode: a blackjack waits for the dealer unless `rules` says otherwise.
+  for (const [key, value] of Object.entries({ blackjackPaysImmediately: false, ...rules })) s = step(s, { type: "SET_SETTING", key, value });
   s = step(s, { type: "ADD_BET", amount: bet });
   s = step(s, { type: "DEAL" });
   const afterDeal = s;

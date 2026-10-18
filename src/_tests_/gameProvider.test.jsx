@@ -120,4 +120,15 @@ describe("GameProvider", () => {
     expect(ctx.state.settings.playTimeout).toBe(500);
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
+
+  it("changes several settings in one step, dealing one fresh shoe (rule presets)", () => {
+    const { ctx } = setup();
+    act(() => ctx.actions.changeSettings({ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }));
+    expect(ctx.state.settings).toMatchObject({ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false });
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+    act(() => ctx.actions.changeSettings({ playTimeout: 750 }));
+    expect(ctx.state.settings.playTimeout).toBe(750);
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
 });

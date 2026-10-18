@@ -8,6 +8,7 @@ import Settings from "../pages/Settings";
 import App from "../App";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { validateField } from "../utils/validation";
+import { RULE_PRESETS } from "../utils/rulePresets";
 
 const location = () => screen.getByTestId("location").textContent;
 const type = (label, value) => fireEvent.change(screen.getByPlaceholderText(label), { target: { value } });
@@ -283,6 +284,7 @@ describe("Settings", () => {
     const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
     expect(screen.queryByText(/NoDraw21/)).toBeNull();
     const paysNow = screen.getByLabelText("blackjackPaysImmediately");
+    fireEvent.click(paysNow);
     expect([paysNow.checked, paysNow.disabled]).toEqual([false, false]);
 
     fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
@@ -296,6 +298,37 @@ describe("Settings", () => {
     fireEvent.click(screen.getByLabelText("Save dealerDrawsOnPlayerBlackjack"));
     expect(gameActions.changeSetting.mock.calls).toEqual([
       ["dealerDrawsOnceOn21", true], ["dealerDrawsOnPlayerBust", true], ["dealerDrawsOnPlayerBlackjack", false]]);
+  });
+
+  it("applies a rules preset in one step, and shows Custom once a rule is changed", () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
+    const preset = screen.getByLabelText("rulePreset");
+    expect(preset.value).toBe("US");
+    expect(screen.getByRole("option", { name: "Custom" }).disabled).toBe(true);
+
+    fireEvent.change(preset, { target: { value: "EU" } });
+    expect(confirm).not.toHaveBeenCalled();
+    expect(gameActions.changeSettings).toHaveBeenCalledWith(RULE_PRESETS.EU);
+    expect(preset.value).toBe("EU");
+    expect(screen.getByLabelText("dealerHoleBehaviour").value).toBe("drawAfter");
+
+    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
+    expect(preset.value).toBe("Custom");
+    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
+    expect(preset.value).toBe("EU");
+  });
+
+  it("asks once before a preset resets a round in progress", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PLAYER_TURN } });
+    const preset = screen.getByLabelText("rulePreset");
+    fireEvent.change(preset, { target: { value: "EU" } });
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(preset.value).toBe("US");
+    fireEvent.change(preset, { target: { value: "EU" } });
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
   });
 
   it("saves table settings without asking before a round, and speed or rebet any time", () => {

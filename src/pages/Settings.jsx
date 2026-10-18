@@ -5,6 +5,8 @@ import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 import { RESET_SETTINGS } from "../utils/gameReducer";
+import { isEU } from "../utils/blackjackLogic";
+import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
 import { validateField } from "../utils/validation";
 import "./pages.css";
 
@@ -17,6 +19,8 @@ const PROFILE_FIELDS = [
 
 const dealerOptionLabel = (key) => key.replace(/_/g, " ").replace(/US|EU/g, (m) => ` (${m})`);
 
+const RESET_CONFIRM = "Changing this setting will reset the current game. Any bets will be lost. Continue?";
+
 const GAME_SETTINGS = [
   { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", min: 1, max: 5 },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
@@ -26,7 +30,7 @@ const GAME_SETTINGS = [
   { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
   // With no dealer card to compare against, a blackjack must pay at once.
   { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
-    forcedOn: (s) => s.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"] && !s.dealerDrawsOnPlayerBlackjack },
+    forcedOn: (s) => isEU(s) && !s.dealerDrawsOnPlayerBlackjack },
   { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
   { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", min: 250, max: 5000 },
@@ -53,7 +57,7 @@ function SettingInput({ setting, value, forced, onChange }) {
 export default function Settings() {
   const { player, updatePlayer, changePassword, deletePlayer } = usePlayer();
   const { settings, phase } = useGameState();
-  const { changeSetting, resetGame } = useGameActions();
+  const { changeSetting, changeSettings, resetGame } = useGameActions();
   const nav = useNavigate();
   const [form, setForm] = useState(() => ({
     userName: player?.userName ?? "",
@@ -105,8 +109,15 @@ export default function Settings() {
   };
 
   const saveSetting = (key) => {
-    if (RESET_SETTINGS.includes(key) && midRound && !confirm("Changing this setting will reset the current game. Any bets will be lost. Continue?")) return;
+    if (RESET_SETTINGS.includes(key) && midRound && !confirm(RESET_CONFIRM)) return;
     changeSetting(key, drafts[key]);
+  };
+
+  // A preset changes every rule at once, with one reset confirmation.
+  const applyPreset = (name) => {
+    if (midRound && !confirm(RESET_CONFIRM)) return;
+    setDrafts({ ...drafts, ...RULE_PRESETS[name] });
+    changeSettings(RULE_PRESETS[name]);
   };
 
   return (
@@ -144,6 +155,15 @@ export default function Settings() {
           <button onClick={savePassword} disabled={!canChangePassword} style={{ marginTop: 4, cursor: canChangePassword ? "pointer" : "not-allowed" }}>
             Change password
           </button>
+
+          <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+          <label>
+            Rules preset
+            <select aria-label="rulePreset" value={rulePresetOf(drafts)} onChange={(e) => applyPreset(e.target.value)} style={{ marginLeft: 8 }}>
+              {Object.keys(RULE_PRESETS).map((name) => <option key={name} value={name}>{name}</option>)}
+              <option value={CUSTOM} disabled>{CUSTOM}</option>
+            </select>
+          </label>
 
           {GAME_SETTINGS.map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];

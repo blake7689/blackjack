@@ -1,5 +1,5 @@
 import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, 
-  getInitialDealerHandEvaluation, getHandEvaluation, settleHand } from "./blackjackLogic";
+  getInitialDealerHandEvaluation, getHandEvaluation, settleHand, isEU } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
@@ -13,9 +13,9 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerCards = [playerFirstCard, playerSecondCard];
-  const isEU = settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
+  const drawsAfter = isEU(settings);
   const dealerPeeks = settings.dealerHoleBehaviour === DealerHoleOptions["Draw Early - Check_US"];
-  const dealerHoleCard = isEU ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  const dealerHoleCard = drawsAfter ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
   const dealerCardsAll = [dealerUpCard, ...dealerHoleCard];
   const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCardsAll);
@@ -25,7 +25,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const dealerCardsShowing = dealerBlackjackRevealed ? dealerCardsAll : [dealerUpCard];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   // An EU dealer that won't draw on a player blackjack has nothing to compare it with, so it must pay now.
-  const blackjackPaysNow = dealerPeeks || settings.blackjackPaysImmediately || (isEU && !settings.dealerDrawsOnPlayerBlackjack);
+  const blackjackPaysNow = dealerPeeks || settings.blackjackPaysImmediately || (drawsAfter && !settings.dealerDrawsOnPlayerBlackjack);
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, blackjackPaysNow);
   const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, settings);
 
@@ -71,7 +71,7 @@ export function dealerNeedsToPlay(hands) {
 // When every hand still waiting is a blackjack, only a dealer blackjack matters: two cards, no more. //
 // With dealerDrawsOnceOn21 (EU), a player 21 is treated the same way. //
 export function dealerOnlyChecksBlackjack(hands, settings) {
-  const onceOn21 = settings.dealerDrawsOnceOn21 && settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
+  const onceOn21 = settings.dealerDrawsOnceOn21 && isEU(settings);
   return hands.filter((h) => !h.isBusted && h.result === HandResult.NONE).every((h) => h.isBlackjack || (onceOn21 && h.total === 21));
 }
 
