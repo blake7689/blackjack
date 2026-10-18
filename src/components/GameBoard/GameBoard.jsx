@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -14,6 +15,12 @@ export default function GameBoard() {
   const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings } = useGameState();
   const { continueRound, hit, stand, double, split } = useGameActions();
   const { player } = usePlayer();
+  const handsRef = useRef(null);
+
+  // With many split hands the row scrolls sideways: keep the hand in play (and its buttons) on screen. //
+  useEffect(() => {
+    handsRef.current.querySelector(".player-hand.active")?.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [selectedHandIndex, hands.length]);
 
   // Any click on the table moves on from the results //
   const handleBoardClick = () => {
@@ -50,7 +57,7 @@ export default function GameBoard() {
         </div>
 
         <div className="player-container">
-          <div className="hands-scroll">
+          <div className="hands-scroll" ref={handsRef}>
             <div className="hands-track">
               {hands.map((hand, idx) => (
                 <PlayerHand

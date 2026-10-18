@@ -55,7 +55,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
-- Splits: `canSplit(hand, handCount, maxSplitHands)`; `maxSplitHands` (2-4, default 2 = one split) caps the
+- Splits: `canSplit(hand, handCount, maxSplitHands)`; `maxSplitHands` (2-4, or 0 = unlimited, the default) caps the
   hands in a round, each split takes one more stake, and split aces never resplit.
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
 

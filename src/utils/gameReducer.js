@@ -20,7 +20,7 @@ export const initialGameState = {
     dealerDrawsOnPlayerBust: false,
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
     showCardCount: true,
-    maxSplitHands: 2, // 2 = one split per round
+    maxSplitHands: 0, // 0 = unlimited; 2 = one split per round
   },
   phase: GamePhases.NONE,
   shoe: [],

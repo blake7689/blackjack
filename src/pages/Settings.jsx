@@ -28,9 +28,11 @@ const GAME_SETTINGS = [
   { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", min: 1, max: 5 },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
-  { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select" },
+  { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
+    options: Object.entries(DealerHoleOptions).map(([key, value]) => ({ value, label: dealerOptionLabel(key) })) },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
-  { key: "maxSplitHands", label: (v) => `Max Hands After Splits: ${v}`, input: "range", min: 2, max: 4 },
+  { key: "maxSplitHands", label: (v) => `Max Hands After Splits: ${v === 0 ? "Unlimited" : v}`, input: "select",
+    options: [2, 3, 4].map((n) => ({ value: n, label: String(n) })).concat({ value: 0, label: "Unlimited" }) },
   { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
   // With no dealer card to compare against, a blackjack must pay at once.
   { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
@@ -48,8 +50,9 @@ function SettingInput({ setting, value, forced, onChange }) {
   }
   if (setting.input === "select") {
     return (
-      <select aria-label={setting.key} value={value} onChange={(e) => onChange(e.target.value)} style={{ marginLeft: 8 }}>
-        {Object.entries(DealerHoleOptions).map(([key, v]) => <option key={v} value={v}>{dealerOptionLabel(key)}</option>)}
+      <select aria-label={setting.key} value={value} style={{ marginLeft: 8 }}
+        onChange={(e) => onChange(setting.options.find((o) => String(o.value) === e.target.value).value)}>
+        {setting.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
     );
   }
