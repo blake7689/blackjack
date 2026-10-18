@@ -56,27 +56,27 @@ describe("getInitialPlayerHandEvaluation", () => {
 
 describe("getInitialDealerHandEvaluation", () => {
     it("returns DONE if both player and dealer have blackjack", () => {
-      const result = getInitialDealerHandEvaluation(true, true, DealerHoleOptions["Draw Early - Check_US"]);
+      const result = getInitialDealerHandEvaluation(true, true, { dealerHoleBehaviour: DealerHoleOptions["Draw Early - Check_US"] });
       expect(result).toBe(HandStatus.DONE);
     });
 
     it("returns DONE if only dealer has blackjack", () => {
-      const result = getInitialDealerHandEvaluation(false, true, DealerHoleOptions["Draw Early - No Check_US"]);
+      const result = getInitialDealerHandEvaluation(false, true, { dealerHoleBehaviour: DealerHoleOptions["Draw Early - No Check_US"] });
       expect(result).toBe(HandStatus.DONE);
     });
 
-    it("returns DONE if only player has blackjack and dealer does not draw hole on 21", () => {
-      const result = getInitialDealerHandEvaluation(true, false, DealerHoleOptions["Draw_After - NoDraw21 EU"]);
+    it("returns DONE if only player has blackjack and the EU dealer does not draw on a player blackjack", () => {
+      const result = getInitialDealerHandEvaluation(true, false, { dealerHoleBehaviour: DealerHoleOptions["Draw After_EU"], dealerDrawsOnPlayerBlackjack: false });
       expect(result).toBe(HandStatus.DONE);
     });
 
     it("returns DRAW_HOLE if only player has blackjack and dealer draws hole after EU", () => {
-      const result = getInitialDealerHandEvaluation(true, false, DealerHoleOptions["Draw After_EU"]);
+      const result = getInitialDealerHandEvaluation(true, false, { dealerHoleBehaviour: DealerHoleOptions["Draw After_EU"], dealerDrawsOnPlayerBlackjack: true });
       expect(result).toBe(HandStatus.DRAW_HOLE);
     });
 
     it("returns NONE if neither player nor dealer has blackjack", () => {
-      const result = getInitialDealerHandEvaluation(false, false, DealerHoleOptions["Draw Early - No Check_US"]);
+      const result = getInitialDealerHandEvaluation(false, false, { dealerHoleBehaviour: DealerHoleOptions["Draw Early - No Check_US"] });
       expect(result).toBe(HandStatus.NONE);
     });
   });

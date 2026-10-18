@@ -5,7 +5,7 @@ import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 {/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
 
 // Sets initial player status based on blackjack conditions //
-// blackjackPaysNow: true when no dealer blackjack can still appear (US peek found none, or EU NoDraw21). //
+// blackjackPaysNow: a player blackjack wins at the deal (US peek found no dealer blackjack, or a rule pays it at once). //
 export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, blackjackPaysNow)
 {
   let handStatus = HandStatus.PLAYING;
@@ -26,15 +26,16 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
 }
 
 // Sets initial dealer status based on blackjack conditions //
-export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, dealerHoleBehaviour)
+export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, settings)
 {
-  let handStatus = dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"] || dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"] ? HandStatus.DRAW_HOLE : HandStatus.NONE;
+  const isEU = settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
+  let handStatus = isEU ? HandStatus.DRAW_HOLE : HandStatus.NONE;
 
   if (dealerHasBlackjack && playerHasBlackjack) {
     handStatus = HandStatus.DONE;
   } else if (dealerHasBlackjack) {
     handStatus = HandStatus.DONE;
-  } else if (playerHasBlackjack && dealerHoleBehaviour === DealerHoleOptions["Draw_After - NoDraw21 EU"]) {
+  } else if (playerHasBlackjack && isEU && !settings.dealerDrawsOnPlayerBlackjack) {
     handStatus = HandStatus.DONE;
   }
 

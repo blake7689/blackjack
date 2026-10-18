@@ -26,16 +26,17 @@ export const Modes = {
   PEEK: DealerHoleOptions["Draw Early - Check_US"],
   NO_PEEK: DealerHoleOptions["Draw Early - No Check_US"],
   EU: DealerHoleOptions["Draw After_EU"],
-  EU_NO_DRAW_21: DealerHoleOptions["Draw_After - NoDraw21 EU"],
 };
 
 // Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
-export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false }) {
+// `rules` sets any other game settings, e.g. { dealerDrawsOnPlayerBust: true }.
+export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {} }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   s = step(s, { type: "SET_SETTING", key: "dealerHoleBehaviour", value: mode });
   s = step(s, { type: "SET_SETTING", key: "blackJackOnSplit", value: blackJackOnSplit });
+  for (const [key, value] of Object.entries(rules)) s = step(s, { type: "SET_SETTING", key, value });
   s = step(s, { type: "ADD_BET", amount: bet });
   s = step(s, { type: "DEAL" });
   const afterDeal = s;

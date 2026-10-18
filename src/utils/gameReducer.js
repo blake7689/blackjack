@@ -15,6 +15,10 @@ export const initialGameState = {
     dealerHoleBehaviour: DealerHoleOptions["Draw Early - Check_US"],
     blackJackOnSplit: false,
     resetInitialBet: false,
+    dealerDrawsOnceOn21: false,
+    dealerDrawsOnPlayerBlackjack: true,
+    dealerDrawsOnPlayerBust: false,
+    blackjackPaysImmediately: false,
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -34,7 +38,8 @@ export const initialGameState = {
 };
 
 // Changing these settings deals a new shoe and resets the table. //
-export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit"];
+export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
+  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately"];
 
 const emptyRound = {
   hands: [],
@@ -154,7 +159,7 @@ export function gameReducer(state, action) {
     case "DEAL": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
       const { result, next, refilled } = draw(state, action.refill,
-        (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings.dealerHoleBehaviour));
+        (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings));
       const dealt = {
         ...next,
         ...emptyRound,
@@ -185,9 +190,9 @@ export function gameReducer(state, action) {
         dealer: {
           ...dealer,
           status: dealer.status === HandStatus.DRAW_HOLE ? HandStatus.DRAW_HOLE : HandStatus.PLAYING,
-          checkBlackjackOnly: engine.dealerOnlyChecksBlackjack(state.hands),
+          checkBlackjackOnly: engine.dealerOnlyChecksBlackjack(state.hands, state.settings),
         },
-        dealerSkipDraw: !engine.dealerNeedsToPlay(state.hands),
+        dealerSkipDraw: !engine.dealerNeedsToPlay(state.hands) && !engine.dealerShowsSecondCard(state.hands, state.settings),
       });
     }
 

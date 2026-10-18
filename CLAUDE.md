@@ -43,9 +43,11 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 
 ## Gotchas
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
-  the player acts; "NoDraw21" EU skips the hole card when the player has blackjack. Test each mode.
-- `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek and EU NoDraw21:
-  the modes where no dealer blackjack can still appear. US no peek hides a dealer blackjack until
+  the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
+  (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),
+  `blackjackPaysImmediately`. Test each mode with each toggle.
+- `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek, `blackjackPaysImmediately`,
+  or EU with `dealerDrawsOnPlayerBlackjack` off. US no peek hides a dealer blackjack until
   `revealDealerHole`, and it then wins every bet, doubles and splits included.
 - Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
