@@ -113,10 +113,42 @@ describe("Login", () => {
     expect(location()).toBe("/");
   });
 
+  it("shows each signup field's error and blocks the form until it is valid", () => {
+    const addPlayer = vi.fn();
+    renderUI(<Login />, { path: "/login", player: { addPlayer } });
+    fireEvent.click(screen.getByText("Add player"));
+    const button = screen.getByText("Create & sign in");
+    expect(button.disabled).toBe(true);
+    expect(screen.queryByText(/is required/)).toBeNull(); // nothing shown before the player touches a field
+
+    type("Username", "ab");
+    expect(screen.getByText("Username must be at least 3 characters.")).toBeTruthy();
+    type("Email", "not-an-email");
+    expect(screen.getByText("Invalid email format.")).toBeTruthy();
+    type("Password", "123");
+    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    type("Password", "");
+    expect(screen.getByText("Password is required.")).toBeTruthy();
+    fireEvent.blur(screen.getByPlaceholderText("First name"));
+    expect(screen.getByText("First name is required.")).toBeTruthy();
+
+    // Enter still submits a form: it shows every problem instead of signing up.
+    fireEvent.submit(button.closest("form"));
+    expect(screen.getByText("Last name is required.")).toBeTruthy();
+    expect(screen.getByPlaceholderText("Last name").getAttribute("aria-invalid")).toBe("true");
+    expect(addPlayer).not.toHaveBeenCalled();
+    expect(button.disabled).toBe(true);
+  });
+
   it("alerts a failed signup", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     renderUI(<Login />, { path: "/login", player: { addPlayer: vi.fn().mockRejectedValue(new Error("")) } });
     fireEvent.click(screen.getByText("Add player"));
+    type("Username", "newbie");
+    type("Email", "n@example.com");
+    type("Password", "secret1");
+    type("First name", "New");
+    type("Last name", "Bie");
     fireEvent.submit(screen.getByText("Create & sign in").closest("form"));
     await flush();
     expect(alert).toHaveBeenCalledWith("Signup failed");

@@ -2,8 +2,20 @@ import "./pages.css";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
+import { validateField } from "../utils/validation";
 
 const NETWORK_ERROR = /failed to fetch|network|timeout/i;
+
+const SIGNUP_FIELDS = [
+  { name: "userName", placeholder: "Username" },
+  { name: "email", placeholder: "Email" },
+  { name: "password", placeholder: "Password", type: "password" },
+  { name: "firstName", placeholder: "First name" },
+  { name: "lastName", placeholder: "Last name" },
+];
+
+// Same rules as Settings; unlike Settings, a new account must choose a password.
+const signupError = (name, value) => (name === "password" && !value ? "Password is required." : validateField(name, value));
 
 export default function Login() {
   const { login, addPlayer } = usePlayer();
@@ -15,8 +27,17 @@ export default function Login() {
   });
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState("");
+  // Signup fields show their error once the player has typed in or left them.
+  const [touched, setTouched] = useState({});
 
-  const onChange = e => setForm({ ...form, [e.target.name]: e.target.value });
+  const onChange = e => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+    setTouched({ ...touched, [e.target.name]: true });
+  };
+  const onBlur = e => setTouched({ ...touched, [e.target.name]: true });
+
+  const signupErrors = Object.fromEntries(SIGNUP_FIELDS.map(({ name }) => [name, signupError(name, form[name])]));
+  const signupInvalid = Object.values(signupErrors).some(Boolean);
 
   // The free-tier API can take ~30s to wake, so keep the player informed while waiting.
   const submit = async (e, work, failure) => {
@@ -44,7 +65,17 @@ export default function Login() {
 
   const handleLogin = (e) => submit(e, () => login({ usernameOrEmail: form.usernameOrEmail, password: form.password }), "Login failed");
 
-  const handleSignup = (e) => submit(e, () => addPlayer({
+  const handleSignup = (e) => {
+    if (signupInvalid) {
+      // Enter in a field still submits the form; show every problem instead.
+      e.preventDefault();
+      setTouched(Object.fromEntries(SIGNUP_FIELDS.map(({ name }) => [name, true])));
+      return;
+    }
+    return signup(e);
+  };
+
+  const signup = (e) => submit(e, () => addPlayer({
     userName: form.userName,
     password: form.password,
     email: form.email,
@@ -78,12 +109,14 @@ export default function Login() {
             </form>
           ) : (
             <form onSubmit={handleSignup} style={{ display:"grid", gap:10 }}>
-              <input name="userName" placeholder="Username" value={form.userName} onChange={onChange} required />
-              <input name="email" placeholder="Email" value={form.email} onChange={onChange} required />
-              <input type="password" name="password" placeholder="Password" value={form.password} onChange={onChange} required />
-              <input name="firstName" placeholder="First name" value={form.firstName} onChange={onChange} />
-              <input name="lastName" placeholder="Last name" value={form.lastName} onChange={onChange} />
-              <button type="submit" disabled={loading}>
+              {SIGNUP_FIELDS.map(({ name, placeholder, type }) => (
+                <div key={name}>
+                  <input name={name} type={type} placeholder={placeholder} value={form[name]} onChange={onChange} onBlur={onBlur}
+                    aria-invalid={Boolean(touched[name] && signupErrors[name])} style={{ width: "100%" }} />
+                  {touched[name] && signupErrors[name] && <div style={{ color: "red", fontSize: "12px", marginTop: "4px" }}>{signupErrors[name]}</div>}
+                </div>
+              ))}
+              <button type="submit" disabled={loading || signupInvalid}>
                 {loading ? <><span className="spinner" /> Creating…</> : "Create & sign in"}
               </button>
               {status}
