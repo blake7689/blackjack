@@ -11,7 +11,7 @@ export default function StatsPanel({ player }) {
       <div>
         ${player ? player.credits.toLocaleString() : 0}
         {delta !== undefined && (
-          <span className={`credit-change ${delta > 0 ? "plus" : "minus"}`} style={{ marginLeft: 8 }}>
+          <span className={`credit-change ${delta > 0 ? "plus" : "minus"}`}>
             {delta > 0 ? `+${delta}` : delta}
           </span>
         )}

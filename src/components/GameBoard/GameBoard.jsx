@@ -30,7 +30,7 @@ export default function GameBoard() {
   return (
     <div className="board" onClick={handleBoardClick}>
       {/* TOP BAR */}
-      <div className="top-bar" style={{ gridArea: "header" }}>
+      <div className="top-bar">
         <div className="top-left stats">
           <StatsPanel player={player} />
         </div>
@@ -43,7 +43,7 @@ export default function GameBoard() {
       </div>
 
       {/* MAIN GAME AREA */}
-      <div className="main-area" style={{ gridArea: "main" }}>
+      <div className="main-area">
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
@@ -77,7 +77,7 @@ export default function GameBoard() {
       </div>
 
       {/* BOTTOM BAR */}
-      <div className="betting-spacer" style={{ gridArea: "footer" }}>
+      <div className="betting-spacer">
         <BettingFooter />
       </div>
     </div>

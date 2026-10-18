@@ -15,13 +15,13 @@ export default function Home() {
 
   return (
     <div className="page-bg">
-      <div style={{ padding: 24 }}>
-        <div style={{ textAlign:"center", marginTop:36 }}>
-          <h1 style={{ color:"#fff" }}>BlakeJack</h1>
+      <div className="page-body">
+        <div className="home-center">
+          <h1>BlakeJack</h1>
           {!player ? (
-            <p style={{ color:"#fff" }}>Please log in to start playing.</p>
+            <p>Please log in to start playing.</p>
           ) : (
-            <button onClick={onStart} style={{ padding:"12px 20px", borderRadius:10, border:"none", background:"#1db954", color:"#fff", fontSize:18 }}>
+            <button onClick={onStart} className="start-btn">
               Start Game
             </button>
           )}

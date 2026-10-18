@@ -31,3 +31,41 @@
   background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
   color: #fff;
 }
+/* ---- Shared page pieces (moved from inline styles, #5) ---- */
+.page-body { padding: 24px; }
+.page-message { padding: 16px; color: #fff; }
+
+.tabs { display: flex; gap: 8px; }
+.tab-btn { padding: 8px; border-radius: 8px; background: #2b3a44; color: #fff; border: none; }
+.tab-btn.active { background: #2e7bff; }
+
+.stack-form { display: grid; gap: 10px; }
+.full-width { width: 100%; }
+.field-error { color: red; font-size: 12px; margin-top: 4px; }
+.notice { margin-top: 8px; color: #8be28b; }
+.notice.error { color: #ff8a80; }
+
+/* Home */
+.home-center { text-align: center; margin-top: 36px; }
+.home-center h1, .home-center p { color: #fff; }
+.start-btn { padding: 12px 20px; border-radius: 10px; border: none; background: #1db954; color: #fff; font-size: 18px; }
+
+/* Login */
+.login-panel { max-width: 680px; margin: 0 auto; color: #fff; }
+.login-panel .tabs { margin-bottom: 12px; }
+.load-status { margin-top: 8px; opacity: 0.9; font-size: 14px; }
+
+/* Settings */
+.settings-body { padding: 18px; color: #fff; }
+.back-btn { margin-bottom: 16px; background: #1976d2; color: #fff; padding: 8px 18px; border-radius: 8px; font-weight: bold; float: right; }
+.divider { margin: 14px 0; border-color: rgba(255, 255, 255, 0.06); }
+.settings-panel { max-width: 720px; }
+.field-input { margin-left: 8px; }
+.range-input { margin-left: 8px; vertical-align: middle; }
+.checkbox-input { margin-right: 8px; }
+.actions-row { margin-top: 12px; }
+.danger-btn { margin-left: 8px; background: #b22; color: #fff; }
+.reset-warning { color: red; margin-top: 4px; margin-bottom: 4px; }
+.save-btn { cursor: pointer; }
+.save-btn:disabled { cursor: not-allowed; }
+.save-btn.spaced { margin-top: 4px; }
