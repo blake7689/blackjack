@@ -23,12 +23,19 @@ const GAME_SETTINGS = [
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select" },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
+  { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
+  // With no dealer card to compare against, a blackjack must pay at once.
+  { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
+    forcedOn: (s) => s.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"] && !s.dealerDrawsOnPlayerBlackjack },
+  { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
+  { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", min: 250, max: 5000 },
 ];
 
-function SettingInput({ setting, value, onChange }) {
+function SettingInput({ setting, value, forced, onChange }) {
   if (setting.input === "checkbox") {
-    return <input type="checkbox" aria-label={setting.key} checked={value} onChange={(e) => onChange(e.target.checked)} style={{ marginRight: 8 }} />;
+    return <input type="checkbox" aria-label={setting.key} checked={value || forced} disabled={forced}
+      onChange={(e) => onChange(e.target.checked)} style={{ marginRight: 8 }} />;
   }
   if (setting.input === "select") {
     return (
@@ -145,7 +152,7 @@ export default function Settings() {
                 <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
                 <label>
                   {setting.label(drafts[setting.key])}
-                  <SettingInput setting={setting} value={drafts[setting.key]}
+                  <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
                     onChange={(v) => setDrafts({ ...drafts, [setting.key]: v })} />
                 </label>
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (

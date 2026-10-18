@@ -279,6 +279,25 @@ describe("Settings", () => {
     expect(gameActions.changeSetting).toHaveBeenCalledWith("deckCount", 4);
   });
 
+  it("offers the dealer rule options, and forces blackjack-pays-now when the EU dealer won't draw on it", () => {
+    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
+    expect(screen.queryByText(/NoDraw21/)).toBeNull();
+    const paysNow = screen.getByLabelText("blackjackPaysImmediately");
+    expect([paysNow.checked, paysNow.disabled]).toEqual([false, false]);
+
+    fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
+    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBlackjack"));
+    expect([paysNow.checked, paysNow.disabled]).toEqual([true, true]);
+
+    for (const key of ["dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust"]) {
+      fireEvent.click(screen.getByLabelText(key));
+      fireEvent.click(screen.getByLabelText(`Save ${key}`));
+    }
+    fireEvent.click(screen.getByLabelText("Save dealerDrawsOnPlayerBlackjack"));
+    expect(gameActions.changeSetting.mock.calls).toEqual([
+      ["dealerDrawsOnceOn21", true], ["dealerDrawsOnPlayerBust", true], ["dealerDrawsOnPlayerBlackjack", false]]);
+  });
+
   it("saves table settings without asking before a round, and speed or rebet any time", () => {
     const confirm = vi.spyOn(window, "confirm");
     const { gameActions, rerender } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });

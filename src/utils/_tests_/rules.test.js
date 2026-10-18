@@ -244,19 +244,110 @@ describe("EU (dealer draws the second card after the player)", () => {
   });
 });
 
-describe("EU NoDraw21 (dealer skips the second card on a player blackjack)", () => {
-  it("pays a player blackjack at once without the dealer drawing", () => {
-    const r = playRound({ cards: ["A", "10", "K", "A"], mode: Modes.EU_NO_DRAW_21 });
+describe("A1: EU dealer draws only once against a player 21 (dealerDrawsOnceOn21)", () => {
+  const once = { dealerDrawsOnceOn21: true };
+
+  it("on: a two-card dealer total loses to the 21, with no third card", () => {
+    const r = playRound({ cards: ["10", "K", "5", "6", "6", "5"], mode: Modes.EU, actions: ["hit"], rules: once });
+    expect(r.hands[0].total).toBe(21);
+    expect(r.dealer.cards).toHaveLength(2);
+    expect(r.cardsLeft).toBe(1);
+    expect(r.results).toEqual([WIN]);
+  });
+
+  it("on: a dealer blackjack still beats the 21", () => {
+    const r = playRound({ cards: ["10", "K", "5", "6", "A"], mode: Modes.EU, actions: ["hit"], rules: once });
+    expect(r.dealer.isBlackjack).toBe(true);
+    expect(r.results).toEqual([LOSE]);
+  });
+
+  it("off: the dealer draws to 17 and a three-card 21 pushes", () => {
+    const r = playRound({ cards: ["10", "K", "5", "6", "6", "5"], mode: Modes.EU, actions: ["hit"] });
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.results).toEqual([PUSH]);
+  });
+
+  it("does not apply to US modes", () => {
+    const r = playRound({ cards: ["10", "K", "5", "6", "6", "5"], mode: Modes.NO_PEEK, actions: ["hit"], rules: once });
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.results).toEqual([PUSH]);
+  });
+});
+
+describe("A2: dealer draws its second card on a player blackjack (dealerDrawsOnPlayerBlackjack)", () => {
+  const noDraw = { dealerDrawsOnPlayerBlackjack: false };
+
+  it("off: pays a player blackjack at once without the dealer drawing", () => {
+    const r = playRound({ cards: ["A", "10", "K", "A"], mode: Modes.EU, rules: noDraw });
+    expect(r.afterDeal.hands[0].result).toBe(WIN);
     expect(r.results).toEqual([WIN]);
     expect(r.payout).toBe(25);
     expect(r.dealer.cards).toHaveLength(1);
     expect(r.cardsLeft).toBe(1);
   });
 
-  it("plays like EU when the player has no blackjack", () => {
-    const r = playRound({ cards: ["10", "10", "9", "A"], mode: Modes.EU_NO_DRAW_21 });
+  it("off: plays like EU when the player has no blackjack", () => {
+    const r = playRound({ cards: ["10", "10", "9", "A"], mode: Modes.EU, rules: noDraw });
     expect(r.dealer.isBlackjack).toBe(true);
     expect(r.results).toEqual([LOSE]);
+  });
+});
+
+describe("A3: dealer draws after the player busts (dealerDrawsOnPlayerBust)", () => {
+  const bust = ["10", "10", "6", "K", "A"];
+
+  it("on: the EU dealer draws only its second card, and it counts", () => {
+    const on = playRound({ cards: bust, mode: Modes.EU, actions: ["hit"], rules: { dealerDrawsOnPlayerBust: true } });
+    const off = playRound({ cards: bust, mode: Modes.EU, actions: ["hit"] });
+    expect(on.results).toEqual([LOSE]);
+    expect(on.payout).toBe(0);
+    expect(on.dealer.cards).toHaveLength(2);
+    expect(on.cardsLeft).toBe(0);
+    expect(on.state.runningCount).toBe(off.state.runningCount - 1); // the ace
+  });
+
+  it("on: the US dealer turns its hole card over and draws nothing more", () => {
+    const r = playRound({ cards: ["10", "10", "6", "6", "K", "5"], mode: Modes.NO_PEEK, actions: ["hit"], rules: { dealerDrawsOnPlayerBust: true } });
+    expect(r.results).toEqual([LOSE]);
+    expect(r.dealer.cards).toHaveLength(2);
+    expect(r.cardsLeft).toBe(1);
+  });
+});
+
+describe("A4: blackjack pays immediately (blackjackPaysImmediately)", () => {
+  const now = { blackjackPaysImmediately: true };
+
+  it("US no peek on: a hidden dealer blackjack can no longer push it", () => {
+    const r = playRound({ cards: ["A", "A", "K", "K"], mode: Modes.NO_PEEK, rules: now });
+    expect(r.afterDeal.hands[0].result).toBe(WIN);
+    expect(r.dealer.isBlackjack).toBe(true);
+    expect(r.results).toEqual([WIN]);
+    expect(r.payout).toBe(25);
+  });
+
+  it("US no peek off: a dealer blackjack pushes it", () => {
+    const r = playRound({ cards: ["A", "A", "K", "K"], mode: Modes.NO_PEEK });
+    expect(r.afterDeal.hands[0].result).toBe(HandResult.NONE);
+    expect(r.results).toEqual([PUSH]);
+  });
+
+  it("EU on: pays at once, and the dealer still shows its second card", () => {
+    const r = playRound({ cards: ["A", "10", "K", "A"], mode: Modes.EU, rules: now });
+    expect(r.afterDeal.hands[0].result).toBe(WIN);
+    expect(r.results).toEqual([WIN]);
+    expect(r.dealer.cards).toHaveLength(2);
+    expect(r.cardsLeft).toBe(0);
+  });
+
+  it("EU off: a dealer blackjack pushes it", () => {
+    const r = playRound({ cards: ["A", "10", "K", "A"], mode: Modes.EU });
+    expect(r.results).toEqual([PUSH]);
+  });
+
+  it("US peek: makes no difference, a revealed dealer blackjack still pushes", () => {
+    for (const rules of [now, {}]) {
+      expect(playRound({ cards: ["A", "A", "K", "K"], mode: Modes.PEEK, rules }).results).toEqual([PUSH]);
+    }
   });
 });
 
