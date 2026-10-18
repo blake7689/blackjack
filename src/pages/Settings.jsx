@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -21,6 +21,9 @@ const dealerOptionLabel = (key) => key.replace(/_/g, " ").replace(/US|EU/g, (m) 
 
 const RESET_CONFIRM = "Changing this setting will reset the current game. Any bets will be lost. Continue?";
 
+const TABS = [{ id: "player", label: "Player" }, { id: "game", label: "Game" }, { id: "dev", label: "Dev" }];
+
+// Game settings with a tab of their own; the rest are on the Game tab.
 const GAME_SETTINGS = [
   { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", min: 1, max: 5 },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
@@ -33,7 +36,8 @@ const GAME_SETTINGS = [
     forcedOn: (s) => isEU(s) && !s.dealerDrawsOnPlayerBlackjack },
   { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
   { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
-  { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", min: 250, max: 5000 },
+  { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", min: 250, max: 5000, tab: "dev" },
+  { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];
 
 function SettingInput({ setting, value, forced, onChange }) {
@@ -59,6 +63,8 @@ export default function Settings() {
   const { settings, phase } = useGameState();
   const { changeSetting, changeSettings, resetGame } = useGameActions();
   const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const tab = TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "player";
   const [form, setForm] = useState(() => ({
     userName: player?.userName ?? "",
     email: player?.email ?? "",
@@ -123,12 +129,21 @@ export default function Settings() {
   return (
     <div className="page-bg">
       <div style={{ padding: 18, color: "#fff" }}>
-        <button style={{marginBottom:16, background:'#1976d2', color:'#fff', padding:'8px 18px', borderRadius:8, fontWeight:'bold', float: 'right'}} onClick={() => nav("/game")}>
+        <button style={{marginBottom:16, background:'#1976d2', color:'#fff', padding:'8px 18px', borderRadius:8, fontWeight:'bold', float: 'right'}} onClick={() => nav("/game", { state: { settingsTab: tab } })}>
           Back to game
         </button>
         <h2>Settings</h2>
+        <div role="tablist" style={{ display: "flex", gap: 8 }}>
+          {TABS.map(({ id, label }) => (
+            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setParams({ tab: id }, { replace: true })}
+              style={{ padding: 8, borderRadius: 8, background: tab === id ? "#2e7bff" : "#2b3a44", color: "#fff", border: "none" }}>
+              {label}
+            </button>
+          ))}
+        </div>
         <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
-        <div style={{ maxWidth: 720 }}>
+        <div role="tabpanel" style={{ maxWidth: 720 }}>
+          {tab === "player" && <>
           {PROFILE_FIELDS.map(({ name, label, type, placeholder }) => (
             <div key={name}>
               <label>{label} <input name={name} type={type} placeholder={placeholder} value={form[name]}
@@ -155,8 +170,9 @@ export default function Settings() {
           <button onClick={savePassword} disabled={!canChangePassword} style={{ marginTop: 4, cursor: canChangePassword ? "pointer" : "not-allowed" }}>
             Change password
           </button>
+          </>}
 
-          <hr style={{ margin: "14px 0", borderColor: "rgba(255,255,255,0.06)" }} />
+          {tab === "game" && (
           <label>
             Rules preset
             <select aria-label="rulePreset" value={rulePresetOf(drafts)} onChange={(e) => applyPreset(e.target.value)} style={{ marginLeft: 8 }}>
@@ -164,8 +180,9 @@ export default function Settings() {
               <option value={CUSTOM} disabled>{CUSTOM}</option>
             </select>
           </label>
+          )}
 
-          {GAME_SETTINGS.map((setting) => {
+          {GAME_SETTINGS.filter((setting) => (setting.tab ?? "game") === tab).map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];
             return (
               <div key={setting.key}>

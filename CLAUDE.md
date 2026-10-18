@@ -14,6 +14,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 ## Architecture
 - Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 3 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
+- Settings has Player / Game / Dev tabs (`?tab=`; "Back to game" carries it so the header's Settings reopens it).
+  A new game setting goes in `GAME_SETTINGS` (`tab: "dev"` for developer options; Game otherwise).
 - Round state: `src/utils/gameReducer.js` (pure reducer; `nextAutoAction` names the next automatic step).
   `GameProvider` = `useReducer` + one timer effect (cleanup cancels it on reset or unmount) + a credit-event
   effect that applies each balance change once. Two contexts: `useGameState()` and `useGameActions()`

@@ -54,7 +54,7 @@ export default function Header() {
     <header className="bj-header" ref={headerRef}>
       <div className="bj-left">
         <button className="nav-btn" onClick={goHome}>Home</button>
-        <button className="nav-btn" onClick={() => nav("/settings")}>Settings</button>
+        <button className="nav-btn" onClick={() => nav(loc.state?.settingsTab ? `/settings?tab=${loc.state.settingsTab}` : "/settings")}>Settings</button>
       </div>
 
       <div className="bj-right">

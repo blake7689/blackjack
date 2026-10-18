@@ -6,6 +6,7 @@ import Game from "../pages/Game";
 import Login from "../pages/Login";
 import Settings from "../pages/Settings";
 import App from "../App";
+import Header from "../components/Header/Header";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { validateField } from "../utils/validation";
 import { RULE_PRESETS } from "../utils/rulePresets";
@@ -267,7 +268,7 @@ describe("Settings", () => {
 
   it("saves a table setting, confirming first when a round is in play", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PLAYER_TURN } });
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PLAYER_TURN } });
     const save = screen.getByLabelText("Save deckCount");
     expect(save.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("deckCount"), { target: { value: "4" } });
@@ -281,7 +282,7 @@ describe("Settings", () => {
   });
 
   it("offers the dealer rule options, and forces blackjack-pays-now when the EU dealer won't draw on it", () => {
-    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
     expect(screen.queryByText(/NoDraw21/)).toBeNull();
     const paysNow = screen.getByLabelText("blackjackPaysImmediately");
     fireEvent.click(paysNow);
@@ -302,7 +303,7 @@ describe("Settings", () => {
 
   it("applies a rules preset in one step, and shows Custom once a rule is changed", () => {
     const confirm = vi.spyOn(window, "confirm");
-    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
     const preset = screen.getByLabelText("rulePreset");
     expect(preset.value).toBe("US");
     expect(screen.getByRole("option", { name: "Custom" }).disabled).toBe(true);
@@ -321,7 +322,7 @@ describe("Settings", () => {
 
   it("asks once before a preset resets a round in progress", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { gameActions } = renderUI(<Settings />, { game: { phase: GamePhases.PLAYER_TURN } });
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PLAYER_TURN } });
     const preset = screen.getByLabelText("rulePreset");
     fireEvent.change(preset, { target: { value: "EU" } });
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
@@ -333,7 +334,7 @@ describe("Settings", () => {
 
   it("saves table settings without asking before a round, and speed or rebet any time", () => {
     const confirm = vi.spyOn(window, "confirm");
-    const { gameActions, rerender } = renderUI(<Settings />, { game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions, rerender } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
     fireEvent.click(screen.getByLabelText("includeCutCard"));
     fireEvent.click(screen.getByLabelText("Save includeCutCard"));
     fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
@@ -342,9 +343,11 @@ describe("Settings", () => {
     expect(confirm).not.toHaveBeenCalled();
     expect(gameActions.changeSetting.mock.calls).toEqual([["includeCutCard", false], ["dealerHoleBehaviour", "drawAfter"]]);
     rerender(<Settings />);
+    fireEvent.click(screen.getByRole("tab", { name: "Dev" }));
     fireEvent.change(screen.getByLabelText("playTimeout"), { target: { value: "500" } });
     expect(screen.getByText("Rate of Play: 0.5 seconds")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Save playTimeout"));
+    fireEvent.click(screen.getByRole("tab", { name: "Game" }));
     fireEvent.click(screen.getByLabelText("resetInitialBet"));
     fireEvent.click(screen.getByLabelText("Save resetInitialBet"));
     expect(gameActions.changeSetting).toHaveBeenCalledWith("playTimeout", 500);
@@ -352,11 +355,61 @@ describe("Settings", () => {
   });
 
   it("warns about a reset only once a game exists", () => {
-    renderUI(<Settings />);
+    renderUI(<Settings />, { path: "/settings?tab=game" });
     fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
     expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
     fireEvent.click(screen.getByText("Back to game"));
     expect(location()).toBe("/game");
+  });
+
+  it("shows one tab at a time, as buttons, and keeps the open tab in the URL", () => {
+    renderUI(<Settings />, { path: "/settings" });
+    const tab = (name) => screen.getByRole("tab", { name });
+    expect(tab("Player").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Player").tagName).toBe("BUTTON");
+    expect(screen.getByText("Delete Profile")).toBeTruthy();
+    expect(screen.queryByLabelText("deckCount")).toBeNull();
+
+    fireEvent.click(tab("Game"));
+    expect(location()).toBe("/settings?tab=game");
+    expect(tab("Game").getAttribute("aria-selected")).toBe("true");
+    expect(tab("Player").getAttribute("aria-selected")).toBe("false");
+    for (const key of ["rulePreset", "dealerHoleBehaviour", "dealerDrawsOnceOn21", "deckCount", "includeCutCard", "resetInitialBet", "blackJackOnSplit"]) {
+      expect(screen.getByLabelText(key)).toBeTruthy();
+    }
+    expect(screen.queryByText("Delete Profile")).toBeNull();
+    expect(screen.queryByLabelText("playTimeout")).toBeNull();
+
+    fireEvent.click(tab("Dev"));
+    expect(location()).toBe("/settings?tab=dev");
+    expect(screen.getByLabelText("playTimeout")).toBeTruthy();
+    expect(screen.getByLabelText("showCardCount")).toBeTruthy();
+    expect(screen.queryByLabelText("deckCount")).toBeNull();
+  });
+
+  it("opens the Player tab for an unknown tab in the URL", () => {
+    renderUI(<Settings />, { path: "/settings?tab=nope" });
+    expect(screen.getByRole("tab", { name: "Player" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("toggles the card count from the Dev tab without resetting the game", () => {
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=dev", game: { phase: GamePhases.PLAYER_TURN } });
+    fireEvent.click(screen.getByLabelText("showCardCount"));
+    expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
+    fireEvent.click(screen.getByLabelText("Save showCardCount"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("showCardCount", false);
+  });
+
+  it("Back to game, then the header's Settings, returns to the same tab", () => {
+    renderUI(<><Header /><Settings /></>, { path: "/settings?tab=dev" });
+    fireEvent.click(screen.getByText("Back to game"));
+    expect(location()).toBe("/game");
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(location()).toBe("/settings?tab=dev");
+    fireEvent.click(screen.getByRole("tab", { name: "Player" }));
+    fireEvent.click(screen.getByText("Back to game"));
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(location()).toBe("/settings?tab=player");
   });
 
   it("starts the profile form empty for a player with no names", () => {
