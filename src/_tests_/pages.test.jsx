@@ -374,7 +374,7 @@ describe("Settings", () => {
     expect(location()).toBe("/settings?tab=game");
     expect(tab("Game").getAttribute("aria-selected")).toBe("true");
     expect(tab("Player").getAttribute("aria-selected")).toBe("false");
-    for (const key of ["rulePreset", "dealerHoleBehaviour", "dealerDrawsOnceOn21", "deckCount", "includeCutCard", "resetInitialBet", "blackJackOnSplit"]) {
+    for (const key of ["rulePreset", "dealerHoleBehaviour", "dealerDrawsOnceOn21", "deckCount", "includeCutCard", "resetInitialBet", "blackJackOnSplit", "maxSplitHands"]) {
       expect(screen.getByLabelText(key)).toBeTruthy();
     }
     expect(screen.queryByText("Delete Profile")).toBeNull();

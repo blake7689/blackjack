@@ -141,13 +141,57 @@ describe("splits", () => {
     expect(r.hands[1].total).toBe(21);
   });
 
-  it("allows one split per round: split hands cannot split again", () => {
+  it("splits a pair of equal value while the hand count is below the limit", () => {
     const [eight] = stackedShoe(["8"]);
-    expect(canSplit({ cards: [eight, eight] })).toBe(true);
-    expect(canSplit({ cards: [eight, eight], isSplit: true })).toBe(false);
-    expect(canSplit({ cards: stackedShoe(["K", "10"]) })).toBe(true);
-    expect(canSplit({ cards: stackedShoe(["K", "9"]) })).toBe(false);
-    expect(canSplit({ cards: stackedShoe(["8", "8", "2"]) })).toBe(false);
+    expect(canSplit({ cards: [eight, eight] }, 1, 2)).toBe(true);
+    expect(canSplit({ cards: [eight, eight], isSplit: true }, 2, 2)).toBe(false);
+    expect(canSplit({ cards: [eight, eight], isSplit: true }, 3, 4)).toBe(true);
+    expect(canSplit({ cards: [eight, eight], isSplit: true }, 4, 4)).toBe(false);
+    expect(canSplit({ cards: stackedShoe(["K", "10"]) }, 1, 2)).toBe(true);
+    expect(canSplit({ cards: stackedShoe(["K", "9"]) }, 1, 2)).toBe(false);
+    expect(canSplit({ cards: stackedShoe(["8", "8", "2"]) }, 1, 2)).toBe(false);
+  });
+
+  it("never resplits aces", () => {
+    expect(canSplit({ cards: stackedShoe(["A", "A"]) }, 1, 4)).toBe(true);
+    expect(canSplit({ cards: stackedShoe(["A", "A"]), isSplit: true }, 2, 4)).toBe(false);
+  });
+});
+
+describe("D1: split more than once (maxSplitHands)", () => {
+  // Deal 8 8 v 10 (hole 7), then each split's two cards: 8 3, 8 2, 10 9; then 10 and K for the hits.
+  const eights = ["8", "10", "8", "7", "8", "3", "8", "2", "10", "9", "10", "K"];
+  const fourSplits = ["split", "split", "split", "stand", "stand", "hit", "stand", "hit"];
+
+  it("with 4 allowed, 8-8-8-8 ends in 4 hands played in order and settled separately", () => {
+    const r = playRound({ cards: eights, actions: fourSplits, rules: { maxSplitHands: 4 } });
+    expect(r.hands.map((h) => h.total)).toEqual([18, 17, 20, 21]);
+    expect(r.results).toEqual([WIN, PUSH, WIN, WIN]);
+    expect(r.staked).toBe(40);
+    expect(r.payout).toBe(70);
+    expect(r.cardsLeft).toBe(0);
+  });
+
+  it("takes one extra stake per split", () => {
+    const r = playRound({ cards: eights, actions: fourSplits, rules: { maxSplitHands: 4 } });
+    const stakes = r.state.creditEvents.filter((e) => e.kind === "bet" && !e.newRound);
+    expect(stakes.map((e) => e.amount)).toEqual([10, 10, 10]);
+  });
+
+  it("stops at the limit", () => {
+    const r = playRound({ cards: eights, actions: fourSplits, rules: { maxSplitHands: 3 } });
+    expect(r.hands).toHaveLength(3);
+  });
+
+  it("by default allows one split", () => {
+    const r = playRound({ cards: eights, actions: ["split", "split"] });
+    expect(r.hands).toHaveLength(2);
+  });
+
+  it("does not resplit aces", () => {
+    const r = playRound({ cards: ["A", "10", "A", "7", "A", "5", "9"], actions: ["split", "split"], rules: { maxSplitHands: 4 } });
+    expect(r.hands.map((h) => h.cards.length)).toEqual([2, 2]);
+    expect(r.cardsLeft).toBe(1);
   });
 });
 
