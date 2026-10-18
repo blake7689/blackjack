@@ -3,9 +3,9 @@ import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
 
 // The dealer draws its second card after the player acts. //
-export const isEU = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions["Draw After_EU"];
+export const isEU = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions.EU;
 
-{/* EVALUATION */} ////////////////////////////////////////////////////////////////////////////////
+// ---- EVALUATION ----
 
 // Sets initial player status based on blackjack conditions //
 // blackjackPaysNow: a player blackjack wins at the deal (US peek found no dealer blackjack, or a rule pays it at once). //
@@ -113,7 +113,7 @@ export function isTotalBlackjack(total) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-{/* TOTALS CALCULATION */} ////////////////////////////////////////////////////////////////////////
+// ---- TOTALS CALCULATION ----
 
 // Returns all valid blackjack totals for a hand (ace as 1 or 11) //
 export function getHandTotals(cards) {
@@ -145,7 +145,7 @@ export function getHandTotals(cards) {
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-{/* SETTLEMENT */} ////////////////////////////////////////////////////////////////////////////////
+// ---- SETTLEMENT ----
 
 // Returns a settled copy; never mutates the hand (it lives in React state) //
 export function settleHand(hand, dealer) {

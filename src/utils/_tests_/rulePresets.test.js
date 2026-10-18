@@ -13,7 +13,7 @@ describe("rulePresetOf", () => {
   it("shows Custom when any one rule differs, and the preset again once it matches", () => {
     const eu = { ...initialGameState.settings, ...RULE_PRESETS.EU };
     for (const key of Object.keys(RULE_PRESETS.EU)) {
-      const changed = { ...eu, [key]: key === "dealerHoleBehaviour" ? DealerHoleOptions["Draw Early - No Check_US"] : !eu[key] };
+      const changed = { ...eu, [key]: key === "dealerHoleBehaviour" ? DealerHoleOptions.US_NO_PEEK : !eu[key] };
       expect(rulePresetOf(changed)).toBe(CUSTOM);
       expect(rulePresetOf({ ...changed, [key]: eu[key] })).toBe("EU");
     }
@@ -24,6 +24,6 @@ describe("rulePresetOf", () => {
   });
 
   it("US no peek has no preset", () => {
-    expect(rulePresetOf({ ...RULE_PRESETS.US, dealerHoleBehaviour: DealerHoleOptions["Draw Early - No Check_US"] })).toBe(CUSTOM);
+    expect(rulePresetOf({ ...RULE_PRESETS.US, dealerHoleBehaviour: DealerHoleOptions.US_NO_PEEK })).toBe(CUSTOM);
   });
 });

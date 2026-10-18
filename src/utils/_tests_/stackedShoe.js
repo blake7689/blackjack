@@ -23,9 +23,9 @@ export const outOfCards = () => { throw new Error("Scenario shoe ran out of card
 const RICH = 1e9;
 
 export const Modes = {
-  PEEK: DealerHoleOptions["Draw Early - Check_US"],
-  NO_PEEK: DealerHoleOptions["Draw Early - No Check_US"],
-  EU: DealerHoleOptions["Draw After_EU"],
+  PEEK: DealerHoleOptions.US_PEEK,
+  NO_PEEK: DealerHoleOptions.US_NO_PEEK,
+  EU: DealerHoleOptions.EU,
 };
 
 // Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order

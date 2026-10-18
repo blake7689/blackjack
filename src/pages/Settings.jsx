@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
-import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
+import { DealerHoleLabels } from "../utils/constants/dealerHoleOptions";
 import { RESET_SETTINGS, SETTING_RANGES } from "../utils/gameReducer";
 import { isEU } from "../utils/blackjackLogic";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
@@ -17,7 +17,6 @@ const PROFILE_FIELDS = [
   { name: "lastName", label: "Last name" },
 ];
 
-const dealerOptionLabel = (key) => key.replace(/_/g, " ").replace(/US|EU/g, (m) => ` (${m})`);
 
 const RESET_CONFIRM = "Changing this setting will reset the current game. Any bets will be lost. Continue?";
 
@@ -29,7 +28,7 @@ const GAME_SETTINGS = [
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
-    options: Object.entries(DealerHoleOptions).map(([key, value]) => ({ value, label: dealerOptionLabel(key) })) },
+    options: Object.entries(DealerHoleLabels).map(([value, label]) => ({ value, label })) },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
   { key: "maxSplitHands", label: (v) => `Max Hands After Splits: ${v === 0 ? "Unlimited" : v}`, input: "select",
     options: [2, 3, 4].map((n) => ({ value: n, label: String(n) })).concat({ value: 0, label: "Unlimited" }) },
