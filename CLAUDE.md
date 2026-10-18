@@ -63,6 +63,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Splits: `canSplit(hand, handCount, maxSplitHands)`; `maxSplitHands` (2-4, or 0 = unlimited, the default) caps the
   hands in a round, each split takes one more stake, and split aces never resplit.
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
+- `.github/workflows/azure-static-web-apps-*.yml` is committed with CRLF; with `core.autocrlf=true` an edit rewrites
+  every line. Keep CRLF and commit it with `git -c core.autocrlf=false`.
+- Game actions such as `changeSetting` return a promise: in tests write `act(() => { action(); })` (braces), or
+  `act` turns async and the assertions run before the update.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.
