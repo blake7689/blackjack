@@ -1,7 +1,8 @@
+import { memo } from "react";
 import { usePlayer } from "../../hooks/usePlayer";
 import "./StatsPanel.css";
 
-export default function StatsPanel({ player }) {
+function StatsPanel({ player }) {
   const { creditChange } = usePlayer();
   const delta = creditChange?.delta;
 
@@ -19,3 +20,6 @@ export default function StatsPanel({ player }) {
     </div>
   );
 }
+
+// Re-renders only when the player or a credit change does (#5).
+export default memo(StatsPanel);

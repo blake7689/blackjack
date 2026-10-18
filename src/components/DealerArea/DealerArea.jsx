@@ -1,7 +1,8 @@
+import { memo } from "react";
 import Card from "../Card/Card.jsx";
 import "./DealerArea.css";
 
-export default function DealerArea({ dealer, hiddenCount = 0 }) {
+function DealerArea({ dealer, hiddenCount = 0 }) {
   return (
     <div className="dealer-area">
       <div className="dealer-hand">
@@ -27,3 +28,6 @@ export default function DealerArea({ dealer, hiddenCount = 0 }) {
     </div>
   );
 }
+
+// Re-renders only when the dealer's hand changes (#5).
+export default memo(DealerArea);

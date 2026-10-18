@@ -1,3 +1,4 @@
+import { memo } from "react";
 import "./CardCountDisplay.css";
 import { trueCount } from "../../utils/cards";
 
@@ -12,4 +13,5 @@ const CardCountDisplay = ({ shoe, runningCount }) => {
   );
 };
 
-export default CardCountDisplay;
+// Re-renders only when a card is drawn (#5).
+export default memo(CardCountDisplay);
