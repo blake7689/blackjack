@@ -1,6 +1,7 @@
+import { memo } from "react";
 import "./Card.css";
 
-export default function Card({ card, faceDown = false, small = false }) {
+function Card({ card, faceDown = false, small = false }) {
   if (!card && !faceDown) {
     return <div className={`card-skel ${small ? "small" : ""}`} />;
   }
@@ -8,3 +9,6 @@ export default function Card({ card, faceDown = false, small = false }) {
   const altText = faceDown ? "Card back" : `${card.rank} of ${card.suit}`;
   return <img className={`card-img ${small ? "small" : ""}`} src={src} alt={altText} draggable={false} />;
 }
+
+// A dealt card never changes, so it skips the board's re-renders (#5).
+export default memo(Card);

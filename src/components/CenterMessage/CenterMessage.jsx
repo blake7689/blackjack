@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 
 const MESSAGES = {
@@ -9,6 +10,9 @@ const MESSAGES = {
   [GamePhases.POST_ROUND]: "Click anywhere to continue...",
 };
 
-export default function CenterMessage({ gamePhase }) {
+function CenterMessage({ gamePhase }) {
   return <div>{MESSAGES[gamePhase] ?? ""}</div>;
 }
+
+// Re-renders only when the phase changes (#5).
+export default memo(CenterMessage);

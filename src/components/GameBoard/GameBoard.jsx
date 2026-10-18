@@ -13,7 +13,7 @@ import "./GameBoard.css";
 
 export default function GameBoard() {
   const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings } = useGameState();
-  const { continueRound, hit, stand, double, split } = useGameActions();
+  const { continueRound } = useGameActions();
   const { player } = usePlayer();
   const handsRef = useRef(null);
 
@@ -63,12 +63,12 @@ export default function GameBoard() {
                 <PlayerHand
                   key={idx}
                   hand={hand}
+                  index={idx}
                   active={selectedHandIndex === idx}
-                  onHit={() => hit(idx)}
-                  onStay={() => stand(idx)}
-                  onDouble={() => double(idx)}
-                  onSplit={() => split(idx)}
                   gamePhase={phase}
+                  handCount={hands.length}
+                  maxSplitHands={settings.maxSplitHands}
+                  credits={player.credits}
                 />
               ))}
             </div>

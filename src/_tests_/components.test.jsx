@@ -105,7 +105,18 @@ describe("PlayerOptions", () => {
 });
 
 describe("PlayerHand", () => {
-  const props = { onHit: vi.fn(), onStay: vi.fn(), onDouble: vi.fn(), onSplit: vi.fn(), active: true, gamePhase: GamePhases.PLAYER_TURN };
+  const props = { index: 0, active: true, gamePhase: GamePhases.PLAYER_TURN, handCount: 1, maxSplitHands: 0, credits: 1000 };
+
+  it("sends each option to the game for this hand", () => {
+    const { gameActions } = renderUI(<PlayerHand {...props} index={2} hand={hand(["8", "8"])} />);
+    ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
+    expect([gameActions.hit, gameActions.stand, gameActions.double, gameActions.split].map((fn) => fn.mock.calls)).toEqual([[[2]], [[2]], [[2]], [[2]]]);
+  });
+
+  it("hides split once the round has the most hands allowed", () => {
+    renderUI(<PlayerHand {...props} handCount={2} maxSplitHands={2} hand={hand(["8", "8"], { isSplit: true })} />);
+    expect(screen.queryByText("Split")).toBeNull();
+  });
 
   it("offers double and split on an affordable pair", () => {
     renderUI(<PlayerHand {...props} hand={hand(["8", "8"], { totals: [16] })} />);
@@ -115,7 +126,7 @@ describe("PlayerHand", () => {
   });
 
   it("hides double and split when the stake is not affordable", () => {
-    renderUI(<PlayerHand {...props} hand={hand(["8", "8"])} />, { player: { player: { credits: 5 } } });
+    renderUI(<PlayerHand {...props} credits={5} hand={hand(["8", "8"])} />);
     expect(screen.getByText("Hit")).toBeTruthy();
     expect(screen.queryByText("Double")).toBeNull();
     expect(screen.queryByText("Split")).toBeNull();
