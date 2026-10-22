@@ -43,7 +43,6 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
       status: playerHandEvaluation.handStatus,
       isBlackjack: playerHasBlackjack, 
       isDouble: false,
-      isTriple: false,
       isBusted: false,
       total: playerTotals.total,
       totals: playerTotals.totals,
@@ -145,7 +144,6 @@ export function playerTripleDown(hand, shoe, setCutCardFound, resetShoe, drawsOn
     totals: handTotals.totals,
     status: HandStatus.DONE,
     result: handEvaluation.handResult,
-    isTriple: true,
     isBlackjack: handEvaluation.isBlackjack,
     isBusted: handEvaluation.isBusted,
     bet: hand.bet * 3

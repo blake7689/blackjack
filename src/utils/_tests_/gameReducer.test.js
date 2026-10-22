@@ -98,7 +98,7 @@ describe("player actions", () => {
     const on = { ...pair, settings: { ...pair.settings, tripleDown: true } };
     const tripled = run(on, { type: "TRIPLE", handIdx: 0 });
     expect(tripled.hands).toHaveLength(1);
-    expect(tripled.hands[0]).toMatchObject({ bet: 30, isTriple: true });
+    expect(tripled.hands[0]).toMatchObject({ bet: 30 });
     expect(run(tripled, { type: "TRIPLE", handIdx: 0 })).toBe(tripled);
     const blackjack = run({ ...started(["A", "5", "K", "6"]), settings: on.settings }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
     expect(run(blackjack, { type: "TRIPLE", handIdx: 0 })).toBe(blackjack);

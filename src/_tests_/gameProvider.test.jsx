@@ -130,7 +130,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
     act(() => ctx.actions.triple(0));
-    expect(ctx.state.hands[0]).toMatchObject({ bet: 30, isTriple: true });
+    expect(ctx.state.hands[0]).toMatchObject({ bet: 30 });
     expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false });
   });
 

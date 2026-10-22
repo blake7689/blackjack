@@ -10,6 +10,7 @@ import Header from "../components/Header/Header";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { validateField } from "../utils/validation";
 import { RULE_PRESETS } from "../utils/rulePresets";
+import { initialGameState } from "../utils/gameReducer";
 
 const location = () => screen.getByTestId("location").textContent;
 const type = (label, value) => fireEvent.change(screen.getByPlaceholderText(label), { target: { value } });
@@ -325,6 +326,14 @@ describe("Settings", () => {
     fireEvent.click(screen.getByLabelText("Save tripleDrawsOnBust"));
     expect(gameActions.changeSetting.mock.calls).toEqual([["tripleDown", true], ["tripleDrawsOnBust", true]]);
     expect(screen.getByLabelText("rulePreset").value).toBe("US");
+  });
+
+  it("shows the always-draw option unticked while triple down is off, without losing the saved choice", () => {
+    renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL, settings: { ...initialGameState.settings, tripleDrawsOnBust: true } } });
+    const draws = screen.getByLabelText("tripleDrawsOnBust");
+    expect([draws.disabled, draws.checked]).toEqual([true, false]);
+    fireEvent.click(screen.getByLabelText("tripleDown"));
+    expect([draws.disabled, draws.checked]).toEqual([false, true]);
   });
 
   it("applies a rules preset in one step, and shows Custom once a rule is changed", () => {

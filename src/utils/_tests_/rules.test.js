@@ -103,7 +103,6 @@ describe("triple down", () => {
   it("11 plus two cards: triples the stake, draws both cards, ends the turn and pays on it", () => {
     const r = playRound({ cards: ["5", "10", "6", "7", "4", "5"], rules: triple, actions: ["triple"] });
     expect(r.hands[0].cards).toHaveLength(4);
-    expect(r.hands[0].isTriple).toBe(true);
     expect(r.staked).toBe(30);
     expect(r.results).toEqual([WIN]);
     expect(r.payout).toBe(60);

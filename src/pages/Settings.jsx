@@ -50,7 +50,7 @@ const GAME_SETTINGS = [
 
 function SettingInput({ setting, value, forced, disabled, onChange }) {
   if (setting.input === "checkbox") {
-    return <input type="checkbox" aria-label={setting.key} checked={value || forced} disabled={forced || disabled}
+    return <input type="checkbox" aria-label={setting.key} checked={(value && !disabled) || forced} disabled={forced || disabled}
       onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
   }
   if (setting.input === "chips") {
