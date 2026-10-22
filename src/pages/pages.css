@@ -63,6 +63,8 @@
 .field-input { margin-left: 8px; }
 .range-input { margin-left: 8px; vertical-align: middle; }
 .checkbox-input { margin-right: 8px; }
+.chip-options { border: 0; padding: 0; margin: 0; }
+.chip-option { display: inline-block; margin-right: 12px; }
 .actions-row { margin-top: 12px; }
 .danger-btn { margin-left: 8px; background: #b22; color: #fff; }
 .reset-warning { color: red; margin-top: 4px; margin-bottom: 4px; }

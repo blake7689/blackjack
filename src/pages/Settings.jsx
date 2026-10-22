@@ -8,6 +8,8 @@ import { RESET_SETTINGS, SETTING_RANGES } from "../utils/gameReducer";
 import { isEU } from "../utils/blackjackLogic";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
 import { validateField } from "../utils/validation";
+import { ALLOWED_CHIPS } from "../utils/constants/chips";
+import { parseChipValues, formatChipValues } from "../utils/chips";
 import "./pages.css";
 
 const PROFILE_FIELDS = [
@@ -38,6 +40,7 @@ const GAME_SETTINGS = [
     forcedOn: (s) => isEU(s) && !s.dealerDrawsOnPlayerBlackjack },
   { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
   { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
+  { key: "chipValues", label: () => "Chips to show", input: "chips" },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.playTimeout, tab: "dev" },
   { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];
@@ -46,6 +49,17 @@ function SettingInput({ setting, value, forced, onChange }) {
   if (setting.input === "checkbox") {
     return <input type="checkbox" aria-label={setting.key} checked={value || forced} disabled={forced}
       onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
+  }
+  if (setting.input === "chips") {
+    const chosen = parseChipValues(value);
+    return ALLOWED_CHIPS.map((chip) => (
+      <label key={chip} className="chip-option">
+        <input type="checkbox" aria-label={`chip ${chip}`} className="checkbox-input" checked={chosen.includes(chip)}
+          disabled={chosen.length === 1 && chosen[0] === chip}
+          onChange={(e) => onChange(formatChipValues(e.target.checked ? [...chosen, chip] : chosen.filter((c) => c !== chip)))} />
+        ${chip.toLocaleString()}
+      </label>
+    ));
   }
   if (setting.input === "select") {
     return (
@@ -200,11 +214,18 @@ export default function Settings() {
             return (
               <div key={setting.key}>
                 <hr className="divider" />
-                <label>
-                  {setting.label(drafts[setting.key])}
-                  <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
-                    onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
-                </label>
+                {setting.input === "chips" ? (
+                  <fieldset className="chip-options">
+                    <legend>{setting.label(drafts[setting.key])}</legend>
+                    <SettingInput setting={setting} value={drafts[setting.key]} onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
+                  </fieldset>
+                ) : (
+                  <label>
+                    {setting.label(drafts[setting.key])}
+                    <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
+                      onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
+                  </label>
+                )}
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (
                   <div className="reset-warning">Changing this setting will reset the current game.</div>
                 )}
