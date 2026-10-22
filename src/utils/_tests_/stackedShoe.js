@@ -30,6 +30,7 @@ export const Modes = {
 
 // Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
+// `beforeReveal` is the state just before a face-down double's card is turned over (null if none).
 // `rules` sets any other game settings, e.g. { dealerDrawsOnPlayerBust: true }.
 export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {} }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
@@ -46,13 +47,16 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
   while (s.phase === GamePhases.PLAYER_TURN) {
     s = step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
   }
+  let beforeReveal = null; // the state just before REVEAL_HIDDEN (face-down doubles), if the round reaches it
   while (nextAutoAction(s)) {
+    if (nextAutoAction(s) === "REVEAL_HIDDEN") beforeReveal = s;
     s = step(s, { type: nextAutoAction(s) });
     if (s.phase === GamePhases.POST_ROUND) break;
   }
 
   return {
     afterDeal,
+    beforeReveal,
     state: s,
     hands: s.hands,
     dealer: s.dealer,

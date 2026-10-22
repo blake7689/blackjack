@@ -44,6 +44,7 @@ const GAME_SETTINGS = [
   { key: "tripleDown", label: () => "Triple Down", input: "checkbox" },
   { key: "tripleDrawsOnBust", label: () => "Always Draw the Second Triple Card, Even on a Bust", input: "checkbox",
     disabledWhen: (s) => !s.tripleDown },
+  { key: "doubleFaceDown", label: () => "Double Down Card Face Down", input: "checkbox" },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.playTimeout, tab: "dev" },
   { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];

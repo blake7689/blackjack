@@ -134,6 +134,29 @@ describe("GameProvider", () => {
     expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false });
   });
 
+  it("runs a face-down double through the timer: one reveal step, then settle, with one bet of one stake", () => {
+    shoes.push(stackedShoe(["6", "10", "5", "7", "K"]));
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => { ctx.actions.changeSetting("doubleFaceDown", true); });
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    act(() => ctx.actions.double(0));
+    expect(ctx.state.hands[0]).toMatchObject({ total: 11, bet: 20, isBusted: false });
+    expect(ctx.state.hands[0].hiddenCards).toHaveLength(1);
+    tick(); // dealer reveals the hole card
+    expect(ctx.state.phase).toBe(GamePhases.SETTLING_HANDS); // 17 stands
+    expect(ctx.state.hands[0].hiddenCards).toHaveLength(1);
+    tick(); // the face-down card turns over
+    expect(ctx.state.hands[0]).toMatchObject({ total: 21, hiddenCards: [] });
+    expect(ctx.state.phase).toBe(GamePhases.SETTLING_HANDS);
+    tick(); // settle
+    tick(); // results
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true },
+      { kind: "bet", amount: 10, newRound: false, alreadyDeducted: false }, { kind: "settle", amount: 40 }]);
+  });
+
   it("deals a fresh shoe for table settings and just updates the others", () => {
     const { ctx } = setup();
     act(() => { ctx.actions.changeSetting("deckCount", 3); });

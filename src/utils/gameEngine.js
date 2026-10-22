@@ -39,6 +39,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   return {
     hands: [{ 
       cards: playerCards, 
+      hiddenCards: [], // a face-down double's card, kept out of `cards` until REVEAL_HIDDEN
       bet: bet, 
       status: playerHandEvaluation.handStatus,
       isBlackjack: playerHasBlackjack, 
@@ -110,9 +111,12 @@ export function playerHit(hand, shoe, setCutCardFound, resetShoe) {
   return { hand: newHand, shoe };
 }
 
-// Player Double //
-export function playerDouble(hand, shoe, setCutCardFound, resetShoe) {
+// Player Double. faceDown: the card waits in hiddenCards; total, bust and result stay as they were until the reveal. //
+export function playerDouble(hand, shoe, setCutCardFound, resetShoe, faceDown = false) {
   const card = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
+  if (faceDown) {
+    return { hand: { ...hand, hiddenCards: [card], status: HandStatus.DONE, isDouble: true, bet: hand.bet * 2 }, shoe };
+  }
   const newCards = [...hand.cards, card];
   const handTotals = getHandTotals(newCards);
   const handEvaluation = getHandEvaluation(handTotals.totals, hand, newCards.length);
@@ -129,6 +133,24 @@ export function playerDouble(hand, shoe, setCutCardFound, resetShoe) {
     bet: hand.bet * 2
   };
   return { hand: newHand, shoe };
+}
+
+// Turns every face-down card face up and works the hand out again (the hand stays DONE) //
+export function revealHiddenCards(hand) {
+  if (hand.hiddenCards.length === 0) return hand;
+  const cards = [...hand.cards, ...hand.hiddenCards];
+  const handTotals = getHandTotals(cards);
+  const handEvaluation = getHandEvaluation(handTotals.totals, hand, cards.length);
+  return {
+    ...hand,
+    cards,
+    hiddenCards: [],
+    total: handTotals.total,
+    totals: handTotals.totals,
+    result: handEvaluation.handResult,
+    isBlackjack: handEvaluation.isBlackjack,
+    isBusted: handEvaluation.isBusted
+  };
 }
 
 // Player Triple Down: two cards (one if the first busts, unless drawsOnBust), triple stake, turn over //

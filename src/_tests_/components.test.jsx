@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { initialGameState } from "../utils/gameReducer";
+import { initialGameState, gameReducer } from "../utils/gameReducer";
 import { screen, fireEvent, cleanup } from "@testing-library/react";
 import { renderUI } from "./testUtils";
-import { stackedShoe } from "../utils/_tests_/stackedShoe";
+import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
@@ -19,7 +19,7 @@ import GameBoard from "../components/GameBoard/GameBoard";
 
 const hand = (codes, extra = {}) => {
   const cards = stackedShoe(codes);
-  return { cards, bet: 10, status: HandStatus.PLAYING, result: HandResult.NONE, totals: [20], total: 20, isBusted: false, isBlackjack: false, ...extra };
+  return { cards, hiddenCards: [], bet: 10, status: HandStatus.PLAYING, result: HandResult.NONE, totals: [20], total: 20, isBusted: false, isBlackjack: false, ...extra };
 };
 
 describe("Card", () => {
@@ -112,6 +112,16 @@ describe("PlayerHand", () => {
     const { gameActions } = renderUI(<PlayerHand {...props} index={2} hand={hand(["8", "8"])} />);
     ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
     expect([gameActions.hit, gameActions.stand, gameActions.double, gameActions.split].map((fn) => fn.mock.calls)).toEqual([[[2]], [[2]], [[2]], [[2]]]);
+  });
+
+  it("shows a card back and the face-up total for a face-down double, and nothing of the hidden card", () => {
+    const [king] = stackedShoe(["K"]);
+    const doubled = hand(["6", "5"], { totals: [11], total: 11, bet: 20, status: HandStatus.DONE, hiddenCards: [king] });
+    const { container } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.DEALER_TURN} hand={doubled} />);
+    expect(screen.getByText(/Total: 11/)).toBeTruthy();
+    expect([...container.querySelectorAll("img")].map((img) => img.alt)).toEqual(["6 of hearts", "5 of hearts", "Card back"]);
+    expect(screen.queryByText(/Busted|Blackjack/)).toBeNull();
+    expect(container.innerHTML).not.toMatch(new RegExp(`king|${king.id}`, "i"));
   });
 
   it("offers triple only when the option is on, with two cards and two more stakes in the balance", () => {
@@ -295,6 +305,33 @@ describe("GameBoard", () => {
     renderUI(<GameBoard />, { game: { ...playing, dealerHole: { cards: stackedShoe(["A"]) } } });
     expect(screen.getByAltText("Card back")).toBeTruthy();
     expect(screen.queryByAltText("ace of hearts")).toBeNull();
+  });
+
+  it("a face-down double puts nothing of the hidden card in the page until the reveal", () => {
+    const [six, ten, five, seven, king] = stackedShoe(["6", "10", "5", "7", "K"]);
+    const hidden = { ...king, suit: "spades", id: "king-spades-0-1" }; // every other card on the table is a heart
+    const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+    let s = step(initialGameState, { type: "START_GAME", shoe: [six, ten, five, seven, hidden] });
+    s = step(s, { type: "SET_SETTING", key: "doubleFaceDown", value: true });
+    s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DOUBLE", handIdx: 0 }].reduce(step, s);
+    expect(s.hands[0].hiddenCards).toEqual([hidden]);
+    const leaks = /king|spades|\b13\b|Busted|Blackjack/i;
+
+    const { container, unmount } = renderUI(<GameBoard />, { game: s });
+    expect(screen.getByText(/Total: 11/)).toBeTruthy();
+    expect(container.querySelectorAll(".player-hand img[alt='Card back']")).toHaveLength(1); // the dealer's hole card is the other back
+    expect(container.querySelector(".count-value").textContent).toBe("1"); // 6 +1, 10 -1, 5 +1: the king (-1) is not counted
+    expect(container.innerHTML).not.toContain(hidden.id);
+    expect(container.innerHTML).not.toMatch(leaks);
+    expect(container.textContent).not.toMatch(leaks);
+    unmount();
+
+    const revealed = ["DEALER_REVEAL", "REVEAL_HIDDEN"].reduce((acc, type) => step(acc, { type }), s);
+    const after = renderUI(<GameBoard />, { game: revealed });
+    expect(screen.getByAltText("king of spades")).toBeTruthy(); // the search above is not vacuous
+    expect(screen.getByText(/Total: 21/)).toBeTruthy();
+    expect(after.container.querySelector(".count-value").textContent).toBe("0");
+    expect(screen.queryByAltText("Card back")).toBeNull();
   });
 
   it("continues on a table click after the round, and hides an empty dealer", () => {

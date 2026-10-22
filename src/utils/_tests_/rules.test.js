@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { playRound, stackedShoe, Modes, HandResult, HandStatus } from "./stackedShoe";
+import { playRound, stackedShoe, outOfCards, Modes, HandResult, HandStatus } from "./stackedShoe";
+import { gameReducer, nextAutoAction } from "../gameReducer";
+import { GamePhases } from "../constants/gamePhases";
 import { canSplit, settleHand } from "../blackjackLogic";
 import { drawCardFromShoe, cardsRemaining, trueCount } from "../cards";
 
@@ -492,6 +494,139 @@ describe("A4: blackjack pays immediately (blackjackPaysImmediately)", () => {
     for (const rules of [now, {}]) {
       expect(playRound({ cards: ["A", "A", "K", "K"], mode: Modes.PEEK, rules }).results).toEqual([PUSH]);
     }
+  });
+});
+
+describe("U6.8: face-down double (doubleFaceDown, #66)", () => {
+  const rules = { doubleFaceDown: true };
+  const faceDown = (opts) => playRound({ rules, actions: ["double"], ...opts });
+  // The money the server sees: the deal's stake, each extra stake, and the final payout.
+  const ledger = (r) => r.state.creditEvents.filter((e) => e.kind !== "local").map((e) => ({ ...e, seq: undefined }));
+  const hiddenIds = (r) => r.beforeReveal.hands.flatMap((h) => h.hiddenCards.map((c) => c.id));
+  const bet = (amount, newRound, alreadyDeducted) => ({ kind: "bet", amount, newRound, alreadyDeducted, seq: undefined });
+  const settle = (amount) => ({ kind: "settle", amount, seq: undefined });
+
+  it.each([
+    ["wins", ["6", "10", "5", "7", "K"], 21, WIN, 40, 1],
+    ["pushes", ["6", "10", "5", "K", "9"], 20, PUSH, 20, 0],
+    ["loses", ["6", "10", "5", "7", "3"], 14, LOSE, 0, 1],
+  ])("keeps the card out of the hand and the count until the reveal, then %s", (_name, cards, total, result, payout, countBefore) => {
+    const r = faceDown({ cards });
+    const before = r.beforeReveal.hands[0];
+    expect(before.cards).toHaveLength(2);
+    expect(before.hiddenCards).toHaveLength(1);
+    expect([before.total, before.totals, before.isBusted, before.result, before.status, before.bet]).toEqual([11, [11], false, HandResult.NONE, HandStatus.DONE, 20]);
+    expect(r.beforeReveal.seenIds).not.toContain(hiddenIds(r)[0]);
+    expect(r.beforeReveal.runningCount).toBe(countBefore); // 6 +1, 10 -1, 5 +1, dealer hole (7 0 / K -1 / 7 0)
+    expect(r.dealer.cards).toHaveLength(2); // the dealer plays on a live hand as normal
+    expect(r.hands[0]).toMatchObject({ total, totals: [total], hiddenCards: [], result, payout });
+    expect(r.hands[0].cards).toHaveLength(3);
+    expect(r.state.seenIds).toContain(hiddenIds(r)[0]);
+    expect(r.state.runningCount).toBe([...r.hands[0].cards, ...r.dealer.cards].reduce((sum, c) => sum + c.count, 0));
+    expect(r.staked).toBe(20);
+  });
+
+  it("books one bet at the deal, one extra stake at the double and one settle at the end", () => {
+    expect(ledger(faceDown({ cards: ["6", "10", "5", "7", "K"] }))).toEqual([bet(10, true, true), bet(10, false, false), settle(40)]);
+    expect(ledger(faceDown({ cards: ["6", "10", "5", "7", "3"] }))).toEqual([bet(10, true, true), bet(10, false, false), settle(0)]);
+  });
+
+  it("a hidden bust shows nothing, the dealer plays out, and the hand loses at the reveal", () => {
+    const r = faceDown({ cards: ["10", "10", "2", "6", "K", "5"] });
+    const before = r.beforeReveal.hands[0];
+    expect([before.total, before.isBusted, before.result]).toEqual([12, false, HandResult.NONE]);
+    expect(r.beforeReveal.dealer.cards).toHaveLength(3); // dealer 16 hit the 5
+    expect(r.hands[0]).toMatchObject({ total: 22, isBusted: true, result: LOSE, bet: 20, payout: 0 });
+    expect(r.cardsLeft).toBe(0);
+  });
+
+  it("a hidden 21 made from an ace keeps both totals and is not a blackjack", () => {
+    const r = faceDown({ cards: ["A", "10", "5", "9", "5"] });
+    expect(r.beforeReveal.hands[0]).toMatchObject({ totals: [16, 6], isBlackjack: false });
+    expect(r.hands[0]).toMatchObject({ totals: [21, 11], total: 21, isBlackjack: false, result: WIN, payout: 40 });
+  });
+
+  it("two split hands both doubled face down reveal together and settle on their own totals", () => {
+    const r = faceDown({ cards: ["8", "10", "8", "7", "3", "2", "10", "5"], actions: ["split", "double", "double"] });
+    expect(r.beforeReveal.hands.map((h) => [h.cards.length, h.hiddenCards.length, h.total, h.result])).toEqual([[2, 1, 11, HandResult.NONE], [2, 1, 10, HandResult.NONE]]);
+    expect(r.beforeReveal.seenIds).toHaveLength(6); // player 8 3 8 2, dealer 10 7: no hidden card
+    expect(r.hands.map((h) => [h.total, h.hiddenCards.length, h.bet])).toEqual([[21, 0, 20], [15, 0, 20]]);
+    expect(r.results).toEqual([WIN, LOSE]);
+    expect(r.payout).toBe(40);
+    expect(r.staked).toBe(40);
+    expect(ledger(r)).toEqual([bet(10, true, true), bet(10, false, false), bet(10, false, false), bet(10, false, false), settle(40)]);
+  });
+
+  it("both split hands can bust face down; the dealer still plays and both lose", () => {
+    const r = faceDown({ cards: ["10", "10", "10", "7", "2", "3", "K", "9"], actions: ["split", "double", "double"] });
+    expect(r.beforeReveal.hands.map((h) => [h.total, h.isBusted])).toEqual([[12, false], [13, false]]);
+    expect(r.hands.map((h) => [h.total, h.isBusted])).toEqual([[22, true], [22, true]]);
+    expect(r.results).toEqual([LOSE, LOSE]);
+    expect(r.payout).toBe(0);
+  });
+
+  it("US no peek: a dealer blackjack takes the doubled hand, double stake and all", () => {
+    const r = faceDown({ cards: ["5", "A", "6", "K", "10"], mode: Modes.NO_PEEK });
+    expect(r.beforeReveal.hands[0]).toMatchObject({ total: 11, result: HandResult.NONE });
+    expect(r.beforeReveal.dealer.isBlackjack).toBe(true);
+    expect(r.hands[0]).toMatchObject({ total: 21, result: LOSE, bet: 20, payout: 0 });
+    expect(ledger(r).at(-1)).toEqual(settle(0));
+  });
+
+  it("EU: the dealer draws its second card after a face-down double, then the hand is revealed", () => {
+    const r = faceDown({ cards: ["6", "10", "5", "K", "7"], mode: Modes.EU });
+    expect(r.afterDeal.dealer.cards).toHaveLength(1);
+    expect(r.beforeReveal.hands[0]).toMatchObject({ total: 11, bet: 20 });
+    expect(r.beforeReveal.dealer.cards).toHaveLength(2);
+    expect(r.hands[0]).toMatchObject({ total: 21, result: WIN, payout: 40 });
+  });
+
+  it("EU: the dealer draws the same whether the hidden card busts the hand or not", () => {
+    const bust = faceDown({ cards: ["10", "10", "2", "K", "7"], mode: Modes.EU });
+    const live = faceDown({ cards: ["10", "10", "2", "3", "7"], mode: Modes.EU });
+    expect([bust.dealer.cards.length, live.dealer.cards.length]).toEqual([2, 2]);
+    expect(bust.results).toEqual([LOSE]);
+    expect(live.results).toEqual([LOSE]); // 15 against the dealer's 17
+  });
+
+  it("turning the option off after the double still reveals and settles the hand", () => {
+    const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+    let s = step(playRound({ cards: ["6", "10", "5", "7", "K"], rules }).afterDeal, { type: "DOUBLE", handIdx: 0 });
+    s = step(s, { type: "SET_SETTING", key: "doubleFaceDown", value: false });
+    expect(s.hands[0].hiddenCards).toHaveLength(1);
+    while (s.phase !== GamePhases.POST_ROUND) s = step(s, { type: nextAutoAction(s) });
+    expect(s.hands[0]).toMatchObject({ total: 21, hiddenCards: [], result: WIN, payout: 40 });
+  });
+
+  it("with the option off a double is face up at once and no reveal step runs", () => {
+    const r = playRound({ cards: ["6", "10", "5", "7", "K"], actions: ["double"] });
+    expect(r.hands[0].hiddenCards).toEqual([]);
+    expect(r.beforeReveal).toBeNull();
+    expect(r.afterDeal.hands[0].hiddenCards).toEqual([]);
+  });
+
+  it("a plain double stays face down when triple down is also on", () => {
+    const r = faceDown({ cards: ["6", "10", "5", "7", "K"], rules: { ...rules, tripleDown: true } });
+    expect(r.beforeReveal.hands[0].hiddenCards).toHaveLength(1);
+    expect(r.hands[0]).toMatchObject({ total: 21, result: WIN, bet: 20 });
+  });
+
+  it("a triple stays face up when the option is on", () => {
+    const r = playRound({ cards: ["2", "10", "3", "7", "4", "5"], rules: { ...rules, tripleDown: true }, actions: ["triple"] });
+    expect(r.beforeReveal).toBeNull();
+    expect(r.hands[0]).toMatchObject({ total: 14, bet: 30, hiddenCards: [] });
+    expect(r.hands[0].cards).toHaveLength(4);
+  });
+
+  it("a double that refills the shoe keeps its card hidden and out of the new count", () => {
+    const step = (state, action) => gameReducer(state, { refill: () => stackedShoe(["K", "3", "4"]), credits: 1000, ...action });
+    let s = step(playRound({ cards: ["6", "10", "5", "7"], rules }).afterDeal, { type: "DOUBLE", handIdx: 0 });
+    expect(s.hands[0].hiddenCards.map((c) => c.rank)).toEqual(["king"]);
+    expect(s.seenIds).toHaveLength(3); // the count restarted with the refill, and the king is not in it
+    expect(s.runningCount).toBe(1); // 6 +1, 10 -1, 5 +1
+    while (s.phase !== GamePhases.POST_ROUND) s = step(s, { type: nextAutoAction(s) });
+    expect(s.hands[0]).toMatchObject({ total: 21, result: WIN, hiddenCards: [] });
+    expect(s.seenIds).toHaveLength(5);
   });
 });
 

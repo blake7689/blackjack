@@ -25,6 +25,7 @@ export const initialGameState = {
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
+    doubleFaceDown: false, // a double's card stays hidden until REVEAL_HIDDEN
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -147,7 +148,7 @@ function playerAction(state, action) {
 
   if (action.type === "DOUBLE") {
     if (hand.cards.length !== 2) return state;
-    const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill));
+    const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill, state.settings.doubleFaceDown));
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
@@ -244,6 +245,10 @@ export function gameReducer(state, action) {
       return countSeen({ ...next, dealer: result.dealer, phase: stillPlaying ? GamePhases.DEALER_TURN : GamePhases.SETTLING_HANDS }, refilled);
     }
 
+    case "REVEAL_HIDDEN":
+      // Every hand at once, so the next step is SETTLE (one step per hand would repeat GameProvider's autoKey).
+      return countSeen({ ...state, hands: state.hands.map(engine.revealHiddenCards) });
+
     case "SETTLE":
       return { ...state, hands: engine.settleHands(state.hands, state.dealer), phase: GamePhases.RESULTS };
 
@@ -274,7 +279,8 @@ export function gameReducer(state, action) {
 export function nextAutoAction(state) {
   switch (state.phase) {
     case GamePhases.DEALER_TURN: return state.dealerRevealed ? "DEALER_STEP" : "DEALER_REVEAL";
-    case GamePhases.SETTLING_HANDS: return "SETTLE";
+    // Checks the hands, not the setting: the option may be turned off mid-round.
+    case GamePhases.SETTLING_HANDS: return state.hands.some((h) => h.hiddenCards.length > 0) ? "REVEAL_HIDDEN" : "SETTLE";
     case GamePhases.RESULTS: return "FINISH_RESULTS";
     case GamePhases.END_ROUND: return "END_ROUND";
     default: return null;

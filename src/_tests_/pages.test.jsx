@@ -328,6 +328,16 @@ describe("Settings", () => {
     expect(screen.getByLabelText("rulePreset").value).toBe("US");
   });
 
+  it("offers the face-down double option, off by default", () => {
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const faceDown = screen.getByLabelText("doubleFaceDown");
+    expect(faceDown.checked).toBe(false);
+    expect(screen.getByText("Double Down Card Face Down")).toBeTruthy();
+    fireEvent.click(faceDown);
+    fireEvent.click(screen.getByLabelText("Save doubleFaceDown"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("doubleFaceDown", true);
+  });
+
   it("shows the always-draw option unticked while triple down is off, without losing the saved choice", () => {
     renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL, settings: { ...initialGameState.settings, tripleDrawsOnBust: true } } });
     const draws = screen.getByLabelText("tripleDrawsOnBust");
