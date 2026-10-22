@@ -65,6 +65,7 @@
 .checkbox-input { margin-right: 8px; }
 .chip-options { border: 0; padding: 0; margin: 0; }
 .chip-option { display: inline-block; margin-right: 12px; }
+.chip-hint { opacity: 0.7; font-size: 0.85em; margin: 4px 0; }
 .actions-row { margin-top: 12px; }
 .danger-btn { margin-left: 8px; background: #b22; color: #fff; }
 .reset-warning { color: red; margin-top: 4px; margin-bottom: 4px; }

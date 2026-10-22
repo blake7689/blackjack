@@ -54,8 +54,9 @@ function SettingInput({ setting, value, forced, onChange }) {
     const chosen = parseChipValues(value);
     return ALLOWED_CHIPS.map((chip) => (
       <label key={chip} className="chip-option">
-        <input type="checkbox" aria-label={`chip ${chip}`} className="checkbox-input" checked={chosen.includes(chip)}
+        <input type="checkbox" className="checkbox-input" checked={chosen.includes(chip)}
           disabled={chosen.length === 1 && chosen[0] === chip}
+          aria-describedby={chosen.length === 1 && chosen[0] === chip ? "chip-hint" : undefined}
           onChange={(e) => onChange(formatChipValues(e.target.checked ? [...chosen, chip] : chosen.filter((c) => c !== chip)))} />
         ${chip.toLocaleString()}
       </label>
@@ -218,6 +219,7 @@ export default function Settings() {
                   <fieldset className="chip-options">
                     <legend>{setting.label(drafts[setting.key])}</legend>
                     <SettingInput setting={setting} value={drafts[setting.key]} onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
+                    <p id="chip-hint" className="chip-hint">At least one chip must stay selected.</p>
                   </fieldset>
                 ) : (
                   <label>

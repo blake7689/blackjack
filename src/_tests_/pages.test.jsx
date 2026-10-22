@@ -422,12 +422,17 @@ describe("Settings", () => {
     expect(screen.getByRole("group", { name: "Chips to show" })).toBeTruthy();
     const save = screen.getByLabelText("Save chipValues");
     expect(save.disabled).toBe(true);
+    // Named by the visible text ("$1,000"); a string name matches exactly, so "$1" does not match "$1,000".
+    const chipBox = (n) => screen.getByRole("checkbox", { name: `$${n.toLocaleString()}` });
     // Untick all but $25 and $5 (ticked last, saved first), then try to untick the last two.
-    for (const chip of [1, 10, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]) fireEvent.click(screen.getByLabelText(`chip ${chip}`));
+    for (const chip of [1, 10, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]) fireEvent.click(chipBox(chip));
     expect(save.disabled).toBe(false);
-    fireEvent.click(screen.getByLabelText("chip 5"));
-    expect(screen.getByLabelText("chip 25").disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText("chip 5"));
+    fireEvent.click(chipBox(5));
+    expect(chipBox(25).disabled).toBe(true);
+    expect(screen.getByText("At least one chip must stay selected.").id).toBe("chip-hint");
+    expect(chipBox(25).getAttribute("aria-describedby")).toBe("chip-hint");
+    expect(chipBox(1).hasAttribute("aria-describedby")).toBe(false);
+    fireEvent.click(chipBox(5));
     fireEvent.click(save);
     expect(gameActions.changeSetting).toHaveBeenCalledWith("chipValues", "5,25");
     expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
