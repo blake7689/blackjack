@@ -190,6 +190,11 @@ describe("BettingFooter", () => {
     expect(screen.getByText("$15")).toBeTruthy();
   });
 
+  it("offers only the chips chosen in settings", () => {
+    renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL, settings: { ...initialGameState.settings, chipValues: "5,25,100" } }, player: { player: { credits: 60 } } });
+    expect(screen.getAllByRole("button", { name: /^Add/ }).map((b) => b.getAttribute("aria-label"))).toEqual(["Add 5", "Add 25"]);
+  });
+
   it("disables clear and deal with no bet, and hides the chips during a round", () => {
     const { container, rerender } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL } });
     expect(screen.getByText("Clear").disabled).toBe(true);

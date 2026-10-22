@@ -2,6 +2,7 @@ import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { canSplit } from "./blackjackLogic";
+import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
 // All round state lives here. The reducer is pure apart from `refill`/`shoe` values passed in on actions,
@@ -21,6 +22,7 @@ export const initialGameState = {
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
     showCardCount: true,
     maxSplitHands: 0, // 0 = unlimited; 2 = one split per round
+    chipValues: DEFAULT_CHIP_VALUES,
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -53,6 +55,7 @@ export function sanitizeSettings(saved) {
     const value = saved?.[key];
     if (typeof value !== typeof fallback) return [key, fallback];
     if (key === "dealerHoleBehaviour") return [key, Object.values(DealerHoleOptions).includes(value) ? value : fallback];
+    if (key === "chipValues") return [key, parseChipValues(value).join(",") || fallback];
     const range = SETTING_RANGES[key];
     if (!range || (key === "maxSplitHands" && value === 0)) return [key, value];
     return [key, Math.min(range[1], Math.max(range[0], Math.round(value)))];

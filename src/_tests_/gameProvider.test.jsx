@@ -183,4 +183,28 @@ describe("GameProvider", () => {
     expect(remote.saveSettings).toHaveBeenCalledWith({ v: 1, ...ctx.state.settings });
     expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
+
+  it("saves chipValues as a flat comma-separated string, without resetting the game", async () => {
+    remote.token = "token";
+    const { ctx } = setup();
+    await act(async () => { await ctx.actions.changeSettings({ chipValues: "5,25" }); });
+    const saved = remote.saveSettings.mock.calls[0][0];
+    expect(saved.chipValues).toBe("5,25");
+    expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
+    await act(async () => { await ctx.actions.changeSetting("chipValues", "1,5"); });
+    expect(remote.saveSettings.mock.calls[1][0].chipValues).toBe("1,5");
+    expect(ctx.state.settings.chipValues).toBe("1,5");
+    expect(cards.createShoe).not.toHaveBeenCalled();
+  });
+
+  it("applies saved chipValues on sign-in, cleaning an out-of-order or bad value", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, chipValues: "25,5,5" });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.chipValues).toBe("5,25");
+    remote.getSettings.mockResolvedValue({ v: 1, chipValues: 5 });
+    const second = setup({ signedIn: true });
+    await flush();
+    expect(second.ctx.state.settings.chipValues).toBe("1,5,10,25,50,100,1000,5000,10000,20000,50000,100000");
+  });
 });

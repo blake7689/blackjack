@@ -4,8 +4,7 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { useCssVarHeight } from "../../hooks/useCssVarHeight";
-
-const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000];
+import { visibleChips } from "../../utils/chips";
 
 function Chip({ value, onClick }) {
   return (
@@ -23,7 +22,7 @@ function Chip({ value, onClick }) {
 
 export default function BettingFooter() {
   const { player } = usePlayer();
-  const { betCircle, phase } = useGameState();
+  const { betCircle, phase, settings } = useGameState();
   const { addBet, clearBet, deal } = useGameActions();
   const footerRef = useRef(null);
   useCssVarHeight(footerRef, "--bet-footer-space");
@@ -38,7 +37,7 @@ export default function BettingFooter() {
         <div className="footer-left">
           <div className={`chips ${!isPreDeal ? "hidden" : ""}`} aria-hidden={!isPreDeal}>
             {isPreDeal &&
-              CHIP_VALUES.filter((v) => v <= credits).map((v) => (
+              visibleChips(settings.chipValues, credits).map((v) => (
                 <Chip key={v} value={v} onClick={() => addBet(v)} />
               ))}
           </div>
