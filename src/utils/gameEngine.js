@@ -131,6 +131,26 @@ export function playerDouble(hand, shoe, setCutCardFound, resetShoe) {
   return { hand: newHand, shoe };
 }
 
+// Player Triple Down: two cards (one if the first busts, unless drawsOnBust), triple stake, turn over //
+export function playerTripleDown(hand, shoe, setCutCardFound, resetShoe, drawsOnBust) {
+  let newCards = [...hand.cards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  if (drawsOnBust || getHandTotals(newCards).total <= 21) newCards = [...newCards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  const handTotals = getHandTotals(newCards);
+  const handEvaluation = getHandEvaluation(handTotals.totals, hand, newCards.length);
+  const newHand = {
+    ...hand,
+    cards: newCards,
+    total: handTotals.total,
+    totals: handTotals.totals,
+    status: HandStatus.DONE,
+    result: handEvaluation.handResult,
+    isBlackjack: handEvaluation.isBlackjack,
+    isBusted: handEvaluation.isBusted,
+    bet: hand.bet * 3
+  };
+  return { hand: newHand, shoe };
+}
+
 // Player Split //
 export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnSplit) {
   const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);

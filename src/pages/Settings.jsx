@@ -41,13 +41,16 @@ const GAME_SETTINGS = [
   { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
   { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
   { key: "chipValues", label: () => "Chips to show", input: "chips" },
+  { key: "tripleDown", label: () => "Triple Down", input: "checkbox" },
+  { key: "tripleDrawsOnBust", label: () => "Always Draw the Second Triple Card, Even on a Bust", input: "checkbox",
+    disabledWhen: (s) => !s.tripleDown },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.playTimeout, tab: "dev" },
   { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];
 
-function SettingInput({ setting, value, forced, onChange }) {
+function SettingInput({ setting, value, forced, disabled, onChange }) {
   if (setting.input === "checkbox") {
-    return <input type="checkbox" aria-label={setting.key} checked={value || forced} disabled={forced}
+    return <input type="checkbox" aria-label={setting.key} checked={(value && !disabled) || forced} disabled={forced || disabled}
       onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
   }
   if (setting.input === "chips") {
@@ -225,6 +228,7 @@ export default function Settings() {
                   <label>
                     {setting.label(drafts[setting.key])}
                     <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
+                      disabled={setting.disabledWhen?.(drafts) ?? false}
                       onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
                   </label>
                 )}

@@ -67,6 +67,66 @@ describe("player actions", () => {
     expect(split.selectedHandIndex).toBe(0);
   });
 
+  it("triple is ignored when off (never a split), too short of credits, or not on two cards", () => {
+    const pair = dealt(["8", "10", "8", "7", "3", "10"]);
+    expect(run(pair, { type: "TRIPLE", handIdx: 0 })).toBe(pair);
+    const on = (s) => ({ ...s, settings: { ...s.settings, tripleDown: true } });
+    expect(run(on(pair), { type: "TRIPLE", handIdx: 0, credits: 19 })).toEqual(on(pair));
+    const threeCards = run(on(dealt(["8", "10", "9", "7", "2"])), { type: "HIT", handIdx: 0 });
+    expect(run(threeCards, { type: "TRIPLE", handIdx: 0 })).toBe(threeCards);
+  });
+
+  it("triple takes two more stakes in one ledger bet and counts both cards", () => {
+    const start = dealt(["5", "10", "6", "7", "4", "5"]);
+    const tripled = run({ ...start, settings: { ...start.settings, tripleDown: true } }, { type: "TRIPLE", handIdx: 0 });
+    expect(events(tripled).at(-1)).toEqual(bet(20, false, false));
+    expect(tripled.betCircle).toBe(30);
+    expect(tripled.phase).toBe(GamePhases.DEALER_TURN);
+    expect(tripled.seenIds).toHaveLength(start.seenIds.length + 2);
+  });
+
+  it("triple needs two stakes: a balance that affords a double but not a triple is refused, exactly two stakes is enough", () => {
+    const start = dealt(["5", "10", "6", "7", "4", "5"]);
+    const on = { ...start, settings: { ...start.settings, tripleDown: true } };
+    expect(run(on, { type: "DOUBLE", handIdx: 0, credits: 19 }).hands[0].isDouble).toBe(true);
+    expect(run(on, { type: "TRIPLE", handIdx: 0, credits: 19 })).toBe(on);
+    expect(run(on, { type: "TRIPLE", handIdx: 0, credits: 20 }).hands[0].bet).toBe(30);
+  });
+
+  it("triple on a pair triples it (never splits) and a second triple, or one on a finished hand, is ignored", () => {
+    const pair = dealt(["8", "10", "8", "7", "3", "10"]);
+    const on = { ...pair, settings: { ...pair.settings, tripleDown: true } };
+    const tripled = run(on, { type: "TRIPLE", handIdx: 0 });
+    expect(tripled.hands).toHaveLength(1);
+    expect(tripled.hands[0]).toMatchObject({ bet: 30 });
+    expect(run(tripled, { type: "TRIPLE", handIdx: 0 })).toBe(tripled);
+    const blackjack = run({ ...started(["A", "5", "K", "6"]), settings: on.settings }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+    expect(run(blackjack, { type: "TRIPLE", handIdx: 0 })).toBe(blackjack);
+  });
+
+  it("triple on the wrong hand, or one that stood, is ignored; after a split the next hand plays", () => {
+    const split = run(dealt(["8", "10", "8", "7", "3", "10", "2", "9", "4"]), { type: "SPLIT", handIdx: 0 });
+    const on = { ...split, settings: { ...split.settings, tripleDown: true } };
+    expect(run(on, { type: "TRIPLE", handIdx: 1 })).toBe(on);
+    expect(run(on, { type: "TRIPLE", handIdx: 5 })).toBe(on);
+    const stood = run(on, { type: "STAND", handIdx: 0 });
+    expect(run(stood, { type: "TRIPLE", handIdx: 0 })).toBe(stood);
+    const tripled = run(on, { type: "TRIPLE", handIdx: 0 });
+    expect(tripled.hands.map((h) => h.bet)).toEqual([30, 10]);
+    expect([tripled.phase, tripled.selectedHandIndex, tripled.betCircle]).toEqual([GamePhases.PLAYER_TURN, 1, 40]);
+    expect(events(tripled).filter((e) => e.kind === "bet" && !e.newRound)).toEqual([bet(10, false, false), bet(20, false, false)]);
+  });
+
+  it("a refill between the two triple cards still draws the second card", () => {
+    const start = dealt(["5", "10", "6", "7", "4"]);
+    const on = { ...start, settings: { ...start.settings, tripleDown: true } };
+    const tripled = run(on, { type: "TRIPLE", handIdx: 0, refill: () => stackedShoe(["5", "9"]) });
+    expect(tripled.hands[0].cards.map((c) => c.rank)).toEqual(["5", "6", "4", "5"]);
+    expect(tripled.hands[0].total).toBe(20);
+    expect(tripled.shoe.map((c) => c.rank)).toEqual(["9"]);
+    expect(start.shoe).toHaveLength(1);
+  });
+
   it("moves to the next hand, then to the dealer", () => {
     const split = run(dealt(["8", "10", "8", "7", "3", "10"]), { type: "SPLIT", handIdx: 0 });
     const second = run(split, { type: "STAND", handIdx: 0 });
@@ -210,6 +270,11 @@ describe("saved settings (#36)", () => {
     expect(sanitizeSettings({ v: 1, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
+  });
+
+  it("a saved triple down setting that is not a boolean falls back to off", () => {
+    expect(sanitizeSettings({ tripleDown: "true", tripleDrawsOnBust: 1 })).toMatchObject({ tripleDown: false, tripleDrawsOnBust: false });
+    expect(sanitizeSettings({ tripleDown: true, tripleDrawsOnBust: true })).toMatchObject({ tripleDown: true, tripleDrawsOnBust: true });
   });
 
   it("clamps and rounds numbers into range, but keeps maxSplitHands 0 (unlimited)", () => {

@@ -122,6 +122,18 @@ describe("GameProvider", () => {
     expect(events(player)).toContainEqual({ kind: "bet", amount: 10, newRound: false, alreadyDeducted: false });
   });
 
+  it("passes the player's balance to a triple and sends one bet of two stakes", () => {
+    shoes.push(stackedShoe(["5", "10", "6", "7", "4", "5"]));
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => { ctx.actions.changeSetting("tripleDown", true); });
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    act(() => ctx.actions.triple(0));
+    expect(ctx.state.hands[0]).toMatchObject({ bet: 30 });
+    expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false });
+  });
+
   it("deals a fresh shoe for table settings and just updates the others", () => {
     const { ctx } = setup();
     act(() => { ctx.actions.changeSetting("deckCount", 3); });

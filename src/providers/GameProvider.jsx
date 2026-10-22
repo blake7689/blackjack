@@ -65,6 +65,7 @@ export function GameProvider({ children }) {
     hit: (handIdx) => dispatch({ type: "HIT", handIdx, refill: makeShoe }),
     stand: (handIdx) => dispatch({ type: "STAND", handIdx }),
     double: (handIdx) => dispatch({ type: "DOUBLE", handIdx, credits: getCredits(), refill: makeShoe }),
+    triple: (handIdx) => dispatch({ type: "TRIPLE", handIdx, credits: getCredits(), refill: makeShoe }),
     split: (handIdx) => dispatch({ type: "SPLIT", handIdx, credits: getCredits(), refill: makeShoe }),
     continueRound: () => dispatch({ type: "CONTINUE" }),
     // Table settings deal a fresh shoe built with the new values and reset the table.
