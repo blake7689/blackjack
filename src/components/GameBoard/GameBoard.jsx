@@ -68,6 +68,7 @@ export default function GameBoard() {
                   gamePhase={phase}
                   handCount={hands.length}
                   maxSplitHands={settings.maxSplitHands}
+                  tripleDown={settings.tripleDown}
                   credits={player.credits}
                 />
               ))}

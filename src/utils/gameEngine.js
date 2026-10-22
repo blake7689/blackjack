@@ -43,6 +43,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
       status: playerHandEvaluation.handStatus,
       isBlackjack: playerHasBlackjack, 
       isDouble: false,
+      isTriple: false,
       isBusted: false,
       total: playerTotals.total,
       totals: playerTotals.totals,
@@ -127,6 +128,27 @@ export function playerDouble(hand, shoe, setCutCardFound, resetShoe) {
     isBlackjack: handEvaluation.isBlackjack,
     isBusted: handEvaluation.isBusted,
     bet: hand.bet * 2
+  };
+  return { hand: newHand, shoe };
+}
+
+// Player Triple Down: two cards (one if the first busts, unless drawsOnBust), triple stake, turn over //
+export function playerTripleDown(hand, shoe, setCutCardFound, resetShoe, drawsOnBust) {
+  let newCards = [...hand.cards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  if (drawsOnBust || getHandTotals(newCards).total <= 21) newCards = [...newCards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  const handTotals = getHandTotals(newCards);
+  const handEvaluation = getHandEvaluation(handTotals.totals, hand, newCards.length);
+  const newHand = {
+    ...hand,
+    cards: newCards,
+    total: handTotals.total,
+    totals: handTotals.totals,
+    status: HandStatus.DONE,
+    result: handEvaluation.handResult,
+    isTriple: true,
+    isBlackjack: handEvaluation.isBlackjack,
+    isBusted: handEvaluation.isBusted,
+    bet: hand.bet * 3
   };
   return { hand: newHand, shoe };
 }

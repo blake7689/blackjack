@@ -97,6 +97,85 @@ describe("US peek (dealer checks for blackjack)", () => {
   });
 });
 
+describe("triple down", () => {
+  const triple = { tripleDown: true };
+
+  it("11 plus two cards: triples the stake, draws both cards, ends the turn and pays on it", () => {
+    const r = playRound({ cards: ["5", "10", "6", "7", "4", "5"], rules: triple, actions: ["triple"] });
+    expect(r.hands[0].cards).toHaveLength(4);
+    expect(r.hands[0].isTriple).toBe(true);
+    expect(r.staked).toBe(30);
+    expect(r.results).toEqual([WIN]);
+    expect(r.payout).toBe(60);
+  });
+
+  it("a first card that busts draws no second card unless tripleDrawsOnBust is on", () => {
+    const cards = ["6", "10", "6", "7", "K", "5"];
+    const one = playRound({ cards, rules: triple, actions: ["triple"] });
+    expect(one.hands[0].cards).toHaveLength(3);
+    expect(one.hands[0].isBusted).toBe(true);
+    expect(one.payout).toBe(0);
+    expect(one.staked).toBe(30);
+    const two = playRound({ cards, rules: { ...triple, tripleDrawsOnBust: true }, actions: ["triple"] });
+    expect(two.hands[0].cards).toHaveLength(4);
+    expect(two.hands[0].isBusted).toBe(true);
+    expect(two.results).toEqual([LOSE]);
+    expect(two.staked).toBe(30);
+  });
+
+  it("a first card that makes 21 still draws the second", () => {
+    const r = playRound({ cards: ["6", "10", "4", "7", "A", "2"], rules: triple, actions: ["triple"] });
+    expect(r.hands[0].cards).toHaveLength(4);
+    expect(r.hands[0].total).toBe(13);
+  });
+
+  it("works on a split hand, then the next hand plays", () => {
+    const r = playRound({ cards: ["8", "10", "8", "7", "3", "10", "2", "K", "9"], rules: triple, actions: ["split", "triple", "stand"] });
+    expect(r.hands.map((h) => h.bet)).toEqual([30, 10]);
+    expect(r.hands.map((h) => h.cards.length)).toEqual([4, 2]);
+  });
+
+  it("pays 2x the tripled stake on a win, 1x on a push, nothing on a loss, with one 2x stake on the ledger", () => {
+    const win = playRound({ cards: ["5", "10", "6", "7", "4", "5"], rules: triple, actions: ["triple"] });
+    expect(win.state.creditEvents.map(({ kind, amount }) => [kind, amount])).toEqual([["local", -10], ["bet", 10], ["bet", 20], ["settle", 60]]);
+    const push = playRound({ cards: ["5", "10", "6", "K", "4", "5"], rules: triple, actions: ["triple"] });
+    expect([push.results, push.staked, push.payout]).toEqual([[PUSH], 30, 30]);
+    const loss = playRound({ cards: ["5", "10", "6", "K", "2", "2"], rules: triple, actions: ["triple"] });
+    expect([loss.results, loss.staked, loss.payout]).toEqual([[LOSE], 30, 0]);
+  });
+
+  it("a bust stays a bust, never a blackjack, whether or not the second card is drawn", () => {
+    for (const tripleDrawsOnBust of [false, true]) {
+      const r = playRound({ cards: ["6", "10", "6", "7", "K", "5"], rules: { ...triple, tripleDrawsOnBust }, actions: ["triple"] });
+      expect(r.hands[0]).toMatchObject({ isBusted: true, isBlackjack: false, status: HandStatus.DONE, result: LOSE, bet: 30 });
+      expect(r.payout).toBe(0);
+    }
+  });
+
+  it("a hidden dealer blackjack (US no peek) takes all three stakes", () => {
+    const r = playRound({ cards: ["5", "A", "6", "K", "4", "5"], mode: Modes.NO_PEEK, rules: triple, actions: ["triple"] });
+    expect(r.hands[0].total).toBe(20);
+    expect(r.results).toEqual([LOSE]);
+    expect([r.staked, r.payout]).toEqual([30, 0]);
+  });
+
+  it("EU: the dealer draws its second card after the tripled hand, and a dealer blackjack still takes 3x", () => {
+    const win = playRound({ cards: ["5", "10", "6", "4", "5", "7"], mode: Modes.EU, rules: triple, actions: ["triple"] });
+    expect(win.dealer.cards).toHaveLength(2);
+    expect([win.results, win.staked, win.payout]).toEqual([[WIN], 30, 60]);
+    const lose = playRound({ cards: ["5", "A", "6", "4", "5", "K"], mode: Modes.EU, rules: triple, actions: ["triple"] });
+    expect(lose.dealer.isBlackjack).toBe(true);
+    expect([lose.results, lose.staked, lose.payout]).toEqual([[LOSE], 30, 0]);
+  });
+
+  it("EU: a tripled bust leaves the dealer with one card", () => {
+    const r = playRound({ cards: ["6", "10", "6", "K", "5", "9"], mode: Modes.EU, rules: { ...triple, tripleDrawsOnBust: true }, actions: ["triple"] });
+    expect(r.hands[0].cards).toHaveLength(4);
+    expect(r.dealer.cards).toHaveLength(1);
+    expect(r.cardsLeft).toBe(1);
+  });
+});
+
 describe("splits", () => {
   it("plays both hands in order and settles each", () => {
     const r = playRound({ cards: ["8", "10", "8", "7", "3", "10", "9"], actions: ["split", "hit", "stand"] });

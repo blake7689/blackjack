@@ -314,6 +314,19 @@ describe("Settings", () => {
       ["dealerDrawsOnceOn21", true], ["dealerDrawsOnPlayerBust", true], ["dealerDrawsOnPlayerBlackjack", false]]);
   });
 
+  it("offers triple down, and only lets the always-draw option be changed while it is on", () => {
+    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const draws = screen.getByLabelText("tripleDrawsOnBust");
+    expect(draws.disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText("tripleDown"));
+    expect(draws.disabled).toBe(false);
+    fireEvent.click(draws);
+    fireEvent.click(screen.getByLabelText("Save tripleDown"));
+    fireEvent.click(screen.getByLabelText("Save tripleDrawsOnBust"));
+    expect(gameActions.changeSetting.mock.calls).toEqual([["tripleDown", true], ["tripleDrawsOnBust", true]]);
+    expect(screen.getByLabelText("rulePreset").value).toBe("US");
+  });
+
   it("applies a rules preset in one step, and shows Custom once a rule is changed", () => {
     const confirm = vi.spyOn(window, "confirm");
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });

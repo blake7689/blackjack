@@ -62,6 +62,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   after split, which must not skip the next hand) and double must all settle correctly.
 - Splits: `canSplit(hand, handCount, maxSplitHands)`; `maxSplitHands` (2-4, or 0 = unlimited, the default) caps the
   hands in a round, each split takes one more stake, and split aces never resplit.
+- Triple down (#21): settings `tripleDown` and `tripleDrawsOnBust` (both off, not in `RESET_SETTINGS` or the presets). In
+  `playerAction` the `TRIPLE` branch must return before the SPLIT code (anything not DOUBLE falls through to it) and needs
+  `credits >= bet * 2`; the one ledger `bet` is `hand.bet * 2`.
 - Saved settings must be flat strings, numbers or booleans: the API rejects arrays and objects (the whole PUT fails).
   `chipValues` is a comma-separated string (`utils/chips.js` parses and formats it in chip order).
 - `.env*` files are tracked but hold only public URLs; never put secrets there.

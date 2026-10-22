@@ -8,8 +8,8 @@ import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
 import { canSplit } from "../../utils/blackjackLogic";
 
-function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, credits }) {
-  const { hit, stand, double, split } = useGameActions();
+function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits }) {
+  const { hit, stand, double, triple, split } = useGameActions();
   const canAffordStake = credits >= hand.bet;
   const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
   const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
@@ -33,8 +33,10 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
           onHit={() => hit(index)}
           onStay={() => stand(index)}
           onDouble={() => double(index)}
+          onTriple={() => triple(index)}
           onSplit={() => split(index)}
           showDouble={hand.cards.length === 2 && canAffordStake}
+          showTriple={tripleDown && hand.cards.length === 2 && credits >= 2 * hand.bet}
           showSplit={canSplit(hand, handCount, maxSplitHands) && canAffordStake}
         />
       )}

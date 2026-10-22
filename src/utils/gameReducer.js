@@ -23,6 +23,8 @@ export const initialGameState = {
     showCardCount: true,
     maxSplitHands: 0, // 0 = unlimited; 2 = one split per round
     chipValues: DEFAULT_CHIP_VALUES,
+    tripleDown: false,
+    tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -149,6 +151,14 @@ function playerAction(state, action) {
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
+  if (action.type === "TRIPLE") {
+    // Must return here: anything else falls through to the split code. Needs two more stakes.
+    if (!state.settings.tripleDown || hand.cards.length !== 2 || action.credits < hand.bet * 2) return state;
+    const { result, next, refilled } = draw(state, action.refill,
+      (shoe, cut, refill) => engine.playerTripleDown(hand, shoe, cut, refill, state.settings.tripleDrawsOnBust));
+    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet * 2, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
+  }
+
   // SPLIT
   if (!canSplit(hand, state.hands.length, state.settings.maxSplitHands)) return state;
   const { result, next, refilled } = draw(state, action.refill,
@@ -206,6 +216,7 @@ export function gameReducer(state, action) {
     case "HIT":
     case "STAND":
     case "DOUBLE":
+    case "TRIPLE":
     case "SPLIT":
       return playerAction(state, action);
 

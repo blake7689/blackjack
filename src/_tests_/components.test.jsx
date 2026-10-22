@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { initialGameState } from "../utils/gameReducer";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, cleanup } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -94,11 +94,12 @@ describe("DeckStack", () => {
 
 describe("PlayerOptions", () => {
   it("always offers hit and stay, and double or split only when allowed", () => {
-    const calls = { onHit: vi.fn(), onStay: vi.fn(), onDouble: vi.fn(), onSplit: vi.fn() };
-    const { rerender } = renderUI(<PlayerOptions {...calls} showDouble showSplit />);
-    ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
+    const calls = { onHit: vi.fn(), onStay: vi.fn(), onDouble: vi.fn(), onTriple: vi.fn(), onSplit: vi.fn() };
+    const { rerender } = renderUI(<PlayerOptions {...calls} showDouble showTriple showSplit />);
+    ["Hit", "Stay", "Double", "Triple", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
     Object.values(calls).forEach((fn) => expect(fn).toHaveBeenCalledOnce());
     rerender(<PlayerOptions {...calls} />);
+    expect(screen.queryByText("Triple")).toBeNull();
     expect(screen.queryByText("Double")).toBeNull();
     expect(screen.queryByText("Split")).toBeNull();
   });
@@ -111,6 +112,20 @@ describe("PlayerHand", () => {
     const { gameActions } = renderUI(<PlayerHand {...props} index={2} hand={hand(["8", "8"])} />);
     ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
     expect([gameActions.hit, gameActions.stand, gameActions.double, gameActions.split].map((fn) => fn.mock.calls)).toEqual([[[2]], [[2]], [[2]], [[2]]]);
+  });
+
+  it("offers triple only when the option is on, with two cards and two more stakes in the balance", () => {
+    const pair = hand(["8", "8"]);
+    const { gameActions, unmount } = renderUI(<PlayerHand {...props} index={1} tripleDown hand={pair} />);
+    fireEvent.click(screen.getByText("Triple"));
+    expect(gameActions.triple).toHaveBeenCalledWith(1);
+    unmount();
+    renderUI(<PlayerHand {...props} hand={pair} />);
+    expect(screen.queryByText("Triple")).toBeNull();
+    cleanup();
+    renderUI(<PlayerHand {...props} tripleDown credits={19} hand={pair} />);
+    expect(screen.getByText("Double")).toBeTruthy();
+    expect(screen.queryByText("Triple")).toBeNull();
   });
 
   it("hides split once the round has the most hands allowed", () => {
@@ -237,6 +252,7 @@ describe("GameBoard", () => {
   it("wires each hand's buttons to that hand", () => {
     const { gameActions } = renderUI(<GameBoard />, { game: playing });
     ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
+    expect(screen.queryByText("Triple")).toBeNull();
     expect(gameActions.hit).toHaveBeenCalledWith(0);
     expect(gameActions.stand).toHaveBeenCalledWith(0);
     expect(gameActions.double).toHaveBeenCalledWith(0);
@@ -244,6 +260,12 @@ describe("GameBoard", () => {
     expect(gameActions.continueRound).not.toHaveBeenCalled();
     expect(screen.getByText("Total: 10")).toBeTruthy();
     expect(screen.queryByAltText("Card back")).toBeNull();
+  });
+
+  it("offers Triple when the triple down setting is on", () => {
+    const { gameActions } = renderUI(<GameBoard />, { game: { ...playing, settings: { ...initialGameState.settings, tripleDown: true } } });
+    fireEvent.click(screen.getByText("Triple"));
+    expect(gameActions.triple).toHaveBeenCalledWith(0);
   });
 
   it("scrolls the hand in play into view (many split hands scroll sideways)", () => {
