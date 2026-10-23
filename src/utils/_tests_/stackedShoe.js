@@ -28,11 +28,17 @@ export const Modes = {
   EU: DealerHoleOptions.EU,
 };
 
+// The server confirms every bet that is still waiting for an answer.
+export const confirmBets = (state) =>
+  state.pendingBets.reduce((s, { seq }) => gameReducer(s, { type: "BET_CONFIRMED", seq }), state);
+
 // Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
 // `beforeReveal` is the state just before a face-down double's card is turned over (null if none).
 // `rules` sets any other game settings, e.g. { dealerDrawsOnPlayerBust: true }.
-export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {} }) {
+// The server answers every bet once the round reaches settling: it confirms them all, except the ledger bets whose
+// position in `refuse` (0 = the opening bet, 1 = the next bet, ...) is listed, which it refuses.
+export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {}, refuse = [] }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   s = step(s, { type: "SET_SETTING", key: "dealerHoleBehaviour", value: mode });
@@ -48,7 +54,13 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
     s = step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
   }
   let beforeReveal = null; // the state just before REVEAL_HIDDEN (face-down doubles), if the round reaches it
-  while (nextAutoAction(s)) {
+  const betSeqs = s.creditEvents.filter((e) => e.kind === "bet").map((e) => e.seq);
+  while (nextAutoAction(s) || (s.phase === GamePhases.SETTLING_HANDS && s.pendingBets.length)) {
+    if (!nextAutoAction(s)) {
+      for (const { seq } of s.pendingBets) s = step(s, { type: refuse.includes(betSeqs.indexOf(seq)) ? "BET_REJECTED" : "BET_CONFIRMED", seq });
+      if (s.phase === GamePhases.PRE_DEAL) break; // a refused opening bet voided the round
+      continue;
+    }
     if (nextAutoAction(s) === "REVEAL_HIDDEN") beforeReveal = s;
     s = step(s, { type: nextAutoAction(s) });
     if (s.phase === GamePhases.POST_ROUND) break;

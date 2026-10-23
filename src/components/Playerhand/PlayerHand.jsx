@@ -10,7 +10,7 @@ import { canSplit } from "../../utils/blackjackLogic";
 
 function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits }) {
   const { hit, stand, double, triple, split } = useGameActions();
-  const canAffordStake = credits >= hand.bet;
+  const canAffordStake = hand.bet > 0 && credits >= hand.bet; // a hand whose stake was refused can't add to it
   const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
   const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
 
@@ -40,7 +40,7 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
           onTriple={() => triple(index)}
           onSplit={() => split(index)}
           showDouble={hand.cards.length === 2 && canAffordStake}
-          showTriple={tripleDown && hand.cards.length === 2 && credits >= 2 * hand.bet}
+          showTriple={tripleDown && hand.cards.length === 2 && canAffordStake && credits >= 2 * hand.bet}
           showSplit={canSplit(hand, handCount, maxSplitHands) && canAffordStake}
         />
       )}

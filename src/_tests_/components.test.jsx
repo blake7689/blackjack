@@ -53,6 +53,31 @@ describe("CenterMessage", () => {
     rerender(<CenterMessage gamePhase={GamePhases.END_ROUND} />);
     expect(container.firstChild.textContent).toBe("");
   });
+
+  it("says it is waiting for the server instead of the phase message", () => {
+    renderUI(<CenterMessage gamePhase={GamePhases.SETTLING_HANDS} waiting />);
+    expect(screen.getByText("Waiting for the server...")).toBeTruthy();
+    expect(screen.queryByText("Settling bets...")).toBeNull();
+  });
+
+  it("shows the phase message again once nothing is awaited", () => {
+    renderUI(<CenterMessage gamePhase={GamePhases.SETTLING_HANDS} waiting={false} />);
+    expect(screen.getByText("Settling bets...")).toBeTruthy();
+    expect(screen.queryByText(/Waiting for the server/)).toBeNull();
+  });
+
+  it("shows Reconnecting... while the server does not answer, beside the phase message", () => {
+    renderUI(<CenterMessage gamePhase={GamePhases.PLAYER_TURN} reconnecting />);
+    expect(screen.getByRole("status").textContent).toBe("Reconnecting...");
+  });
+
+  it("shows a notice, and shows no status line without one", () => {
+    const { rerender } = renderUI(<CenterMessage gamePhase={GamePhases.PRE_DEAL} notice="The server refused your bet, so the round was cancelled." />);
+    expect(screen.getByRole("status").textContent).toBe("The server refused your bet, so the round was cancelled.");
+    expect(screen.getByText("Place your bets!")).toBeTruthy();
+    rerender(<CenterMessage gamePhase={GamePhases.PRE_DEAL} notice={null} reconnecting={false} />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
 });
 
 describe("DealerArea", () => {
@@ -136,6 +161,13 @@ describe("PlayerHand", () => {
     renderUI(<PlayerHand {...props} tripleDown credits={19} hand={pair} />);
     expect(screen.getByText("Double")).toBeTruthy();
     expect(screen.queryByText("Triple")).toBeNull();
+  });
+
+  it("a hand whose stake was refused (bet 0) offers no double, triple or split, only hit and stay", () => {
+    renderUI(<PlayerHand {...props} tripleDown hand={hand(["8", "8"], { bet: 0 })} />);
+    expect(screen.getByText("Hit")).toBeTruthy();
+    expect(screen.getByText("Stay")).toBeTruthy();
+    for (const name of ["Double", "Triple", "Split"]) expect(screen.queryByText(name)).toBeNull();
   });
 
   it("hides split once the round has the most hands allowed", () => {
@@ -332,6 +364,37 @@ describe("GameBoard", () => {
     expect(screen.getByText(/Total: 21/)).toBeTruthy();
     expect(after.container.querySelector(".count-value").textContent).toBe("0");
     expect(screen.queryByAltText("Card back")).toBeNull();
+  });
+
+  it("tells the player the table is waiting for the server while settling with bets unanswered", () => {
+    const waiting = { ...playing, phase: GamePhases.SETTLING_HANDS, pendingBets: [{ seq: 1, handTag: 1, amount: 10, newRound: false }] };
+    renderUI(<GameBoard />, { game: waiting });
+    expect(screen.getByText("Waiting for the server...")).toBeTruthy();
+    cleanup();
+    renderUI(<GameBoard />, { game: { ...waiting, pendingBets: [] } });
+    expect(screen.getByText("Settling bets...")).toBeTruthy();
+    expect(screen.queryByText(/Waiting for the server/)).toBeNull();
+    cleanup();
+    // unanswered bets during the player's turn do not stop the turn or show the wait
+    renderUI(<GameBoard />, { game: { ...waiting, phase: GamePhases.PLAYER_TURN } });
+    expect(screen.queryByText(/Waiting for the server/)).toBeNull();
+    expect(screen.getByText("Hit")).toBeTruthy();
+  });
+
+  it("shows Reconnecting... when the player context is reconnecting, and the round's notice", () => {
+    renderUI(<GameBoard />, { game: { ...playing, notice: "The server refused $10 of your stake; that hand plays for less." }, player: { reconnecting: true } });
+    expect(screen.getByText("Reconnecting...")).toBeTruthy();
+    expect(screen.getByText(/refused \$10 of your stake/)).toBeTruthy();
+    cleanup();
+    renderUI(<GameBoard />, { game: playing });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("does not offer Double or Split on a hand whose stake was refused", () => {
+    renderUI(<GameBoard />, { game: { ...playing, hands: [hand(["8", "8"], { bet: 0 })] } });
+    expect(screen.queryByText("Double")).toBeNull();
+    expect(screen.queryByText("Split")).toBeNull();
+    expect(screen.getByText("Hit")).toBeTruthy();
   });
 
   it("continues on a table click after the round, and hides an empty dealer", () => {

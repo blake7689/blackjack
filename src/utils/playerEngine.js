@@ -45,5 +45,6 @@ export const logoutPlayer = () => clearToken();
 export const getSettings = () => apiGet("/player/me/settings");
 export const saveSettings = (settings) => apiPut("/player/me/settings", settings);
 
-export const placeBet = (amount, newRound) => apiPost("/ledger/bet", { amount, newRound });
-export const settleRound = (payout) => apiPost("/ledger/settle", { payout });
+// requestId makes a call safe to repeat: the server applies a given id once and replays its answer.
+export const placeBet = (amount, newRound, requestId) => apiPost("/ledger/bet", { amount, newRound, requestId });
+export const settleRound = (payout, requestId) => apiPost("/ledger/settle", { payout, requestId });

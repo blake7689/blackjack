@@ -1,5 +1,6 @@
 const API_BASE = import.meta.env.VITE_API_URL;
 const TOKEN_KEY = "bj.token";
+const REQUEST_TIMEOUT_MS = 10000;
 
 // The bearer token lives in sessionStorage so a page refresh keeps you signed in (ADR-0002).
 // Storage can be unavailable (private mode, blocked site data); then the token simply isn't kept.
@@ -30,6 +31,7 @@ async function request(method, url, body) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), // a request with no answer fails instead of hanging
   });
   if (!res.ok) {
     if (res.status === 401 && token) {
@@ -37,7 +39,8 @@ async function request(method, url, body) {
       onUnauthorized();
     }
     const txt = await res.text();
-    throw new Error(errorMessage(txt) || `${method} ${url} failed`);
+    // err.status tells callers a definite refusal (4xx) from a network failure, which has none.
+    throw Object.assign(new Error(errorMessage(txt) || `${method} ${url} failed`), { status: res.status });
   }
   return res.status === 204 ? null : res.json().catch(() => null);
 }

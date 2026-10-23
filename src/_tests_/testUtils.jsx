@@ -10,7 +10,7 @@ export const testPlayer = { playerId: 7, userName: "tester", email: "t@example.c
 
 export function fakePlayer(overrides = {}) {
   return {
-    player: testPlayer, creditChange: null,
+    player: testPlayer, creditChange: null, reconnecting: false,
     login: vi.fn(), addPlayer: vi.fn(), updatePlayer: vi.fn(), deletePlayer: vi.fn(), logout: vi.fn(),
     getCredits: vi.fn(() => 100), applyCreditEvent: vi.fn(), changePassword: vi.fn(),
     ...overrides,

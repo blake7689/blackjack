@@ -93,13 +93,14 @@ describe("account changes", () => {
 describe("ledger", () => {
   it("placeBet and settleRound post to the ledger and return the server's balance", async () => {
     fetchMock.mockResolvedValueOnce(respond({ credits: 990, openStake: 10 }));
-    expect(await placeBet(10, true)).toEqual({ credits: 990, openStake: 10 });
-    expect(call()).toMatchObject({ method: "POST", body: { amount: 10, newRound: true } });
+    expect(await placeBet(10, true, "id-1")).toEqual({ credits: 990, openStake: 10 });
+    expect(call()).toMatchObject({ method: "POST", body: { amount: 10, newRound: true, requestId: "id-1" } });
+    expect(call().url).toMatch(/\/ledger\/bet$/);
 
     fetchMock.mockResolvedValueOnce(respond({ credits: 1015, openStake: 0 }));
-    expect(await settleRound(25)).toEqual({ credits: 1015, openStake: 0 });
+    expect(await settleRound(25, "id-2")).toEqual({ credits: 1015, openStake: 0 });
     expect(call().url).toMatch(/\/ledger\/settle$/);
-    expect(call().body).toEqual({ payout: 25 });
+    expect(call().body).toEqual({ payout: 25, requestId: "id-2" });
   });
 });
 

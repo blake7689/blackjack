@@ -44,7 +44,34 @@ describe("requests", () => {
   });
 });
 
+describe("timeout", () => {
+  it("gives every request a 10 s abort signal, so a call with no answer fails instead of hanging", async () => {
+    const signal = new AbortController().signal;
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(signal);
+    const fetch = respond({});
+    for (const send of [apiGet, apiDelete, (url) => apiPost(url, {}), (url) => apiPut(url, {})]) await send("/x");
+    expect(timeout).toHaveBeenCalledTimes(4);
+    expect(timeout).toHaveBeenCalledWith(10000);
+    expect(fetch.mock.calls.map(([, init]) => init.signal)).toEqual([signal, signal, signal, signal]);
+  });
+
+  it("a timed-out or dropped request rejects without a status, which callers treat as unknown", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new DOMException("signal timed out", "TimeoutError"); }));
+    const error = await apiPost("/x", {}).catch((e) => e);
+    expect(error.name).toBe("TimeoutError");
+    expect(error.status).toBeUndefined();
+  });
+});
+
 describe("errors", () => {
+  it("carries the HTTP status on the error, so a refusal can be told from a network failure", async () => {
+    for (const status of [400, 401, 409, 422, 500, 503]) {
+      respond({ ok: false, status, text: async () => JSON.stringify({ message: "no" }) });
+      const error = await apiPost("/x", {}).catch((e) => e);
+      expect([error.message, error.status]).toEqual(["no", status]);
+    }
+  });
+
   it("shows the API's specific errors, then its message, then the raw text, then a default", async () => {
     respond({ ok: false, status: 400, text: async () => JSON.stringify({ message: "Registration failed.", errors: ["Username 'x' is already taken."] }) });
     await expect(apiPost("/x", {})).rejects.toThrow("Username 'x' is already taken.");

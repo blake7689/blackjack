@@ -12,9 +12,9 @@ import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings, pendingBets, notice } = useGameState();
   const { continueRound } = useGameActions();
-  const { player } = usePlayer();
+  const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
 
   // With many split hands the row scrolls sideways: keep the hand in play (and its buttons) on screen. //
@@ -53,7 +53,12 @@ export default function GameBoard() {
         </div>
 
         <div className="center-msg-row">
-          <CenterMessage gamePhase={phase} />
+          <CenterMessage
+            gamePhase={phase}
+            waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
+            reconnecting={reconnecting}
+            notice={notice}
+          />
         </div>
 
         <div className="player-container">
