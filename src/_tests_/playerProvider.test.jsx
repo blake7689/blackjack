@@ -210,6 +210,19 @@ describe("credits", () => {
     error.mockRestore();
   });
 
+  it("gives a refused bet's stake back on screen even when the balance reload fails", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { ctx } = await signedIn();
+    engine.placeBet.mockRejectedValueOnce(refusal(400, "insufficient"));
+    engine.getMe.mockRejectedValueOnce(new Error("offline"));
+
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "bet", amount: 50, newRound: false, alreadyDeducted: false }, vi.fn()));
+    await settleQueue();
+
+    expect(ctx.player.credits).toBe(1000);
+    error.mockRestore();
+  });
+
   it("logs when reloading the balance also fails, and does not touch the balance if signed out meanwhile", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const { ctx } = await signedIn();

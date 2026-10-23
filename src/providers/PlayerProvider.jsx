@@ -106,8 +106,8 @@ export function PlayerProvider({ children }) {
       }
       console.error("Ledger call refused; the game drops it", seq);
       if (newRound) roundRefusedRef.current = true;
-      if (skipped) setCredits(playerRef.current.credits - optimistic);
-      else await reload();
+      setCredits(playerRef.current.credits - optimistic); // undo the optimistic change even if the reload below fails
+      if (!skipped) await reload();
       report(seq, "rejected");
     });
   }, [setCredits]);
