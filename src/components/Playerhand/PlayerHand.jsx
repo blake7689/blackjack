@@ -7,21 +7,23 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
 import { canSplit } from "../../utils/blackjackLogic";
+import { dealingStyle } from "../dealingStyle";
 
 function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits }) {
   const { hit, stand, double, triple, split } = useGameActions();
   const canAffordStake = hand.bet > 0 && credits >= hand.bet; // a hand whose stake was refused can't add to it
   const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
+  const style = dealingStyle(gamePhase === GamePhases.DEALING);
   const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
 
   return (
     <div className={`player-hand${active ? " active" : ""}`}>
       <div className="hand-total">
-        Total: {hand.totals.join(" / ")}
+        <span style={style}>Total: {hand.totals.join(" / ")}</span>
         {' '}| Bet: ${hand.bet}
-        {showResult && <span className={`hand-result ${hand.result}`}> {hand.result}</span>}
-        {hand.isBusted && <span className={`hand-result busted`}> Busted</span>}
-        {hand.isBlackjack && <span className={`hand-result blackjack`}> Blackjack</span>}
+        {showResult && <span className={`hand-result ${hand.result}`} style={style}> {hand.result}</span>}
+        {hand.isBusted && <span className={`hand-result busted`} style={style}> Busted</span>}
+        {hand.isBlackjack && <span className={`hand-result blackjack`} style={style}> Blackjack</span>}
       </div>
       <div className="cards">
         {hand.cards.map((card) => (

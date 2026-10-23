@@ -35,7 +35,7 @@ export default function GameBoard() {
           <StatsPanel player={player} />
         </div>
         <div className="top-center card-count">
-          {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} />}
+          {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} dealing={phase === GamePhases.DEALING} />}
         </div>
         <div className="top-right deck-stack">
           <DeckStack shoe={shoe} />
@@ -47,7 +47,7 @@ export default function GameBoard() {
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
-              {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} />}
+              {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} gamePhase={phase} />}
             </div>
           </div>
         </div>

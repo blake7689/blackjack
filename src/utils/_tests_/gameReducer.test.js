@@ -5,7 +5,8 @@ import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus
 
 const run = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1000, ...a }), state);
 const started = (cards) => run(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
-const dealt = (cards, bet = 10) => run(started(cards), { type: "ADD_BET", amount: bet }, { type: "DEAL" });
+const dealing = (cards, bet = 10) => run(started(cards), { type: "ADD_BET", amount: bet }, { type: "DEAL" });
+const dealt = (cards, bet = 10) => run(dealing(cards, bet), { type: "DEAL_DONE" });
 const withoutSeq = (e) => { const copy = { ...e }; delete copy.seq; delete copy.handTag; return copy; };
 const events = (s) => s.creditEvents.map(withoutSeq);
 const local = (amount) => ({ kind: "local", amount });
@@ -34,6 +35,39 @@ describe("betting", () => {
     expect(s.initialBet).toBe(10);
     expect(events(s).at(-1)).toEqual(bet(10, true, true));
     expect(run(s, { type: "DEAL" })).toBe(s);
+  });
+});
+
+describe("dealing phase", () => {
+  it("DEAL puts the cards on the table and waits in DEALING, whose next step is DEAL_DONE", () => {
+    const s = dealing(["10", "10", "9", "7"]);
+    expect(s.phase).toBe(GamePhases.DEALING);
+    expect(s.hands[0].cards).toHaveLength(2);
+    expect(s.dealer.cards).toHaveLength(1);
+    expect(nextAutoAction(s)).toBe("DEAL_DONE");
+  });
+
+  it("DEAL_DONE hands over to the player, or to the dealer when the first hand is already done", () => {
+    expect(run(dealing(["10", "10", "9", "7"]), { type: "DEAL_DONE" }).phase).toBe(GamePhases.PLAYER_TURN);
+    const blackjack = run(dealing(["A", "5", "K", "6"]), { type: "DEAL_DONE" });
+    expect(blackjack.phase).toBe(GamePhases.DEALER_TURN);
+    expect(nextAutoAction(blackjack)).toBe("DEALER_REVEAL");
+  });
+
+  it("the player cannot act while dealing", () => {
+    const s = dealing(["10", "10", "9", "7", "2"]);
+    expect(run(s, { type: "HIT", handIdx: 0 })).toBe(s);
+    expect(run(s, { type: "STAND", handIdx: 0 })).toBe(s);
+  });
+
+  it("DEAL_DONE outside DEALING does nothing, even with no hands", () => {
+    const playing = dealt(["10", "10", "9", "7"]);
+    expect(run(playing, { type: "DEAL_DONE" })).toBe(playing);
+    expect(run(initialGameState, { type: "DEAL_DONE" })).toBe(initialGameState);
+    const s = dealing(["10", "10", "9", "7"]);
+    const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+    expect(voided.phase).toBe(GamePhases.PRE_DEAL);
+    expect(run(voided, { type: "DEAL_DONE" })).toBe(voided);
   });
 });
 
@@ -100,7 +134,7 @@ describe("player actions", () => {
     expect(tripled.hands).toHaveLength(1);
     expect(tripled.hands[0]).toMatchObject({ bet: 30 });
     expect(run(tripled, { type: "TRIPLE", handIdx: 0 })).toBe(tripled);
-    const blackjack = run({ ...started(["A", "5", "K", "6"]), settings: on.settings }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+    const blackjack = run({ ...started(["A", "5", "K", "6"]), settings: on.settings }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
     expect(run(blackjack, { type: "TRIPLE", handIdx: 0 })).toBe(blackjack);
   });
 

@@ -46,6 +46,63 @@ describe("CardCountDisplay", () => {
   });
 });
 
+describe("dealing display (cards on the table, nothing counted yet)", () => {
+  const isHidden = (el) => el.style.visibility === "hidden";
+  const dealing = GamePhases.DEALING;
+
+  it("CardCountDisplay keeps the count's place but hides both values while dealing", () => {
+    const shoe = stackedShoe(Array(104).fill("7"));
+    const { container, rerender } = renderUI(<CardCountDisplay shoe={shoe} runningCount={4} dealing />);
+    expect([".count-value", ".true-count-value"].map((q) => isHidden(container.querySelector(q)))).toEqual([true, true]);
+    expect(screen.getByText("Count:")).toBeTruthy();
+    rerender(<CardCountDisplay shoe={shoe} runningCount={4} dealing={false} />);
+    expect([".count-value", ".true-count-value"].map((q) => isHidden(container.querySelector(q)))).toEqual([false, false]);
+  });
+
+  it("CenterMessage says Dealing...", () => {
+    renderUI(<CenterMessage gamePhase={dealing} />);
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+  });
+
+  it("DealerArea hides the total and the badges, but keeps them in the layout", () => {
+    const dealer = { cards: stackedShoe(["A", "K"]), dealerDisplayTotal: 21, isBusted: true, isBlackjack: true };
+    const { rerender } = renderUI(<DealerArea dealer={dealer} gamePhase={dealing} />);
+    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(true));
+    rerender(<DealerArea dealer={dealer} gamePhase={GamePhases.DEALER_TURN} />);
+    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(false));
+  });
+
+  it("PlayerHand hides the total and the labels, shows the bet, and offers no buttons", () => {
+    const blackjack = hand(["A", "K"], { totals: [21], isBlackjack: true, isBusted: true, result: HandResult.WIN });
+    const props = { index: 0, active: true, handCount: 1, maxSplitHands: 0, credits: 1000, hand: blackjack };
+    const { container, rerender } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.POST_ROUND} />);
+    ["Total: 21", /Busted/, /Blackjack/, new RegExp(HandResult.WIN)].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(false));
+    rerender(<PlayerHand {...props} gamePhase={dealing} />);
+    expect(container.querySelector(".hand-total").textContent).toMatch(/Bet: \$10/);
+    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(true));
+    expect(screen.queryByText("Hit")).toBeNull();
+    expect(container.querySelectorAll("img")).toHaveLength(2); // the cards stay on the table
+  });
+
+  it("the board shows the cards, Dealing... and no totals or count between the deal and the first turn", () => {
+    const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+    let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) });
+    s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }].reduce(step, s);
+    const { container } = renderUI(<GameBoard />, { game: s });
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(isHidden(screen.getByText("Total: 19"))).toBe(true);
+    expect(isHidden(screen.getByText("Total: 10"))).toBe(true);
+    expect(isHidden(container.querySelector(".count-value"))).toBe(true);
+    expect(container.querySelectorAll(".player-hand img, .dealer img")).toHaveLength(4);
+    expect(screen.queryByText("Hit")).toBeNull();
+    cleanup();
+    renderUI(<GameBoard />, { game: step(s, { type: "DEAL_DONE" }) });
+    expect(screen.queryByText("Dealing...")).toBeNull();
+    expect(isHidden(screen.getByText("Total: 19"))).toBe(false);
+    expect(screen.getByText("Hit")).toBeTruthy();
+  });
+});
+
 describe("CenterMessage", () => {
   it("shows the phase message, or nothing", () => {
     const { container, rerender } = renderUI(<CenterMessage gamePhase={GamePhases.PRE_DEAL} />);
@@ -176,8 +233,8 @@ describe("PlayerHand", () => {
   });
 
   it("offers double and split on an affordable pair", () => {
-    renderUI(<PlayerHand {...props} hand={hand(["8", "8"], { totals: [16] })} />);
-    expect(screen.getByText(/Total: 16 \| Bet: \$10/)).toBeTruthy();
+    const { container } = renderUI(<PlayerHand {...props} hand={hand(["8", "8"], { totals: [16] })} />);
+    expect(container.querySelector(".hand-total").textContent).toBe("Total: 16 | Bet: $10");
     expect(screen.getByText("Double")).toBeTruthy();
     expect(screen.getByText("Split")).toBeTruthy();
   });
@@ -345,7 +402,7 @@ describe("GameBoard", () => {
     const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
     let s = step(initialGameState, { type: "START_GAME", shoe: [six, ten, five, seven, hidden] });
     s = step(s, { type: "SET_SETTING", key: "doubleFaceDown", value: true });
-    s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DOUBLE", handIdx: 0 }].reduce(step, s);
+    s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" }, { type: "DOUBLE", handIdx: 0 }].reduce(step, s);
     expect(s.hands[0].hiddenCards).toEqual([hidden]);
     const leaks = /king|spades|\b13\b|Busted|Blackjack/i;
 

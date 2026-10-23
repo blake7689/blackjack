@@ -73,6 +73,8 @@ describe("GameProvider", () => {
     expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    expect(ctx.state.phase).toBe(GamePhases.DEALING); // the cards sit there for one step
+    tick();
     expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
     act(() => ctx.actions.stand(0));
     expect(ctx.actions.getPhase()).toBe(GamePhases.DEALER_TURN);
@@ -94,7 +96,8 @@ describe("GameProvider", () => {
     const { ctx, player } = setup();
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
-    act(() => ctx.actions.deal()); // player blackjack: the dealer's turn is scheduled
+    act(() => ctx.actions.deal());
+    tick(); // player blackjack: the dealer's turn is scheduled
     expect(ctx.state.phase).toBe(GamePhases.DEALER_TURN);
     act(() => ctx.actions.resetGame());
     for (let i = 0; i < 5; i++) tick();
@@ -108,7 +111,8 @@ describe("GameProvider", () => {
     const { ctx, unmount } = setup();
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
-    act(() => ctx.actions.deal());
+    act(() => ctx.actions.deal()); // DEALING: the DEAL_DONE timer is pending
+    expect(vi.getTimerCount()).toBe(1);
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
@@ -123,6 +127,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.clearBet());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     act(() => ctx.actions.split(0));
     expect(ctx.state.hands).toHaveLength(2);
     act(() => ctx.actions.double(0));
@@ -139,6 +144,7 @@ describe("GameProvider", () => {
     act(() => { ctx.actions.changeSetting("tripleDown", true); });
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     act(() => ctx.actions.triple(0));
     expect(ctx.state.hands[0]).toMatchObject({ bet: 30 });
     expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false, handTag: 1 });
@@ -151,6 +157,7 @@ describe("GameProvider", () => {
     act(() => { ctx.actions.changeSetting("doubleFaceDown", true); });
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     act(() => ctx.actions.double(0));
     expect(ctx.state.hands[0]).toMatchObject({ total: 11, bet: 20, isBusted: false });
     expect(ctx.state.hands[0].hiddenCards).toHaveLength(1);
@@ -173,6 +180,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     act(() => ctx.actions.stand(0));
     tick(); // reveal
     tick(); // dealer draws K and busts
@@ -197,6 +205,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     act(() => ctx.actions.double(0));
     expect(ctx.state.hands[0]).toMatchObject({ bet: 10, total: 21, isDouble: true });
     expect(ctx.state.betCircle).toBe(10);
@@ -213,6 +222,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, hands: [], pendingBets: [] });
     expect(ctx.state.notice).toMatch(/round was cancelled/);
     for (let i = 0; i < 4; i++) tick();
@@ -226,6 +236,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
+    tick();
     const { seq } = ctx.state.pendingBets[0];
     act(() => ctx.actions.resetGame());
     expect(ctx.state.pendingBets).toEqual([]);

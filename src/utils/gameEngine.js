@@ -12,7 +12,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const playerFirstCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const playerCards = [playerFirstCard, playerSecondCard];
+  const playerCards = [{ ...playerFirstCard, dealOrder: 0 }, { ...playerSecondCard, dealOrder: 2 }];
   const drawsAfter = isEU(settings);
   const dealerPeeks = settings.dealerHoleBehaviour === DealerHoleOptions.US_PEEK;
   const dealerHoleCard = drawsAfter ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
@@ -22,7 +22,9 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
   // Only a peek reveals a dealer blackjack now; with no peek it stays hidden until the dealer's turn.
   const dealerBlackjackRevealed = dealerPeeks && dealerCardsAll.length === 2 && isTotalBlackjack(dealerTotals.total);
-  const dealerCardsShowing = dealerBlackjackRevealed ? dealerCardsAll : [dealerUpCard];
+  // Animation hints go on copies. The hole card carries one only when the peek shows it at the deal.
+  const dealerUpShown = { ...dealerUpCard, dealOrder: 1 };
+  const dealerCardsShowing = dealerBlackjackRevealed ? [dealerUpShown, { ...dealerHoleCard[0], dealOrder: 3, revealed: true }] : [dealerUpShown];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   // An EU dealer that won't draw on a player blackjack has nothing to compare it with, so it must pay now.
   const blackjackPaysNow = dealerPeeks || settings.blackjackPaysImmediately || (drawsAfter && !settings.dealerDrawsOnPlayerBlackjack);
@@ -138,7 +140,7 @@ export function playerDouble(hand, shoe, setCutCardFound, resetShoe, faceDown = 
 // Turns every face-down card face up and works the hand out again (the hand stays DONE) //
 export function revealHiddenCards(hand) {
   if (hand.hiddenCards.length === 0) return hand;
-  const cards = [...hand.cards, ...hand.hiddenCards];
+  const cards = [...hand.cards, ...hand.hiddenCards.map((c) => ({ ...c, revealed: true }))];
   const handTotals = getHandTotals(cards);
   const handEvaluation = getHandEvaluation(handTotals.totals, hand, cards.length);
   return {
@@ -178,7 +180,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
   const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const card2 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const hand1Cards = [hand.cards[0], card1];
-  const hand2Cards = [hand.cards[1], card2];
+  const hand2Cards = [{ ...hand.cards[1], moved: true }, card2]; // moved: the card that changes hands
   const hand1Totals = getHandTotals(hand1Cards);
   const hand2Totals = getHandTotals(hand2Cards);
   const hand1Evaluation = getHandEvaluation(hand1Totals.totals, hand, hand1Cards.length);
@@ -226,7 +228,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
 
 // Turns the hole card face up at the start of the dealer's turn (no-op in EU, which has no hole card yet) //
 export function revealDealerHole(dealer, hole) {
-  const cards = [...dealer.cards, ...hole.cards];
+  const cards = [...dealer.cards, ...hole.cards.map((c) => ({ ...c, revealed: true }))];
   const totals = getHandTotals(cards);
   return {
     ...dealer,
