@@ -64,7 +64,8 @@ describe("dealing phase", () => {
     const playing = dealt(["10", "10", "9", "7"]);
     expect(run(playing, { type: "DEAL_DONE" })).toBe(playing);
     expect(run(initialGameState, { type: "DEAL_DONE" })).toBe(initialGameState);
-    const voided = run(dealing(["10", "10", "9", "7"]), { type: "BET_REJECTED", seq: dealing(["10", "10", "9", "7"]).pendingBets[0].seq });
+    const s = dealing(["10", "10", "9", "7"]);
+    const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
     expect(voided.phase).toBe(GamePhases.PRE_DEAL);
     expect(run(voided, { type: "DEAL_DONE" })).toBe(voided);
   });

@@ -1,12 +1,10 @@
 import { memo } from "react";
 import "./CardCountDisplay.css";
 import { trueCount } from "../../utils/cards";
-import { GamePhases } from "../../utils/constants/gamePhases";
+import { dealingStyle } from "../dealingStyle";
 
-const HIDDEN = { visibility: "hidden" }; // keeps the layout, so nothing shifts when the totals appear
-
-const CardCountDisplay = ({ shoe, runningCount, gamePhase }) => {
-  const style = gamePhase === GamePhases.DEALING ? HIDDEN : undefined;
+const CardCountDisplay = ({ shoe, runningCount, dealing }) => {
+  const style = dealingStyle(dealing);
   return (
     <div className="card-count-display">
       <span className="count-label">Count:</span>
@@ -17,5 +15,5 @@ const CardCountDisplay = ({ shoe, runningCount, gamePhase }) => {
   );
 };
 
-// Re-renders only when a card is drawn or the dealing starts or ends (#5).
+// Re-renders only when a card is drawn or the dealing starts or ends (#5); `dealing` is the DEALING phase or not.
 export default memo(CardCountDisplay);

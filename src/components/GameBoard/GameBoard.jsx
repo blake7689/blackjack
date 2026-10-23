@@ -35,7 +35,7 @@ export default function GameBoard() {
           <StatsPanel player={player} />
         </div>
         <div className="top-center card-count">
-          {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} gamePhase={phase} />}
+          {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} dealing={phase === GamePhases.DEALING} />}
         </div>
         <div className="top-right deck-stack">
           <DeckStack shoe={shoe} />

@@ -1,12 +1,11 @@
 import { memo } from "react";
 import Card from "../Card/Card.jsx";
 import { GamePhases } from "../../utils/constants/gamePhases";
+import { dealingStyle } from "../dealingStyle";
 import "./DealerArea.css";
 
-const HIDDEN = { visibility: "hidden" }; // keeps the layout, so nothing shifts when the totals appear
-
 function DealerArea({ dealer, hiddenCount = 0, gamePhase }) {
-  const style = gamePhase === GamePhases.DEALING ? HIDDEN : undefined;
+  const style = dealingStyle(gamePhase === GamePhases.DEALING);
   return (
     <div className="dealer-area">
       <div className="dealer-hand">

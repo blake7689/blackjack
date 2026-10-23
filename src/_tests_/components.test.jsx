@@ -52,10 +52,10 @@ describe("dealing display (cards on the table, nothing counted yet)", () => {
 
   it("CardCountDisplay keeps the count's place but hides both values while dealing", () => {
     const shoe = stackedShoe(Array(104).fill("7"));
-    const { container, rerender } = renderUI(<CardCountDisplay shoe={shoe} runningCount={4} gamePhase={dealing} />);
+    const { container, rerender } = renderUI(<CardCountDisplay shoe={shoe} runningCount={4} dealing />);
     expect([".count-value", ".true-count-value"].map((q) => isHidden(container.querySelector(q)))).toEqual([true, true]);
     expect(screen.getByText("Count:")).toBeTruthy();
-    rerender(<CardCountDisplay shoe={shoe} runningCount={4} gamePhase={GamePhases.PLAYER_TURN} />);
+    rerender(<CardCountDisplay shoe={shoe} runningCount={4} dealing={false} />);
     expect([".count-value", ".true-count-value"].map((q) => isHidden(container.querySelector(q)))).toEqual([false, false]);
   });
 
