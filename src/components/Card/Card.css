@@ -22,3 +22,9 @@
   width: clamp(40px, 9.5vw, 64px);
   aspect-ratio: 86 / 120;
 }
+/* Two-faced flip card: the back is decoration only (no image, no text); the face exists once the card is known */
+.fly-card { perspective: 700px; display: block; flex: 0 0 auto; }
+.fly-inner { display: grid; transform-style: preserve-3d; }
+.fly-inner > * { grid-area: 1 / 1; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.fly-back { background: url("/cards/back.png") center / contain no-repeat; }
+.fly-front { transform: rotateY(180deg); }

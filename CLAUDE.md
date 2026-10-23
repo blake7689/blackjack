@@ -87,6 +87,14 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - `ci.yml` is also the SWA deploy's test gate (`uses:` via `workflow_call`, deploy `needs: test`); keep that trigger.
 - Game actions such as `changeSetting` return a promise: in tests write `act(() => { action(); })` (braces), or
   `act` turns async and the assertions run before the update.
+- Card animations (#6): the table shows cards only through `FlyCard`. A new card flies face down from `.deck-stack` (a copy in
+  `.flight-layer`) and flips as it lands; the dealer's hole card and a face-down double stay one element (keys `hole` / `dbl`,
+  hidden and shown cards in one list), so they flip in place. Never key them by card id or split them into two lists (a remount
+  flies again). Hints (`dealOrder`, `revealed`, `moved`) sit on card copies, never in place; a hidden back gets `dealOrder` by prop
+  (3 for the hole) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
+- Anything that flies or flips reserves its time in the `queue` of `utils/cardAnimation.js`; automatic steps wait `stepWait(T)`;
+  totals count only landed cards (`useLanded`). A card object is a new copy on every reducer step, so effects depend on `card.id`,
+  never on `card` (a changed dependency cancels the flip in progress). jsdom has no `Element.animate`: `setup.js` stubs it.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.
