@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { FlightContext } from "../../context/FlightContext";
+import { cardTiming, clearLanded, queue } from "../../utils/cardAnimation";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -16,6 +18,25 @@ export default function GameBoard() {
   const { continueRound } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
+  const layerRef = useRef(null);
+  // Cards on the board's first render never fly (returning from Settings): they read `enabled` while it is still false.
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => setEnabled(true), []);
+  useEffect(() => { if (phase === GamePhases.PRE_DEAL) clearLanded(); }, [phase]);
+  // Busy while any card is flying or flipping: the buttons wait until it lands (like a real dealer's hands).
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let t;
+    const check = () => {
+      clearTimeout(t);
+      const left = queue.free - performance.now();
+      if (left > 0) { setBusy(true); t = setTimeout(check, left + 5); } else setBusy(false);
+    };
+    queue.listeners.add(check);
+    return () => { queue.listeners.delete(check); clearTimeout(t); };
+  }, []);
+  const timing = useMemo(() => cardTiming(Number(settings.playTimeout)), [settings.playTimeout]);
+  const flight = useMemo(() => ({ enabled, layerRef, timing }), [enabled, timing]);
 
   // With many split hands the row scrolls sideways: keep the hand in play (and its buttons) on screen. //
   useEffect(() => {
@@ -28,7 +49,8 @@ export default function GameBoard() {
   };
 
   return (
-    <div className="board" onClick={handleBoardClick}>
+    <FlightContext.Provider value={flight}>
+    <div className={`board${busy ? " busy" : ""}`} onClick={handleBoardClick}>
       {/* TOP BAR */}
       <div className="top-bar">
         <div className="top-left stats">
@@ -47,14 +69,14 @@ export default function GameBoard() {
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
-              {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} gamePhase={phase} />}
+              {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} />}
             </div>
           </div>
         </div>
 
         <div className="center-msg-row">
           <CenterMessage
-            gamePhase={phase}
+            gamePhase={busy && phase === GamePhases.PLAYER_TURN ? GamePhases.DEALING : phase}
             waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
             reconnecting={reconnecting}
             notice={notice}
@@ -66,7 +88,7 @@ export default function GameBoard() {
             <div className="hands-track">
               {hands.map((hand, idx) => (
                 <PlayerHand
-                  key={idx}
+                  key={hand.tag}
                   hand={hand}
                   index={idx}
                   active={selectedHandIndex === idx}
@@ -86,6 +108,8 @@ export default function GameBoard() {
       <div className="betting-spacer">
         <BettingFooter />
       </div>
+      <div className="flight-layer" ref={layerRef} />
     </div>
+    </FlightContext.Provider>
   );
 }

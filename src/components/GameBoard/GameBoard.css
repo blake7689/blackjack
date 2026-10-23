@@ -231,3 +231,13 @@
 
 /* Final override to ensure hands can always grow */
 .player-hand, .dealer-hand { max-width: none; }
+/* Cards in flight, above the board so nothing clips them */
+.flight-layer { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 50; }
+
+/* While a card flies or flips the buttons wait (hidden, so the layout stays put) */
+.board.busy .options-wrap { visibility: hidden; pointer-events: none; }
+
+/* Live total text over an invisible copy of the final text: the strip keeps its final width, so cards never shift as totals update */
+.hand-total { display: inline-grid; }
+.hand-total > * { grid-area: 1 / 1; }
+.hand-total > .ht-size { visibility: hidden; }

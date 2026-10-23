@@ -6,6 +6,7 @@ import { PlayerContext } from "../context/PlayerContext";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import * as cards from "../utils/cards";
+import { queue } from "../utils/cardAnimation";
 
 // Saved settings on the server (#36), controlled per test.
 const remote = vi.hoisted(() => ({ getSettings: vi.fn(), saveSettings: vi.fn(), token: null }));
@@ -66,6 +67,20 @@ const flush = () => act(async () => {});
 afterEach(() => vi.useRealTimers());
 
 describe("GameProvider", () => {
+  it("an automatic step waits for a card still in the air, then a beat of 0.3 x Rate of Play", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "6", "K", "2"]));
+    const { ctx } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    queue.free = performance.now() + 3000; // the cards of this deal are still flying
+    act(() => ctx.actions.deal());
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    act(() => { vi.advanceTimersByTime(3299); }); // 3000 + 0.3 * 1000, not the plain 1000
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+  });
+
   it("plays a round end to end, applying each credit change exactly once", () => {
     shoes.push(stackedShoe(["10", "10", "9", "6", "K", "2"]));
     const { ctx, player } = setup();

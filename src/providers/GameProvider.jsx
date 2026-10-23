@@ -6,6 +6,7 @@ import { createShoe } from "../utils/cards";
 import { usePlayer } from "../hooks/usePlayer";
 import { getToken } from "../utils/api";
 import { getSettings, saveSettings } from "../utils/playerEngine";
+import { stepWait } from "../utils/cardAnimation";
 
 const SETTINGS_VERSION = 1;
 
@@ -44,7 +45,7 @@ export function GameProvider({ children }) {
     }
   }, [state.creditEvents, applyCreditEvent]);
 
-  // One timer drives the automatic steps (dealer, settle, results, next round). Its cleanup cancels it
+  // One timer drives the automatic steps (dealer, settle, results, next round), each after Rate of Play or, while a card is still moving, after it lands (stepWait). Its cleanup cancels it
   // whenever the state moves on or the provider unmounts, so a stale step can never fire into a new game.
   const auto = nextAutoAction(state);
   const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}`;
@@ -53,7 +54,7 @@ export function GameProvider({ children }) {
     const type = autoKey.split("|")[0];
     const timer = setTimeout(() => {
       dispatch({ type, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
-    }, Number(playTimeout));
+    }, stepWait(Number(playTimeout)));
     return () => clearTimeout(timer);
   }, [autoKey, playTimeout, makeShoe, getCredits]);
 

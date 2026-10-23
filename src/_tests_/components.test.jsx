@@ -1,12 +1,11 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { initialGameState, gameReducer } from "../utils/gameReducer";
 import { screen, fireEvent, cleanup } from "@testing-library/react";
-import { renderUI } from "./testUtils";
+import { renderUI, Flight, settleDeal } from "./testUtils";
 import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
-import Card from "../components/Card/Card";
 import CardCountDisplay from "../components/CardCountDisplay/CardCountDisplay";
 import CenterMessage from "../components/CenterMessage/CenterMessage";
 import DealerArea from "../components/DealerArea/DealerArea";
@@ -17,26 +16,14 @@ import StatsPanel from "../components/StatsPanel/StatsPanel";
 import BettingFooter from "../components/BettingFooter/BettingFooter";
 import GameBoard from "../components/GameBoard/GameBoard";
 
+let tagCount = 0;
 const hand = (codes, extra = {}) => {
   const cards = stackedShoe(codes);
-  return { cards, hiddenCards: [], bet: 10, status: HandStatus.PLAYING, result: HandResult.NONE, totals: [20], total: 20, isBusted: false, isBlackjack: false, ...extra };
+  return { tag: `t${tagCount++}`, cards, hiddenCards: [], bet: 10, status: HandStatus.PLAYING, result: HandResult.NONE, totals: [20], total: 20, isBusted: false, isBlackjack: false, ...extra };
 };
 
-describe("Card", () => {
-  it("shows the face, the back, or a placeholder", () => {
-    const [ace] = stackedShoe(["A"]);
-    const { container, rerender } = renderUI(<Card card={ace} />);
-    expect(screen.getByAltText("ace of hearts").getAttribute("src")).toBe("/cards/ace_of_hearts.png");
-    rerender(<Card card={ace} faceDown small />);
-    expect(screen.getByAltText("Card back").className).toContain("small");
-    rerender(<Card faceDown />);
-    expect(screen.getByAltText("Card back").getAttribute("src")).toBe("/cards/back.png");
-    rerender(<Card />);
-    expect(container.querySelector(".card-skel")).not.toBeNull();
-    rerender(<Card small />);
-    expect(container.querySelector(".card-skel.small")).not.toBeNull();
-  });
-});
+// The hand-total strip has live text over an invisible copy of the final text (.ht-size): these read the live one.
+const live = (c) => c.querySelector(".hand-total > span:not(.ht-size)").textContent;
 
 describe("CardCountDisplay", () => {
   it("shows the running count and the true count from the shoe", () => {
@@ -64,42 +51,57 @@ describe("dealing display (cards on the table, nothing counted yet)", () => {
     expect(screen.getByText("Dealing...")).toBeTruthy();
   });
 
-  it("DealerArea hides the total and the badges, but keeps them in the layout", () => {
-    const dealer = { cards: stackedShoe(["A", "K"]), dealerDisplayTotal: 21, isBusted: true, isBlackjack: true };
-    const { rerender } = renderUI(<DealerArea dealer={dealer} gamePhase={dealing} />);
-    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(true));
-    rerender(<DealerArea dealer={dealer} gamePhase={GamePhases.DEALER_TURN} />);
-    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(false));
-  });
+  describe("cards still on the way", () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const size = (c) => c.querySelector(".hand-total > .ht-size").textContent;
 
-  it("PlayerHand hides the total and the labels, shows the bet, and offers no buttons", () => {
-    const blackjack = hand(["A", "K"], { totals: [21], isBlackjack: true, isBusted: true, result: HandResult.WIN });
-    const props = { index: 0, active: true, handCount: 1, maxSplitHands: 0, credits: 1000, hand: blackjack };
-    const { container, rerender } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.POST_ROUND} />);
-    ["Total: 21", /Busted/, /Blackjack/, new RegExp(HandResult.WIN)].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(false));
-    rerender(<PlayerHand {...props} gamePhase={dealing} />);
-    expect(container.querySelector(".hand-total").textContent).toMatch(/Bet: \$10/);
-    ["Total: 21", /Busted/, /Blackjack/].forEach((text) => expect(isHidden(screen.getByText(text))).toBe(true));
-    expect(screen.queryByText("Hit")).toBeNull();
-    expect(container.querySelectorAll("img")).toHaveLength(2); // the cards stay on the table
-  });
+    it("DealerArea shows '-' and no badges until its cards have landed, but keeps their room in the layout", () => {
+      const dealer = { cards: stackedShoe(["A", "K"]), dealerDisplayTotal: 21, isBusted: true, isBlackjack: true };
+      const { container } = renderUI(<Flight><DealerArea dealer={dealer} /></Flight>);
+      expect(live(container)).toBe("Total: -");
+      expect(size(container)).toBe("Total: 21 Busted Blackjack"); // invisible copy of the final text keeps the width
+      expect(container.querySelector(".ht-size").getAttribute("aria-hidden")).toBe("true");
+      settleDeal();
+      expect(live(container)).toBe("Total: 21 Busted Blackjack");
+    });
 
-  it("the board shows the cards, Dealing... and no totals or count between the deal and the first turn", () => {
-    const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
-    let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) });
-    s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }].reduce(step, s);
-    const { container } = renderUI(<GameBoard />, { game: s });
-    expect(screen.getByText("Dealing...")).toBeTruthy();
-    expect(isHidden(screen.getByText("Total: 19"))).toBe(true);
-    expect(isHidden(screen.getByText("Total: 10"))).toBe(true);
-    expect(isHidden(container.querySelector(".count-value"))).toBe(true);
-    expect(container.querySelectorAll(".player-hand img, .dealer img")).toHaveLength(4);
-    expect(screen.queryByText("Hit")).toBeNull();
-    cleanup();
-    renderUI(<GameBoard />, { game: step(s, { type: "DEAL_DONE" }) });
-    expect(screen.queryByText("Dealing...")).toBeNull();
-    expect(isHidden(screen.getByText("Total: 19"))).toBe(false);
-    expect(screen.getByText("Hit")).toBeTruthy();
+    it("PlayerHand shows '-' and no labels, keeps the bet, and offers no buttons until its cards have landed", () => {
+      const blackjack = hand(["A", "K"], { totals: [21], isBlackjack: true, isBusted: true, result: HandResult.WIN });
+      const props = { index: 0, active: true, handCount: 1, maxSplitHands: 0, credits: 1000, hand: blackjack };
+      const { container } = renderUI(<Flight><PlayerHand {...props} gamePhase={GamePhases.DEALING} /></Flight>);
+      expect(live(container)).toBe("Total: - | Bet: $10");
+      expect(size(container)).toBe("Total: 21 | Bet: $10 Busted Blackjack");
+      expect(screen.queryByText("Hit")).toBeNull();
+      expect(container.querySelectorAll(".fly-card")).toHaveLength(2); // the cards stay on the table
+      settleDeal();
+      expect(live(container)).toBe("Total: 21 | Bet: $10 Busted Blackjack");
+    });
+
+    it("the board shows Dealing... and no total or count between the deal and the first turn, then the totals and buttons", () => {
+      const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+      let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) });
+      const ready = step(s, { type: "ADD_BET", amount: 10 });
+      const dealt = step(ready, { type: "DEAL" });
+      const { container, gameState, rerender } = renderUI(<GameBoard />, { game: ready });
+      Object.assign(gameState, dealt); // the board's first render was the empty table: these cards fly
+      rerender(<GameBoard />);
+      expect(screen.getByText("Dealing...")).toBeTruthy();
+      expect(container.querySelector(".player-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: - | Bet: $10");
+      expect(container.querySelector(".dealer .fly-card")).not.toBeNull();
+      expect(container.querySelector(".dealer-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: -");
+      expect(isHidden(container.querySelector(".count-value"))).toBe(true);
+      expect(container.querySelectorAll(".fly-card")).toHaveLength(4);
+      expect(screen.queryByText("Hit")).toBeNull();
+      Object.assign(gameState, step(dealt, { type: "DEAL_DONE" }));
+      rerender(<GameBoard />);
+      settleDeal();
+      expect(screen.queryByText("Dealing...")).toBeNull();
+      expect(container.querySelector(".player-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: 19 | Bet: $10");
+      expect(container.querySelector(".dealer-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: 10");
+      expect(isHidden(container.querySelector(".count-value"))).toBe(false);
+      expect(screen.getByText("Hit")).toBeTruthy();
+    });
   });
 });
 
@@ -140,22 +142,27 @@ describe("CenterMessage", () => {
 describe("DealerArea", () => {
   it("shows the total and the bust or blackjack badges", () => {
     const dealer = { cards: stackedShoe(["10", "6"]), dealerDisplayTotal: 16, isBusted: false, isBlackjack: false };
-    const { rerender } = renderUI(<DealerArea dealer={dealer} />);
-    expect(screen.getByText("Total: 16")).toBeTruthy();
+    const { container, rerender } = renderUI(<DealerArea dealer={dealer} />);
+    expect(live(container)).toBe("Total: 16");
     expect(screen.queryByText(/Busted|Blackjack/)).toBeNull();
     rerender(<DealerArea dealer={{ ...dealer, isBusted: true, isBlackjack: true }} />);
-    expect(screen.getByText(/Busted/)).toBeTruthy();
-    expect(screen.getByText(/Blackjack/)).toBeTruthy();
+    expect(live(container)).toBe("Total: 16 Busted Blackjack");
+    expect(container.querySelector(".busted")).not.toBeNull();
+    expect(container.querySelector(".blackjack")).not.toBeNull();
   });
 
   it("shows one card back per hidden card, after the up card", () => {
     const dealer = { cards: stackedShoe(["10"]), dealerDisplayTotal: 10 };
     const { container, rerender } = renderUI(<DealerArea dealer={dealer} />);
-    expect(screen.queryByAltText("Card back")).toBeNull();
+    expect(container.querySelectorAll(".dealer .fly-card")).toHaveLength(1);
     rerender(<DealerArea dealer={dealer} hiddenCount={1} />);
-    const imgs = [...container.querySelectorAll(".dealer img")].map((img) => img.alt);
-    expect(imgs).toEqual(["10 of hearts", "Card back"]);
-    expect(screen.getByText("Total: 10")).toBeTruthy();
+    // the back is an aria-hidden div: no image, no "Card back" name, nothing of the card
+    const cards = [...container.querySelectorAll(".dealer .fly-card")];
+    expect(cards.map((c) => c.querySelector("img")?.alt)).toEqual(["10 of hearts", undefined]);
+    expect(cards[1].querySelector(".fly-back").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByAltText("Card back")).toBeNull();
+    expect(screen.queryByText(/card back/i)).toBeNull();
+    expect(live(container)).toBe("Total: 10");
   });
 });
 
@@ -200,10 +207,11 @@ describe("PlayerHand", () => {
     const [king] = stackedShoe(["K"]);
     const doubled = hand(["6", "5"], { totals: [11], total: 11, bet: 20, status: HandStatus.DONE, hiddenCards: [king] });
     const { container } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.DEALER_TURN} hand={doubled} />);
-    expect(screen.getByText(/Total: 11/)).toBeTruthy();
-    expect([...container.querySelectorAll("img")].map((img) => img.alt)).toEqual(["6 of hearts", "5 of hearts", "Card back"]);
+    expect(live(container)).toBe("Total: 11 | Bet: $20");
+    expect([...container.querySelectorAll(".fly-card")].map((c) => c.querySelector("img")?.alt)).toEqual(["6 of hearts", "5 of hearts", undefined]);
+    expect(container.querySelectorAll(".fly-back[aria-hidden='true']")).toHaveLength(3);
     expect(screen.queryByText(/Busted|Blackjack/)).toBeNull();
-    expect(container.innerHTML).not.toMatch(new RegExp(`king|${king.id}`, "i"));
+    expect(container.innerHTML).not.toMatch(new RegExp(`king|${king.id}|card back`, "i"));
   });
 
   it("offers triple only when the option is on, with two cards and two more stakes in the balance", () => {
@@ -234,7 +242,7 @@ describe("PlayerHand", () => {
 
   it("offers double and split on an affordable pair", () => {
     const { container } = renderUI(<PlayerHand {...props} hand={hand(["8", "8"], { totals: [16] })} />);
-    expect(container.querySelector(".hand-total").textContent).toBe("Total: 16 | Bet: $10");
+    expect(live(container)).toBe("Total: 16 | Bet: $10");
     expect(screen.getByText("Double")).toBeTruthy();
     expect(screen.getByText("Split")).toBeTruthy();
   });
@@ -247,20 +255,18 @@ describe("PlayerHand", () => {
   });
 
   it("shows soft totals, and no options when not its turn", () => {
-    renderUI(<PlayerHand {...props} active={false} hand={hand(["A", "6"], { totals: [17, 7] })} />);
-    expect(screen.getByText(/17 \/ 7/)).toBeTruthy();
+    const { container } = renderUI(<PlayerHand {...props} active={false} hand={hand(["A", "6"], { totals: [17, 7] })} />);
+    expect(live(container)).toBe("Total: 17 / 7 | Bet: $10");
     expect(screen.queryByText("Hit")).toBeNull();
   });
 
   it("shows the result after the round, plus bust and blackjack badges", () => {
-    const { rerender } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.POST_ROUND}
+    const { container, rerender } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.POST_ROUND}
       hand={hand(["10", "6", "K"], { status: HandStatus.DONE, result: HandResult.LOSE, isBusted: true })} />);
-    expect(screen.getByText("Lose")).toBeTruthy();
-    expect(screen.getByText("Busted")).toBeTruthy();
+    expect(live(container)).toBe("Total: 20 | Bet: $10 Lose Busted");
     rerender(<PlayerHand {...props} gamePhase={GamePhases.END_ROUND}
       hand={hand(["A", "K"], { status: HandStatus.DONE, result: HandResult.WIN, isBlackjack: true })} />);
-    expect(screen.getByText("Win")).toBeTruthy();
-    expect(screen.getByText("Blackjack")).toBeTruthy();
+    expect(live(container)).toBe("Total: 20 | Bet: $10 Win Blackjack");
   });
 
   it("hides an unsettled result", () => {
@@ -349,7 +355,7 @@ describe("GameBoard", () => {
   };
 
   it("wires each hand's buttons to that hand", () => {
-    const { gameActions } = renderUI(<GameBoard />, { game: playing });
+    const { gameActions, container } = renderUI(<GameBoard />, { game: playing });
     ["Hit", "Stay", "Double", "Split"].forEach((name) => fireEvent.click(screen.getByText(name)));
     expect(screen.queryByText("Triple")).toBeNull();
     expect(gameActions.hit).toHaveBeenCalledWith(0);
@@ -357,7 +363,7 @@ describe("GameBoard", () => {
     expect(gameActions.double).toHaveBeenCalledWith(0);
     expect(gameActions.split).toHaveBeenCalledWith(0);
     expect(gameActions.continueRound).not.toHaveBeenCalled();
-    expect(screen.getByText("Total: 10")).toBeTruthy();
+    expect(container.querySelector(".dealer-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: 10");
     expect(screen.queryByAltText("Card back")).toBeNull();
   });
 
@@ -391,9 +397,12 @@ describe("GameBoard", () => {
   });
 
   it("shows the US hole card face down", () => {
-    renderUI(<GameBoard />, { game: { ...playing, dealerHole: { cards: stackedShoe(["A"]) } } });
-    expect(screen.getByAltText("Card back")).toBeTruthy();
+    const { container } = renderUI(<GameBoard />, { game: { ...playing, dealerHole: { cards: stackedShoe(["A"]) } } });
+    const cards = [...container.querySelectorAll(".dealer .fly-card")];
+    expect(cards.map((c) => c.querySelector("img")?.alt)).toEqual(["10 of hearts", undefined]); // the hole card is a plain back
+    expect(cards[1].querySelector(".fly-back").getAttribute("aria-hidden")).toBe("true");
     expect(screen.queryByAltText("ace of hearts")).toBeNull();
+    expect(container.innerHTML).not.toMatch(/ace[ _]of|card back/i);
   });
 
   it("a face-down double puts nothing of the hidden card in the page until the reveal", () => {
@@ -407,8 +416,9 @@ describe("GameBoard", () => {
     const leaks = /king|spades|\b13\b|Busted|Blackjack/i;
 
     const { container, unmount } = renderUI(<GameBoard />, { game: s });
-    expect(screen.getByText(/Total: 11/)).toBeTruthy();
-    expect(container.querySelectorAll(".player-hand img[alt='Card back']")).toHaveLength(1); // the dealer's hole card is the other back
+    expect(live(container.querySelector(".player-hand"))).toBe("Total: 11 | Bet: $20");
+    expect(container.querySelectorAll(".player-hand .fly-back")).toHaveLength(3); // two face-up cards (their backs are hidden) and the double's back
+    expect(container.querySelectorAll(".player-hand img")).toHaveLength(2); // the hidden card has no image
     expect(container.querySelector(".count-value").textContent).toBe("1"); // 6 +1, 10 -1, 5 +1: the king (-1) is not counted
     expect(container.innerHTML).not.toContain(hidden.id);
     expect(container.innerHTML).not.toMatch(leaks);
@@ -418,7 +428,7 @@ describe("GameBoard", () => {
     const revealed = ["DEALER_REVEAL", "REVEAL_HIDDEN"].reduce((acc, type) => step(acc, { type }), s);
     const after = renderUI(<GameBoard />, { game: revealed });
     expect(screen.getByAltText("king of spades")).toBeTruthy(); // the search above is not vacuous
-    expect(screen.getByText(/Total: 21/)).toBeTruthy();
+    expect(live(after.container.querySelector(".player-hand"))).toMatch(/^Total: 21/);
     expect(after.container.querySelector(".count-value").textContent).toBe("0");
     expect(screen.queryByAltText("Card back")).toBeNull();
   });
