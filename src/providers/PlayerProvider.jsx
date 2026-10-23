@@ -5,6 +5,7 @@ import {
   getMe, loginPlayer, registerPlayer, updateProfile, changePassword as changePasswordApi,
   deleteMe, logoutPlayer, placeBet, settleRound,
 } from "../utils/playerEngine";
+import { newRequestId, sendLedgerCall } from "../utils/ledgerCall";
 
 export function PlayerProvider({ children }) {
   const [player, setPlayer] = useState(null);
@@ -17,17 +18,20 @@ export function PlayerProvider({ children }) {
   const pendingRef = useRef(0);
   // Ledger calls run one at a time, in the order the game made them.
   const queueRef = useRef(Promise.resolve());
+  // Set when a round's opening bet is refused: the rest of that round's bets are then dropped unsent.
+  const roundRefusedRef = useRef(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const signIn = useCallback((p) => {
     playerRef.current = p;
     unsentRef.current = 0;
     pendingRef.current = 0;
+    roundRefusedRef.current = false;
     setPlayer(p);
     return p;
   }, []);
 
   const setCredits = useCallback((credits) => {
-    if (!playerRef.current) return;
     playerRef.current = { ...playerRef.current, credits };
     setPlayer(playerRef.current);
   }, []);
@@ -72,48 +76,67 @@ export function PlayerProvider({ children }) {
     if (delta !== 0) setCreditChange((prev) => ({ delta, seq: (prev?.seq ?? 0) + 1 }));
   }, []);
 
-  // Sends one ledger call after the ones before it, then shows the server's balance plus local changes.
-  const enqueue = useCallback((call, optimistic) => {
+  // Sends one ledger call after the ones before it (the queue stays serial, so a retrying call blocks the rest),
+  // then shows the server's balance plus local changes. It stops quietly if the player signed out or changed
+  // since it was queued, so one player's retry is never charged to another. report(seq, outcome) tells the game.
+  const enqueue = useCallback(({ seq, newRound, optimistic, call }, report) => {
+    const token = getToken();
+    const stop = () => !playerRef.current || getToken() !== token;
     pendingRef.current += optimistic;
-    queueRef.current = queueRef.current
-      .then(call)
-      .then((res) => {
-        pendingRef.current -= optimistic;
-        setCredits(res.credits + unsentRef.current + pendingRef.current);
-      })
-      .catch(async (err) => {
-        pendingRef.current -= optimistic;
-        if (!playerRef.current) return; // signed out (for example a 401)
-        console.error("Ledger call failed; reloading the balance", err);
+    queueRef.current = queueRef.current.then(async () => {
+      const reload = async () => {
         try {
-          setCredits((await getMe()).credits + unsentRef.current + pendingRef.current);
-        } catch (reloadErr) {
-          console.error("Reloading the balance failed", reloadErr);
+          const { credits } = await getMe();
+          if (!stop()) setCredits(credits + unsentRef.current + pendingRef.current);
+        } catch (err) {
+          console.error("Reloading the balance failed", err);
         }
-      });
+      };
+      if (newRound) roundRefusedRef.current = false;
+      const skipped = newRound === false && roundRefusedRef.current;
+      const { outcome, res } = skipped && !stop()
+        ? { outcome: "rejected" }
+        : await sendLedgerCall(call, { shouldStop: stop, onReconnecting: setReconnecting });
+      setReconnecting(false);
+      if (outcome === "dropped" || stop()) return report(seq, "confirmed"); // balances were reset by the sign-out
+      pendingRef.current -= optimistic;
+      if (outcome === "confirmed") {
+        setCredits(res.credits + unsentRef.current + pendingRef.current);
+        return report(seq, "confirmed");
+      }
+      console.error("Ledger call refused; the game drops it", seq);
+      if (newRound) roundRefusedRef.current = true;
+      if (skipped) setCredits(playerRef.current.credits - optimistic);
+      else await reload();
+      report(seq, "rejected");
+    });
   }, [setCredits]);
 
   // Applies one credit event from the game reducer: local chip moves, ledger bets, and the round's settlement. //
-  const applyCreditEvent = useCallback((event) => {
-    if (!playerRef.current) return;
+  const applyCreditEvent = useCallback((event, report) => {
+    if (!playerRef.current) return report(event.seq, "confirmed"); // signed out: nothing to wait for
     if (event.kind === "local") {
       unsentRef.current += event.amount;
       setCredits(playerRef.current.credits + event.amount);
       showChange(event.amount);
     } else if (event.kind === "bet") {
+      const requestId = newRequestId(); // once per event; every retry reuses it
+      const call = () => placeBet(event.amount, event.newRound, requestId);
+      const common = { seq: event.seq, newRound: event.newRound, call };
       if (event.alreadyDeducted) {
         // The chips were taken from the balance locally; they now move to the server.
         unsentRef.current += event.amount;
-        enqueue(() => placeBet(event.amount, event.newRound), 0);
+        enqueue({ ...common, optimistic: 0 }, report);
       } else {
         setCredits(playerRef.current.credits - event.amount);
         showChange(-event.amount);
-        enqueue(() => placeBet(event.amount, event.newRound), -event.amount);
+        enqueue({ ...common, optimistic: -event.amount }, report);
       }
     } else {
       setCredits(playerRef.current.credits + event.amount);
       showChange(event.amount);
-      enqueue(() => settleRound(event.amount), event.amount);
+      const requestId = newRequestId();
+      enqueue({ seq: event.seq, optimistic: event.amount, call: () => settleRound(event.amount, requestId) }, report);
     }
   }, [enqueue, setCredits, showChange]);
 
@@ -125,8 +148,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent }),
-    [player, creditChange, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent]
+    () => ({ player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent }),
+    [player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

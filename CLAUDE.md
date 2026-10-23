@@ -69,6 +69,13 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `hand.hiddenCards`, not `hand.cards`; `total`, `isBusted` and `result` stay as before the double until the auto step
   `REVEAL_HIDDEN` (all hands at once, then `SETTLE`). Code that reads `hand.cards`, `isBusted` or `result` during a round must
   allow for `hiddenCards`, and a hidden card's id, rank or suit must never reach the DOM.
+- Ledger retries (BlackJackAPI#23): every `bet`/`settle` call carries a `requestId` made once per credit event in
+  `applyCreditEvent` and reused on every retry (`utils/ledgerCall.js`). An unknown outcome (network, 10 s timeout, 5xx) is
+  never treated as refused: it retries with the same id and shows "Reconnecting...". Only 400/422/other 4xx or a 409 still
+  clashing after 4 retries is a refusal, and it dispatches `BET_REJECTED`.
+- Bets sit in `pendingBets` until answered and settling waits for them (`nextAutoAction` is null in `SETTLING_HANDS`). Find a
+  hand by its `tag`, never by index, when an answer arrives (indexes move on split). A refused opening bet voids the round;
+  a refused double/triple/split bet lowers that hand's `bet`. Any new bet event needs `handTag`.
 - Saved settings must be flat strings, numbers or booleans: the API rejects arrays and objects (the whole PUT fails).
   `chipValues` is a comma-separated string (`utils/chips.js` parses and formats it in chip order).
 - `.env*` files are tracked but hold only public URLs; never put secrets there.

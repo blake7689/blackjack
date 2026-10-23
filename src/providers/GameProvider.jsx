@@ -33,12 +33,13 @@ export function GameProvider({ children }) {
     return () => { current = false; };
   }, [signedIn]);
 
-  // Apply each credit event from the reducer exactly once. //
+  // Apply each credit event from the reducer exactly once. The server's answer to a bet comes back as an action. //
   const appliedSeq = useRef(0);
   useEffect(() => {
+    const report = (seq, outcome) => dispatch({ type: outcome === "rejected" ? "BET_REJECTED" : "BET_CONFIRMED", seq });
     for (const event of state.creditEvents) {
       if (event.seq <= appliedSeq.current) continue;
-      applyCreditEvent(event);
+      applyCreditEvent(event, report);
       appliedSeq.current = event.seq;
     }
   }, [state.creditEvents, applyCreditEvent]);

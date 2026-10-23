@@ -25,12 +25,21 @@ function Probe({ ctx }) {
   return null;
 }
 
-function setup({ signedIn = false } = {}) {
+// The fake server answers each bet at once with `answer(event)`; with answer = null the test answers by hand
+// through player.reports[seq](outcome).
+function setup({ signedIn = false, answer = () => "confirmed" } = {}) {
   const credits = { value: 100 };
+  const reports = {};
   const player = {
     player: signedIn ? { userName: "alice" } : null,
     getCredits: vi.fn(() => credits.value),
-    applyCreditEvent: vi.fn((event) => { credits.value += event.kind === "bet" && !event.alreadyDeducted ? -event.amount : event.kind === "bet" ? 0 : event.amount; }),
+    reports,
+    applyCreditEvent: vi.fn((event, report) => {
+      credits.value += event.kind === "bet" && !event.alreadyDeducted ? -event.amount : event.kind === "bet" ? 0 : event.amount;
+      if (event.kind !== "bet") return;
+      reports[event.seq] = (outcome) => act(() => report(event.seq, outcome));
+      if (answer) report(event.seq, answer(event));
+    }),
   };
   const ctx = {};
   const utils = render(
@@ -73,7 +82,7 @@ describe("GameProvider", () => {
     tick(); // settle
     tick(); // results
     expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
-    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true }, { kind: "settle", amount: 20 }]);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, { kind: "settle", amount: 20 }]);
     act(() => ctx.actions.continueRound());
     tick();
     expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
@@ -91,7 +100,7 @@ describe("GameProvider", () => {
     for (let i = 0; i < 5; i++) tick();
     expect(ctx.state.phase).toBe(GamePhases.NONE);
     expect(ctx.state.dealer.cards).toEqual([]);
-    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true }]);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }]);
   });
 
   it("stops its timer on unmount", () => {
@@ -119,7 +128,8 @@ describe("GameProvider", () => {
     act(() => ctx.actions.double(0));
     act(() => ctx.actions.hit(1));
     expect(ctx.state.hands[1].cards).toHaveLength(3);
-    expect(events(player)).toContainEqual({ kind: "bet", amount: 10, newRound: false, alreadyDeducted: false });
+    expect(events(player)).toContainEqual({ kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: 2 }); // the split-off hand
+    expect(events(player)).toContainEqual({ kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: 1 }); // the double
   });
 
   it("passes the player's balance to a triple and sends one bet of two stakes", () => {
@@ -131,7 +141,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.deal());
     act(() => ctx.actions.triple(0));
     expect(ctx.state.hands[0]).toMatchObject({ bet: 30 });
-    expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false });
+    expect(events(player)).toContainEqual({ kind: "bet", amount: 20, newRound: false, alreadyDeducted: false, handTag: 1 });
   });
 
   it("runs a face-down double through the timer: one reveal step, then settle, with one bet of one stake", () => {
@@ -153,8 +163,77 @@ describe("GameProvider", () => {
     tick(); // settle
     tick(); // results
     expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
-    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true },
-      { kind: "bet", amount: 10, newRound: false, alreadyDeducted: false }, { kind: "settle", amount: 40 }]);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null },
+      { kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: 1 }, { kind: "settle", amount: 40 }]);
+  });
+
+  it("waits at settling until the server has answered every bet, then carries on", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "6", "K", "2"]));
+    const { ctx, player } = setup({ answer: null });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    act(() => ctx.actions.stand(0));
+    tick(); // reveal
+    tick(); // dealer draws K and busts
+    expect(ctx.state.phase).toBe(GamePhases.SETTLING_HANDS);
+    for (let i = 0; i < 5; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.SETTLING_HANDS); // still waiting for the opening bet's answer
+    expect(ctx.state.pendingBets).toHaveLength(1);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(events(player).some((e) => e.kind === "settle")).toBe(false);
+
+    player.reports[ctx.state.pendingBets[0].seq]("confirmed");
+    expect(ctx.state.pendingBets).toEqual([]);
+    tick(); // settle
+    tick(); // results
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(events(player).at(-1)).toEqual({ kind: "settle", amount: 20 });
+  });
+
+  it("a refused double lowers the bet, shows a notice and settles at the single stake", () => {
+    shoes.push(stackedShoe(["5", "10", "6", "7", "K"]));
+    const { ctx, player } = setup({ answer: (event) => (event.newRound ? "confirmed" : "rejected") });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    act(() => ctx.actions.double(0));
+    expect(ctx.state.hands[0]).toMatchObject({ bet: 10, total: 21, isDouble: true });
+    expect(ctx.state.betCircle).toBe(10);
+    expect(ctx.state.notice).toMatch(/refused \$10/);
+    for (let i = 0; i < 4; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(ctx.state.hands[0]).toMatchObject({ bet: 10, payout: 20 });
+    expect(events(player).at(-1)).toEqual({ kind: "settle", amount: 20 }); // not 40: the server holds a single stake
+  });
+
+  it("a refused opening bet voids the round: back to betting, no timer, no settle", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "7"]));
+    const { ctx, player } = setup({ answer: () => "rejected" });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, hands: [], pendingBets: [] });
+    expect(ctx.state.notice).toMatch(/round was cancelled/);
+    for (let i = 0; i < 4; i++) tick();
+    expect(events(player).some((e) => e.kind === "settle")).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("an answer that arrives after the table was reset is ignored", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "7"]), stackedShoe(["2"]));
+    const { ctx, player } = setup({ answer: null });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    const { seq } = ctx.state.pendingBets[0];
+    act(() => ctx.actions.resetGame());
+    expect(ctx.state.pendingBets).toEqual([]);
+    const after = ctx.state;
+    player.reports[seq]("rejected");
+    player.reports[seq]("confirmed");
+    expect(ctx.state).toBe(after);
+    expect(ctx.state.notice).toBeNull();
   });
 
   it("deals a fresh shoe for table settings and just updates the others", () => {

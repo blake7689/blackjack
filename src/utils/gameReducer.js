@@ -42,6 +42,9 @@ export const initialGameState = {
   runningCount: 0,
   creditEvents: [],
   creditSeq: 0,
+  pendingBets: [], // bets sent to the server and not yet answered: { seq, handTag, amount, newRound }
+  nextHandTag: 1,
+  notice: null, // a message about the round, such as a refused bet
 };
 
 // Changing these settings deals a new shoe and resets the table. //
@@ -72,15 +75,23 @@ const emptyRound = {
   dealerRevealed: false,
   dealerSkipDraw: false,
   selectedHandIndex: 0,
+  notice: null,
 };
 
 // Queues a balance change; GameProvider hands each event to PlayerProvider exactly once. Kinds:
 //   local:  chips moved on the table only ({ amount } is the change to the shown balance)
-//   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted })
+//   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted, handTag }); handTag finds the hand
+//           again when the answer comes (null for the opening bet). Until the server answers it sits in pendingBets.
 //   settle: the round's payout for the server ledger ({ amount }, sent even when 0 to close the round)
 function credit(state, event) {
   const creditSeq = state.creditSeq + 1;
-  return { ...state, creditSeq, creditEvents: [...state.creditEvents, { seq: creditSeq, ...event }].slice(-20) };
+  const pending = event.kind === "bet" ? [{ seq: creditSeq, handTag: event.handTag, amount: event.amount, newRound: event.newRound }] : [];
+  return {
+    ...state,
+    creditSeq,
+    creditEvents: [...state.creditEvents, { seq: creditSeq, ...event }].slice(-20),
+    pendingBets: [...state.pendingBets, ...pending],
+  };
 }
 
 const local = (amount) => ({ kind: "local", amount });
@@ -108,7 +119,7 @@ function countSeen(state, reset = false) {
 
 function resetTable(state, shoe, phase) {
   const refunded = state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 ? credit(state, local(state.betCircle)) : state;
-  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false }, true);
+  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false, pendingBets: [] }, true);
 }
 
 // The player may act on a hand only on their turn, on the selected hand, while it is still in play. //
@@ -144,12 +155,12 @@ function playerAction(state, action) {
     return countSeen(advance(next, replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
-  if (action.credits < hand.bet) return state;
+  if (hand.bet <= 0 || action.credits < hand.bet) return state; // a hand whose stake was refused can't add to it
 
   if (action.type === "DOUBLE") {
     if (hand.cards.length !== 2) return state;
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill, state.settings.doubleFaceDown));
-    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
+    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   if (action.type === "TRIPLE") {
@@ -157,14 +168,18 @@ function playerAction(state, action) {
     if (!state.settings.tripleDown || hand.cards.length !== 2 || action.credits < hand.bet * 2) return state;
     const { result, next, refilled } = draw(state, action.refill,
       (shoe, cut, refill) => engine.playerTripleDown(hand, shoe, cut, refill, state.settings.tripleDrawsOnBust));
-    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet * 2, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
+    return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet * 2, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   // SPLIT
   if (!canSplit(hand, state.hands.length, state.settings.maxSplitHands)) return state;
   const { result, next, refilled } = draw(state, action.refill,
     (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, state.settings.blackJackOnSplit));
-  return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false }), replaceHand(state.hands, handIdx, ...result.newHandsArray), handIdx), refilled);
+  // Both new hands start as copies of the parent; the second one is a new hand and gets its own tag (it takes the new stake).
+  const [first, second] = result.newHandsArray;
+  const splitOff = { ...second, tag: next.nextHandTag };
+  const split = credit({ ...next, nextHandTag: next.nextHandTag + 1 }, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: splitOff.tag });
+  return countSeen(advance(split, replaceHand(state.hands, handIdx, first, splitOff), handIdx), refilled);
 }
 
 export function gameReducer(state, action) {
@@ -204,14 +219,15 @@ export function gameReducer(state, action) {
       const dealt = {
         ...next,
         ...emptyRound,
-        hands: result.hands,
+        hands: result.hands.map((h) => ({ ...h, tag: state.nextHandTag })),
+        nextHandTag: state.nextHandTag + 1,
         dealer: result.dealer,
         dealerHole: result.dealerHoleCards,
         initialBet: state.betCircle,
         phase: result.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN,
       };
       // The chips already left the shown balance; this stakes them on the server and opens the round.
-      return countSeen(credit(dealt, { kind: "bet", amount: state.betCircle, newRound: true, alreadyDeducted: true }), refilled);
+      return countSeen(credit(dealt, { kind: "bet", amount: state.betCircle, newRound: true, alreadyDeducted: true, handTag: null }), refilled);
     }
 
     case "HIT":
@@ -249,6 +265,25 @@ export function gameReducer(state, action) {
       // Every hand at once, so the next step is SETTLE (one step per hand would repeat GameProvider's autoKey).
       return countSeen({ ...state, hands: state.hands.map(engine.revealHiddenCards) });
 
+    case "BET_CONFIRMED":
+      return state.pendingBets.some((b) => b.seq === action.seq)
+        ? { ...state, pendingBets: state.pendingBets.filter((b) => b.seq !== action.seq) }
+        : state;
+
+    case "BET_REJECTED": {
+      const bet = state.pendingBets.find((b) => b.seq === action.seq);
+      if (!bet) return state; // answered already, or the table was reset
+      if (bet.newRound) {
+        // The server never took the stake, so the round never happened: back to betting, nothing to refund.
+        return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, pendingBets: [],
+          notice: "The server refused your bet, so the round was cancelled." };
+      }
+      // Find the hand by its tag: its index may have moved since the bet was made.
+      const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, bet: h.bet - bet.amount } : h));
+      return { ...state, hands, betCircle: hands.reduce((sum, h) => sum + h.bet, 0),
+        pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused $${bet.amount} of your stake; that hand plays for less.` };
+    }
+
     case "SETTLE":
       return { ...state, hands: engine.settleHands(state.hands, state.dealer), phase: GamePhases.RESULTS };
 
@@ -280,7 +315,10 @@ export function nextAutoAction(state) {
   switch (state.phase) {
     case GamePhases.DEALER_TURN: return state.dealerRevealed ? "DEALER_STEP" : "DEALER_REVEAL";
     // Checks the hands, not the setting: the option may be turned off mid-round.
-    case GamePhases.SETTLING_HANDS: return state.hands.some((h) => h.hiddenCards.length > 0) ? "REVEAL_HIDDEN" : "SETTLE";
+    // Waits until the server has answered every bet: a refused bet changes what the hands are worth.
+    case GamePhases.SETTLING_HANDS:
+      if (state.pendingBets.length > 0) return null;
+      return state.hands.some((h) => h.hiddenCards.length > 0) ? "REVEAL_HIDDEN" : "SETTLE";
     case GamePhases.RESULTS: return "FINISH_RESULTS";
     case GamePhases.END_ROUND: return "END_ROUND";
     default: return null;

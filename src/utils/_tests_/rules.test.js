@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { playRound, stackedShoe, outOfCards, Modes, HandResult, HandStatus } from "./stackedShoe";
+import { playRound, stackedShoe, outOfCards, confirmBets, Modes, HandResult, HandStatus } from "./stackedShoe";
 import { gameReducer, nextAutoAction } from "../gameReducer";
 import { GamePhases } from "../constants/gamePhases";
 import { canSplit, settleHand } from "../blackjackLogic";
@@ -501,7 +501,7 @@ describe("U6.8: face-down double (doubleFaceDown, #66)", () => {
   const rules = { doubleFaceDown: true };
   const faceDown = (opts) => playRound({ rules, actions: ["double"], ...opts });
   // The money the server sees: the deal's stake, each extra stake, and the final payout.
-  const ledger = (r) => r.state.creditEvents.filter((e) => e.kind !== "local").map((e) => ({ ...e, seq: undefined }));
+  const ledger = (r) => r.state.creditEvents.filter((e) => e.kind !== "local").map((e) => ({ ...e, seq: undefined, handTag: undefined }));
   const hiddenIds = (r) => r.beforeReveal.hands.flatMap((h) => h.hiddenCards.map((c) => c.id));
   const bet = (amount, newRound, alreadyDeducted) => ({ kind: "bet", amount, newRound, alreadyDeducted, seq: undefined });
   const settle = (amount) => ({ kind: "settle", amount, seq: undefined });
@@ -592,7 +592,7 @@ describe("U6.8: face-down double (doubleFaceDown, #66)", () => {
   it("turning the option off after the double still reveals and settles the hand", () => {
     const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
     let s = step(playRound({ cards: ["6", "10", "5", "7", "K"], rules }).afterDeal, { type: "DOUBLE", handIdx: 0 });
-    s = step(s, { type: "SET_SETTING", key: "doubleFaceDown", value: false });
+    s = confirmBets(step(s, { type: "SET_SETTING", key: "doubleFaceDown", value: false }));
     expect(s.hands[0].hiddenCards).toHaveLength(1);
     while (s.phase !== GamePhases.POST_ROUND) s = step(s, { type: nextAutoAction(s) });
     expect(s.hands[0]).toMatchObject({ total: 21, hiddenCards: [], result: WIN, payout: 40 });
@@ -621,6 +621,7 @@ describe("U6.8: face-down double (doubleFaceDown, #66)", () => {
   it("a double that refills the shoe keeps its card hidden and out of the new count", () => {
     const step = (state, action) => gameReducer(state, { refill: () => stackedShoe(["K", "3", "4"]), credits: 1000, ...action });
     let s = step(playRound({ cards: ["6", "10", "5", "7"], rules }).afterDeal, { type: "DOUBLE", handIdx: 0 });
+    s = confirmBets(s);
     expect(s.hands[0].hiddenCards.map((c) => c.rank)).toEqual(["king"]);
     expect(s.seenIds).toHaveLength(3); // the count restarted with the refill, and the king is not in it
     expect(s.runningCount).toBe(1); // 6 +1, 10 -1, 5 +1
@@ -656,5 +657,100 @@ describe("shoe", () => {
     const twoDecks = stackedShoe(Array(104).fill("7"));
     expect(trueCount(4, twoDecks)).toBe(2);
     expect(trueCount(4, stackedShoe(Array(10).fill("7")))).toBe(4);
+  });
+});
+
+describe("a refused bet (#23)", () => {
+  const rules = { tripleDown: true };
+  // What the server holds open for the round: every bet it took.
+  const serverStake = (r, refused) => r.state.creditEvents.filter((e) => e.kind === "bet")
+    .reduce((sum, e, i) => sum + (refused.includes(i) ? 0 : e.amount), 0);
+  const settledAt = (r) => r.state.creditEvents.find((e) => e.kind === "settle");
+
+  it("a double the server takes pays 2x the doubled stake, which is fine against the open stake", () => {
+    const r = playRound({ cards: ["5", "10", "6", "7", "K"], actions: ["double"] });
+    expect([r.hands[0].bet, r.payout, serverStake(r, [])]).toEqual([20, 40, 20]);
+  });
+
+  it("a refused double keeps its cards, plays for the single stake and a win is paid on it (the PayoutTooHigh case)", () => {
+    const r = playRound({ cards: ["5", "10", "6", "7", "K"], actions: ["double"], refuse: [1] });
+    expect(r.hands[0].cards.map((c) => c.rank)).toEqual(["5", "6", "king"]);
+    expect(r.hands[0]).toMatchObject({ total: 21, result: WIN, bet: 10, payout: 20 });
+    expect(r.state.notice).toMatch(/refused \$10/);
+    expect(serverStake(r, [1])).toBe(10);
+    expect(r.payout).toBe(20);
+    expect(r.payout).toBeLessThanOrEqual(2.5 * serverStake(r, [1])); // un-reduced it would be 40, over the 25 cap
+    expect(settledAt(r).amount).toBe(20); // the settle the server receives
+  });
+
+  it("a refused double loses only the single stake, and a push returns it", () => {
+    const lose = playRound({ cards: ["5", "10", "6", "7", "3"], actions: ["double"], refuse: [1] });
+    expect([lose.results, lose.hands[0].bet, lose.payout]).toEqual([[LOSE], 10, 0]);
+    const push = playRound({ cards: ["6", "10", "5", "K", "9"], actions: ["double"], refuse: [1] }); // 20 against 20
+    expect([push.results, push.hands[0].bet, push.payout]).toEqual([[PUSH], 10, 10]);
+  });
+
+  it("a refused face-down double reduces the stake, then reveals and settles on it", () => {
+    const r = playRound({ cards: ["6", "10", "5", "7", "K"], rules: { doubleFaceDown: true }, actions: ["double"], refuse: [1] });
+    expect(r.beforeReveal.hands[0]).toMatchObject({ bet: 10, total: 11 }); // already reduced before the reveal
+    expect(r.hands[0]).toMatchObject({ total: 21, hiddenCards: [], result: WIN, bet: 10, payout: 20 });
+  });
+
+  it("a refused triple drops the bet by 2x the base and a win is paid on the single stake", () => {
+    const r = playRound({ cards: ["5", "10", "6", "7", "4", "5"], rules, actions: ["triple"], refuse: [1] });
+    expect(r.hands[0]).toMatchObject({ total: 20, result: WIN, bet: 10, payout: 20 });
+    expect(r.state.notice).toMatch(/refused \$20/);
+    expect(r.payout).toBeLessThanOrEqual(2.5 * serverStake(r, [1]));
+  });
+
+  it("a refused split lowers the split-off hand's bet; the parent hand still wins on its own stake", () => {
+    // 8 8 split: the first hand gets K (18, wins against 17), the split-off hand gets 3 (11, stands and loses).
+    const r = playRound({ cards: ["8", "10", "8", "7", "K", "3"], actions: ["split"], refuse: [1] });
+    expect(r.hands.map((h) => [h.tag, h.bet, h.result, h.payout])).toEqual([[1, 10, WIN, 20], [2, 0, LOSE, 0]]);
+    expect(r.payout).toBeLessThanOrEqual(2.5 * serverStake(r, [1]));
+  });
+
+  it("a refused split whose split-off hand wins pays that hand nothing, and the parent hand is untouched", () => {
+    // The split-off hand gets the K (18) and the first hand the 3 (11).
+    const r = playRound({ cards: ["8", "10", "8", "7", "3", "K"], actions: ["split"], refuse: [1] });
+    expect(r.hands.map((h) => [h.tag, h.bet, h.result, h.payout])).toEqual([[1, 10, LOSE, 0], [2, 0, WIN, 0]]);
+    expect(r.payout).toBe(0);
+    const accepted = playRound({ cards: ["8", "10", "8", "7", "3", "K"], actions: ["split"] });
+    expect(accepted.payout).toBe(20); // the same hands pay when the server takes the split stake
+  });
+
+  it("two splits and a resplit, with both of the first two split bets refused: each cut lands on its own hand and the payout stays within 2.5x the open stake", () => {
+    // 8 8 -> split -> [8 8][8 8] -> split the first -> [8 3][8 K][8 8] -> split the third -> [8 3][8 K][8 2][8 K].
+    const cards = ["8", "10", "8", "7", "8", "8", "3", "K", "2", "K"];
+    const actions = ["split", "split", "stand", "stand", "split"];
+    const all = playRound({ cards, actions });
+    expect(all.hands.map((h) => [h.tag, h.total, h.bet, h.payout])).toEqual([[1, 11, 10, 0], [3, 18, 10, 20], [2, 10, 10, 0], [4, 18, 10, 20]]);
+
+    const r = playRound({ cards, actions, refuse: [1, 2] }); // bet 1 = the first split (tag 2), bet 2 = the second (tag 3)
+    expect(r.hands.map((h) => [h.tag, h.total, h.bet, h.payout])).toEqual([[1, 11, 10, 0], [3, 18, 0, 0], [2, 10, 0, 0], [4, 18, 10, 20]]);
+    expect(r.state.betCircle).toBe(20);
+    expect(serverStake(r, [1, 2])).toBe(20); // the opening bet and the third split
+    expect(r.staked).toBe(serverStake(r, [1, 2]));
+    expect(r.payout).toBe(20);
+    expect(r.payout).toBeLessThanOrEqual(2.5 * serverStake(r, [1, 2]));
+  });
+
+  it("refusing the third split lands on the resplit hand, not on the hand now at the same position", () => {
+    const r = playRound({ cards: ["8", "10", "8", "7", "8", "8", "3", "K", "2", "K"], actions: ["split", "split", "stand", "stand", "split"], refuse: [3] });
+    expect(r.hands.map((h) => [h.tag, h.bet, h.payout])).toEqual([[1, 10, 0], [3, 10, 20], [2, 10, 0], [4, 0, 0]]);
+  });
+
+  it("a refused opening bet voids the round: back to betting, nothing on the table, no settle", () => {
+    const r = playRound({ cards: ["5", "10", "6", "7", "K"], actions: ["double"], refuse: [0] });
+    expect(r.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, hands: [], pendingBets: [] });
+    expect(r.state.creditEvents.some((e) => e.kind === "settle")).toBe(false);
+    expect(r.state.creditEvents.filter((e) => e.kind === "local").map((e) => e.amount)).toEqual([-10]); // no refund event either
+    expect(r.state.notice).toMatch(/round was cancelled/);
+  });
+
+  it("a win with every bet accepted still pays in full (no regression for the normal path)", () => {
+    const r = playRound({ cards: ["A", "10", "K", "6", "5"] });
+    expect(r.payout).toBe(25);
+    expect(r.state.notice).toBeNull();
   });
 });

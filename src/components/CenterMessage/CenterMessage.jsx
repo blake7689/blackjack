@@ -10,9 +10,15 @@ const MESSAGES = {
   [GamePhases.POST_ROUND]: "Click anywhere to continue...",
 };
 
-function CenterMessage({ gamePhase }) {
-  return <div>{MESSAGES[gamePhase] ?? ""}</div>;
+function CenterMessage({ gamePhase, waiting, reconnecting, notice }) {
+  return (
+    <div>
+      {waiting ? "Waiting for the server..." : MESSAGES[gamePhase] ?? ""}
+      {reconnecting && <div role="status">Reconnecting...</div>}
+      {notice && <div role="status">{notice}</div>}
+    </div>
+  );
 }
 
-// Re-renders only when the phase changes (#5).
+// Re-renders only when its props change (#5).
 export default memo(CenterMessage);
