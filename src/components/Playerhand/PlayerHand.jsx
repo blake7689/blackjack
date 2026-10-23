@@ -27,6 +27,10 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
         {hand.cards.map((card) => (
           <Card key={card.id} card={card} />
         ))}
+        {/* Face down: the hidden card itself (and its id) never reaches the DOM */}
+        {hand.hiddenCards.map((_, i) => (
+          <Card key={`hidden-${i}`} faceDown />
+        ))}
       </div>
       {canAct && (
         <PlayerOptions

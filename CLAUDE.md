@@ -65,6 +65,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Triple down (#21): settings `tripleDown` and `tripleDrawsOnBust` (both off, not in `RESET_SETTINGS` or the presets). In
   `playerAction` the `TRIPLE` branch must return before the SPLIT code (anything not DOUBLE falls through to it) and needs
   `credits >= bet * 2`; the one ledger `bet` is `hand.bet * 2`.
+- Face-down double (#66): setting `doubleFaceDown` (off, not in `RESET_SETTINGS` or the presets). The double's card goes in
+  `hand.hiddenCards`, not `hand.cards`; `total`, `isBusted` and `result` stay as before the double until the auto step
+  `REVEAL_HIDDEN` (all hands at once, then `SETTLE`). Code that reads `hand.cards`, `isBusted` or `result` during a round must
+  allow for `hiddenCards`, and a hidden card's id, rank or suit must never reach the DOM.
 - Saved settings must be flat strings, numbers or booleans: the API rejects arrays and objects (the whole PUT fails).
   `chipValues` is a comma-separated string (`utils/chips.js` parses and formats it in chip order).
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
