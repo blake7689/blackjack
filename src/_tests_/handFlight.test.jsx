@@ -158,6 +158,16 @@ describe("useSmoothRow", () => {
     expect(glides()[0].el.dataset.fk).toBe(a.id); // the new card does not glide: it flies
   });
 
+  it("does not glide when the row moves between renders but no card joined (a scroll or resize)", () => {
+    lefts[a.id] = 100;
+    const { rerender } = renderUI(ui([a]));
+    settleDeal();
+    rerender(ui([a]));
+    lefts[a.id] = 40;
+    rerender(ui([a]));
+    expect(glides()).toHaveLength(0);
+  });
+
   it("finishes a glide in progress before measuring, and ignores moves of a pixel or less", () => {
     lefts[a.id] = 100;
     const { rerender } = renderUI(ui([a]));

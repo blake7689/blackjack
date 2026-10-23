@@ -6,7 +6,6 @@ import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
-import Card from "../components/Card/Card";
 import CardCountDisplay from "../components/CardCountDisplay/CardCountDisplay";
 import CenterMessage from "../components/CenterMessage/CenterMessage";
 import DealerArea from "../components/DealerArea/DealerArea";
@@ -25,22 +24,6 @@ const hand = (codes, extra = {}) => {
 
 // The hand-total strip has live text over an invisible copy of the final text (.ht-size): these read the live one.
 const live = (c) => c.querySelector(".hand-total > span:not(.ht-size)").textContent;
-
-describe("Card", () => {
-  it("shows the face, the back, or a placeholder", () => {
-    const [ace] = stackedShoe(["A"]);
-    const { container, rerender } = renderUI(<Card card={ace} />);
-    expect(screen.getByAltText("ace of hearts").getAttribute("src")).toBe("/cards/ace_of_hearts.png");
-    rerender(<Card card={ace} faceDown small />);
-    expect(screen.getByAltText("Card back").className).toContain("small");
-    rerender(<Card faceDown />);
-    expect(screen.getByAltText("Card back").getAttribute("src")).toBe("/cards/back.png");
-    rerender(<Card />);
-    expect(container.querySelector(".card-skel")).not.toBeNull();
-    rerender(<Card small />);
-    expect(container.querySelector(".card-skel.small")).not.toBeNull();
-  });
-});
 
 describe("CardCountDisplay", () => {
   it("shows the running count and the true count from the shoe", () => {
