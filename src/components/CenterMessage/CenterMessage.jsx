@@ -3,6 +3,7 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 
 const MESSAGES = {
   [GamePhases.PRE_DEAL]: "Place your bets!",
+  [GamePhases.DEALING]: "Dealing...",
   [GamePhases.PLAYER_TURN]: "Your turn!",
   [GamePhases.DEALER_TURN]: "Dealer's turn...",
   [GamePhases.SETTLING_HANDS]: "Settling bets...",

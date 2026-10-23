@@ -32,7 +32,7 @@ export const Modes = {
 export const confirmBets = (state) =>
   state.pendingBets.reduce((s, { seq }) => gameReducer(s, { type: "BET_CONFIRMED", seq }), state);
 
-// Plays one round through gameReducer, as GameProvider does: start, bet, deal, the player's actions in order
+// Plays one round through gameReducer, as GameProvider does: start, bet, deal, deal done, the player's actions in order
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
 // `beforeReveal` is the state just before a face-down double's card is turned over (null if none).
 // `rules` sets any other game settings, e.g. { dealerDrawsOnPlayerBust: true }.
@@ -47,6 +47,7 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
   for (const [key, value] of Object.entries({ blackjackPaysImmediately: false, ...rules })) s = step(s, { type: "SET_SETTING", key, value });
   s = step(s, { type: "ADD_BET", amount: bet });
   s = step(s, { type: "DEAL" });
+  s = step(s, { type: "DEAL_DONE" }); // the cards sit on the table for one step, then play (or the dealer) begins
   const afterDeal = s;
 
   const queue = [...actions];

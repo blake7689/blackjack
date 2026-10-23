@@ -1,15 +1,19 @@
 import { memo } from "react";
 import Card from "../Card/Card.jsx";
+import { GamePhases } from "../../utils/constants/gamePhases";
 import "./DealerArea.css";
 
-function DealerArea({ dealer, hiddenCount = 0 }) {
+const HIDDEN = { visibility: "hidden" }; // keeps the layout, so nothing shifts when the totals appear
+
+function DealerArea({ dealer, hiddenCount = 0, gamePhase }) {
+  const style = gamePhase === GamePhases.DEALING ? HIDDEN : undefined;
   return (
     <div className="dealer-area">
       <div className="dealer-hand">
         <div className="hand-total">
-          Total: {dealer.dealerDisplayTotal}
-          {dealer.isBusted && <span className={`busted`}> Busted</span>}
-          {dealer.isBlackjack && <span className={`blackjack`}> Blackjack</span>}
+          <span style={style}>Total: {dealer.dealerDisplayTotal}</span>
+          {dealer.isBusted && <span className={`busted`} style={style}> Busted</span>}
+          {dealer.isBlackjack && <span className={`blackjack`} style={style}> Blackjack</span>}
         </div>
         <div className="dealer cards">
           {dealer.cards.map((c) => (
@@ -29,5 +33,5 @@ function DealerArea({ dealer, hiddenCount = 0 }) {
   );
 }
 
-// Re-renders only when the dealer's hand changes (#5).
+// Re-renders only when the dealer's hand changes or the phase does (#5).
 export default memo(DealerArea);

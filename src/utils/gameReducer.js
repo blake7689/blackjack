@@ -224,11 +224,15 @@ export function gameReducer(state, action) {
         dealer: result.dealer,
         dealerHole: result.dealerHoleCards,
         initialBet: state.betCircle,
-        phase: result.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN,
+        phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
       };
       // The chips already left the shown balance; this stakes them on the server and opens the round.
       return countSeen(credit(dealt, { kind: "bet", amount: state.betCircle, newRound: true, alreadyDeducted: true, handTag: null }), refilled);
     }
+
+    case "DEAL_DONE":
+      if (state.phase !== GamePhases.DEALING) return state;
+      return { ...state, phase: state.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN };
 
     case "HIT":
     case "STAND":
@@ -313,6 +317,7 @@ export function gameReducer(state, action) {
 // Which automatic step comes next, if any; GameProvider schedules it after the play timeout. //
 export function nextAutoAction(state) {
   switch (state.phase) {
+    case GamePhases.DEALING: return "DEAL_DONE";
     case GamePhases.DEALER_TURN: return state.dealerRevealed ? "DEALER_STEP" : "DEALER_REVEAL";
     // Checks the hands, not the setting: the option may be turned off mid-round.
     // Waits until the server has answered every bet: a refused bet changes what the hands are worth.
