@@ -72,11 +72,17 @@ describe("Login", () => {
     const login = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
     renderUI(<Login />, { path: "/login", player: { login } });
     fireEvent.click(screen.getByText("Log in"));
+    expect(screen.getByText("Contacting server...")).toBeTruthy();
     act(() => { vi.advanceTimersByTime(5000); });
     expect(screen.getByText(/may be waking up/)).toBeTruthy();
     act(() => { vi.advanceTimersByTime(25000); });
     expect(screen.getByText(/still waking up/)).toBeTruthy();
+    // A cold start can take longer than 30 s (#75): still waiting at 31 s, no error, then it signs in.
+    act(() => { vi.advanceTimersByTime(1000); });
+    expect(screen.getByText(/still waking up/)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
     await act(async () => finish(testPlayer));
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(location()).toBe("/");
   });
 

@@ -1,6 +1,8 @@
 const API_BASE = import.meta.env.VITE_API_URL;
 const TOKEN_KEY = "bj.token";
 const REQUEST_TIMEOUT_MS = 10000;
+// Sign-in, sign-up and the session restore wait out a cold API start (~30 s) instead of failing at 10 s (#75).
+export const COLD_START_TIMEOUT_MS = 90000;
 
 // The bearer token lives in sessionStorage so a page refresh keeps you signed in (ADR-0002).
 // Storage can be unavailable (private mode, blocked site data); then the token simply isn't kept.
@@ -22,7 +24,7 @@ export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler;
 }
 
-async function request(method, url, body) {
+async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS) {
   const token = getToken();
   const res = await fetch(`${API_BASE}${url}`, {
     method,
@@ -31,7 +33,7 @@ async function request(method, url, body) {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS), // a request with no answer fails instead of hanging
+    signal: AbortSignal.timeout(timeout), // a request with no answer fails instead of hanging
   });
   if (!res.ok) {
     if (res.status === 401 && token) {
@@ -56,7 +58,8 @@ function errorMessage(text) {
   }
 }
 
-export const apiGet = (url) => request("GET", url);
-export const apiPost = (url, body) => request("POST", url, body);
+// The default 10 s suits the ledger (an unknown outcome is retried); pass a longer timeout where the API may be waking up.
+export const apiGet = (url, timeout) => request("GET", url, undefined, timeout);
+export const apiPost = (url, body, timeout) => request("POST", url, body, timeout);
 export const apiPut = (url, body) => request("PUT", url, body);
 export const apiDelete = (url) => request("DELETE", url);

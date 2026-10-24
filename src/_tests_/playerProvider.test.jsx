@@ -9,7 +9,7 @@ vi.mock("../utils/playerEngine", () => ({
   getMe: vi.fn(), loginPlayer: vi.fn(), registerPlayer: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn(),
   deleteMe: vi.fn(), logoutPlayer: vi.fn(), placeBet: vi.fn(), settleRound: vi.fn(),
 }));
-vi.mock("../utils/api", () => ({ getToken: vi.fn(), setUnauthorizedHandler: vi.fn() }));
+vi.mock("../utils/api", () => ({ getToken: vi.fn(), setUnauthorizedHandler: vi.fn(), COLD_START_TIMEOUT_MS: 90000 }));
 
 const player = { userName: "tester", email: "t@example.com", firstName: "T", lastName: "E", credits: 1000 };
 
@@ -58,6 +58,18 @@ describe("session", () => {
     const { ctx } = setup();
     await settleQueue();
     expect(ctx.player).toEqual(player);
+  });
+
+  it("waits out a slow restore on a cold API start instead of signing the player out (#75)", async () => {
+    vi.useFakeTimers();
+    api.getToken.mockReturnValue("tok");
+    engine.getMe.mockImplementationOnce(() => new Promise((resolve) => setTimeout(() => resolve(player), 60000)));
+    const { ctx } = setup();
+    await act(async () => { await vi.advanceTimersByTimeAsync(59000); });
+    expect(ctx.player).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+    expect(ctx.player).toEqual(player);
+    expect(engine.getMe).toHaveBeenCalledWith(90000);
   });
 
   it("stays signed out without a token, or when the stored token has expired", async () => {

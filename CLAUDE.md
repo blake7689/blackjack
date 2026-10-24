@@ -72,6 +72,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `hand.hiddenCards`, not `hand.cards`; `total`, `isBusted` and `result` stay as before the double until the auto step
   `REVEAL_HIDDEN` (all hands at once, then `SETTLE`). Code that reads `hand.cards`, `isBusted` or `result` during a round must
   allow for `hiddenCards`, and a hidden card's id, rank or suit must never reach the DOM.
+- Request timeouts (#75): `api.js` aborts a request after 10 s by default, which is right for the ledger (an unknown
+  outcome retries with the same `requestId`). Sign-in, sign-up and the session-restore `getMe` pass `COLD_START_TIMEOUT_MS`
+  (90 s) so a cold Azure API start (~30 s) is waited out; never give them the 10 s default, or Login's "waking up"
+  messages are never reached and a restore silently logs the player out. Any new call made before the API is warm needs it too.
 - Ledger retries (BlackJackAPI#23): every `bet`/`settle` call carries a `requestId` made once per credit event in
   `applyCreditEvent` and reused on every retry (`utils/ledgerCall.js`). An unknown outcome (network, 10 s timeout, 5xx) is
   never treated as refused: it retries with the same id and shows "Reconnecting...". Only 400/422/other 4xx or a 409 still

@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, setToken, clearToken } from "./api";
+import { apiGet, apiPost, apiPut, apiDelete, setToken, clearToken, COLD_START_TIMEOUT_MS } from "./api";
 
 // The API's /api/player/me profile; it never includes a password or a player id. //
 export function normalizePlayer(profile) {
@@ -11,14 +11,15 @@ export function normalizePlayer(profile) {
   };
 }
 
-export async function getMe() {
-  return normalizePlayer(await apiGet("/player/me"));
+// The default 10 s suits a balance reload inside the serial ledger queue; sign-in and the session restore pass a long one.
+export async function getMe(timeout) {
+  return normalizePlayer(await apiGet("/player/me", timeout));
 }
 
 async function signInWith(url, body) {
-  const { accessToken } = await apiPost(url, body);
+  const { accessToken } = await apiPost(url, body, COLD_START_TIMEOUT_MS);
   setToken(accessToken);
-  return getMe();
+  return getMe(COLD_START_TIMEOUT_MS);
 }
 
 export const loginPlayer = ({ usernameOrEmail, password }) => signInWith("/auth/login", { usernameOrEmail, password });
