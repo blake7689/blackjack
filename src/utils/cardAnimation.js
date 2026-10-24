@@ -35,12 +35,21 @@ export function flightFrames(dx, dy, endRotation) {
 
 // Everything that flies or flips reserves its end time here. Cards outside the opening deal queue behind it,
 // the board hides its buttons while it runs, and the game's automatic steps wait for it (stepWait).
-export const queue = { free: 0, listeners: new Set() };
+export const queue = { free: 0, holds: new Set(), listeners: new Set() };
 export function reserve(end) {
   const prev = queue.free;
   const mine = queue.free = Math.max(prev, end);
   queue.listeners.forEach((l) => l());
   return () => { if (queue.free === mine) queue.free = prev; }; // StrictMode's mount/cleanup/mount must not delay the second run
+}
+
+// A card holds the board busy until the browser reports its flight and flip finished: the clock above can run out first
+// when frames come late (a slow device, a throttled tab), and the buttons must not wait on the clock alone.
+export function hold() {
+  const token = {};
+  queue.holds.add(token);
+  queue.listeners.forEach((l) => l());
+  return () => { if (queue.holds.delete(token)) queue.listeners.forEach((l) => l()); };
 }
 
 // A step normally fires after Rate of Play T, but never while a card is still on its way: it waits for the animation, then a beat.
@@ -56,6 +65,7 @@ export const clearLanded = () => { if (landed.ids.size) { landed.ids.clear(); bu
 
 export function resetCardStage() {
   queue.free = 0;
+  queue.holds.clear();
   queue.listeners.clear();
   landed.ids.clear();
   landed.listeners.clear();

@@ -278,3 +278,126 @@ describe("FlyCard: sideways (a double)", () => {
     expect(wrap(container).style.marginInline).toBe("");
   });
 });
+
+// The board stays busy while any card holds: a hold ends only when the browser reports the flight and flip over (#72).
+describe("FlyCard: holds the board until it is over", () => {
+  const holds = () => queue.holds.size;
+
+  it("a flying card holds from mount through the flight and the flip, and lets go at the flip's onfinish", () => {
+    mount({ card: king });
+    expect(holds()).toBe(1);
+    advance(0);
+    expect(holds()).toBe(1);
+    act(() => { flights()[0].onfinish(); }); // landed, flip under way
+    expect(holds()).toBe(1);
+    act(() => { flips()[0].onfinish(); });
+    expect(holds()).toBe(0);
+  });
+
+  it("keeps holding past the reserved time when the frames come late", () => {
+    mount({ card: king });
+    advance(0);
+    act(() => { flights()[0].onfinish(); });
+    advance(timing.flip + timing.gap + 5000); // the clock is long over, the browser has not said the flip is done
+    expect(queue.free).toBeLessThan(performance.now());
+    expect(holds()).toBe(1);
+  });
+
+  it("a face-less card (hole, face-down double) holds until it has landed, with no flip to wait for", () => {
+    mount({ dealOrder: 3 });
+    expect(holds()).toBe(1);
+    advance(3 * timing.stagger);
+    expect(holds()).toBe(1); // in the air
+    act(() => { flights()[0].onfinish(); });
+    expect(holds()).toBe(0);
+    expect(flips()).toHaveLength(0);
+  });
+
+  it("a face-less card also lets go when the landing timer fires without an onfinish", () => {
+    mount({});
+    advance(timing.slide + 149);
+    expect(holds()).toBe(1);
+    advance(1);
+    expect(holds()).toBe(0);
+  });
+
+  it("a face arriving later holds again through the in-place flip", () => {
+    const { again } = mount({});
+    advance(0);
+    finishAnimations();
+    expect(holds()).toBe(0);
+    again({ card: king });
+    expect(holds()).toBe(1);
+    finishAnimations();
+    expect(holds()).toBe(0);
+  });
+
+  it("a face arriving while the card is still in the air holds without a gap, through the landing and the flip", () => {
+    const { again } = mount({});
+    advance(0);
+    again({ card: king });
+    expect(holds()).toBe(1);
+    act(() => { flights()[0].onfinish(); });
+    expect(holds()).toBe(1);
+    act(() => { flips()[0].onfinish(); });
+    expect(holds()).toBe(0);
+  });
+
+  it("a card that never flies holds nothing", () => {
+    mount({ card: king, dealOrder: 1 }, { enabled: false }); // the board's first render
+    mount({ card: king, moved: true }); // a split's moved card
+    mount({}, { enabled: false }); // the hole card already on the table, face down
+    expect(holds()).toBe(0);
+  });
+
+  it("reduced motion holds nothing, even when a face arrives later", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const { again } = mount({});
+    expect(holds()).toBe(0);
+    again({ card: king });
+    expect(holds()).toBe(0);
+  });
+
+  it("a face arriving on a card that never flew holds through its flip", () => {
+    const { again } = mount({}, { enabled: false });
+    again({ card: king });
+    expect(holds()).toBe(1);
+    finishAnimations();
+    expect(holds()).toBe(0);
+  });
+
+  it("unmounting mid-flight releases the hold", () => {
+    const { unmount } = mount({ card: king });
+    advance(0);
+    unmount();
+    expect(holds()).toBe(0);
+  });
+
+  it("unmounting before the copy has left releases the hold", () => {
+    const { unmount } = mount({ card: king, dealOrder: 3 });
+    expect(holds()).toBe(1);
+    unmount();
+    expect(holds()).toBe(0);
+  });
+
+  it("unmounting mid-flip releases the hold", () => {
+    const { unmount } = mount({ card: king });
+    advance(0);
+    act(() => { flights()[0].onfinish(); });
+    expect(holds()).toBe(1);
+    unmount();
+    expect(holds()).toBe(0);
+  });
+
+  it("several cards: the board is held until the last one is over", () => {
+    mount({ card: king, dealOrder: 0 });
+    render(<FlyCard fk="b" card={{ ...king, id: "other" }} dealOrder={1} />, { wrapper: ({ children }) => <Flight>{children}</Flight> });
+    expect(holds()).toBe(2);
+    advance(timing.stagger);
+    act(() => { flights()[0].onfinish(); });
+    act(() => { flips()[0].onfinish(); });
+    expect(holds()).toBe(1);
+    finishAnimations();
+    expect(holds()).toBe(0);
+  });
+});

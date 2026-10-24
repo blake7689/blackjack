@@ -30,7 +30,7 @@ export default function GameBoard() {
     const check = () => {
       clearTimeout(t);
       const left = queue.free - performance.now();
-      if (left > 0) { setBusy(true); t = setTimeout(check, left + 5); } else setBusy(false);
+      if (left > 0) { setBusy(true); t = setTimeout(check, left + 5); } else setBusy(queue.holds.size > 0); // released holds call check again
     };
     queue.listeners.add(check);
     return () => { queue.listeners.delete(check); clearTimeout(t); };
