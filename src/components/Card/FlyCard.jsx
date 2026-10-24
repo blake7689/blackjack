@@ -1,6 +1,6 @@
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
-import { EASING, SIDE_ROOM, flightFrames, markLanded, queue, reducedMotion, reserve } from "../../utils/cardAnimation";
+import { EASING, SIDE_ROOM, flightFrames, hold, markLanded, queue, reducedMotion, reserve } from "../../utils/cardAnimation";
 import "./Card.css";
 
 // A card on the table. A new one flies in from the shoe face down and flips as it lands; a card whose face arrives later
@@ -79,6 +79,10 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     an.onfinish = () => setFlipped(true);
     return () => { undo(); an.cancel(); };
   }, [faceId, flipped, shown, timing]);
+
+  // Not over until the browser says so: the board stays busy through a late frame, past the reserved time.
+  const settled = shown && (!faceId || flipped);
+  useLayoutEffect(() => (settled ? undefined : hold()), [settled]);
 
   // On the table and face up: its value now counts in the hand's total.
   useLayoutEffect(() => { if (faceId && shown && flipped) markLanded(faceId); }, [faceId, shown, flipped]);

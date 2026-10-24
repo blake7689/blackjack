@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  cardTiming, flightFrames, reducedMotion, reserve, queue, stepWait, landed, markLanded, clearLanded, resetCardStage,
+  cardTiming, flightFrames, hold, reducedMotion, reserve, queue, stepWait, landed, markLanded, clearLanded, resetCardStage,
 } from "../cardAnimation";
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
@@ -99,6 +99,42 @@ describe("reserve and stepWait", () => {
   });
 });
 
+describe("hold", () => {
+  it("takes the board's attention until released, and tells listeners on take and on release", () => {
+    const listener = vi.fn();
+    queue.listeners.add(listener);
+    const release = hold();
+    expect(queue.holds.size).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const other = hold(); // each hold is its own: two cards at once
+    expect(queue.holds.size).toBe(2);
+    release();
+    expect(queue.holds.size).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(3);
+    other();
+    expect(queue.holds.size).toBe(0);
+    expect(listener).toHaveBeenCalledTimes(4);
+  });
+
+  it("release is idempotent: a second call changes nothing and tells nobody", () => {
+    const listener = vi.fn();
+    const release = hold();
+    const other = hold();
+    queue.listeners.add(listener);
+    release();
+    release();
+    expect(queue.holds.size).toBe(1); // the other hold is untouched
+    expect(listener).toHaveBeenCalledTimes(1);
+    other();
+  });
+
+  it("does not touch the reserved clock", () => {
+    reserve(900);
+    hold()();
+    expect(queue.free).toBe(900);
+  });
+});
+
 describe("landed cards", () => {
   it("marks each card once, notifies listeners, and clears", () => {
     const listener = vi.fn();
@@ -119,12 +155,13 @@ describe("landed cards", () => {
 });
 
 describe("resetCardStage", () => {
-  it("empties the queue, the landed set and the listeners", () => {
+  it("empties the queue, its holds, the landed set and the listeners", () => {
     reserve(5000);
+    hold();
     queue.listeners.add(() => {});
     markLanded("x");
     landed.listeners.add(() => {});
     resetCardStage();
-    expect([queue.free, queue.listeners.size, landed.ids.size, landed.listeners.size]).toEqual([0, 0, 0, 0]);
+    expect([queue.free, queue.holds.size, queue.listeners.size, landed.ids.size, landed.listeners.size]).toEqual([0, 0, 0, 0, 0]);
   });
 });

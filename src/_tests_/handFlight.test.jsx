@@ -5,7 +5,7 @@ import { animations } from "./setup";
 import DealerArea from "../components/DealerArea/DealerArea";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import GameBoard from "../components/GameBoard/GameBoard";
-import { EASING, cardTiming, landed, queue, reserve } from "../utils/cardAnimation";
+import { EASING, cardTiming, hold, landed, queue, reserve } from "../utils/cardAnimation";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
@@ -234,6 +234,106 @@ describe("GameBoard flights", () => {
     advance(1000);
     expect(container.querySelector(".board").classList.contains("busy")).toBe(false);
     expect(screen.getByText("Your turn!")).toBeTruthy();
+  });
+
+  const busy = (c) => c.querySelector(".board").classList.contains("busy");
+  // In small steps: an effect runs when its act ends, so one big jump would start a flip at the end of the jump.
+  const run = (ms) => { for (let i = 0; i < ms / 50; i++) advance(50); };
+
+  it("stays busy once the reserved time has passed, until the browser says the card is done (#72)", () => {
+    const { container } = renderUI(<GameBoard />, { game: playing });
+    let release;
+    act(() => { release = hold(); });
+    expect(queue.free).toBeLessThanOrEqual(performance.now()); // nothing reserved: the clock alone would say free
+    expect(busy(container)).toBe(true);
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(screen.queryByText("Your turn!")).toBeNull();
+    advance(60_000);
+    expect(busy(container)).toBe(true);
+    act(() => { release(); });
+    expect(busy(container)).toBe(false);
+    expect(screen.getByText("Your turn!")).toBeTruthy();
+  });
+
+  it("stays busy past the clock while a hold is open, and frees up when the last one goes", () => {
+    const { container } = renderUI(<GameBoard />, { game: playing });
+    let first, second;
+    act(() => { reserve(performance.now() + 500); first = hold(); second = hold(); });
+    advance(2000);
+    expect(busy(container)).toBe(true);
+    act(() => { first(); });
+    expect(busy(container)).toBe(true);
+    act(() => { second(); });
+    expect(busy(container)).toBe(false);
+  });
+
+  it("a flying face-down card keeps the board busy after its reserved time, until it lands", () => {
+    const [ten, up] = stackedShoe(["10", "7"]);
+    const { container, gameState, rerender } = renderUI(<GameBoard />, { game: { ...playing, dealer: { cards: [ten], dealerDisplayTotal: 10 } } });
+    advance(5000);
+    expect(busy(container)).toBe(false);
+    // The hole card joins (dealOrder 3): it reserves 4 staggers, but lands only 150 ms after its flight should have ended.
+    Object.assign(gameState, { dealerHole: { cards: [up] } });
+    rerender(<GameBoard />);
+    expect(busy(container)).toBe(true);
+    advance(4 * timing.stagger + 20);
+    expect(queue.free).toBeLessThan(performance.now());
+    expect(busy(container)).toBe(true);
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+    advance(timing.slide + 150 - timing.stagger);
+    expect(busy(container)).toBe(false);
+  });
+
+  it("a card that has flown but not finished flipping keeps the board busy past the clock; its onfinish frees it", () => {
+    const { container, gameState, rerender } = renderUI(<GameBoard />, { game: playing });
+    advance(5000);
+    Object.assign(gameState, { hands: [mkHand([...playing.hands[0].cards, ...stackedShoe(["3"])], { tag: "a" })] });
+    rerender(<GameBoard />);
+    advance(0);
+    expect(busy(container)).toBe(true);
+    run(timing.slide + 150 + timing.flip + timing.gap + 1000); // the landing timer ran, the flip was started, the browser never reported either as finished
+    expect(flips()).toHaveLength(1);
+    expect(queue.free).toBeLessThan(performance.now());
+    expect(busy(container)).toBe(true);
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+    finishAnimations();
+    expect(busy(container)).toBe(false);
+    expect(screen.getByText("Your turn!")).toBeTruthy();
+  });
+
+  describe.each([250, 1000, 5000])("opening deal at Rate of Play %i ms", (T) => {
+    const t = cardTiming(T);
+    const settings = { ...initialGameState.settings, playTimeout: T };
+
+    it("is busy until every card has landed and flipped, however late the frames, then not", () => {
+      const [pA, dUp, pB, hole] = stackedShoe(["9", "10", "7", "A"]);
+      const { container, gameState, rerender } = renderUI(<GameBoard />, {
+        game: { phase: GamePhases.PRE_DEAL, hands: [], dealer: { cards: [] }, dealerHole: { cards: [] }, settings },
+      });
+      advance(100);
+      const spot = { phase: GamePhases.PLAYER_TURN, settings };
+      Object.assign(gameState, {
+        ...spot,
+        hands: [mkHand([{ ...pA, dealOrder: 0 }, { ...pB, dealOrder: 2 }], { tag: "a" })],
+        dealer: { cards: [{ ...dUp, dealOrder: 1 }], dealerDisplayTotal: 10 },
+        dealerHole: { cards: [hole] },
+      });
+      rerender(<GameBoard />);
+      expect(busy(container)).toBe(true);
+      expect(screen.getByText("Dealing...")).toBeTruthy();
+      // Far past the last reservation (the hole card's slot, 3 staggers on), with no onfinish from the browser.
+      run(3 * t.stagger + t.stagger + t.flip + t.gap + t.slide + 1000);
+      expect(queue.free).toBeLessThan(performance.now());
+      expect(flights()).toHaveLength(4);
+      expect(busy(container)).toBe(true); // three faces are still turning
+      expect(screen.getByText("Dealing...")).toBeTruthy();
+      run(60_000);
+      expect(busy(container)).toBe(true);
+      finishAnimations();
+      expect(busy(container)).toBe(false);
+      expect(queue.holds.size).toBe(0);
+      expect(screen.getByText("Your turn!")).toBeTruthy();
+    });
   });
 
   it("busy only changes the message during the player's turn", () => {
