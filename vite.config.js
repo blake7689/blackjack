@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
@@ -15,6 +16,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['src/_tests_/setup.js'],
+    exclude: [...configDefaults.exclude, '.claude/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**'],
