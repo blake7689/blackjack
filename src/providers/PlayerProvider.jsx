@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { PlayerContext } from "../context/PlayerContext";
-import { getToken, setUnauthorizedHandler } from "../utils/api";
+import { getToken, setUnauthorizedHandler, COLD_START_TIMEOUT_MS } from "../utils/api";
 import {
   getMe, loginPlayer, registerPlayer, updateProfile, changePassword as changePasswordApi,
   deleteMe, logoutPlayer, placeBet, settleRound,
@@ -41,7 +41,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    getMe().then((p) => { if (getToken() === token) signIn(p); }).catch(() => {});
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }).catch(() => {});
   }, [signIn]);
 
   // Any signed-in request that gets 401 signs you out here.

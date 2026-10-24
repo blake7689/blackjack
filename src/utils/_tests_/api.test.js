@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiGet, apiPost, apiPut, apiDelete, getToken, setToken, clearToken, setUnauthorizedHandler } from "../api";
+import { apiGet, apiPost, apiPut, apiDelete, getToken, setToken, clearToken, setUnauthorizedHandler, COLD_START_TIMEOUT_MS } from "../api";
 
 const respond = (res) => {
   const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: 1 }), text: async () => "", ...res }));
@@ -51,8 +51,17 @@ describe("timeout", () => {
     const fetch = respond({});
     for (const send of [apiGet, apiDelete, (url) => apiPost(url, {}), (url) => apiPut(url, {})]) await send("/x");
     expect(timeout).toHaveBeenCalledTimes(4);
-    expect(timeout).toHaveBeenCalledWith(10000);
+    expect(timeout.mock.calls).toEqual([[10000], [10000], [10000], [10000]]);
     expect(fetch.mock.calls.map(([, init]) => init.signal)).toEqual([signal, signal, signal, signal]);
+  });
+
+  it("a call can ask for a longer timeout, and the cold-start one is 90 s", async () => {
+    const timeout = vi.spyOn(AbortSignal, "timeout");
+    respond({});
+    await apiGet("/x", COLD_START_TIMEOUT_MS);
+    await apiPost("/x", {}, 5000);
+    expect(COLD_START_TIMEOUT_MS).toBe(90000);
+    expect(timeout.mock.calls).toEqual([[90000], [5000]]);
   });
 
   it("a timed-out or dropped request rejects without a status, which callers treat as unknown", async () => {

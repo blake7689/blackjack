@@ -71,6 +71,32 @@ describe("signing in", () => {
   });
 });
 
+describe("timeouts (#75)", () => {
+  // Every fetch gets one AbortSignal.timeout(ms); the list is the timeout each call asked for, in order.
+  const timeouts = async (run) => {
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    await run();
+    const ms = spy.mock.calls.map(([t]) => t);
+    spy.mockRestore();
+    return ms;
+  };
+
+  it("session restore, login and signup wait 90 s (post and follow-up getMe), for a cold API start", async () => {
+    expect(await timeouts(() => getMe(90000))).toEqual([90000]);
+    expect(await timeouts(() => getMe())).toEqual([10000]); // a balance reload inside the ledger queue
+    expect(await timeouts(() => loginPlayer({ usernameOrEmail: "t", password: "secret1" }))).toEqual([90000, 90000]);
+    expect(await timeouts(() => registerPlayer({ userName: "n", email: "n@example.com", password: "secret1", firstName: "F", lastName: "L" }))).toEqual([90000, 90000]);
+  });
+
+  it("ledger, settings and account calls keep the 10 s default", async () => {
+    expect(await timeouts(() => placeBet(10, true, "id-1"))).toEqual([10000]);
+    expect(await timeouts(() => settleRound(25, "id-2"))).toEqual([10000]);
+    expect(await timeouts(getSettings)).toEqual([10000]);
+    expect(await timeouts(() => saveSettings({ v: 1 }))).toEqual([10000]);
+    expect(await timeouts(() => updateProfile({ userName: "r", email: "r@example.com", firstName: "R", lastName: "" }))).toEqual([10000]);
+  });
+});
+
 describe("account changes", () => {
   it("updateProfile sends the profile without a password or balance", async () => {
     const p = await updateProfile({ userName: "renamed", email: "r@example.com", firstName: "R", lastName: "" });
