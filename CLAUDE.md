@@ -8,7 +8,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Test: `npm test -- --run`
 - Coverage: `npm run coverage` (v8, report in `coverage/`; `src/main.jsx` and tests excluded). CI runs this
   and fails below 100% lines, branches, functions or statements: every change ships its tests.
-- Lint: `npm run lint`
+- Lint: `npm run lint` (`.claude/**`, where app-made worktrees live, is ignored by lint and by the tests)
 - Build: `npm run build` (output `dist/`)
 
 ## Architecture
