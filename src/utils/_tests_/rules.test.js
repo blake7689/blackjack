@@ -540,6 +540,31 @@ describe("U6.8: face-down double (doubleFaceDown, #66)", () => {
     expect(r.cardsLeft).toBe(0);
   });
 
+  // #89: the player busted first, so a dealer bust does not save a hand whose bust only shows at the reveal.
+  it.each([
+    ["US peek", Modes.PEEK, ["10", "10", "2", "6", "K", "K"]],
+    ["US no peek", Modes.NO_PEEK, ["10", "10", "2", "6", "K", "K"]],
+    ["EU", Modes.EU, ["10", "10", "2", "K", "6", "K"]],
+  ])("%s: the dealer busts first, then the hidden bust is revealed and the hand still loses", (_name, mode, cards) => {
+    const r = faceDown({ cards, mode });
+    const before = r.beforeReveal;
+    expect(before.dealer).toMatchObject({ total: 26, isBusted: true });
+    expect([before.hands[0].total, before.hands[0].isBusted, before.hands[0].result]).toEqual([12, false, HandResult.NONE]);
+    expect(r.hands[0]).toMatchObject({ total: 22, isBusted: true, hiddenCards: [], result: LOSE, bet: 20, payout: 0 });
+    expect(ledger(r)).toEqual([bet(10, true, true), bet(10, false, false), settle(0)]);
+  });
+
+  it("a split hand that busts face down loses while the other hand wins against the dealer's bust", () => {
+    const r = faceDown({ cards: ["10", "10", "10", "6", "2", "9", "K", "K"], actions: ["split", "double", "stand"] });
+    expect(r.beforeReveal.dealer.isBusted).toBe(true);
+    expect(r.beforeReveal.hands.map((h) => [h.total, h.isBusted, h.result])).toEqual([[12, false, HandResult.NONE], [19, false, HandResult.NONE]]);
+    expect(r.hands.map((h) => [h.total, h.isBusted, h.bet, h.payout])).toEqual([[22, true, 20, 0], [19, false, 10, 20]]);
+    expect(r.results).toEqual([LOSE, WIN]);
+    expect(r.payout).toBe(20);
+    expect(r.staked).toBe(30);
+    expect(ledger(r)).toEqual([bet(10, true, true), bet(10, false, false), bet(10, false, false), settle(20)]);
+  });
+
   it("a hidden 21 made from an ace keeps both totals and is not a blackjack", () => {
     const r = faceDown({ cards: ["A", "10", "5", "9", "5"] });
     expect(r.beforeReveal.hands[0]).toMatchObject({ totals: [16, 6], isBlackjack: false });
