@@ -3,7 +3,7 @@ import { PlayerContext } from "../context/PlayerContext";
 import { getToken, setUnauthorizedHandler, COLD_START_TIMEOUT_MS } from "../utils/api";
 import {
   getMe, loginPlayer, registerPlayer, updateProfile, changePassword as changePasswordApi,
-  deleteMe, logoutPlayer, placeBet, settleRound,
+  deleteMe, logoutPlayer, placeBet, settleRound, topUp as topUpApi,
 } from "../utils/playerEngine";
 import { newRequestId, sendLedgerCall } from "../utils/ledgerCall";
 
@@ -79,7 +79,7 @@ export function PlayerProvider({ children }) {
   // Sends one ledger call after the ones before it (the queue stays serial, so a retrying call blocks the rest),
   // then shows the server's balance plus local changes. It stops quietly if the player signed out or changed
   // since it was queued, so one player's retry is never charged to another. report(seq, outcome) tells the game.
-  const enqueue = useCallback(({ seq, newRound, optimistic, call }, report) => {
+  const enqueue = useCallback(({ seq, quiet, newRound, optimistic, call }, report) => {
     const token = getToken();
     const stop = () => !playerRef.current || getToken() !== token;
     pendingRef.current += optimistic;
@@ -104,7 +104,7 @@ export function PlayerProvider({ children }) {
         setCredits(res.credits + unsentRef.current + pendingRef.current);
         return report(seq, "confirmed");
       }
-      console.error("Ledger call refused; the game drops it", seq);
+      if (!quiet) console.error("Ledger call refused; the game drops it", seq);
       if (newRound) roundRefusedRef.current = true;
       setCredits(playerRef.current.credits - optimistic); // undo the optimistic change even if the reload below fails
       if (!skipped) await reload();
@@ -140,6 +140,30 @@ export function PlayerProvider({ children }) {
     }
   }, [enqueue, setCredits, showChange]);
 
+  // The hidden top-up (#90). Joins the ledger queue so it is ordered with bets and settles and retries an unknown
+  // outcome with one requestId. Resolves { ok } or { ok: false, locked, retryAfter }; the code is never logged or kept.
+  const topUp = useCallback((code) => new Promise((resolve) => {
+    const requestId = newRequestId();
+    const token = getToken();
+    let applied = false;
+    let locked = null;
+    let before = 0;
+    const call = () => {
+      before = getCredits(); // the displayed balance, to show how far the top-up moved it
+      return topUpApi(code, requestId).then((res) => { applied = true; return res; }, (err) => {
+        if (err.status !== 429) throw err;
+        locked = { retryAfter: err.retryAfter };
+        throw Object.assign(new Error("locked"), { status: 400 }); // a definite refusal: sendLedgerCall must not retry it
+      });
+    };
+    enqueue({ quiet: true, optimistic: 0, call }, (_, outcome) => {
+      // enqueue reports a dropped call (sign-out, other player) as "confirmed" too, so check for that here: no badge then.
+      const ok = outcome === "confirmed" && applied && !!playerRef.current && getToken() === token;
+      if (ok) showChange(getCredits() - before); // enqueue has already set the new balance
+      resolve(ok ? { ok: true } : { ok: false, locked: locked !== null, retryAfter: locked?.retryAfter });
+    });
+  }), [enqueue, getCredits, showChange]);
+
   // The +/- badge next to the balance fades after a moment. //
   useEffect(() => {
     if (!creditChange) return;
@@ -148,8 +172,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent }),
-    [player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent]
+    () => ({ player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

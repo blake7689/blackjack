@@ -49,3 +49,4 @@ export const saveSettings = (settings) => apiPut("/player/me/settings", settings
 // requestId makes a call safe to repeat: the server applies a given id once and replays its answer.
 export const placeBet = (amount, newRound, requestId) => apiPost("/ledger/bet", { amount, newRound, requestId });
 export const settleRound = (payout, requestId) => apiPost("/ledger/settle", { payout, requestId });
+export const topUp = (code, requestId) => apiPost("/ledger/topup", { code, requestId });

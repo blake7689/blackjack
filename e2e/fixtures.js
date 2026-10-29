@@ -5,6 +5,7 @@ const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Expose-Headers': 'Retry-After', // without it a cross-origin page cannot read the lockout time
 };
 const PLAYER = { userName: 'tester', email: 'tester@e2e.test', firstName: 'Test', lastName: 'Er' };
 const hold = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -13,9 +14,12 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 
 // Answers every API call the app makes. The deliberate holds live here, in the handler, not in the tests.
 // Returns what the tests assert on: the ledger calls, requests that failed, endpoints nobody stubbed.
-export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0 } = {}) {
-  let credits = 1000;
-  const stub = { bets: [], settles: [], failed: [], unknown: [] };
+// startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
+// { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
+export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCredits = 1000, topUps = [] } = {}) {
+  let credits = startCredits;
+  const replies = [...topUps];
+  const stub = { bets: [], settles: [], topups: [], failed: [], unknown: [] };
   stubs.set(page, stub);
   page.on('requestfailed', (r) => { if (r.url().startsWith('http://api.e2e.test')) stub.failed.push(`${r.method()} ${r.url()} ${r.failure()?.errorText}`); });
 
@@ -44,6 +48,16 @@ export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0 } = {}) {
         stub.settles.push(body);
         credits += body.payout;
         return json({ credits });
+      }
+      case 'POST /ledger/topup': {
+        const reply = replies.shift();
+        if (!reply) { stub.unknown.push(endpoint); return json({ message: 'e2e stub has no more top-up replies' }, 501); }
+        stub.topups.push(req.postDataJSON());
+        if (reply.status === 200) {
+          credits = reply.credits;
+          return json({ credits });
+        }
+        return route.fulfill({ status: reply.status, headers: { ...CORS, ...reply.headers }, contentType: 'application/json', body: JSON.stringify({ message: reply.message }) });
       }
       default:
         stub.unknown.push(endpoint);

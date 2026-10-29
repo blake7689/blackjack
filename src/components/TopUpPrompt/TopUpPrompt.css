@@ -1,0 +1,16 @@
+.topup-overlay {
+  position: fixed; inset: 0; z-index: 2000; display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.6); padding: 16px;
+}
+.topup-dialog {
+  display: flex; flex-direction: column; gap: 8px; width: min(320px, 100%); box-sizing: border-box;
+  background: #0b1520; color: #fff; border: 1px solid #22313f; border-radius: 8px; padding: 16px;
+  box-shadow: 0 10px 20px rgba(0,0,0,0.35);
+}
+.topup-dialog h2 { margin: 0; font-size: 1.1em; }
+.topup-dialog input { padding: 8px 10px; border-radius: 8px; border: 1px solid #22313f; background: #16232f; color: #fff; font-size: 16px; }
+.topup-dialog [role="alert"] { color: #ff6b6b; }
+.topup-buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.topup-buttons button { background: #1f2a34; color: #fff; padding: 8px 12px; cursor: pointer; }
+.topup-buttons button:hover:not(:disabled) { background: #2e3f4b; }
+.topup-buttons button:disabled { opacity: 0.5; cursor: default; }

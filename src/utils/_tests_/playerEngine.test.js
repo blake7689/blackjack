@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   normalizePlayer, getMe, loginPlayer, registerPlayer, updateProfile, changePassword,
-  deleteMe, logoutPlayer, placeBet, settleRound, getSettings, saveSettings,
+  deleteMe, logoutPlayer, placeBet, settleRound, topUp, getSettings, saveSettings,
 } from "../playerEngine";
 import { getToken, setToken } from "../api";
 
@@ -127,6 +127,13 @@ describe("ledger", () => {
     expect(await settleRound(25, "id-2")).toEqual({ credits: 1015, openStake: 0 });
     expect(call().url).toMatch(/\/ledger\/settle$/);
     expect(call().body).toEqual({ payout: 25, requestId: "id-2" });
+  });
+
+  it("topUp posts the code and requestId to the ledger", async () => {
+    fetchMock.mockResolvedValueOnce(respond({ credits: 10050 }));
+    expect(await topUp("dummy-code-123", "id-3")).toEqual({ credits: 10050 });
+    expect(call()).toMatchObject({ method: "POST", body: { code: "dummy-code-123", requestId: "id-3" } });
+    expect(call().url).toMatch(/\/ledger\/topup$/);
   });
 });
 

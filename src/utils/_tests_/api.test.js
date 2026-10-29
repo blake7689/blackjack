@@ -81,6 +81,21 @@ describe("errors", () => {
     }
   });
 
+  it("a 429 also carries the Retry-After header as retryAfter; other statuses do not (#90)", async () => {
+    const headers = (v) => ({ get: (name) => (name === "Retry-After" ? v : null) });
+    respond({ ok: false, status: 429, headers: headers("600"), text: async () => "{}" });
+    expect(await apiPost("/x", {}).catch((e) => e)).toMatchObject({ status: 429, retryAfter: "600" });
+
+    respond({ ok: false, status: 429, headers: headers(null), text: async () => "{}" });
+    const bare = await apiPost("/x", {}).catch((e) => e);
+    expect([bare.status, bare.retryAfter]).toEqual([429, null]);
+
+    for (const status of [400, 409, 500]) {
+      respond({ ok: false, status, headers: headers("600"), text: async () => "{}" });
+      expect(await apiPost("/x", {}).catch((e) => e)).not.toHaveProperty("retryAfter");
+    }
+  });
+
   it("shows the API's specific errors, then its message, then the raw text, then a default", async () => {
     respond({ ok: false, status: 400, text: async () => JSON.stringify({ message: "Registration failed.", errors: ["Username 'x' is already taken."] }) });
     await expect(apiPost("/x", {})).rejects.toThrow("Username 'x' is already taken.");

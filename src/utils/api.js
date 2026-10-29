@@ -42,7 +42,11 @@ async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS) {
     }
     const txt = await res.text();
     // err.status tells callers a definite refusal (4xx) from a network failure, which has none.
-    throw Object.assign(new Error(errorMessage(txt) || `${method} ${url} failed`), { status: res.status });
+    // retryAfter (429 only): the lockout's whole seconds, as the server sent it.
+    throw Object.assign(new Error(errorMessage(txt) || `${method} ${url} failed`), {
+      status: res.status,
+      ...(res.status === 429 && { retryAfter: res.headers.get("Retry-After") }),
+    });
   }
   return res.status === 204 ? null : res.json().catch(() => null);
 }
