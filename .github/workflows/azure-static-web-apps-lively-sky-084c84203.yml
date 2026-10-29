@@ -56,37 +56,57 @@ jobs:
         env:
           SITE_URL: ${{ steps.builddeploy.outputs.static_web_app_url }}
         run: |
-          # Retries each check for up to 90 s (18 x 5 s), then fails naming the check.
+          # Each check retries every 5 s until its own 90 s deadline, then fails naming the check and the last reason.
           API=https://blackjack-api-blake.azurewebsites.net/api/auth/login
           ORIGIN=https://lively-sky-084c84203.2.azurestaticapps.net
           tmp=$(mktemp -d)
-          retry() { # retry <name> <fn>
-            for i in $(seq 18); do "$2" && return 0; sleep 5; done
-            echo "::error::Post-deploy probe failed: $1 - $msg"; exit 1
+          check() { # check <name> <fn>; fn sets $why and returns 1 on failure, $ok on success
+            local start=$SECONDS end=$((SECONDS+90))
+            until "$2"; do
+              [ $SECONDS -lt $end ] || { echo "::error::Post-deploy probe failed: $1 - $why"; exit 1; }
+              sleep 5
+            done
+            echo "$1 ok: $ok ($((SECONDS-start))s)"
           }
           site() {
-            msg="GET $SITE_URL not 200"
-            [ "$(curl -s -m 10 -o "$tmp/html" -w '%{http_code}' "$SITE_URL/")" = 200 ] || return 1
-            bundle=$(grep -oE 'src="/assets/[^"]+\.js"' "$tmp/html" | head -1 | cut -d'"' -f2)
-            msg="index.html references no /assets/*.js bundle"
-            [ -n "$bundle" ] || return 1
+            why="GET $SITE_URL/ not 200"
+            [ "$(curl -s -m 5 -o "$tmp/html" -w '%{http_code}' "$SITE_URL/")" = 200 ] || return 1
+            # First module script, else any script ending .js; may be absolute-path, relative or a full URL.
+            tags=$(tr '\n' ' ' < "$tmp/html" | grep -oiE '<script[^>]*>')
+            src=$(grep -i 'type="module"' <<< "$tags" | grep -oiE 'src="[^"]+"' | head -1 | cut -d'"' -f2)
+            [ -n "$src" ] || src=$(grep -oiE 'src="[^"]+\.js"' <<< "$tags" | head -1 | cut -d'"' -f2)
+            why="index.html has no <script type=module src> or .js script"
+            [ -n "$src" ] || return 1
+            case $src in
+              http://*|https://*) url=$src ;;
+              //*) url=https:$src ;;
+              /*) url=${SITE_URL%/}$src ;;
+              *) url=${SITE_URL%/}/${src#./} ;;
+            esac
             # A missing file is rewritten to index.html (200), so require a JavaScript content-type.
-            msg="GET $bundle not 200 with a javascript content-type"
-            ct=$(curl -s -m 10 -o /dev/null -w '%{http_code} %{content_type}' "$SITE_URL$bundle")
-            case "$ct" in "200 "*javascript*) ;; *) msg="$msg (got: $ct)"; return 1 ;; esac
-            status=${ct%% *}
+            ct=$(curl -s -m 5 -o /dev/null -w '%{http_code} %{content_type}' "$url")
+            why="GET $url not 200 with a javascript content-type (got: $ct)"
+            case $ct in "200 "*javascript*) ok="$SITE_URL 200, bundle $url" ;; *) return 1 ;; esac
           }
+          hdr() { grep -i "^$1:" "$tmp/h" | head -1 | cut -d: -f2- | tr -d '\r '; }
           cors() {
-            msg="preflight to $API returned no Access-Control-Allow-Origin equal to $ORIGIN"
-            curl -s -m 10 -i -X OPTIONS "$API" -H "Origin: $ORIGIN" \
+            why="no response from preflight to $API"
+            curl -si -m 5 -X OPTIONS "$API" -H "Origin: $ORIGIN" \
               -H 'Access-Control-Request-Method: POST' \
-              -H 'Access-Control-Request-Headers: content-type,authorization' |
-              tr -d '\r' | grep -iqx "access-control-allow-origin: $ORIGIN"
+              -H 'Access-Control-Request-Headers: content-type,authorization' -o "$tmp/h" || return 1
+            code=$(sed -n '1s/^HTTP[^ ]* \([0-9]*\).*/\1/p' "$tmp/h")
+            case $code in 2??) ;; *) why="preflight status '$code', want 2xx"; return 1 ;; esac
+            [ "$(hdr access-control-allow-origin)" = "$ORIGIN" ] ||
+              { why="Access-Control-Allow-Origin is '$(hdr access-control-allow-origin)', want $ORIGIN"; return 1; }
+            h=$(hdr access-control-allow-headers | tr A-Z a-z)
+            case ",$h," in *,authorization,*) ;; *) why="Access-Control-Allow-Headers '$h' lacks authorization"; return 1 ;; esac
+            # ASP.NET Core omits Allow-Methods for CORS-safelisted POST, so only a present header must list POST.
+            m=$(hdr access-control-allow-methods | tr a-z A-Z)
+            case ",$m," in ,,|*,POST,*|*,\*,*) ;; *) why="Access-Control-Allow-Methods '$m' lacks POST"; return 1 ;; esac
+            ok="$API allows $ORIGIN (HTTP $code)"
           }
-          retry SITE site
-          echo "SITE ok: $SITE_URL 200, bundle $bundle $status"
-          retry CORS cors
-          echo "CORS ok: $API allows $ORIGIN"
+          check SITE site
+          check CORS cors
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
