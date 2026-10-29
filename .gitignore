@@ -29,3 +29,9 @@ coverage
 .claude/worktrees/
 CLAUDE.local.md
 .env*
+
+# Playwright
+!.env.e2e
+test-results/
+playwright-report/
+blob-report/

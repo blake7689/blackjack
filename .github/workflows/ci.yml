@@ -23,3 +23,28 @@ jobs:
         env:
           CI: true
       - run: npm run build
+
+  # Playwright smoke tests against a route-stubbed API (playwright.config.js builds and serves the app).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Chromium shell only, no browser cache (Playwright's CI guide).
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npx playwright test
+        env:
+          CI: true
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-results
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

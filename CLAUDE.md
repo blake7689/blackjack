@@ -10,6 +10,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   and fails below 100% lines, branches, functions or statements: every change ships its tests.
 - Lint: `npm run lint` (`.claude/**`, where app-made worktrees live, is ignored by lint and by the tests)
 - Build: `npm run build` (output `dist/`)
+- E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
+  `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. CI has an `e2e` job in `ci.yml` that gates the deploy.
 
 ## Architecture
 - Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 3 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
@@ -99,6 +102,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Anything that flies or flips reserves its time in the `queue` of `utils/cardAnimation.js`; automatic steps wait `stepWait(T)`;
   totals count only landed cards (`useLanded`). A card object is a new copy on every reducer step, so effects depend on `card.id`,
   never on `card` (a changed dependency cancels the flip in progress). jsdom has no `Element.animate`: `setup.js` stubs it.
+
+- E2E tests (#93, ADR-0004): they stub the API with `page.route` (`e2e/fixtures.js`) and seed `Math.random`, so the dealt cards repeat. Never add
+  real waits (`page.waitForTimeout` is a lint error): wait on conditions, and keep deliberate delays in the route handlers. If the page's use of
+  `Math.random` changes (new shoe builds, router keys), the seed in the deal test needs re-picking; its card assertions fail first. A bug that
+  slips past the jsdom tests (timers, layout, animation, network) gets an e2e test. The tests rely on the `.flight-layer`, `.fly-inner`,
+  `.options-wrap` and `.board.busy` hooks: rename one and the test changes with it.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.
