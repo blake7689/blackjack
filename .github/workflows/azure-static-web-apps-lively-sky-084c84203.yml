@@ -51,6 +51,42 @@ jobs:
           output_location: "dist" # Built app content directory - optional
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
+      - name: Post-deploy probe
+        if: github.event_name == 'push'
+        env:
+          SITE_URL: ${{ steps.builddeploy.outputs.static_web_app_url }}
+        run: |
+          # Retries each check for up to 90 s (18 x 5 s), then fails naming the check.
+          API=https://blackjack-api-blake.azurewebsites.net/api/auth/login
+          ORIGIN=https://lively-sky-084c84203.2.azurestaticapps.net
+          tmp=$(mktemp -d)
+          retry() { # retry <name> <fn>
+            for i in $(seq 18); do "$2" && return 0; sleep 5; done
+            echo "::error::Post-deploy probe failed: $1 - $msg"; exit 1
+          }
+          site() {
+            msg="GET $SITE_URL not 200"
+            [ "$(curl -s -m 10 -o "$tmp/html" -w '%{http_code}' "$SITE_URL/")" = 200 ] || return 1
+            bundle=$(grep -oE 'src="/assets/[^"]+\.js"' "$tmp/html" | head -1 | cut -d'"' -f2)
+            msg="index.html references no /assets/*.js bundle"
+            [ -n "$bundle" ] || return 1
+            # A missing file is rewritten to index.html (200), so require a JavaScript content-type.
+            msg="GET $bundle not 200 with a javascript content-type"
+            ct=$(curl -s -m 10 -o /dev/null -w '%{http_code} %{content_type}' "$SITE_URL$bundle")
+            case "$ct" in "200 "*javascript*) ;; *) msg="$msg (got: $ct)"; return 1 ;; esac
+            status=${ct%% *}
+          }
+          cors() {
+            msg="preflight to $API returned no Access-Control-Allow-Origin equal to $ORIGIN"
+            curl -s -m 10 -i -X OPTIONS "$API" -H "Origin: $ORIGIN" \
+              -H 'Access-Control-Request-Method: POST' \
+              -H 'Access-Control-Request-Headers: content-type,authorization' |
+              tr -d '\r' | grep -iqx "access-control-allow-origin: $ORIGIN"
+          }
+          retry SITE site
+          echo "SITE ok: $SITE_URL 200, bundle $bundle $status"
+          retry CORS cors
+          echo "CORS ok: $API allows $ORIGIN"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

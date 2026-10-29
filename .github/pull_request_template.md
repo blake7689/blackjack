@@ -1,5 +1,6 @@
 ## What & why
 <!-- One paragraph. Link the issue: Closes #N -->
+<!-- Any close/fix/resolve word followed by #N anywhere in this body (even in prose) closes that issue on merge. Use `Closes #N` once, only on the PR that finishes the issue, `Part of #N` otherwise, and never write those words next to a #N when naming other PRs. -->
 
 ## Changes
 -
