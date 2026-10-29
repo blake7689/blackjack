@@ -110,6 +110,11 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `Math.random` changes (new shoe builds, router keys), the seed in the deal test needs re-picking; its card assertions fail first. A bug that
   slips past the jsdom tests (timers, layout, animation, network) gets an e2e test. The tests rely on the `.flight-layer`, `.fly-inner`,
   `.options-wrap` and `.board.busy` hooks: rename one and the test changes with it.
+- Hidden top-up (#90): 7 taps in 3 s on the balance open a code prompt. The call goes through `enqueue` with one `requestId` per submit; a 429
+  (lockout, `Retry-After`) is a definite refusal, never retried. Keep `tapEnabled` in GameBoard (signed in, balance under 100, PRE_DEAL, no chips in
+  the circle, nothing pending): the API counts a correct code refused by a guard as a wrong entry toward the per-player lockout (5 wrong, then 10 min).
+  Nothing about the feature may be in the DOM before the 7 taps (no role/tabindex/aria on the balance, prompt not rendered). Every refusal shows one
+  generic message. The real code is never in the repo, bundle, tests, logs or PR (tests use a dummy).
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

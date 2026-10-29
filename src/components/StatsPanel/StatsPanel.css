@@ -1,3 +1,6 @@
+/* Rapid taps (#90) must not select text or trigger double-tap zoom. */
+.stats-panel { user-select: none; touch-action: manipulation; }
+
 .credit-change { margin-left: 8px; }
 
 .credit-change.plus {

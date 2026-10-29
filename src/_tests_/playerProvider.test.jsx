@@ -7,7 +7,7 @@ import * as api from "../utils/api";
 
 vi.mock("../utils/playerEngine", () => ({
   getMe: vi.fn(), loginPlayer: vi.fn(), registerPlayer: vi.fn(), updateProfile: vi.fn(), changePassword: vi.fn(),
-  deleteMe: vi.fn(), logoutPlayer: vi.fn(), placeBet: vi.fn(), settleRound: vi.fn(),
+  deleteMe: vi.fn(), logoutPlayer: vi.fn(), placeBet: vi.fn(), settleRound: vi.fn(), topUp: vi.fn(),
 }));
 vi.mock("../utils/api", () => ({ getToken: vi.fn(), setUnauthorizedHandler: vi.fn(), COLD_START_TIMEOUT_MS: 90000 }));
 
@@ -647,5 +647,244 @@ describe("ledger retries and refusals (#23)", () => {
     expect(ctx.reconnecting).toBe(true);
     await tick(1000);
     expect(ctx.reconnecting).toBe(false);
+  });
+});
+
+describe("hidden top-up (#90)", () => {
+  const CODE = "dummy-code-123"; // an arbitrary stand-in; the real code is never written in this repo
+  const tick = (ms) => act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+  });
+  // Starts a top-up and returns the promise's eventual answer in `out.res`.
+  const submit = (ctx, code = CODE) => {
+    const out = {};
+    act(() => { ctx.topUp(code).then((res) => { out.res = res; }); });
+    return out;
+  };
+  let error, log;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+    log = vi.spyOn(console, "log").mockImplementation(() => {});
+  });
+  afterEach(() => { error.mockRestore(); log.mockRestore(); });
+
+  it("a right code sets the balance from the answer (plus chips still on the table) and getCredits is fresh", async () => {
+    const { ctx } = await signedIn();
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn())); // 10 chips on the circle
+    engine.topUp.mockResolvedValue({ credits: 10050 });
+    const out = submit(ctx);
+    await tick(0);
+    expect(out.res).toEqual({ ok: true });
+    expect(ctx.player.credits).toBe(10040);
+    expect(ctx.getCredits()).toBe(10040);
+    expect(engine.topUp).toHaveBeenCalledOnce();
+    expect(engine.topUp).toHaveBeenCalledWith(CODE, expect.stringMatching(UUID));
+    expect(ctx.reconnecting).toBe(false);
+  });
+
+  it.each([400, 403, 422])("a %i is a refusal: not ok, not locked, the balance is reloaded and nothing is logged", async (status) => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValue(refusal(status, "That didn't work."));
+    engine.getMe.mockResolvedValue({ ...player, credits: 777 });
+    const out = submit(ctx);
+    await tick(0);
+    expect(out.res).toEqual({ ok: false, locked: false, retryAfter: undefined });
+    expect(engine.topUp).toHaveBeenCalledOnce();
+    expect(ctx.player.credits).toBe(777);
+    expect(error).not.toHaveBeenCalled(); // the game's "ledger call refused" log is for bets and settles
+  });
+
+  it("a 429 is a lockout: answered once, never retried, with the Retry-After", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValue(Object.assign(refusal(429), { retryAfter: "600" }));
+    const out = submit(ctx);
+    await tick(60_000);
+    expect(out.res).toEqual({ ok: false, locked: true, retryAfter: "600" });
+    expect(engine.topUp).toHaveBeenCalledOnce();
+    expect(ctx.reconnecting).toBe(false);
+  });
+
+  it("a 429 without a Retry-After is still a lockout", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValue(Object.assign(refusal(429), { retryAfter: null }));
+    const out = submit(ctx);
+    await tick(0);
+    expect(out.res).toEqual({ ok: false, locked: true, retryAfter: null });
+  });
+
+  it.each([
+    ["network error", () => new Error("Failed to fetch")],
+    ["500", () => refusal(500)],
+    ["408", () => refusal(408)],
+  ])("an unknown outcome (%s) retries with the SAME requestId and shows Reconnecting until it answers", async (_, failure) => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValueOnce(failure()).mockRejectedValueOnce(failure()).mockResolvedValue({ credits: 10000 });
+    const out = submit(ctx);
+    await tick(0);
+    expect(ctx.reconnecting).toBe(true);
+    expect(out.res).toBeUndefined();
+    await tick(1000);
+    expect(ctx.reconnecting).toBe(true);
+    await tick(2000);
+    expect(out.res).toEqual({ ok: true });
+    expect(ctx.reconnecting).toBe(false);
+    expect(ctx.player.credits).toBe(10000);
+    const ids = engine.topUp.mock.calls.map((c) => c[1]);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(1);
+    expect(ids[0]).toMatch(UUID);
+  });
+
+  it("a retry that ends in a refusal resolves not ok", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValueOnce(refusal(503)).mockRejectedValue(refusal(400));
+    const out = submit(ctx);
+    await tick(1000);
+    expect(out.res).toEqual({ ok: false, locked: false, retryAfter: undefined });
+  });
+
+  it("each submit makes its own requestId", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValueOnce(refusal(400)).mockResolvedValue({ credits: 10000 });
+    submit(ctx);
+    await tick(0);
+    submit(ctx);
+    await tick(0);
+    const [a, b] = engine.topUp.mock.calls.map((c) => c[1]);
+    expect(a).toMatch(UUID);
+    expect(b).toMatch(UUID);
+    expect(a).not.toBe(b);
+  });
+
+  it("waits its turn in the ledger queue behind a bet that is still retrying", async () => {
+    const { ctx } = await signedIn();
+    engine.placeBet.mockRejectedValueOnce(refusal(500)).mockResolvedValue({ credits: 990 });
+    engine.topUp.mockResolvedValue({ credits: 10000 });
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "bet", amount: 10, newRound: true, alreadyDeducted: false, handTag: 1 }, vi.fn()));
+    const out = submit(ctx);
+    await tick(0);
+    expect(engine.topUp).not.toHaveBeenCalled();
+    await tick(1000);
+    expect(engine.topUp).toHaveBeenCalledOnce();
+    expect(out.res).toEqual({ ok: true });
+  });
+
+  it("does nothing, and says not ok, when the player is signed out", async () => {
+    const { ctx } = setup();
+    const out = submit(ctx);
+    await tick(0);
+    expect(out.res).toEqual({ ok: false, locked: false, retryAfter: undefined });
+    expect(engine.topUp).not.toHaveBeenCalled();
+  });
+
+  it("drops a top-up still queued when the player signs out meanwhile, without calling the server", async () => {
+    const { ctx } = await signedIn();
+    const bet = deferred();
+    engine.placeBet.mockReturnValue(bet.promise);
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "bet", amount: 10, newRound: true, alreadyDeducted: false, handTag: 1 }, vi.fn()));
+    const out = submit(ctx);
+    act(() => ctx.logout());
+    bet.resolve({ credits: 990 });
+    await tick(0);
+    expect(out.res).toEqual({ ok: false, locked: false, retryAfter: undefined });
+    expect(engine.topUp).not.toHaveBeenCalled();
+  });
+
+  it("a refused bet and a refused settle still log the refusal (only the top-up is quiet)", async () => {
+    const { ctx } = await signedIn();
+    engine.placeBet.mockRejectedValue(refusal(400));
+    act(() => ctx.applyCreditEvent({ seq: 3, kind: "bet", amount: 10, newRound: true, alreadyDeducted: false, handTag: 1 }, vi.fn()));
+    await tick(0);
+    expect(error).toHaveBeenCalledWith("Ledger call refused; the game drops it", 3);
+    engine.settleRound.mockRejectedValue(refusal(422));
+    act(() => ctx.applyCreditEvent({ seq: 4, kind: "settle", amount: 20 }, vi.fn()));
+    await tick(0);
+    expect(error).toHaveBeenCalledWith("Ledger call refused; the game drops it", 4);
+    expect(error).toHaveBeenCalledTimes(2);
+  });
+
+  it("a refused (400) and a locked (429) top-up log nothing at all", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValueOnce(refusal(400)).mockRejectedValueOnce(Object.assign(refusal(429), { retryAfter: "60" }));
+    for (let i = 0; i < 2; i++) { submit(ctx); await tick(0); }
+    expect(engine.topUp).toHaveBeenCalledTimes(2);
+    expect(error).not.toHaveBeenCalled();
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  describe("credit-change badge", () => {
+    it("a confirmed top-up shows +delta equal to the rise in the displayed balance", async () => {
+      engine.loginPlayer.mockResolvedValue({ ...player, credits: 40 });
+      const { ctx } = await signedIn();
+      expect(ctx.player.credits).toBe(40);
+      engine.topUp.mockResolvedValue({ credits: 10040 });
+      const out = submit(ctx);
+      await tick(0);
+      expect(out.res).toEqual({ ok: true });
+      expect(ctx.player.credits).toBe(10040);
+      expect(ctx.creditChange.delta).toBe(10000);
+    });
+
+    it("counts only the top-up when chips are on the table (delta = answer - before, not the raw answer)", async () => {
+      const { ctx } = await signedIn(); // 1000
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn())); // displayed 990
+      engine.topUp.mockResolvedValue({ credits: 10990 });
+      submit(ctx);
+      await tick(0);
+      expect(ctx.player.credits).toBe(10980);
+      expect(ctx.creditChange.delta).toBe(ctx.player.credits - 990);
+      expect(ctx.creditChange.delta).toBe(9990);
+    });
+
+    it("shows no badge for a refused, a locked or a signed-out top-up", async () => {
+      const { ctx } = await signedIn();
+      engine.topUp.mockRejectedValueOnce(refusal(400)).mockRejectedValueOnce(Object.assign(refusal(429), { retryAfter: "60" }));
+      submit(ctx); await tick(0);
+      submit(ctx); await tick(0);
+      expect(ctx.creditChange).toBeNull();
+      const bet = deferred();
+      engine.placeBet.mockReturnValue(bet.promise);
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "bet", amount: 10, newRound: true, alreadyDeducted: false, handTag: 1 }, vi.fn()));
+      const betBadge = ctx.creditChange; // the bet's own -10 badge, shown at once
+      const out = submit(ctx); // dropped: signs out while queued
+      act(() => ctx.logout());
+      bet.resolve({ credits: 990 });
+      await tick(0);
+      expect(out.res.ok).toBe(false);
+      expect(ctx.creditChange).toBe(betBadge); // no top-up badge followed it
+    });
+
+    it("a top-up that changes nothing shows no badge", async () => {
+      const { ctx } = await signedIn();
+      engine.topUp.mockResolvedValue({ credits: 1000 });
+      const out = submit(ctx);
+      await tick(0);
+      expect(out.res).toEqual({ ok: true });
+      expect(ctx.creditChange).toBeNull();
+    });
+
+    it("a retry after an unknown outcome gives one badge, measured from the balance just before the send that worked", async () => {
+      const { ctx } = await signedIn(); // 1000
+      engine.topUp.mockRejectedValueOnce(new Error("Failed to fetch")).mockResolvedValue({ credits: 10000 });
+      const out = submit(ctx);
+      await tick(0);
+      expect(ctx.reconnecting).toBe(true);
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn())); // displayed 990 while waiting
+      await tick(1000);
+      expect(out.res).toEqual({ ok: true });
+      expect(ctx.player.credits).toBe(9990);
+      expect(ctx.creditChange).toEqual({ delta: 9000, seq: 2 }); // seq 2: the local -10 badge came first
+    });
+  });
+
+  it("never logs the typed code, whatever the outcome", async () => {
+    const { ctx } = await signedIn();
+    engine.topUp.mockRejectedValueOnce(refusal(400)).mockRejectedValueOnce(Object.assign(refusal(429), { retryAfter: "60" })).mockResolvedValue({ credits: 1 });
+    for (let i = 0; i < 3; i++) { submit(ctx); await tick(0); }
+    expect(engine.topUp).toHaveBeenCalledTimes(3);
+    [error, log].forEach((spy) => expect(JSON.stringify(spy.mock.calls)).not.toContain(CODE));
   });
 });

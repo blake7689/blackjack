@@ -13,8 +13,11 @@ import BettingFooter from "../BettingFooter/BettingFooter";
 import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
+// Mirrors the API's "balance under 100" top-up guard; the API is the authority.
+const TOP_UP_BELOW = 100;
+
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, runningCount, settings, pendingBets, notice } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, runningCount, settings, pendingBets, notice } = useGameState();
   const { continueRound } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
@@ -48,13 +51,16 @@ export default function GameBoard() {
     if (phase === GamePhases.POST_ROUND) continueRound();
   };
 
+  // The hidden top-up taps (#90) count only when idle, signed in, low, with no chips in the circle and nothing awaiting the server.
+  const tapEnabled = !!player && player.credits < TOP_UP_BELOW && phase === GamePhases.PRE_DEAL && betCircle === 0 && pendingBets.length === 0;
+
   return (
     <FlightContext.Provider value={flight}>
     <div className={`board${busy ? " busy" : ""}`} onClick={handleBoardClick}>
       {/* TOP BAR */}
       <div className="top-bar">
         <div className="top-left stats">
-          <StatsPanel player={player} />
+          <StatsPanel player={player} tapEnabled={tapEnabled} />
         </div>
         <div className="top-center card-count">
           {settings.showCardCount && <CardCountDisplay shoe={shoe} runningCount={runningCount} dealing={phase === GamePhases.DEALING} />}
