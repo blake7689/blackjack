@@ -91,6 +91,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - `.env*` files are tracked but hold only public URLs; never put secrets there.
 - `.github/workflows/azure-static-web-apps-*.yml` is committed with CRLF; with `core.autocrlf=true` an edit rewrites
   every line. Keep CRLF and commit it with `git -c core.autocrlf=false`.
+- PR bodies: any `close`/`fix`/`resolve` word followed by `#N` anywhere in the body, even in prose, closes that issue on merge (#93 closed early this way).
+  Write `Closes #N` once, only on the PR that finishes the issue, `Part of #N` otherwise, and never put those words next to a `#N` when naming other PRs.
 - `ci.yml` is also the SWA deploy's test gate (`uses:` via `workflow_call`, deploy `needs: test`); keep that trigger.
 - Game actions such as `changeSetting` return a promise: in tests write `act(() => { action(); })` (braces), or
   `act` turns async and the assertions run before the update.
