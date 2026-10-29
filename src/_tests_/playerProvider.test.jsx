@@ -940,3 +940,98 @@ describe("hidden top-up (#90)", () => {
     [error, log].forEach((spy) => expect(JSON.stringify(spy.mock.calls)).not.toContain(CODE));
   });
 });
+
+describe("a throw inside a queued ledger step (#100)", () => {
+  const betEvent = (seq) => ({ seq, kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: 1 });
+  let error;
+  beforeEach(() => {
+    // A queue that is still stuck leaves unused once-answers behind; clear them so one failure does not leak into the next test.
+    [engine.placeBet, engine.settleRound, engine.topUp].forEach((m) => m.mockReset());
+    engine.getMe.mockReset().mockResolvedValue(player);
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => error.mockRestore());
+
+  it("a bet answered 200 with no body is reported confirmed once, the balance is re-read, and the next bet still runs", async () => {
+    const { ctx } = await signedIn();
+    const first = vi.fn();
+    const second = vi.fn();
+    engine.placeBet.mockResolvedValueOnce(null).mockResolvedValueOnce({ credits: 1080 }); // api.js turns an empty body into null
+    engine.getMe.mockResolvedValueOnce({ ...player, credits: 1100 });
+
+    act(() => ctx.applyCreditEvent(betEvent(1), first));
+    act(() => ctx.applyCreditEvent(betEvent(2), second));
+    await settleQueue();
+
+    expect(first.mock.calls).toEqual([[1, "confirmed"]]);
+    expect(engine.getMe).toHaveBeenCalledOnce(); // the re-read after the throw (login does not call getMe)
+    expect(engine.placeBet).toHaveBeenCalledTimes(2); // the queue kept running
+    expect(second.mock.calls).toEqual([[2, "confirmed"]]);
+    expect(ctx.player.credits).toBe(1080); // second answer + nothing unsent or pending: the first stake's pending was released
+  });
+
+  it("a settle answered with no body is reported confirmed once, the balance is re-read, and the next settle still runs", async () => {
+    const { ctx } = await signedIn();
+    const first = vi.fn();
+    const second = vi.fn();
+    engine.settleRound.mockResolvedValueOnce(null).mockResolvedValueOnce({ credits: 1030 });
+    engine.getMe.mockResolvedValueOnce({ ...player, credits: 1020 });
+
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "settle", amount: 20 }, first));
+    act(() => ctx.applyCreditEvent({ seq: 2, kind: "settle", amount: 10 }, second));
+    await settleQueue();
+
+    expect(first.mock.calls).toEqual([[1, "confirmed"]]);
+    expect(engine.getMe).toHaveBeenCalledOnce();
+    expect(second.mock.calls).toEqual([[2, "confirmed"]]);
+    expect(ctx.player.credits).toBe(1030);
+  });
+
+  it("reports the failed call to the game even when the balance re-read fails too", async () => {
+    const { ctx } = await signedIn();
+    const first = vi.fn();
+    const second = vi.fn();
+    engine.placeBet.mockResolvedValueOnce(null).mockResolvedValueOnce({ credits: 990 });
+    engine.getMe.mockRejectedValueOnce(new Error("offline"));
+
+    act(() => ctx.applyCreditEvent(betEvent(1), first));
+    act(() => ctx.applyCreditEvent(betEvent(2), second));
+    await settleQueue();
+
+    expect(first.mock.calls).toEqual([[1, "confirmed"]]);
+    expect(second.mock.calls).toEqual([[2, "confirmed"]]);
+  });
+
+  it("a top-up answered with no body still resolves, and a bet queued behind it still runs", async () => {
+    const { ctx } = await signedIn();
+    const out = {};
+    const report = vi.fn();
+    engine.topUp.mockResolvedValueOnce(null);
+    engine.placeBet.mockResolvedValueOnce({ credits: 990 });
+
+    act(() => { ctx.topUp("dummy-code-123").then((res) => { out.res = res; }); });
+    act(() => ctx.applyCreditEvent(betEvent(1), report));
+    await settleQueue();
+
+    expect(out.res).toEqual({ ok: true }); // it did not hang, and the server applied it
+    expect(engine.placeBet).toHaveBeenCalledOnce();
+    expect(report.mock.calls).toEqual([[1, "confirmed"]]);
+    expect(ctx.player.credits).toBe(990);
+  });
+
+  it("a throw on the refused path (the refusal log throws) reports rejected once, and the next bet still runs", async () => {
+    const { ctx } = await signedIn();
+    const first = vi.fn();
+    const second = vi.fn();
+    engine.placeBet.mockRejectedValueOnce(refusal(400, "refused")).mockResolvedValueOnce({ credits: 990 });
+    error.mockImplementationOnce(() => { throw new Error("console.error blew up"); });
+
+    act(() => ctx.applyCreditEvent(betEvent(1), first));
+    act(() => ctx.applyCreditEvent(betEvent(2), second));
+    await settleQueue();
+
+    expect(first.mock.calls).toEqual([[1, "rejected"]]);
+    expect(engine.placeBet).toHaveBeenCalledTimes(2);
+    expect(second.mock.calls).toEqual([[2, "confirmed"]]);
+  });
+});

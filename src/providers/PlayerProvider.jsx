@@ -92,23 +92,44 @@ export function PlayerProvider({ children }) {
           console.error("Reloading the balance failed", err);
         }
       };
-      if (newRound) roundRefusedRef.current = false;
-      const skipped = newRound === false && roundRefusedRef.current;
-      const { outcome, res } = skipped && !stop()
-        ? { outcome: "rejected" }
-        : await sendLedgerCall(call, { shouldStop: stop, onReconnecting: setReconnecting });
-      setReconnecting(false);
-      if (outcome === "dropped" || stop()) return report(seq, "confirmed"); // balances were reset by the sign-out
-      pendingRef.current -= optimistic;
-      if (outcome === "confirmed") {
-        setCredits(res.credits + unsentRef.current + pendingRef.current);
-        return report(seq, "confirmed");
+      // What the catch below must still do if a step throws: release the pending amount, undo the optimistic change.
+      let held = optimistic;
+      let undo = optimistic;
+      let outcome;
+      try {
+        if (newRound) roundRefusedRef.current = false;
+        const skipped = newRound === false && roundRefusedRef.current;
+        let res;
+        ({ outcome, res } = skipped && !stop()
+          ? { outcome: "rejected" }
+          : await sendLedgerCall(call, { shouldStop: stop, onReconnecting: setReconnecting }));
+        setReconnecting(false);
+        if (outcome === "dropped" || stop()) return report(seq, "confirmed"); // balances were reset by the sign-out
+        pendingRef.current -= held;
+        held = 0;
+        if (outcome === "confirmed") {
+          setCredits(res.credits + unsentRef.current + pendingRef.current);
+          return report(seq, "confirmed");
+        }
+        if (!quiet) console.error("Ledger call refused; the game drops it", seq);
+        if (newRound) roundRefusedRef.current = true;
+        setCredits(playerRef.current.credits - undo); // undo the optimistic change even if the reload below fails
+        undo = 0;
+        if (!skipped) await reload();
+        report(seq, "rejected");
+      } catch (err) {
+        // sendLedgerCall handles its own errors, so this ran after the server answered. The chain must never reject:
+        // that would skip every later bet, settle and top-up. A confirmed call was applied, so report it as such.
+        console.error("Ledger step failed", seq, err);
+        setReconnecting(false);
+        pendingRef.current -= held;
+        if (outcome === "confirmed") {
+          await reload();
+          return report(seq, "confirmed");
+        }
+        setCredits(playerRef.current.credits - undo);
+        report(seq, "rejected");
       }
-      if (!quiet) console.error("Ledger call refused; the game drops it", seq);
-      if (newRound) roundRefusedRef.current = true;
-      setCredits(playerRef.current.credits - optimistic); // undo the optimistic change even if the reload below fails
-      if (!skipped) await reload();
-      report(seq, "rejected");
     });
   }, [setCredits]);
 
