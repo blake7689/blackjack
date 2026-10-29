@@ -144,6 +144,7 @@ export function PlayerProvider({ children }) {
   // outcome with one requestId. Resolves { ok } or { ok: false, locked, retryAfter }; the code is never logged or kept.
   const topUp = useCallback((code) => new Promise((resolve) => {
     const requestId = newRequestId();
+    const token = getToken();
     let applied = false;
     let locked = null;
     let before = 0;
@@ -156,7 +157,8 @@ export function PlayerProvider({ children }) {
       });
     };
     enqueue({ quiet: true, optimistic: 0, call }, (_, outcome) => {
-      const ok = outcome === "confirmed" && applied;
+      // enqueue reports a dropped call (sign-out, other player) as "confirmed" too, so check for that here: no badge then.
+      const ok = outcome === "confirmed" && applied && !!playerRef.current && getToken() === token;
       if (ok) showChange(getCredits() - before); // enqueue has already set the new balance
       resolve(ok ? { ok: true } : { ok: false, locked: locked !== null, retryAfter: locked?.retryAfter });
     });

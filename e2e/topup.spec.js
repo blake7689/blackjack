@@ -98,3 +98,27 @@ test('seven taps open nothing at $100 or more (#90)', async ({ page }) => {
   await expect(shown(page)).toHaveText('Credits: $100');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+test('the backdrop covers the whole viewport, header and betting footer included (#90)', async ({ page }) => {
+  await stubApi(page, { startCredits: 40 });
+  await openTable(page);
+  await tapBalance(page);
+  await expect(page.getByRole('dialog', { name: 'Enter code' })).toBeVisible();
+
+  // Header and footer controls sit under the overlay, so a real click there could not reach them.
+  const settings = await page.getByRole('button', { name: 'Settings', exact: true }).boundingBox();
+  const chip = await page.getByRole('button', { name: 'Add 10', exact: true }).boundingBox();
+  const { width, height } = page.viewportSize();
+  const points = [
+    [2, 2], [width / 2, 2], [width - 3, 2], // header: corners and top edge
+    [settings.x + settings.width / 2, settings.y + settings.height / 2], // the Settings button
+    [chip.x + chip.width / 2, chip.y + chip.height / 2], // a betting chip
+    [2, height - 3], [width / 2, height - 3], [width - 3, height - 3], // bottom edge
+  ];
+  const outside = await page.evaluate(
+    (pts) => pts.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('.topup-overlay')),
+    points,
+  );
+  expect(outside).toEqual([]);
+  expect(await page.evaluate(() => document.querySelector('.topup-overlay').parentElement === document.body)).toBe(true);
+});

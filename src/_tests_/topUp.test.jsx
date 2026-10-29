@@ -83,6 +83,20 @@ describe("StatsPanel hidden taps", () => {
     expect(dialog()).not.toBeNull();
   });
 
+  it("renders the overlay as a direct child of document.body, outside the panel; clicks inside it are not taps and 7 do not reopen it", () => {
+    const { container } = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    tap(7);
+    const overlay = document.querySelector(".topup-overlay");
+    expect(overlay.parentElement).toBe(document.body);
+    expect(container.contains(overlay)).toBe(false);
+    expect(screen.getByRole("dialog").closest(".topup-overlay")).toBe(overlay);
+    for (let i = 0; i < 7; i++) fireEvent.click(screen.getByLabelText("Code")); // would be a 2nd prompt if they counted
+    fireEvent.click(screen.getByText("Cancel"));
+    expect(document.querySelectorAll(".topup-overlay")).toHaveLength(0);
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText("Credits:"));
+    expect(dialog()).toBeNull(); // only 6 real taps since the reopen: the inside clicks did not add up
+  });
+
   it("adds nothing to the DOM before the taps: same markup, no role, tabindex or aria on the balance", () => {
     const on = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
     const markupOn = on.container.innerHTML;
@@ -159,7 +173,8 @@ describe("TopUpPrompt", () => {
     expect(d.getAttribute("aria-modal")).toBe("true");
     expect(within(d).getByRole("heading", { name: "Enter code" })).toBeTruthy();
     expect(input().type).toBe("password");
-    expect(input().getAttribute("autocomplete")).toBe("off");
+    expect(input().getAttribute("autocomplete")).toBe("new-password"); // "off" is ignored by browsers: they would offer to save the code
+    for (const a of ["data-lpignore", "data-1p-ignore", "data-bwignore"]) expect(input().getAttribute(a), a).toBe("true");
     expect(input().maxLength).toBe(200);
     expect(within(d).getByRole("button", { name: "Submit" })).toBeTruthy();
     expect(within(d).getByRole("button", { name: "Cancel" })).toBeTruthy();
@@ -220,16 +235,65 @@ describe("TopUpPrompt", () => {
       expect(document.activeElement).toBe(input());
     });
 
-    it("skips the disabled Submit while a request is out", async () => {
+    it("while a request is out Submit and Cancel are disabled and skipped: Tab and shift-Tab keep focus on the input", async () => {
       topUp.mockReturnValue(new Promise(() => {}));
       show();
       await send();
       expect(screen.getByRole("button", { name: "Submit" }).disabled).toBe(true);
-      screen.getByRole("button", { name: "Cancel" }).focus();
+      expect(screen.getByRole("button", { name: "Cancel" }).disabled).toBe(true);
+      expect(document.activeElement).toBe(input());
       expect(tab()).toBe(false);
       expect(document.activeElement).toBe(input());
       expect(tab(true)).toBe(false);
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+      expect(document.activeElement).toBe(input());
+    });
+  });
+
+  describe("while a submit is busy", () => {
+    const busy = async () => {
+      show();
+      await send();
+    };
+    beforeEach(() => { topUp.mockReturnValue(new Promise(() => {})); });
+
+    it("Cancel is disabled and a click does nothing", async () => {
+      await busy();
+      const cancel = screen.getByRole("button", { name: "Cancel" });
+      expect(cancel.disabled).toBe(true);
+      fireEvent.click(cancel);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("Escape is ignored: the prompt stays open and onClose is not called", async () => {
+      await busy();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(onClose).not.toHaveBeenCalled();
+      expect(dialog()).not.toBeNull();
+    });
+
+    it("after a refusal Cancel is enabled and Escape closes again", async () => {
+      const pending = deferred();
+      topUp.mockReturnValue(pending.promise);
+      await busy();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => { pending.resolve({ ok: false, locked: false }); });
+      expect(screen.getByRole("button", { name: "Cancel" }).disabled).toBe(false);
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(onClose).toHaveBeenCalledTimes(1);
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+      expect(onClose).toHaveBeenCalledTimes(2);
+    });
+
+    it("signing out still closes the prompt", async () => {
+      const ui = (player) => (
+        <PlayerContext.Provider value={fakePlayer({ player, topUp })}><TopUpPrompt onClose={onClose} /></PlayerContext.Provider>
+      );
+      const view = render(ui(testPlayer));
+      await send();
+      expect(onClose).not.toHaveBeenCalled();
+      view.rerender(ui(null));
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
 

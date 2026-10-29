@@ -793,6 +793,58 @@ describe("hidden top-up (#90)", () => {
     expect(engine.topUp).not.toHaveBeenCalled();
   });
 
+  describe("a top-up answered after the player changed", () => {
+    const notOk = { ok: false, locked: false, retryAfter: undefined };
+
+    it("sign-out while in flight, then a 200: not ok, no badge, nothing applied", async () => {
+      const { ctx } = await signedIn();
+      const call = deferred();
+      api.getToken.mockReturnValue("token-a");
+      engine.topUp.mockReturnValue(call.promise);
+      const out = submit(ctx);
+      await tick(0); // the call is on its way
+      expect(engine.topUp).toHaveBeenCalledOnce();
+      act(() => ctx.logout());
+      await act(async () => { call.resolve({ credits: 10000 }); });
+      await tick(0);
+      expect(out.res).toEqual(notOk);
+      expect(ctx.player).toBeNull();
+      expect(ctx.creditChange).toBeNull();
+    });
+
+    it("another player signing in while in flight (token changed), then a 200: not ok, no badge, their balance untouched", async () => {
+      const { ctx } = await signedIn();
+      const call = deferred();
+      api.getToken.mockReturnValue("token-a");
+      engine.topUp.mockReturnValue(call.promise);
+      const out = submit(ctx);
+      await tick(0);
+      act(() => ctx.logout());
+      api.getToken.mockReturnValue("token-b");
+      engine.loginPlayer.mockResolvedValue({ ...player, userName: "other", credits: 500 });
+      await act(async () => { await ctx.login({}); });
+      await act(async () => { call.resolve({ credits: 10000 }); });
+      await tick(0);
+      expect(out.res).toEqual(notOk);
+      expect(ctx.player.credits).toBe(500);
+      expect(ctx.creditChange).toBeNull();
+    });
+
+    it("the same player and token: ok, with the badge", async () => {
+      const { ctx } = await signedIn(); // 1000
+      const call = deferred();
+      api.getToken.mockReturnValue("token-a");
+      engine.topUp.mockReturnValue(call.promise);
+      const out = submit(ctx);
+      await tick(0);
+      await act(async () => { call.resolve({ credits: 10000 }); });
+      await tick(0);
+      expect(out.res).toEqual({ ok: true });
+      expect(ctx.player.credits).toBe(10000);
+      expect(ctx.creditChange.delta).toBe(9000);
+    });
+  });
+
   it("a refused bet and a refused settle still log the refusal (only the top-up is quiet)", async () => {
     const { ctx } = await signedIn();
     engine.placeBet.mockRejectedValue(refusal(400));

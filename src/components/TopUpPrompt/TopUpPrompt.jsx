@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { usePlayer } from "../../hooks/usePlayer";
 import "./TopUpPrompt.css";
 
@@ -20,6 +21,7 @@ export default function TopUpPrompt({ onClose }) {
   const dialogRef = useRef(null);
   const inputRef = useRef(null);
   const alive = useRef(true);
+  const busyRef = useRef(false); // read by the key handler, which must not re-subscribe (and refocus) when busy changes
   const titleId = useId();
   const inputId = useId();
 
@@ -29,7 +31,7 @@ export default function TopUpPrompt({ onClose }) {
     const previous = document.activeElement;
     inputRef.current.focus();
     const onKeyDown = (e) => {
-      if (e.key === "Escape") return onClose();
+      if (e.key === "Escape") return busyRef.current ? undefined : onClose(); // not mid-flight: it would reopen a second top-up
       if (e.key !== "Tab") return;
       const items = dialogRef.current.querySelectorAll("input, button:not(:disabled)");
       const first = items[0];
@@ -58,15 +60,18 @@ export default function TopUpPrompt({ onClose }) {
     setCode("");
     setError("");
     setBusy(true);
+    busyRef.current = true;
     const res = await topUp(sent);
     if (!alive.current) return; // closed while waiting
     if (res.ok) return onClose();
+    busyRef.current = false;
     setBusy(false);
     setError(res.locked ? lockedMessage(res.retryAfter) : FAILED);
     inputRef.current.focus();
   };
 
-  return (
+  // A portal to body so the overlay's z-index is not trapped inside the stats panel's stacking context.
+  return createPortal(
     <div className="topup-overlay">
       <form ref={dialogRef} className="topup-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
         <h2 id={titleId}>Enter code</h2>
@@ -75,7 +80,10 @@ export default function TopUpPrompt({ onClose }) {
           id={inputId}
           ref={inputRef}
           type="password"
-          autoComplete="off"
+          autoComplete="new-password"
+          data-lpignore="true"
+          data-1p-ignore="true"
+          data-bwignore="true"
           maxLength={200}
           value={code}
           readOnly={busy}
@@ -85,9 +93,10 @@ export default function TopUpPrompt({ onClose }) {
         {busy && reconnecting && <div role="status">Reconnecting...</div>}
         <div className="topup-buttons">
           <button type="submit" disabled={busy}>Submit</button>
-          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={busy} onClick={onClose}>Cancel</button>
         </div>
       </form>
-    </div>
+    </div>,
+    document.body
   );
 }
