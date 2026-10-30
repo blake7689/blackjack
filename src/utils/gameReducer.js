@@ -2,7 +2,7 @@ import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
-import { canSplit, canDouble, isSplitAces, cents } from "./blackjackLogic";
+import { canSplit, canDouble, canSurrender, isSplitAces, cents } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
@@ -196,6 +196,11 @@ function playerAction(state, action) {
     return advance(state, replaceHand(state.hands, handIdx, { ...hand, status: HandStatus.DONE }), handIdx);
   }
 
+  if (action.type === "SURRENDER") {
+    if (!canSurrender(hand, state.dealer, state.settings)) return state; // adds no stake, so it comes before the credits guard
+    return advance(state, replaceHand(state.hands, handIdx, engine.playerSurrender(hand, state.dealer.cards[0], state.settings)), handIdx);
+  }
+
   if (action.type === "HIT") {
     if (isSplitAces(hand) && !state.settings.hitSplitAces) return state; // a split ace may only be split again or stood on
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerHit(hand, shoe, cut, refill));
@@ -299,6 +304,7 @@ export function gameReducer(state, action) {
     case "DOUBLE":
     case "TRIPLE":
     case "SPLIT":
+    case "SURRENDER":
       return playerAction(state, action);
 
     case "DEALER_REVEAL": {

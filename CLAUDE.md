@@ -74,6 +74,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   a hand of A,A stays PLAYING (Stay or Split, no Hit). In SPLIT every ace-split hand that can no longer split is set DONE before
   `advance()` (or the turn can stay on a finished hand). `canDouble` (hard 9-11 / 10-11 means no ace counted as 11; never on split
   aces; DAS) also gates TRIPLE.
+- Surrender (#91): `canSurrender` (pure; first two cards, never split or doubled; `earlyNoAce` never vs an ace) and `engine.playerSurrender`.
+  Every surrender sets `surrendered: true`: at once (`result` SURRENDER) or, for `late` with no peek against an ace or ten, waiting (`result`
+  NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered round has one hand. The
+  dealer takes its second card after any surrender and stops at two (`dealerShowsSecondCard`, `dealerOnlyChecksBlackjack`, `dealerNeedsToPlay`
+  read the flag). In US peek `early` and `earlyNoAce` work like `late` until the offers step (PR 3); PR 3 must remove that sentence from the
+  catalogue hints.
 - Saved settings carry `v` (3 since #91 surrender). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
   older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`; `{}`, no `v` and `v: 3`
   get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.

@@ -4,6 +4,7 @@ import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions"; 
+import { SurrenderOptions } from "./constants/ruleOptions";
 
 // ---- GAME ACTIONS ----
 
@@ -69,20 +70,20 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
 
 // Dealer only plays when a hand still depends on the dealer's total //
 export function dealerNeedsToPlay(hands) {
-  return hands.some((h) => !h.isBusted && h.result === HandResult.NONE);
+  return hands.some((h) => !h.isBusted && h.result === HandResult.NONE && !h.surrendered); // a waiting surrender needs only the blackjack check
 }
 
 // When every hand still waiting is a blackjack, only a dealer blackjack matters: two cards, no more. //
 // With dealerDrawsOnceOn21 (EU), a player 21 is treated the same way. //
 export function dealerOnlyChecksBlackjack(hands, settings) {
   const onceOn21 = settings.dealerDrawsOnceOn21 && isEU(settings);
-  return hands.filter((h) => !h.isBusted && h.result === HandResult.NONE).every((h) => h.isBlackjack || (onceOn21 && h.total === 21));
+  return hands.filter((h) => !h.isBusted && h.result === HandResult.NONE).every((h) => h.isBlackjack || h.surrendered || (onceOn21 && h.total === 21));
 }
 
 // Rules that show the dealer's second card although no hand depends on it (it still counts) //
 export function dealerShowsSecondCard(hands, settings) {
   return (settings.dealerDrawsOnPlayerBust && hands.every((h) => h.isBusted)) ||
-    (settings.dealerDrawsOnPlayerBlackjack && hands.some((h) => h.isBlackjack));
+    (settings.dealerDrawsOnPlayerBlackjack && hands.some((h) => h.isBlackjack)) || hands.some((h) => h.surrendered);
 }
 
 // Settle Hands //
@@ -223,6 +224,13 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { blackJackO
   const newHandsArray = [newHand1, newHand2];
 
   return { newHandsArray, shoe };
+}
+
+// Player Surrender. Late with no hole card against an ace or ten waits: the dealer's blackjack decides at settlement.
+// Every other surrender is fixed now: after a peek no dealer blackjack is possible, and early keeps the half either way. //
+export function playerSurrender(hand, upCard, { surrender, dealerHoleBehaviour }) {
+  const waits = surrender === SurrenderOptions.LATE && dealerHoleBehaviour !== DealerHoleOptions.US_PEEK && upCard.value >= 10;
+  return { ...hand, status: HandStatus.DONE, surrendered: true, result: waits ? HandResult.NONE : HandResult.SURRENDER };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
