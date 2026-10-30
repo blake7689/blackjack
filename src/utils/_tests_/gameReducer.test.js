@@ -414,7 +414,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 3, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 4, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -935,16 +935,16 @@ describe("auto deal (#88)", () => {
   });
 });
 
-describe("saved settings, versions 1 to 3 (#91): no silent payout change", () => {
+describe("saved settings, versions 1 to 4 (#91): no silent payout change", () => {
   const vegas = initialGameState.settings;
   // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none",
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none", insurance: false,
   };
 
   it("exports the version and the legacy values", () => {
-    expect(SETTINGS_VERSION).toBe(3);
+    expect(SETTINGS_VERSION).toBe(4);
     expect(LEGACY_RULES).toEqual(legacy);
   });
 
@@ -958,10 +958,10 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   it.each([
     ["{} (a player who never saved)", {}],
     ["no version", { tripleDown: false }],
-    ["v: 3 with nothing else", { v: 3 }],
+    ["v: 4 with nothing else", { v: 4 }],
     ["null", null],
     ["undefined", undefined],
-    ["a future version", { v: 4 }],
+    ["a future version", { v: 5 }],
     ["a version that is a string", { v: "1" }],
   ])("%s gets the Vegas defaults", (_name, saved) => {
     expect(sanitizeSettings(saved)).toEqual(vegas);
@@ -996,8 +996,8 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   describe("wrong types and unknown values fall back", () => {
     const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
 
-    it("to the Vegas default for v: 3", () => {
-      expect(sanitizeSettings({ v: 3, ...bad })).toEqual(vegas);
+    it("to the Vegas default for v: 4", () => {
+      expect(sanitizeSettings({ v: 4, ...bad })).toEqual(vegas);
     });
 
     it("to the Vegas default for {}", () => {
@@ -1031,7 +1031,7 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   });
 
   it("drops unknown keys, and the version is not a setting", () => {
-    const s = sanitizeSettings({ v: 3, bogus: 1, rigDeck: true });
+    const s = sanitizeSettings({ v: 4, bogus: 1, rigDeck: true });
     expect(s).toEqual(vegas);
     expect(s).not.toHaveProperty("v");
   });
@@ -1264,7 +1264,7 @@ describe("surrender in saved settings (#91)", () => {
 
   it("only surrender is filled by version 3: a v: 2 object keeps Vegas for its other missing keys", () => {
     const s = sanitizeSettings({ v: 2 });
-    expect(s).toEqual({ ...vegas, surrender: "none" });
+    expect(s).toEqual({ ...vegas, surrender: "none", insurance: false });
   });
 
   it("LOAD_SETTINGS of a v: 2 object between rounds deals the new shoe: surrender went from late to none", () => {
@@ -1277,9 +1277,9 @@ describe("surrender in saved settings (#91)", () => {
 
   it("LOAD_SETTINGS of the same surrender leaves the shoe alone; a changed one never resets a round in progress", () => {
     const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
-    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
+    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
     const round = dealt(["10", "6", "6", "K", "5"]);
-    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "none" }, shoe: stackedShoe(["4"]) });
+    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "none" }, shoe: stackedShoe(["4"]) });
     expect([loaded.phase, loaded.hands, loaded.shoe, loaded.settings.surrender]).toEqual([round.phase, round.hands, round.shoe, "none"]);
   });
 });

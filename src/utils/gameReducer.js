@@ -31,6 +31,7 @@ export const initialGameState = {
     hitSplitAces: false,
     noHoleCardLoss: NoHoleCardLoss.ORIGINAL, // a dealer blackjack found after the player added stakes: takes only the first bet
     surrender: SurrenderOptions.LATE,
+    insurance: true, // offered against a dealer ace (and even money on a player blackjack)
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
@@ -63,24 +64,24 @@ export const initialGameState = {
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
   "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands",
-  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender"];
+  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
 export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
 
-// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender; every save
-// before that is `v: 1`. A missing rule key in an older object gets today's behaviour from LEGACY_RULES, so an existing table
-// never changes payout (`v: 1` gets all of them; `v: 1` and `v: 2` get surrender "none"). `{}`, a missing `v` and the current
-// version get the Vegas defaults. The next save writes `v: 3` with every key.
-// Whoever adds a rule key later (PR 3 insurance) must bump SETTINGS_VERSION, add its RULE_SINCE entry and its LEGACY_RULES value.
-export const SETTINGS_VERSION = 3;
+// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender, version 4
+// insurance; every save before that is `v: 1`. A missing rule key in an older object gets today's behaviour from LEGACY_RULES, so
+// an existing table never changes payout (`v: 1` gets all of them; `v: 1` and `v: 2` get surrender "none"; `v: 1` to `v: 3` get
+// insurance off). `{}`, a missing `v` and the current version get the Vegas defaults. The next save writes `v: 4` with every key.
+// Whoever adds a rule key later must bump SETTINGS_VERSION, add its RULE_SINCE entry and its LEGACY_RULES value.
+export const SETTINGS_VERSION = 4;
 export const LEGACY_RULES = {
   deckCount: 2, maxSplitHands: 0, dealerHitsSoft17: false, blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY,
   doubleAfterSplit: true, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
-  surrender: SurrenderOptions.NONE,
+  surrender: SurrenderOptions.NONE, insurance: false,
 };
 // The saved version that introduced a rule key (a key not listed came with version 2). An older saved object has no such key.
-const RULE_SINCE = { surrender: 3 };
+const RULE_SINCE = { surrender: 3, insurance: 4 };
 
 // Settings that hold one of a fixed list of strings.
 const ENUM_SETTINGS = {

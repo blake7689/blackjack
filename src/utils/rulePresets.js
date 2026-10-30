@@ -19,31 +19,31 @@ export const RULE_PRESETS = {
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK, deckCount: 6, dealerHitsSoft17: true,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.LATE, ...advanced(true),
+    surrender: SurrenderOptions.LATE, insurance: true, ...advanced(true),
   },
   "Atlantic City": {
     dealerHoleBehaviour: afterPlayers, deckCount: 8, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.LATE, ...advanced(false),
+    surrender: SurrenderOptions.LATE, insurance: true, ...advanced(false),
   },
   Europe: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
-    surrender: SurrenderOptions.NONE, ...advanced(false),
+    surrender: SurrenderOptions.NONE, insurance: true, ...advanced(false),
   },
   Australia: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.NONE, ...advanced(false),
+    surrender: SurrenderOptions.NONE, insurance: true, ...advanced(false),
   },
   Singapore: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.EARLY_NO_ACE, ...advanced(false),
+    surrender: SurrenderOptions.EARLY_NO_ACE, insurance: true, ...advanced(false),
   },
 };
 

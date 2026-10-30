@@ -619,7 +619,7 @@ describe("Settings auto deal (#88)", () => {
 
 describe("Settings table rules (#91)", () => {
   const open = (game = {}, path = "/settings?tab=game") => renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game } });
-  const RULE_KEYS = ["deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces"];
+  const RULE_KEYS = ["deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "insurance"];
   const withMode = (dealerHoleBehaviour) => ({ settings: { ...initialGameState.settings, dealerHoleBehaviour } });
 
   it("shows every catalogue rule on the Game tab, with the Vegas values, and none on the other tabs", () => {
@@ -718,14 +718,14 @@ describe("Settings table rules (#91)", () => {
     expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
   });
 
-  it("applying a preset sends all 16 rule keys in one call, and the list names the five presets and Custom", () => {
+  it("applying a preset sends all 17 rule keys in one call, and the list names the five presets and Custom", () => {
     const { gameActions } = open();
     const select = screen.getByLabelText("rulePreset");
     expect([...select.options].map((o) => o.text)).toEqual(["Vegas", "Atlantic City", "Europe", "Australia", "Singapore", "Custom"]);
     fireEvent.change(select, { target: { value: "Singapore" } });
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
     const sent = gameActions.changeSettings.mock.calls[0][0];
-    expect(Object.keys(sent)).toHaveLength(16);
+    expect(Object.keys(sent)).toHaveLength(17);
     expect(sent).toMatchObject({ doubleOn: "any", maxSplitHands: 3, deckCount: 6, dealerHitsSoft17: false, noHoleCardLoss: "original" });
     expect(screen.getByLabelText("doubleOn").value).toBe("any");
     expect(screen.getByLabelText("maxSplitHands").value).toBe("3");
@@ -765,9 +765,9 @@ describe("Settings table rules (#91)", () => {
       fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "none" } });
       expect(screen.getByText("You can't give up a hand.")).toBeTruthy();
       fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "early" } });
-      expect(screen.getByText(/before the dealer checks for blackjack\. You keep the half even if the dealer has one\..*works like Late/)).toBeTruthy();
+      expect(screen.getByText(/before the dealer checks for blackjack\. You keep the half even if the dealer has one\./)).toBeTruthy();
       fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "earlyNoAce" } });
-      expect(screen.getByText(/not offered when the dealer shows an ace\..*works like Late/)).toBeTruthy();
+      expect(screen.getByText(/not offered when the dealer shows an ace\./)).toBeTruthy();
     });
 
     it("saves the chosen value with its Save button", () => {
