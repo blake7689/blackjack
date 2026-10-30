@@ -22,14 +22,18 @@ export function GameProvider({ children }) {
 
   const makeShoe = useCallback(() => createShoe(deckCount, includeCutCard), [deckCount, includeCutCard]);
 
-  // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there. //
+  // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there, and while
+  // nothing has loaded a signed-in change is applied here but never saved: it would overwrite the stored table with defaults. //
+  const loadedRef = useRef(false);
   useEffect(() => {
+    loadedRef.current = false;
     if (!signedIn) return;
     let current = true;
     getSettings().then((saved) => {
       if (!current) return;
       const settings = sanitizeSettings(saved);
       dispatch({ type: "LOAD_SETTINGS", saved, shoe: createShoe(settings.deckCount, settings.includeCutCard) });
+      loadedRef.current = true;
     }).catch(() => {});
     return () => { current = false; };
   }, [signedIn]);
@@ -86,7 +90,8 @@ export function GameProvider({ children }) {
       const next = { ...stateRef.current.settings, ...values };
       const shoe = Object.keys(values).some((k) => RESET_SETTINGS.includes(k)) ? createShoe(next.deckCount, next.includeCutCard) : undefined;
       dispatch({ type: "SET_SETTING", values, shoe });
-      return getToken() ? saveSettings({ v: SETTINGS_VERSION, ...next }) : Promise.resolve();
+      if (!getToken()) return Promise.resolve();
+      return loadedRef.current ? saveSettings({ v: SETTINGS_VERSION, ...next }) : Promise.reject(new Error("Settings have not loaded yet"));
     },
     getPhase: () => stateRef.current.phase,
   }), [makeShoe, getCredits]);

@@ -8,8 +8,11 @@ async function openGameSettings(page) {
   await page.getByPlaceholder('Username or Email').fill('tester');
   await page.getByPlaceholder('Password').fill('not-a-real-password');
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await (await settingsLoaded).finished(); // the saved table is applied before the page is read
+  await (await settingsLoaded).finished();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  // A save before the load is applied is refused (it would overwrite the stored table): wait until the loaded table shows (the fixture's Rate of Play).
+  await page.getByRole('tab', { name: 'Dev' }).click();
+  await expect(page.getByLabel('playTimeout', { exact: true })).toHaveValue('250');
   await page.getByRole('tab', { name: 'Game' }).click();
 }
 
