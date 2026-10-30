@@ -80,6 +80,7 @@ export function GameProvider({ children }) {
     double: (handIdx) => dispatch({ type: "DOUBLE", handIdx, credits: getCredits(), refill: makeShoe }),
     triple: (handIdx) => dispatch({ type: "TRIPLE", handIdx, credits: getCredits(), refill: makeShoe }),
     split: (handIdx) => dispatch({ type: "SPLIT", handIdx, credits: getCredits(), refill: makeShoe }),
+    surrender: (handIdx) => dispatch({ type: "SURRENDER", handIdx }),
     continueRound: () => dispatch({ type: "CONTINUE" }),
     pauseAutoDeal: () => dispatch({ type: "PAUSE_AUTO_DEAL" }),
     resumeAutoDeal: () => dispatch({ type: "RESUME_AUTO_DEAL" }),

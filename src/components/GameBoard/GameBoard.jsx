@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue } from "../../utils/cardAnimation";
 import { GamePhases } from "../../utils/constants/gamePhases";
+import { canSurrender } from "../../utils/blackjackLogic";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
 import StatsPanel from "../StatsPanel/StatsPanel";
@@ -106,6 +107,7 @@ export default function GameBoard() {
                   resplitAces={settings.resplitAces}
                   hitSplitAces={settings.hitSplitAces}
                   tripleDown={settings.tripleDown}
+                  showSurrender={phase === GamePhases.PLAYER_TURN && canSurrender(hand, dealer, settings)}
                   credits={player.credits}
                 />
               ))}

@@ -15,6 +15,7 @@
 .Lose { color: red !important; }
 .Push { color: orange !important; }
 .Win { color: #00e600 !important; }
+.Surrendered { color: #8ec5ff !important; }
 .busted { color: red !important; }
 .blackjack { color: gold !important; }
 

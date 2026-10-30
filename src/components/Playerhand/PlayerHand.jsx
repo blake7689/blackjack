@@ -13,13 +13,14 @@ import { DoubleOn } from "../../utils/constants/ruleOptions";
 
 // The rule props default to the rules the game had before #91, so a caller that passes none gets those.
 function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits,
-  doubleOn = DoubleOn.ANY, doubleAfterSplit = true, resplitAces = false, hitSplitAces = false }) {
+  doubleOn = DoubleOn.ANY, doubleAfterSplit = true, resplitAces = false, hitSplitAces = false, showSurrender }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(hand.cards);
-  const { hit, stand, double, triple, split } = useGameActions();
+  const { hit, stand, double, triple, split, surrender } = useGameActions();
   const canAffordStake = hand.bet > 0 && credits >= hand.bet; // a hand whose stake was refused can't add to it
-  const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
+  const settled = gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND;
+  const showResult = hand.result !== HandResult.NONE && (settled || hand.result === HandResult.SURRENDER); // a surrender shows at once
   const mayDouble = canDouble(hand, { doubleOn, doubleAfterSplit }) && canAffordStake;
   const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
 
@@ -33,6 +34,7 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
             Total: {pending ? (shown.totals?.totals.join(" / ") ?? "-") : hand.totals.join(" / ")}
             {' '}| Bet: ${hand.bet}
             {!pending && showResult && <span className={`hand-result ${hand.result}`}> {hand.result}</span>}
+            {!pending && hand.surrendered && !showResult && <span className="hand-result Surrendered"> Surrender pending</span>}
             {!pending && hand.isBusted && <span className={`hand-result busted`}> Busted</span>}
             {!pending && hand.isBlackjack && <span className={`hand-result blackjack`}> Blackjack</span>}
           </span>
@@ -57,10 +59,12 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
           onDouble={() => double(index)}
           onTriple={() => triple(index)}
           onSplit={() => split(index)}
+          onSurrender={() => surrender(index)}
           showHit={hitSplitAces || !isSplitAces(hand)}
           showDouble={mayDouble}
           showTriple={tripleDown && mayDouble && credits >= 2 * hand.bet}
           showSplit={canSplit(hand, handCount, maxSplitHands, resplitAces) && canAffordStake}
+          showSurrender={showSurrender}
         />
       )}
     </div>
