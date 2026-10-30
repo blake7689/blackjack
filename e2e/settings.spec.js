@@ -68,3 +68,18 @@ test('Surrender is a rule: the hint follows the choice, and saving it writes ver
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.saves[0]).toMatchObject({ v: 4, surrender: 'early', dealerHoleBehaviour: 'drawEarly_Check', deckCount: 6 });
 });
+
+test('Insurance and Even Money is on for a new player, and unticking it saves version 4 with insurance off (#91)', async ({ page }) => {
+  const api = await stubApi(page);
+  await openGameSettings(page);
+  await expect(control(page, 'insurance')).toBeChecked();
+  await expect(page.getByText(/insure for half your bet; it pays 2:1 if the dealer has blackjack/)).toBeVisible();
+  await expect(control(page, 'rulePreset')).toHaveValue('Vegas');
+
+  await control(page, 'insurance').uncheck();
+  await control(page, 'Save insurance').click();
+
+  await expect.poll(() => api.saves.length).toBe(1);
+  expect(api.saves[0]).toMatchObject({ v: 4, insurance: false, surrender: 'late', deckCount: 6 });
+  await expect(control(page, 'rulePreset')).toHaveValue('Custom'); // every preset has insurance on
+});
