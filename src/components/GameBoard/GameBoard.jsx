@@ -18,7 +18,7 @@ import "./GameBoard.css";
 const TOP_UP_BELOW = 100;
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, runningCount, settings, pendingBets, notice } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, runningCount, settings, pendingBets, notice, offers } = useGameState();
   const { continueRound } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
@@ -83,7 +83,8 @@ export default function GameBoard() {
 
         <div className="center-msg-row">
           <CenterMessage
-            gamePhase={busy && phase === GamePhases.PLAYER_TURN ? GamePhases.DEALING : phase}
+            gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}
+            offers={phase === GamePhases.OFFERS ? offers : null}
             waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
             reconnecting={reconnecting}
             notice={notice}
@@ -108,6 +109,7 @@ export default function GameBoard() {
                   hitSplitAces={settings.hitSplitAces}
                   tripleDown={settings.tripleDown}
                   showSurrender={phase === GamePhases.PLAYER_TURN && canSurrender(hand, dealer, settings)}
+                  offers={phase === GamePhases.OFFERS ? offers : null}
                   credits={player.credits}
                 />
               ))}
