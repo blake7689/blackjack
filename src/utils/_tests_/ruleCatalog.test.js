@@ -10,7 +10,7 @@ const byKey = (key) => RULE_CATALOG.find((r) => r.key === key);
 describe("ruleCatalog (#91)", () => {
   it("lists the table rules this PR adds, plus deck count and split limit", () => {
     expect(RULE_CATALOG.map((r) => r.key)).toEqual([
-      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss",
+      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender",
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("ruleCatalog (#91)", () => {
 
   it("a select carries the stored values, each with a label and a one-line hint", () => {
     const stored = {
-      blackjackPayout: ["3:2", "6:5"], doubleOn: ["any", "9-11", "10-11"], noHoleCardLoss: ["all", "original"], maxSplitHands: [2, 3, 4, 0],
+      blackjackPayout: ["3:2", "6:5"], doubleOn: ["any", "9-11", "10-11"], noHoleCardLoss: ["all", "original"], surrender: ["none", "late", "early", "earlyNoAce"], maxSplitHands: [2, 3, 4, 0],
     };
     for (const rule of RULE_CATALOG.filter((r) => r.input === "select")) {
       expect(rule.options.map((o) => o.value)).toEqual(stored[rule.key]);

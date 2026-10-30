@@ -6,3 +6,6 @@ export const DoubleOn = { ANY: "any", NINE_TO_ELEVEN: "9-11", TEN_TO_ELEVEN: "10
 
 // What a dealer blackjack takes when it is found after the player added stakes (no hole card).
 export const NoHoleCardLoss = { ALL: "all", ORIGINAL: "original" };
+
+// Giving up half the bet on the first two cards (#91).
+export const SurrenderOptions = { NONE: "none", LATE: "late", EARLY: "early", EARLY_NO_ACE: "earlyNoAce" };

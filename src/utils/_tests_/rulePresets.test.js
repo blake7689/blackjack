@@ -40,23 +40,23 @@ const real = (blackjackPaysImmediately) => ({
 const TABLE = {
   Vegas: {
     dealerHoleBehaviour: PEEK, deckCount: 6, dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", ...real(true),
+    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", ...real(true),
   },
   "Atlantic City": {
     dealerHoleBehaviour: AFTER, deckCount: 8, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", ...real(false),
+    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", ...real(false),
   },
   Europe: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "9-11", doubleAfterSplit: true,
-    maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "all", ...real(false),
+    maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "all", surrender: "none", ...real(false),
   },
   Australia: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "9-11", doubleAfterSplit: true,
-    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", ...real(false),
+    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "none", ...real(false),
   },
   Singapore: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", ...real(false),
+    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "earlyNoAce", ...real(false),
   },
 };
 
@@ -69,9 +69,9 @@ describe("the five presets (#91)", () => {
     expect(RULE_PRESETS[name]).toEqual(TABLE[name]);
   });
 
-  it("every preset sets every rule key (15), so picking one is never order-dependent", () => {
+  it("every preset sets every rule key (16), so picking one is never order-dependent", () => {
     const keys = Object.keys(TABLE.Vegas).sort();
-    expect(keys).toHaveLength(15);
+    expect(keys).toHaveLength(16);
     for (const name of Object.keys(RULE_PRESETS)) expect(Object.keys(RULE_PRESETS[name]).sort()).toEqual(keys);
   });
 

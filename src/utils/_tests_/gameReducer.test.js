@@ -413,7 +413,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 2, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 3, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -939,11 +939,11 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none",
   };
 
   it("exports the version and the legacy values", () => {
-    expect(SETTINGS_VERSION).toBe(2);
+    expect(SETTINGS_VERSION).toBe(3);
     expect(LEGACY_RULES).toEqual(legacy);
   });
 
@@ -957,10 +957,10 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   it.each([
     ["{} (a player who never saved)", {}],
     ["no version", { tripleDown: false }],
-    ["v: 2 with nothing else", { v: 2 }],
+    ["v: 3 with nothing else", { v: 3 }],
     ["null", null],
     ["undefined", undefined],
-    ["a future version", { v: 3 }],
+    ["a future version", { v: 4 }],
     ["a version that is a string", { v: "1" }],
   ])("%s gets the Vegas defaults", (_name, saved) => {
     expect(sanitizeSettings(saved)).toEqual(vegas);
@@ -995,8 +995,8 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   describe("wrong types and unknown values fall back", () => {
     const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
 
-    it("to the Vegas default for v: 2", () => {
-      expect(sanitizeSettings({ v: 2, ...bad })).toEqual(vegas);
+    it("to the Vegas default for v: 3", () => {
+      expect(sanitizeSettings({ v: 3, ...bad })).toEqual(vegas);
     });
 
     it("to the Vegas default for {}", () => {
@@ -1030,7 +1030,7 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   });
 
   it("drops unknown keys, and the version is not a setting", () => {
-    const s = sanitizeSettings({ v: 2, bogus: 1, rigDeck: true });
+    const s = sanitizeSettings({ v: 3, bogus: 1, rigDeck: true });
     expect(s).toEqual(vegas);
     expect(s).not.toHaveProperty("v");
   });

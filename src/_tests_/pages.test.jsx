@@ -718,14 +718,14 @@ describe("Settings table rules (#91)", () => {
     expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
   });
 
-  it("applying a preset sends all 15 rule keys in one call, and the list names the five presets and Custom", () => {
+  it("applying a preset sends all 16 rule keys in one call, and the list names the five presets and Custom", () => {
     const { gameActions } = open();
     const select = screen.getByLabelText("rulePreset");
     expect([...select.options].map((o) => o.text)).toEqual(["Vegas", "Atlantic City", "Europe", "Australia", "Singapore", "Custom"]);
     fireEvent.change(select, { target: { value: "Singapore" } });
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
     const sent = gameActions.changeSettings.mock.calls[0][0];
-    expect(Object.keys(sent)).toHaveLength(15);
+    expect(Object.keys(sent)).toHaveLength(16);
     expect(sent).toMatchObject({ doubleOn: "any", maxSplitHands: 3, deckCount: 6, dealerHitsSoft17: false, noHoleCardLoss: "original" });
     expect(screen.getByLabelText("doubleOn").value).toBe("any");
     expect(screen.getByLabelText("maxSplitHands").value).toBe("3");

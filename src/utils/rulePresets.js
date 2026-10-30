@@ -1,5 +1,5 @@
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
-import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 
 // Rules presets (#35 A5, #91): each sets every rule setting at once. Any other combination is "Custom".
 // Vegas is the default: initialGameState.settings equals it. Sources are in the spec (Specs\Regional rules.md).
@@ -19,31 +19,31 @@ export const RULE_PRESETS = {
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK, deckCount: 6, dealerHitsSoft17: true,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    ...advanced(true),
+    surrender: SurrenderOptions.LATE, ...advanced(true),
   },
   "Atlantic City": {
     dealerHoleBehaviour: afterPlayers, deckCount: 8, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    ...advanced(false),
+    surrender: SurrenderOptions.LATE, ...advanced(false),
   },
   Europe: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
-    ...advanced(false),
+    surrender: SurrenderOptions.NONE, ...advanced(false),
   },
   Australia: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    ...advanced(false),
+    surrender: SurrenderOptions.NONE, ...advanced(false),
   },
   Singapore: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    ...advanced(false),
+    surrender: SurrenderOptions.EARLY_NO_ACE, ...advanced(false),
   },
 };
 

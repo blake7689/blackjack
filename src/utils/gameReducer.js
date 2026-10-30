@@ -1,7 +1,7 @@
 import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
-import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 import { canSplit, canDouble, isSplitAces, cents } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
@@ -30,6 +30,7 @@ export const initialGameState = {
     resplitAces: false,
     hitSplitAces: false,
     noHoleCardLoss: NoHoleCardLoss.ORIGINAL, // a dealer blackjack found after the player added stakes: takes only the first bet
+    surrender: SurrenderOptions.LATE,
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
@@ -62,20 +63,24 @@ export const initialGameState = {
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
   "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands",
-  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss"];
+  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
 export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
 
-// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above; every save before that is `v: 1`.
-// A missing rule key in a `v: 1` object gets today's behaviour from LEGACY_RULES, so an existing table never changes payout.
-// `{}`, a missing `v` and `v: 2` get the Vegas defaults. The next save writes `v: 2` with every key.
-// Whoever adds a rule key later (PR 2 surrender, PR 3 insurance) must bump SETTINGS_VERSION and decide the fill for older versions.
-export const SETTINGS_VERSION = 2;
+// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender; every save
+// before that is `v: 1`. A missing rule key in an older object gets today's behaviour from LEGACY_RULES, so an existing table
+// never changes payout (`v: 1` gets all of them; `v: 1` and `v: 2` get surrender "none"). `{}`, a missing `v` and the current
+// version get the Vegas defaults. The next save writes `v: 3` with every key.
+// Whoever adds a rule key later (PR 3 insurance) must bump SETTINGS_VERSION, add its RULE_SINCE entry and its LEGACY_RULES value.
+export const SETTINGS_VERSION = 3;
 export const LEGACY_RULES = {
   deckCount: 2, maxSplitHands: 0, dealerHitsSoft17: false, blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY,
   doubleAfterSplit: true, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
+  surrender: SurrenderOptions.NONE,
 };
+// The saved version that introduced a rule key (a key not listed came with version 2). An older saved object has no such key.
+const RULE_SINCE = { surrender: 3 };
 
 // Settings that hold one of a fixed list of strings.
 const ENUM_SETTINGS = {
@@ -83,14 +88,16 @@ const ENUM_SETTINGS = {
   blackjackPayout: Object.values(BlackjackPayouts),
   doubleOn: Object.values(DoubleOn),
   noHoleCardLoss: Object.values(NoHoleCardLoss),
+  surrender: Object.values(SurrenderOptions),
 };
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
-// fall back to the default (or, for a `v: 1` object, the legacy rule) for anything else, and fill what's missing.
+// fall back to the default (or, for an older object, the legacy rule) for anything else, and fill what's missing.
 export function sanitizeSettings(saved) {
-  const legacy = saved?.v === 1;
+  const v = saved?.v;
+  const legacy = (key) => key in LEGACY_RULES && Number.isInteger(v) && v >= 1 && v < (RULE_SINCE[key] ?? 2);
   const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, standard]) => {
-    const fallback = legacy && key in LEGACY_RULES ? LEGACY_RULES[key] : standard;
+    const fallback = legacy(key) ? LEGACY_RULES[key] : standard;
     const value = saved?.[key];
     if (typeof value !== typeof fallback) return [key, fallback];
     if (key in ENUM_SETTINGS) return [key, ENUM_SETTINGS[key].includes(value) ? value : fallback];
