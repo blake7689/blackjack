@@ -275,6 +275,118 @@ describe("PlayerHand", () => {
   });
 });
 
+describe("PlayerOptions Hit button (#91)", () => {
+  it("hides Hit when showHit is false and shows it by default", () => {
+    const calls = { onHit: vi.fn(), onStay: vi.fn() };
+    const { rerender } = renderUI(<PlayerOptions {...calls} showHit={false} />);
+    expect(screen.queryByText("Hit")).toBeNull();
+    expect(screen.getByText("Stay")).toBeTruthy();
+    rerender(<PlayerOptions {...calls} />);
+    expect(screen.getByText("Hit")).toBeTruthy();
+  });
+});
+
+describe("PlayerHand table rules (#91)", () => {
+  const props = { index: 0, active: true, gamePhase: GamePhases.PLAYER_TURN, handCount: 1, maxSplitHands: 0, credits: 1000 };
+  const has = (name) => screen.queryByText(name) !== null;
+  const renderHand = (codes, extra = {}, rules = {}) => renderUI(<PlayerHand {...props} {...rules} hand={hand(codes, extra)} />);
+
+  describe("split aces", () => {
+    const splitAces = { isSplit: true };
+
+    it("Hit is hidden on a split ace without hitSplitAces, and shown with it", () => {
+      renderHand(["A", "5"], splitAces);
+      expect([has("Hit"), has("Stay")]).toEqual([false, true]);
+      cleanup();
+      renderHand(["A", "5"], splitAces, { hitSplitAces: true });
+      expect(has("Hit")).toBe(true);
+    });
+
+    it("an A-A that may be split again can split or stay but not hit; with hitSplitAces it can hit too", () => {
+      renderHand(["A", "A"], splitAces, { resplitAces: true });
+      expect([has("Hit"), has("Split"), has("Stay")]).toEqual([false, true, true]);
+      cleanup();
+      renderHand(["A", "A"], splitAces, { resplitAces: true, hitSplitAces: true });
+      expect([has("Hit"), has("Split")]).toEqual([true, true]);
+    });
+
+    it("an A-A is split again only with resplitAces", () => {
+      renderHand(["A", "A"], splitAces);
+      expect(has("Split")).toBe(false);
+    });
+
+    it("Hit is still offered on an unsplit pair of aces and on a normal split hand", () => {
+      renderHand(["A", "A"]);
+      expect([has("Hit"), has("Split")]).toEqual([true, true]);
+      cleanup();
+      renderHand(["8", "3"], splitAces);
+      expect(has("Hit")).toBe(true);
+    });
+
+    it("a split ace is never offered a double or a triple, even when it may hit", () => {
+      renderHand(["A", "5"], splitAces, { hitSplitAces: true, tripleDown: true, doubleAfterSplit: true });
+      expect([has("Hit"), has("Double"), has("Triple")]).toEqual([true, false, false]);
+    });
+  });
+
+  describe("Double follows doubleOn and doubleAfterSplit", () => {
+    it.each([
+      ["any", ["5", "3"], true],
+      ["any", ["A", "8"], true],
+      ["9-11", ["5", "3"], false],
+      ["9-11", ["5", "4"], true],
+      ["9-11", ["6", "5"], true],
+      ["9-11", ["7", "5"], false],
+      ["9-11", ["A", "8"], false],
+      ["10-11", ["5", "4"], false],
+      ["10-11", ["6", "4"], true],
+      ["10-11", ["A", "9"], false],
+    ])("doubleOn %s with %j: Double shown is %s", (doubleOn, codes, shown) => {
+      renderHand(codes, {}, { doubleOn });
+      expect(has("Double")).toBe(shown);
+    });
+
+    it("doubleAfterSplit off hides Double on a split hand only", () => {
+      renderHand(["5", "6"], { isSplit: true }, { doubleAfterSplit: false });
+      expect(has("Double")).toBe(false);
+      cleanup();
+      renderHand(["5", "6"], {}, { doubleAfterSplit: false });
+      expect(has("Double")).toBe(true);
+      cleanup();
+      renderHand(["5", "6"], { isSplit: true }, { doubleAfterSplit: true });
+      expect(has("Double")).toBe(true);
+    });
+
+    it("a hand of three cards is never offered Double", () => {
+      renderHand(["2", "3", "5"], {}, { doubleOn: "any" });
+      expect(has("Double")).toBe(false);
+    });
+
+    it("the default rules (no props) offer Double on any two cards", () => {
+      renderHand(["A", "8"]);
+      expect(has("Double")).toBe(true);
+    });
+  });
+
+  describe("Triple follows Double", () => {
+    it("is shown exactly where Double is, when triple down is on", () => {
+      renderHand(["5", "4"], {}, { tripleDown: true, doubleOn: "9-11" });
+      expect([has("Double"), has("Triple")]).toEqual([true, true]);
+      cleanup();
+      renderHand(["5", "3"], {}, { tripleDown: true, doubleOn: "9-11" });
+      expect([has("Double"), has("Triple")]).toEqual([false, false]);
+      cleanup();
+      renderHand(["5", "6"], { isSplit: true }, { tripleDown: true, doubleAfterSplit: false });
+      expect([has("Double"), has("Triple")]).toEqual([false, false]);
+    });
+
+    it("is never shown with triple down off", () => {
+      renderHand(["5", "4"], {}, { doubleOn: "9-11" });
+      expect([has("Double"), has("Triple")]).toEqual([true, false]);
+    });
+  });
+});
+
 describe("StatsPanel", () => {
   it("shows the balance with a +/- badge for the last change", () => {
     const { rerender } = renderUI(<StatsPanel player={{ credits: 1234 }} />, { player: { creditChange: { delta: 20, seq: 1 } } });

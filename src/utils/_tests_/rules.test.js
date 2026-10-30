@@ -4,6 +4,7 @@ import { gameReducer, nextAutoAction } from "../gameReducer";
 import { GamePhases } from "../constants/gamePhases";
 import { canSplit, settleHand } from "../blackjackLogic";
 import { drawCardFromShoe, cardsRemaining, trueCount } from "../cards";
+import { RULE_PRESETS } from "../rulePresets";
 
 // Card order out of the shoe: player, dealer up, player, dealer hole (US modes only), then draws.
 // Bets are 10. Payout is what returns to the balance, stake included (win 2x, blackjack 2.5x, push 1x).
@@ -238,7 +239,7 @@ describe("splits", () => {
     expect(canSplit({ cards: stackedShoe(["A", "A"]), isSplit: true }, 9, 0)).toBe(false);
   });
 
-  it("never resplits aces", () => {
+  it("never resplits aces (resplitAces is off)", () => {
     expect(canSplit({ cards: stackedShoe(["A", "A"]) }, 1, 4)).toBe(true);
     expect(canSplit({ cards: stackedShoe(["A", "A"]), isSplit: true }, 2, 4)).toBe(false);
   });
@@ -274,7 +275,7 @@ describe("D1: split more than once (maxSplitHands)", () => {
     expect(r.hands).toHaveLength(2);
   });
 
-  it("by default (unlimited) splits past 4 hands, playing and settling each in order (#50)", () => {
+  it("with no limit (the pre-#91 default) splits past 4 hands, playing and settling each in order (#50)", () => {
     const cards = ["8", "10", "8", "7", "8", "3", "8", "2", "8", "4", "10", "9", "K", "Q"];
     const actions = ["split", "split", "split", "split", "stand", "stand", "stand", "hit", "stand", "hit"];
     const r = playRound({ cards, actions });
@@ -777,5 +778,522 @@ describe("a refused bet (#23)", () => {
     const r = playRound({ cards: ["A", "10", "K", "6", "5"] });
     expect(r.payout).toBe(25);
     expect(r.state.notice).toBeNull();
+  });
+});
+
+// ---- #91 PR 1: regional rules. Scenarios start from LEGACY_RULES (see playRound); each one turns its rule on. ----
+
+describe("H17: dealer hits soft 17 (dealerHitsSoft17)", () => {
+  const h17 = { dealerHitsSoft17: true };
+  // Player 10-9 (19) stands. The dealer's cards come after: up card, hole card (EU: its second card), then draws.
+  const soft17 = (rules, cards, mode) => playRound({ cards, mode, rules });
+
+  it.each([
+    ["US peek", Modes.PEEK],
+    ["US no peek", Modes.NO_PEEK],
+    ["EU", Modes.EU],
+  ])("%s: A-6 hits, and a 3 makes soft 20 that beats 19", (_name, mode) => {
+    const r = soft17(h17, ["10", "A", "9", "6", "3"], mode);
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.dealer.total).toBe(20);
+    expect(r.results).toEqual([LOSE]);
+    expect(r.cardsLeft).toBe(0);
+  });
+
+  it.each([
+    ["US peek", Modes.PEEK],
+    ["US no peek", Modes.NO_PEEK],
+    ["EU", Modes.EU],
+  ])("%s: with S17 (off) the same A-6 stands and the player's 19 wins", (_name, mode) => {
+    const r = soft17({ dealerHitsSoft17: false }, ["10", "A", "9", "6", "3"], mode);
+    expect(r.dealer.cards).toHaveLength(2);
+    expect(r.dealer.total).toBe(17);
+    expect(r.results).toEqual([WIN]);
+    expect(r.cardsLeft).toBe(1);
+  });
+
+  it("the dealer's order of cards does not matter: 6 up and an ace in the hole is soft 17 too", () => {
+    const r = soft17(h17, ["10", "6", "9", "A", "3"]);
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.dealer.total).toBe(20);
+  });
+
+  it.each([
+    ["A-A-5", ["10", "A", "9", "A", "5", "3"]],
+    ["A-2-4", ["10", "A", "9", "2", "4", "3"]],
+  ])("%s is a soft 17 that hits, whichever the order it was built in", (_name, cards) => {
+    const r = soft17(h17, cards);
+    expect(r.dealer.cards).toHaveLength(4);
+    expect(r.dealer.total).toBe(20);
+    expect(r.results).toEqual([LOSE]);
+  });
+
+  it("A-6-10 is a hard 17: the dealer stands (no fourth card is available)", () => {
+    const r = soft17(h17, ["10", "A", "9", "6", "10"]);
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.dealer.total).toBe(17);
+    expect(r.results).toEqual([WIN]);
+  });
+
+  it("7-10 and soft 18 stand", () => {
+    const hard = soft17(h17, ["10", "10", "9", "7"]);
+    expect([hard.dealer.cards.length, hard.dealer.total, hard.results]).toEqual([2, 17, [WIN]]);
+    const soft18 = soft17(h17, ["10", "A", "9", "7"]);
+    expect([soft18.dealer.cards.length, soft18.dealer.total, soft18.results]).toEqual([2, 18, [WIN]]);
+  });
+
+  it("a soft 17 that hits into a hard 12 keeps drawing, and a bust ends it", () => {
+    const bust = soft17(h17, ["10", "A", "9", "6", "5", "K"]); // A-6 hits 5 (hard 12), draws K and busts
+    expect(bust.dealer.isBusted).toBe(true);
+    expect(bust.results).toEqual([WIN]);
+    expect(bust.payout).toBe(20);
+  });
+
+  it("a dealer that only checks for blackjack (the player has one) stops at two cards even on soft 17", () => {
+    const us = soft17(h17, ["A", "A", "K", "6", "5"]);
+    expect(us.dealer.cards).toHaveLength(2);
+    expect(us.cardsLeft).toBe(1);
+    expect(us.payout).toBe(25);
+    const eu = soft17(h17, ["A", "A", "K", "6", "5"], Modes.EU);
+    expect(eu.dealer.cards).toHaveLength(2);
+    expect(eu.dealer.total).toBe(17);
+    expect(eu.cardsLeft).toBe(1);
+    expect(eu.payout).toBe(25);
+  });
+
+  it("the dealer takes no card when every hand busted, even with soft 17", () => {
+    const us = playRound({ cards: ["10", "A", "6", "6", "K"], actions: ["hit"], rules: h17 });
+    expect(us.hands[0].isBusted).toBe(true);
+    expect(us.dealer.cards).toHaveLength(2);
+    expect(us.cardsLeft).toBe(0);
+    const eu = playRound({ cards: ["10", "A", "6", "K"], actions: ["hit"], mode: Modes.EU, rules: h17 });
+    expect(eu.hands[0].isBusted).toBe(true);
+    expect(eu.dealer.cards).toHaveLength(1);
+  });
+});
+
+describe("6:5 blackjack (blackjackPayout)", () => {
+  const sixFive = { blackjackPayout: "6:5" };
+  const bj = ["A", "10", "K", "6", "5"]; // player blackjack against a dealer 16 that need not draw (a blackjack wins at once)
+
+  it.each([[10, 22], [5, 11], [1, 2.2], [3, 6.6], [25, 55]])("a $%s blackjack pays $%s back (stake included)", (bet, payout) => {
+    const r = playRound({ cards: bj, bet, rules: sixFive });
+    expect(r.results).toEqual([WIN]);
+    expect(r.payout).toBe(payout);
+    expect(r.state.creditEvents.find((e) => e.kind === "settle").amount).toBe(payout);
+  });
+
+  it.each([[10, 25], [5, 12.5], [1, 2.5]])("3:2 is unchanged: a $%s blackjack pays $%s", (bet, payout) => {
+    expect(playRound({ cards: bj, bet, rules: { blackjackPayout: "3:2" } }).payout).toBe(payout);
+    expect(playRound({ cards: bj, bet }).payout).toBe(payout); // and so is the legacy default
+  });
+
+  it.each([
+    ["US peek", Modes.PEEK, bj],
+    ["US no peek", Modes.NO_PEEK, bj],
+    ["EU", Modes.EU, ["A", "10", "K", "7"]],
+  ])("%s pays 6:5 the same way", (_name, mode, cards) => {
+    expect(playRound({ cards, mode, rules: sixFive }).payout).toBe(22);
+  });
+
+  it("a plain win, a push and a loss are not touched", () => {
+    expect(playRound({ cards: ["10", "10", "9", "7"], rules: sixFive }).payout).toBe(20);
+    expect(playRound({ cards: ["A", "A", "K", "K"], rules: sixFive }).payout).toBe(10); // blackjack against blackjack
+    expect(playRound({ cards: ["10", "10", "6", "K"], rules: sixFive }).payout).toBe(0);
+  });
+
+  it("a split 21 that counts as blackjack (blackJackOnSplit) pays 6:5 as well", () => {
+    const r = playRound({ cards: ["A", "10", "A", "7", "K", "9"], actions: ["split"], blackJackOnSplit: true, rules: sixFive });
+    expect(r.hands.map((h) => h.payout)).toEqual([22, 20]);
+  });
+
+  it("a split 21 that is not blackjack still pays 1:1", () => {
+    const r = playRound({ cards: ["A", "10", "A", "7", "K", "9"], actions: ["split"], rules: sixFive });
+    expect(r.hands.map((h) => h.payout)).toEqual([20, 20]);
+  });
+
+  it("three $1 blackjacks settle 6.6 (not 6.6000000000000005): the API rejects more than two decimals", () => {
+    // A-A split, resplit the second ace: each hand is A-K, all blackjack on a split.
+    const r = playRound({
+      cards: ["A", "10", "A", "7", "K", "A", "K", "K"], bet: 1, actions: ["split", "split"], blackJackOnSplit: true,
+      rules: { ...sixFive, resplitAces: true },
+    });
+    expect(r.hands.map((h) => h.isBlackjack)).toEqual([true, true, true]);
+    expect(r.hands.map((h) => h.payout)).toEqual([2.2, 2.2, 2.2]);
+    expect(r.state.creditEvents.find((e) => e.kind === "settle").amount).toBe(6.6);
+  });
+});
+
+describe("double limits (doubleOn, doubleAfterSplit) and triple down", () => {
+  // Dealer 10-7 stands on 17. A double that is allowed draws the 2; a refused one leaves the hand as it was.
+  const tryDouble = (cards, rules, action = "double") => playRound({ cards: [cards[0], "10", cards[1], "7", "2", "2"], actions: [action], rules });
+  const doubled = (r) => r.hands[0].bet === 20;
+  const tripled = (r) => r.hands[0].bet === 30;
+
+  // [name, the two cards, allowed by: any, 9-11, 10-11]
+  it.each([
+    ["hard 8", ["5", "3"], [true, false, false]],
+    ["hard 9", ["5", "4"], [true, true, false]],
+    ["hard 10", ["6", "4"], [true, true, true]],
+    ["hard 11", ["6", "5"], [true, true, true]],
+    ["hard 12", ["7", "5"], [true, false, false]],
+    ["hard 20 (10-K)", ["K", "10"], [true, false, false]],
+    ["soft 19 (A-8, which is also a hard 9)", ["A", "8"], [true, false, false]],
+    ["soft 13 (A-2)", ["A", "2"], [true, false, false]],
+    ["soft 18 (A-7)", ["A", "7"], [true, false, false]],
+    ["soft 20 (A-9, a hard 10)", ["A", "9"], [true, false, false]],
+  ])("%s: doubles on any, 9-11, 10-11 as %j", (_name, hand, [any, nineEleven, tenEleven]) => {
+    expect(doubled(tryDouble(hand, { doubleOn: "any" }))).toBe(any);
+    expect(doubled(tryDouble(hand, { doubleOn: "9-11" }))).toBe(nineEleven);
+    expect(doubled(tryDouble(hand, { doubleOn: "10-11" }))).toBe(tenEleven);
+  });
+
+  it("a refused double changes nothing: same cards, same stake, no extra ledger bet, and the hand stands next", () => {
+    const r = tryDouble(["5", "3"], { doubleOn: "9-11" });
+    expect(r.hands[0]).toMatchObject({ bet: 10, status: HandStatus.DONE });
+    expect(r.hands[0].cards).toHaveLength(2);
+    expect(r.state.creditEvents.filter((e) => e.kind === "bet")).toHaveLength(1);
+    expect(r.cardsLeft).toBe(2);
+  });
+
+  it("legacy settings (any two cards) are unchanged", () => {
+    expect(doubled(playRound({ cards: ["5", "10", "3", "7", "2"], actions: ["double"] }))).toBe(true);
+  });
+
+  it("doubleAfterSplit off blocks a double on a split hand, on blocks nothing", () => {
+    const cards = ["8", "10", "8", "7", "3", "10", "9"]; // split: 8-3 (11) and 8-10; a double would draw the 9
+    const off = playRound({ cards, actions: ["split", "double"], rules: { doubleAfterSplit: false } });
+    expect(off.hands.map((h) => h.bet)).toEqual([10, 10]);
+    expect(off.hands[0].cards).toHaveLength(2);
+    const on = playRound({ cards, actions: ["split", "double"], rules: { doubleAfterSplit: true } });
+    expect(on.hands.map((h) => h.bet)).toEqual([20, 10]);
+  });
+
+  it("doubleAfterSplit off still allows a double on the first two cards of an unsplit hand", () => {
+    expect(doubled(playRound({ cards: ["5", "10", "6", "7", "K"], actions: ["double"], rules: { doubleAfterSplit: false } }))).toBe(true);
+  });
+
+  it("doubleOn applies to a split hand as well: 8-3 (11) doubles on 10-11, 8-K (18) does not", () => {
+    const rules = { doubleOn: "10-11" };
+    const good = playRound({ cards: ["8", "10", "8", "7", "3", "K", "4"], actions: ["split", "double"], rules });
+    expect(good.hands.map((h) => h.bet)).toEqual([20, 10]);
+    const bad = playRound({ cards: ["8", "10", "8", "7", "K", "3", "4"], actions: ["split", "double"], rules });
+    expect(bad.hands.map((h) => h.bet)).toEqual([10, 10]);
+  });
+
+  it("split aces are never doubled, even when they may be hit and doubling is allowed everywhere", () => {
+    const r = playRound({ cards: ["A", "10", "A", "7", "5", "4", "3"], actions: ["split", "double"], rules: { hitSplitAces: true, doubleAfterSplit: true, doubleOn: "any" } });
+    expect(r.hands.map((h) => [h.bet, h.cards.length])).toEqual([[10, 2], [10, 2]]);
+    expect(r.state.creditEvents.filter((e) => e.kind === "bet")).toHaveLength(2); // the opening bet and the split stake only
+  });
+
+  describe("triple down obeys the same limits", () => {
+    const triple = { tripleDown: true };
+    const tryTriple = (cards, rules) => playRound({ cards: [cards[0], "10", cards[1], "7", "2", "2", "2"], actions: ["triple"], rules: { ...triple, ...rules } });
+
+    it("triples where a double is allowed and is refused where it is not", () => {
+      expect(tripled(tryTriple(["5", "4"], { doubleOn: "9-11" }))).toBe(true);
+      expect(tripled(tryTriple(["5", "3"], { doubleOn: "9-11" }))).toBe(false);
+      expect(tripled(tryTriple(["A", "8"], { doubleOn: "9-11" }))).toBe(false);
+      expect(tripled(tryTriple(["6", "4"], { doubleOn: "10-11" }))).toBe(true);
+      expect(tripled(tryTriple(["5", "4"], { doubleOn: "10-11" }))).toBe(false);
+    });
+
+    it("legacy: any two cards", () => {
+      expect(tripled(tryTriple(["A", "8"], {}))).toBe(true);
+    });
+
+    it("is refused on a split hand when doubleAfterSplit is off, and works when it is on", () => {
+      const cards = ["8", "10", "8", "7", "3", "K", "2", "2"];
+      const off = playRound({ cards, actions: ["split", "triple"], rules: { ...triple, doubleAfterSplit: false } });
+      expect(off.hands.map((h) => h.bet)).toEqual([10, 10]);
+      const on = playRound({ cards, actions: ["split", "triple"], rules: triple });
+      expect(on.hands.map((h) => h.bet)).toEqual([30, 10]);
+    });
+
+    it("a refused triple never falls through to a split of the pair", () => {
+      const r = playRound({ cards: ["8", "10", "8", "7", "2", "2"], actions: ["triple"], rules: { ...triple, doubleOn: "9-11" } });
+      expect(r.hands).toHaveLength(1);
+      expect(r.hands[0].bet).toBe(10);
+    });
+
+    it("split aces are never tripled", () => {
+      const r = playRound({ cards: ["A", "10", "A", "7", "5", "4", "3", "2"], actions: ["split", "triple"], rules: { ...triple, hitSplitAces: true } });
+      expect(r.hands.map((h) => [h.bet, h.cards.length])).toEqual([[10, 2], [10, 2]]);
+    });
+  });
+});
+
+describe("split aces (resplitAces, hitSplitAces)", () => {
+  const a = ["A", "10", "A", "7"]; // A-A against 10-7; the split's cards come next: first hand, second hand
+  const ranks = (r) => r.hands.map((h) => h.cards.map((c) => c.rank[0]).join(""));
+
+  it("by default each split ace gets one card and stands, even an ace", () => {
+    const r = playRound({ cards: [...a, "A", "5", "9"], actions: ["split"], rules: { resplitAces: false } });
+    expect(r.hands.map((h) => [h.cards.length, h.status])).toEqual([[2, HandStatus.DONE], [2, HandStatus.DONE]]);
+    expect(r.cardsLeft).toBe(1);
+  });
+
+  it("resplitAces: a split ace that gets an ace stays playable and splits again, then the other ace is dead and finishes", () => {
+    // Split 1: first hand A-A (waits), second hand A-K (stands). Split 2, with the hand limit 3: A-K and A-K; the first hand's A-A is left.
+    const r = playRound({ cards: [...a, "A", "K", "A", "K"], actions: ["split", "split"], rules: { resplitAces: true, maxSplitHands: 3 } });
+    expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(ranks(r)).toEqual(["aa", "ak", "ak"]);
+    expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+    expect(r.cardsLeft).toBe(0);
+    expect(r.staked).toBe(30);
+  });
+
+  it("resplitAces stops at maxSplitHands: a second split is refused and both A-A hands finish without hanging the round", () => {
+    const r = playRound({ cards: [...a, "A", "A", "5", "9", "K"], actions: ["split", "split"], rules: { resplitAces: true, maxSplitHands: 2 } });
+    expect(r.hands).toHaveLength(2);
+    expect(ranks(r)).toEqual(["aa", "aa"]);
+    expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+    expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+  });
+
+  it("resplitAces with no limit (0) splits as long as aces come", () => {
+    // [A-A][A-A] -> split the first: [A-A][A-A][A-A] -> split the first again: [A-5][A-K][A-A][A-A]; the other two aces are left to stand.
+    const r = playRound({ cards: [...a, "A", "A", "A", "A", "5", "K"], actions: ["split", "split", "split"], rules: { resplitAces: true, maxSplitHands: 0 } });
+    expect(r.hands).toHaveLength(4);
+    expect(r.staked).toBe(40);
+    expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+  });
+
+  it("a split ace that gets a king (A-K) stands, with resplitAces on", () => {
+    const r = playRound({ cards: [...a, "K", "K"], actions: ["split"], rules: { resplitAces: true } });
+    expect(r.hands.map((h) => [h.total, h.status, h.isBlackjack])).toEqual([[21, HandStatus.DONE, false], [21, HandStatus.DONE, false]]);
+    expect(r.payout).toBe(40);
+  });
+
+  it("resplitAces off by default: a third ace is not split", () => {
+    const r = playRound({ cards: [...a, "A", "A", "5"], actions: ["split", "split"] });
+    expect(r.hands).toHaveLength(2);
+  });
+
+  it("hitSplitAces: a split ace may hit, and a 21 stops it", () => {
+    const r = playRound({ cards: [...a, "5", "2", "5", "K"], actions: ["split", "hit"], rules: { hitSplitAces: true } });
+    expect(r.hands[0].cards).toHaveLength(3);
+    expect([r.hands[0].total, r.hands[0].status]).toEqual([21, HandStatus.DONE]);
+    expect(r.hands[1].cards).toHaveLength(2); // A-2 stood
+    expect(r.cardsLeft).toBe(1);
+    expect(r.results).toEqual([WIN, LOSE]);
+  });
+
+  it("hitSplitAces with resplitAces: an ace pair that can still hit stays in play at the hand limit", () => {
+    const r = playRound({ cards: [...a, "A", "5", "A", "K", "2"], actions: ["split", "split", "hit"], rules: { hitSplitAces: true, resplitAces: true, maxSplitHands: 3 } });
+    expect(r.hands).toHaveLength(3);
+    expect(r.hands[0].cards).toHaveLength(3); // the A-A hand was not finished for the player: the hit went through
+    expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+  });
+
+  it("a hit on a split ace is refused without hitSplitAces: the hand keeps its two cards and the shoe its cards", () => {
+    const r = playRound({ cards: [...a, "A", "5", "K", "K"], actions: ["split", "hit"], rules: { resplitAces: true, maxSplitHands: 0 } });
+    expect(r.hands[0].cards).toHaveLength(2); // A-A may only split or stand; the hit did nothing and the hand then stood
+    expect(r.cardsLeft).toBe(2);
+  });
+
+  it("a hit works on a normal split hand, with or without hitSplitAces", () => {
+    for (const hitSplitAces of [false, true]) {
+      const r = playRound({ cards: ["8", "10", "8", "7", "3", "10", "K"], actions: ["split", "hit"], rules: { hitSplitAces } });
+      expect(r.hands[0].cards).toHaveLength(3);
+    }
+  });
+});
+
+describe("original bet only (noHoleCardLoss): a dealer blackjack found after the player added stakes", () => {
+  const original = { noHoleCardLoss: "original" };
+  const all = { noHoleCardLoss: "all" };
+  // The dealer has an ace up and a king: with no peek the hole card is dealt at the start, in EU the dealer's second card
+  // comes after the player has acted. `draws` are the player's cards in between.
+  const play = (mode, p1, p2, draws, actions, rules, extra = {}) =>
+    playRound({ cards: mode === Modes.EU ? [p1, "A", p2, ...draws, "K"] : [p1, "A", p2, "K", ...draws], mode, actions, rules, ...extra });
+
+  describe.each([["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]])("%s", (_name, mode) => {
+    it("a double loses the original bet and gets the doubled stake back", () => {
+      const r = play(mode, "5", "6", ["10"], ["double"], original);
+      expect(r.dealer.isBlackjack).toBe(true);
+      expect(r.hands[0]).toMatchObject({ total: 21, bet: 20, result: LOSE, payout: 10 });
+      expect([r.staked, r.payout]).toEqual([20, 10]);
+    });
+
+    it("all (the legacy rule) takes both stakes", () => {
+      const r = play(mode, "5", "6", ["10"], ["double"], all);
+      expect(r.results).toEqual([LOSE]);
+      expect([r.staked, r.payout]).toEqual([20, 0]);
+    });
+
+    it("a triple gets the two added stakes back", () => {
+      const r = play(mode, "5", "6", ["2", "3"], ["triple"], { ...original, tripleDown: true });
+      expect([r.results, r.staked, r.payout]).toEqual([[LOSE], 30, 20]);
+      expect(play(mode, "5", "6", ["2", "3"], ["triple"], { ...all, tripleDown: true }).payout).toBe(0);
+    });
+
+    it("a split with two live hands loses one bet in all: the split-off hand's stake comes back", () => {
+      const r = play(mode, "8", "8", ["3", "2"], ["split"], original);
+      expect(r.hands.map((h) => [h.bet, h.result, h.payout])).toEqual([[10, LOSE, 0], [10, LOSE, 10]]);
+      expect([r.staked, r.payout]).toEqual([20, 10]);
+      expect(play(mode, "8", "8", ["3", "2"], ["split"], all).payout).toBe(0);
+    });
+
+    it("a split where the first hand busts and the second is live still loses only one bet", () => {
+      const r = play(mode, "8", "8", ["6", "3", "K"], ["split", "hit"], original);
+      expect(r.hands.map((h) => [h.isBusted, h.payout])).toEqual([[true, 0], [false, 10]]);
+      expect([r.staked, r.payout]).toEqual([20, 10]);
+    });
+
+    // The agreed rule (spec: "a hand that busted is never refunded"): the added stake belongs to the split-off hand, so when
+    // that hand busts its stake is lost, and the first hand, live, loses its own bet. Both bets go. Do not "fix" this one.
+    it("a split where the second hand busts and the first is live loses both bets: a bust is never refunded", () => {
+      const r = play(mode, "8", "8", ["3", "6", "K"], ["split", "stand", "hit"], original);
+      expect(r.hands.map((h) => [h.isBusted, h.payout])).toEqual([[false, 0], [true, 0]]);
+      expect([r.staked, r.payout]).toEqual([20, 0]);
+    });
+
+    it("a double on the split-off hand gets all of its doubled stake back", () => {
+      const r = play(mode, "8", "8", ["3", "2", "5"], ["split", "stand", "double"], original);
+      expect(r.hands.map((h) => [h.bet, h.payout])).toEqual([[10, 0], [20, 20]]);
+      expect([r.staked, r.payout]).toEqual([30, 20]);
+    });
+
+    it("a double on the first hand of a split gets only the doubled stake back, plus the split stake of the other hand", () => {
+      const r = play(mode, "8", "8", ["3", "2", "5"], ["split", "double"], original);
+      expect(r.hands.map((h) => [h.bet, h.payout])).toEqual([[20, 10], [10, 10]]);
+      expect([r.staked, r.payout]).toEqual([30, 20]);
+    });
+
+    it("a face-down double that did not bust gets the doubled stake back", () => {
+      const r = play(mode, "5", "6", ["10"], ["double"], { ...original, doubleFaceDown: true });
+      expect(r.hands[0]).toMatchObject({ total: 21, bet: 20, result: LOSE, payout: 10 });
+    });
+
+    it("a face-down double that busts loses everything: a bust is never refunded", () => {
+      const r = play(mode, "10", "2", ["K"], ["double"], { ...original, doubleFaceDown: true });
+      expect(r.hands[0]).toMatchObject({ total: 22, isBusted: true, bet: 20, result: LOSE, payout: 0 });
+    });
+
+    it("a face-down double with all takes everything either way", () => {
+      expect(play(mode, "5", "6", ["10"], ["double"], { ...all, doubleFaceDown: true }).payout).toBe(0);
+    });
+
+    it("a hit to 21 (not a blackjack) loses to the dealer blackjack; nothing was added, so nothing comes back", () => {
+      const r = play(mode, "5", "6", ["K"], ["hit"], original);
+      expect(r.hands[0]).toMatchObject({ total: 21, isBlackjack: false, result: LOSE, bet: 10, payout: 0 });
+    });
+
+    it("a refused double stake leaves nothing to refund, and the payout is never negative", () => {
+      const r = play(mode, "5", "6", ["10"], ["double"], original, { refuse: [1] });
+      expect(r.hands[0]).toMatchObject({ bet: 10, result: LOSE, payout: 0 });
+    });
+
+    it("a refused triple stake leaves nothing to refund", () => {
+      const r = play(mode, "5", "6", ["2", "3"], ["triple"], { ...original, tripleDown: true }, { refuse: [1] });
+      expect(r.hands[0]).toMatchObject({ bet: 10, payout: 0 });
+    });
+
+    it("a refused split stake leaves the split-off hand with no bet and no refund", () => {
+      const r = play(mode, "8", "8", ["3", "2"], ["split"], original, { refuse: [1] });
+      expect(r.hands.map((h) => [h.bet, h.payout])).toEqual([[10, 0], [0, 0]]);
+    });
+
+    it("a player blackjack against the dealer blackjack still pushes", () => {
+      const r = playRound({ cards: ["A", "A", "K", "K"], mode, rules: original });
+      expect(r.results).toEqual([PUSH]);
+      expect(r.payout).toBe(10);
+    });
+  });
+
+  it("a split into two aces that each stand loses one bet in all, like any other split", () => {
+    const r = playRound({ cards: ["A", "A", "A", "K", "K", "9"], mode: Modes.NO_PEEK, actions: ["split"], rules: original });
+    expect(r.dealer.isBlackjack).toBe(true);
+    expect([r.staked, r.payout]).toEqual([20, 10]);
+  });
+
+  it("with a peek the dealer blackjack is found at the deal, before any extra stake: both values lose just the bet", () => {
+    for (const rules of [original, all]) {
+      const r = playRound({ cards: ["10", "A", "9", "K"], rules });
+      expect([r.results, r.staked, r.payout]).toEqual([[LOSE], 10, 0]);
+    }
+  });
+
+  it("a player blackjack pushes a dealer blackjack with a peek under both values", () => {
+    for (const rules of [original, all]) expect(playRound({ cards: ["A", "A", "K", "K"], rules }).payout).toBe(10);
+  });
+
+  it("a dealer without blackjack changes nothing: a lost double still loses the whole doubled stake", () => {
+    const r = playRound({ cards: ["5", "10", "6", "K", "2"], mode: Modes.NO_PEEK, actions: ["double"], rules: original });
+    expect(r.dealer.isBlackjack).toBe(false);
+    expect([r.results, r.staked, r.payout]).toEqual([[LOSE], 20, 0]);
+  });
+
+  it("a dealer 21 of three cards is not a blackjack and takes everything", () => {
+    // Player 9-2 doubles into 16; the dealer 5-6 draws a 10.
+    const r = playRound({ cards: ["9", "5", "2", "5", "6", "10"], mode: Modes.EU, actions: ["double"], rules: original });
+    expect(r.dealer.isBlackjack).toBe(false);
+    expect(r.dealer.total).toBe(21);
+    expect([r.results, r.staked, r.payout]).toEqual([[LOSE], 20, 0]);
+  });
+
+  it("the displayed result stays a loss, and the refund is part of the one settle sent to the server", () => {
+    const r = play(Modes.EU, "5", "6", ["10"], ["double"], original);
+    expect(r.state.creditEvents.filter((e) => e.kind !== "local").map((e) => [e.kind, e.amount])).toEqual([["bet", 10], ["bet", 10], ["settle", 10]]);
+  });
+});
+
+describe("rule presets (#91): one signature scenario each, with the preset's own settings", () => {
+  const preset = (name) => RULE_PRESETS[name];
+  // Eight 8s then the dealer's card: the first four splits come out as 8-8 pairs, the last split (if allowed) ends the pairs.
+  const pairs = ["8", "10", "8", "8", "8", "8", "8", "8", "8", "K", "9", "7"];
+  const splits = ["split", "split", "split", "split"];
+
+  it("Vegas: the dealer hits soft 17 (A-6 draws), and a peek finds a dealer blackjack at the deal", () => {
+    const r = playRound({ cards: ["10", "A", "9", "6", "3"], rules: preset("Vegas") });
+    expect(r.dealer.cards).toHaveLength(3);
+    expect(r.results).toEqual([LOSE]);
+    const bj = playRound({ cards: ["10", "A", "9", "K"], rules: preset("Vegas") });
+    expect(bj.afterDeal.dealer.isBlackjack).toBe(true);
+  });
+
+  it("Atlantic City: no hole card, and a dealer blackjack after a double takes only the original bet", () => {
+    const r = playRound({ cards: ["5", "A", "6", "10", "K"], actions: ["double"], rules: preset("Atlantic City") });
+    expect(r.afterDeal.dealer.cards).toHaveLength(1);
+    expect(r.dealer.isBlackjack).toBe(true);
+    expect([r.results, r.staked, r.payout]).toEqual([[LOSE], 20, 10]);
+    const stands = playRound({ cards: ["10", "A", "9", "6"], rules: preset("Atlantic City") }); // S17: A-6 stands
+    expect(stands.dealer.cards).toHaveLength(2);
+  });
+
+  it("Europe: no double on 8, a double on 9, resplit with no limit, and a dealer blackjack takes everything", () => {
+    const europe = preset("Europe");
+    const eight = playRound({ cards: ["5", "10", "3", "K", "2"], actions: ["double"], rules: europe });
+    expect(eight.hands[0].bet).toBe(10);
+    const nine = playRound({ cards: ["5", "10", "4", "2", "K"], actions: ["double"], rules: europe });
+    expect(nine.hands[0].bet).toBe(20);
+    const resplit = playRound({ cards: pairs, actions: splits, rules: europe });
+    expect(resplit.hands).toHaveLength(5); // four splits: past the 4 hands of the other regions
+    const takesAll = playRound({ cards: ["5", "A", "6", "10", "K"], actions: ["double"], rules: europe });
+    expect([takesAll.results, takesAll.staked, takesAll.payout]).toEqual([[LOSE], 20, 0]);
+  });
+
+  it("Australia: double on hard 9-11 only, and a fourth hand is not allowed", () => {
+    const australia = preset("Australia");
+    expect(playRound({ cards: ["5", "10", "4", "2", "K"], actions: ["double"], rules: australia }).hands[0].bet).toBe(20);
+    expect(playRound({ cards: ["7", "10", "5", "K", "2"], actions: ["double"], rules: australia }).hands[0].bet).toBe(10); // hard 12
+    expect(playRound({ cards: ["A", "10", "8", "K", "2"], actions: ["double"], rules: australia }).hands[0].bet).toBe(10); // soft 19
+    expect(playRound({ cards: pairs, actions: splits, rules: australia }).hands).toHaveLength(3);
+  });
+
+  it("Singapore: double on A-7 (any first two cards), and a fourth hand is not allowed", () => {
+    const singapore = preset("Singapore");
+    const r = playRound({ cards: ["A", "10", "7", "3", "7"], actions: ["double"], rules: singapore });
+    expect([r.hands[0].bet, r.hands[0].total, r.results]).toEqual([20, 21, [WIN]]);
+    expect(playRound({ cards: pairs, actions: splits, rules: singapore }).hands).toHaveLength(3);
+  });
+
+  it("Vegas and Atlantic City allow up to four hands", () => {
+    expect(playRound({ cards: pairs, actions: splits, rules: preset("Atlantic City") }).hands).toHaveLength(4);
+    // Vegas peeks, so its dealer's hole card is dealt up front.
+    const peekPairs = ["8", "10", "8", "7", ...pairs.slice(3)];
+    expect(playRound({ cards: peekPairs, actions: splits, rules: preset("Vegas") }).hands).toHaveLength(4);
   });
 });

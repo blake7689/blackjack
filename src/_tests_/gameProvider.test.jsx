@@ -736,3 +736,82 @@ describe("GameProvider auto deal (#88)", () => {
     });
   });
 });
+
+describe("GameProvider saved table rules (#91)", () => {
+  const legacy = {
+    dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0,
+  };
+  const vegas = {
+    dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
+    noHoleCardLoss: "original", deckCount: 6, maxSplitHands: 4,
+  };
+  const cardsIn = (ctx) => ctx.state.shoe.filter((c) => c.type === "card").length;
+
+  it("a player who never saved ({}) signs in on Vegas, with a six-deck shoe", async () => {
+    remote.getSettings.mockResolvedValue({});
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject(vegas);
+    expect(cards.createShoe).toHaveBeenLastCalledWith(6, true);
+    act(() => ctx.actions.startGame());
+    expect(cardsIn(ctx)).toBe(312);
+  });
+
+  it("a v: 2 object without the rule keys also signs in on Vegas", async () => {
+    remote.getSettings.mockResolvedValue({ v: 2, playTimeout: 500 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...vegas, playTimeout: 500 });
+  });
+
+  it("a v: 1 object loads the legacy rules, and the shoe has the legacy two decks", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, playTimeout: 500 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...legacy, playTimeout: 500 });
+    expect(cards.createShoe).toHaveBeenLastCalledWith(2, true);
+    act(() => ctx.actions.startGame());
+    expect(cardsIn(ctx)).toBe(104);
+  });
+
+  it("a v: 1 object with its own deck count and split limit keeps them, and the shoe is that size", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, deckCount: 3, maxSplitHands: 2 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...legacy, deckCount: 3, maxSplitHands: 2 });
+    expect(cards.createShoe).toHaveBeenLastCalledWith(3, true);
+  });
+
+  it("a setting change saves { v: 2, ...every setting }", async () => {
+    remote.token = "token";
+    remote.getSettings.mockResolvedValue({});
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    await act(async () => { await ctx.actions.changeSetting("blackjackPayout", "6:5"); });
+    const saved = remote.saveSettings.mock.calls[0][0];
+    expect(saved.v).toBe(2);
+    expect(Object.keys(saved).sort()).toEqual(["v", ...Object.keys(ctx.state.settings)].sort());
+    expect(saved).toMatchObject({ ...vegas, blackjackPayout: "6:5" });
+  });
+
+  it("a v: 1 table that changes one setting is saved as v: 2 with its legacy rule values (no silent payout change)", async () => {
+    remote.token = "token";
+    remote.getSettings.mockResolvedValue({ v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
+    const saved = remote.saveSettings.mock.calls[0][0];
+    expect(saved).toMatchObject({ v: 2, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(saved.dealerHitsSoft17).toBe(false);
+    expect(saved.noHoleCardLoss).toBe("all");
+  });
+
+  it("a rule change is a table setting: it deals a fresh shoe and resets the table", async () => {
+    const { ctx } = setup();
+    act(() => { ctx.actions.changeSetting("dealerHitsSoft17", false); });
+    expect(ctx.state.settings.dealerHitsSoft17).toBe(false);
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+});
