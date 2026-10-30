@@ -6,6 +6,9 @@ import { useGameState, useGameActions } from "../../hooks/useGame";
 import { useCssVarHeight } from "../../hooks/useCssVarHeight";
 import { visibleChips } from "../../utils/chips";
 
+// Auto deal's Pause/Resume shows only between rounds.
+const BETWEEN_ROUNDS = [GamePhases.PRE_DEAL, GamePhases.POST_ROUND, GamePhases.END_ROUND];
+
 function Chip({ value, onClick }) {
   return (
     <button className="chip" onClick={onClick} aria-label={`Add ${value}`}>
@@ -56,7 +59,7 @@ export default function BettingFooter() {
               Clear
             </button>
           </div>
-          {settings.autoDeal && settings.resetInitialBet && (
+          {settings.autoDeal && settings.resetInitialBet && BETWEEN_ROUNDS.includes(phase) && (
             // Inside .board, whose click moves on from the results: stop the click there.
             <button
               type="button"

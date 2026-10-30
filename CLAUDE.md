@@ -122,7 +122,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `nextAutoAction` gives CONTINUE (POST_ROUND) and DEAL (PRE_DEAL, pending) on the one existing timer; DEAL waits `stepWait(autoDealDelay)`, so delay 0 means right
   after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
   `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
-  shows whenever auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal); it stops click
+  shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal); it stops click
   propagation because `.board` treats a click as CONTINUE. There is no Undo action, only ADD_BET and CLEAR_BET.
 
 ## Do not

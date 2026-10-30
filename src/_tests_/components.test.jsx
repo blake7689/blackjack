@@ -503,10 +503,39 @@ describe("BettingFooter auto deal control (#88)", () => {
     expect(gameActions.pauseAutoDeal).toHaveBeenCalledTimes(1);
   });
 
-  it("is there in every phase, and a pending deal adds no countdown", () => {
-    const { container } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PLAYER_TURN, settings: on, betCircle: 10, autoDealPending: true } });
+  it("shows only between rounds: in PRE_DEAL, POST_ROUND and END_ROUND", () => {
+    for (const phase of [GamePhases.PRE_DEAL, GamePhases.POST_ROUND, GamePhases.END_ROUND]) {
+      renderUI(<BettingFooter />, { game: { phase, settings: on } });
+      expect(toggle("Pause auto deal"), phase).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it("is not in the page during a round: dealing, the turns, settling, results, or before the game starts", () => {
+    const duringRound = [GamePhases.DEALING, GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS, GamePhases.NONE];
+    for (const phase of duringRound) {
+      for (const autoDealPaused of [false, true]) {
+        renderUI(<BettingFooter />, { game: { phase, settings: on, autoDealPaused, betCircle: 10 } });
+        expect(toggle(/auto deal/), `${phase} paused=${autoDealPaused}`).toBeNull();
+        cleanup();
+      }
+    }
+  });
+
+  it("stays absent between rounds when either setting is off", () => {
+    for (const phase of [GamePhases.PRE_DEAL, GamePhases.POST_ROUND, GamePhases.END_ROUND]) {
+      for (const settings of [{ ...on, autoDeal: false }, { ...on, resetInitialBet: false }]) {
+        renderUI(<BettingFooter />, { game: { phase, settings } });
+        expect(toggle(/auto deal/), phase).toBeNull();
+        cleanup();
+      }
+    }
+  });
+
+  it("a pending deal adds no countdown", () => {
+    const { container } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL, settings: on, betCircle: 10, autoDealPending: true } });
     expect(toggle("Pause auto deal")).not.toBeNull();
-    expect(container.textContent).not.toMatch(/countdown|dealing in|seconds|\d\s*s\b/i);
+    expect(container.textContent).not.toMatch(/countdown|dealing in|seconds/i);
   });
 
   it("clicking it does not reach the board's click, which would continue the round", () => {
