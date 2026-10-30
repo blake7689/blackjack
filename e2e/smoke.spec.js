@@ -87,3 +87,28 @@ test('options stay hidden while cards move through a whole round (#72)', async (
   expect(api.settles).toEqual([{ payout: expect.any(Number), requestId: expect.stringMatching(V4) }]);
   expect(api.bets[0].requestId).not.toBe(api.settles[0].requestId);
 });
+
+// The same seed-183 deal (14 against a 6, jack in the hole, Vegas peek): Surrender gives half the bet back in one settle, and the dealer draws nothing.
+test('surrendering a hand returns half the bet, in one settle (#91)', async ({ page }) => {
+  const api = await stubApi(page);
+  await seedRandom(page, 183);
+  const settingsLoaded = page.waitForResponse('**/player/me/settings');
+  await submitLogin(page);
+  await (await settingsLoaded).finished();
+  await page.getByRole('button', { name: 'Start Game' }).click();
+  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
+  await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
+  await expect(page.locator('.hand-total > span:not(.ht-size) .hand-result.Surrendered')).toHaveText('Surrendered') // the live text, not its invisible size copy;
+  await expect(page.getByText('Click anywhere to continue...')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('img', { name: 'jack of hearts' })).toBeVisible(); // the hole card is shown
+  await expect(page.getByRole('img', { name: '3 of diamonds' })).toHaveCount(0); // the dealer did not play on (16)
+  await expect(page.getByRole('button', { name: 'Surrender' })).toHaveCount(0);
+
+  await expect.poll(() => api.settles.length).toBe(1);
+  expect(api.bets).toEqual([{ amount: 10, newRound: true, requestId: expect.stringMatching(V4) }]);
+  expect(api.settles).toEqual([{ payout: 5, requestId: expect.stringMatching(V4) }]);
+});

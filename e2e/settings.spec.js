@@ -1,6 +1,6 @@
 import { test, expect, stubApi } from './fixtures';
 
-// Table rules on the Settings page (#91): the controls come from the saved settings, and a save writes version 2 with the whole key set.
+// Table rules on the Settings page (#91): the controls come from the saved settings, and a save writes version 3 with the whole key set.
 async function openGameSettings(page) {
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await page.goto('/');
@@ -52,4 +52,18 @@ test('a table saved before #91 keeps its payout rules, and the next save upgrade
   expect(api.saves[0]).toMatchObject({
     v: 3, resplitAces: true, surrender: 'none', dealerHitsSoft17: false, noHoleCardLoss: 'all', blackjackPayout: '3:2', deckCount: 2, maxSplitHands: 0, dealerHoleBehaviour: 'drawAfter',
   });
+});
+
+test('Surrender is a rule: the hint follows the choice, and saving it writes version 3 with surrender early (#91)', async ({ page }) => {
+  const api = await stubApi(page);
+  await openGameSettings(page);
+  await expect(control(page, 'surrender')).toHaveValue('late');
+  await expect(page.getByText(/Give up half your bet on your first two cards/)).toBeVisible();
+
+  await control(page, 'surrender').selectOption('early');
+  await expect(page.getByText(/You keep the half even if the dealer has one/)).toBeVisible();
+  await control(page, 'Save surrender').click();
+
+  await expect.poll(() => api.saves.length).toBe(1);
+  expect(api.saves[0]).toMatchObject({ v: 3, surrender: 'early', dealerHoleBehaviour: 'drawEarly_Check', deckCount: 6 });
 });
