@@ -801,3 +801,83 @@ describe("Settings table rules (#91)", () => {
     });
   });
 });
+
+describe("Settings: insurance and even money (#91)", () => {
+  const open = (game = {}, path = "/settings?tab=game") => renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game } });
+  const TEXT = /When the dealer shows an ace you may insure for half your bet; it pays 2:1 if the dealer has blackjack\. With your own blackjack you may take even money \(1:1\) at once\./;
+
+  it("is a checkbox on the Game tab, on for Vegas, named 'Insurance and Even Money', with its hint", () => {
+    open();
+    const box = screen.getByLabelText("insurance");
+    expect(box.type).toBe("checkbox");
+    expect(box.checked).toBe(true);
+    expect(screen.getByText("Insurance and Even Money")).toBeTruthy();
+    expect(screen.getByText(TEXT)).toBeTruthy();
+  });
+
+  it("is not on the Player or Dev tabs", () => {
+    open();
+    for (const tab of ["Player", "Dev"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.queryByLabelText("insurance"), tab).toBeNull();
+    }
+  });
+
+  it("is shown in every dealer mode", () => {
+    for (const dealerHoleBehaviour of ["drawEarly_Check", "drawEarly_NoCheck", "drawAfter"]) {
+      open({ settings: { ...initialGameState.settings, dealerHoleBehaviour } });
+      expect(screen.getByLabelText("insurance"), dealerHoleBehaviour).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("shows a table with insurance off unchecked", () => {
+    open({ settings: { ...initialGameState.settings, insurance: false } });
+    expect(screen.getByLabelText("insurance").checked).toBe(false);
+  });
+
+  it("saves the unchecked box with its Save button", () => {
+    const { gameActions } = open();
+    fireEvent.click(screen.getByLabelText("insurance"));
+    fireEvent.click(screen.getByLabelText("Save insurance"));
+    expect(gameActions.changeSetting.mock.calls).toEqual([["insurance", false]]);
+  });
+
+  it("a change warns that it resets a round in progress (it is a table setting)", () => {
+    open({ phase: GamePhases.PLAYER_TURN });
+    expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
+    fireEvent.click(screen.getByLabelText("insurance"));
+    expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+  });
+
+  it("also warns while the table waits at the offers or the peek (they count as mid-round)", () => {
+    for (const phase of [GamePhases.OFFERS, GamePhases.PEEK]) {
+      open({ phase });
+      fireEvent.click(screen.getByLabelText("insurance"));
+      expect(screen.getByText("Changing this setting will reset the current game."), phase).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("every preset applies insurance on", () => {
+    const { gameActions } = open({ settings: { ...initialGameState.settings, insurance: false } });
+    for (const name of ["Vegas", "Atlantic City", "Europe", "Australia", "Singapore"]) {
+      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: name } });
+    }
+    expect(gameActions.changeSettings.mock.calls.map(([sent]) => sent.insurance)).toEqual([true, true, true, true, true]);
+  });
+
+  it("unticking it on a preset table shows Custom, and ticking it back shows the preset again", () => {
+    open();
+    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
+    fireEvent.click(screen.getByLabelText("insurance"));
+    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+    fireEvent.click(screen.getByLabelText("insurance"));
+    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
+  });
+
+  it("a saved table with insurance off (a version 1 to 3 save) shows Custom, for every preset's other rules", () => {
+    open({ settings: { ...initialGameState.settings, insurance: false } });
+    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+  });
+});

@@ -951,3 +951,165 @@ describe("GameProvider surrender (#91)", () => {
     expect(second.ctx.state.settings.surrender).toBe("earlyNoAce");
   });
 });
+
+describe("GameProvider offers (#91)", () => {
+  const { OFFERS, PEEK, PLAYER_TURN, POST_ROUND } = GamePhases;
+  // Vegas: the dealer peeks and insurance is on. Player 10-6 against an ace; the hole card is `hole`; a 9 behind it.
+  const aceUp = (hole = "K") => stackedShoe(["10", "A", "6", hole, "9", "9"]);
+  const toOffers = (options, hole) => {
+    shoes.push(aceUp(hole));
+    const result = setup(options);
+    act(() => result.ctx.actions.startGame());
+    act(() => result.ctx.actions.addBet(10));
+    act(() => result.ctx.actions.deal());
+    tick(); // DEAL_DONE
+    return result;
+  };
+  const bets = (player) => events(player).filter((e) => e.kind === "bet");
+
+  it("deal passes the balance after the bet: the insurance is offered only when half the bet is left", () => {
+    const poor = toOffers({ credits: 14 }); // 4 left
+    expect(poor.ctx.state.phase).not.toBe(OFFERS);
+    expect(poor.ctx.state.offers).toBeNull();
+    cleanup();
+    const exact = toOffers({ credits: 15 }); // 5 left
+    expect(exact.ctx.state.phase).toBe(OFFERS);
+  });
+
+  it("stops at OFFERS and stays there however long it takes: no timer, no decline, no deal", () => {
+    const { ctx, player } = toOffers();
+    expect(ctx.state).toMatchObject({ phase: OFFERS, offers: { insurance: true, peek: true } });
+    expect(vi.getTimerCount()).toBe(0);
+    const logged = player.applyCreditEvent.mock.calls.length;
+    act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
+    expect(ctx.state.phase).toBe(OFFERS);
+    expect(player.applyCreditEvent).toHaveBeenCalledTimes(logged);
+  });
+
+  it("auto deal waits at the offers: it neither declines nor pauses, and the round carries on after the player answers", () => {
+    const { ctx } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => { ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
+    shoes.push(aceUp("5")); // the settings change dealt a new shoe; this one is for the round
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.phase).toBe(OFFERS);
+    act(() => { vi.advanceTimersByTime(60_000); });
+    expect(ctx.state).toMatchObject({ phase: OFFERS, autoDealPaused: false, autoDealPending: false });
+    act(() => { ctx.actions.declineOffers(); });
+    expect(ctx.state.phase).toBe(PEEK);
+    tick();
+    expect(ctx.state.phase).toBe(PLAYER_TURN);
+  });
+
+  it("takeInsurance books half the bet as a ledger bet (newRound false, tagged side insurance) and the peek follows on its own timer", () => {
+    const { ctx, player } = toOffers();
+    act(() => { ctx.actions.takeInsurance(); });
+    expect(ctx.state.hands[0].insurance).toBe(5);
+    expect(ctx.state.phase).toBe(PEEK);
+    expect(bets(player).at(-1)).toEqual({ kind: "bet", amount: 5, newRound: false, alreadyDeducted: false, handTag: ctx.state.hands[0].tag, side: "insurance" });
+    expect(player.getCredits()).toBe(85); // 100 - 10 - 5
+    expect(vi.getTimerCount()).toBe(1);
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.DEALER_TURN); // the hole card was a king
+    expect(ctx.state.dealer.isBlackjack).toBe(true);
+  });
+
+  it("takeInsurance sends the current balance: one that fell below the stake since the deal is refused by the reducer", () => {
+    const { ctx, player } = toOffers();
+    player.getCredits.mockReturnValue(4);
+    const before = ctx.state;
+    act(() => { ctx.actions.takeInsurance(); });
+    expect(ctx.state).toBe(before);
+    expect(bets(player)).toHaveLength(1);
+  });
+
+  it("evenMoney pays the blackjack 1:1 with no ledger bet, whatever the dealer's hole card", () => {
+    shoes.push(stackedShoe(["A", "A", "K", "K", "9", "9"]));
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.offers).toMatchObject({ evenMoney: true });
+    act(() => { ctx.actions.evenMoney(); });
+    expect(ctx.state.hands[0]).toMatchObject({ evenMoney: true, result: "Win" });
+    expect(bets(player)).toHaveLength(1);
+    for (let i = 0; i < 6 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(POST_ROUND);
+    expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 20 }]); // the dealer's blackjack does not push it
+  });
+
+  it("a whole insured round against a dealer blackjack: one bet, one insurance bet, one settle of 15, each event applied once", () => {
+    const { ctx, player } = toOffers();
+    act(() => { ctx.actions.takeInsurance(); });
+    for (let i = 0; i < 8 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(POST_ROUND);
+    expect(events(player).map((e) => [e.kind, e.amount, e.side])).toEqual([["local", -10, undefined], ["bet", 10, undefined], ["bet", 5, "insurance"], ["settle", 15, undefined]]);
+    expect(ctx.state.hands[0]).toMatchObject({ insurancePayout: 15, payout: 15 });
+    expect(player.getCredits()).toBe(100); // net 0: the insurance paid for the hand
+  });
+
+  it("a refused insurance bet voids only the insurance: notice, the hand keeps its stake, and the settle carries no insurance", () => {
+    const { ctx, player } = toOffers({ answer: (event) => (event.side === "insurance" ? "rejected" : "confirmed") });
+    act(() => { ctx.actions.takeInsurance(); });
+    expect(ctx.state.hands[0]).toMatchObject({ insurance: 0, bet: 10 });
+    expect(ctx.state.notice).toMatch(/insurance bet/);
+    for (let i = 0; i < 8 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 0 }]);
+  });
+
+  it("settling waits for an insurance bet the server has not answered, then sends the settle with the insurance in it", () => {
+    const { ctx, player } = toOffers({ answer: null });
+    player.reports[ctx.state.pendingBets[0].seq]("confirmed"); // the opening bet
+    act(() => { ctx.actions.takeInsurance(); });
+    for (let i = 0; i < 8; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.SETTLING_HANDS);
+    expect(ctx.state.pendingBets.map((b) => b.side)).toEqual(["insurance"]);
+    expect(events(player).some((e) => e.kind === "settle")).toBe(false);
+    player.reports[ctx.state.pendingBets[0].seq]("confirmed");
+    for (let i = 0; i < 4 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(events(player).at(-1)).toEqual({ kind: "settle", amount: 15 });
+  });
+
+  it("early surrender at the offers goes through surrender(0): half the bet in the one settle, kept against a dealer blackjack", () => {
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => { ctx.actions.changeSettings({ surrender: "early", insurance: false }); });
+    shoes.push(stackedShoe(["10", "K", "6", "A", "9", "9"])); // for the round (the settings change dealt a shoe)
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.offers).toMatchObject({ surrender: true });
+    act(() => { ctx.actions.surrender(0); });
+    for (let i = 0; i < 8 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(ctx.state.dealer.isBlackjack).toBe(true);
+    expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 5 }]);
+  });
+
+  it("saves insurance in the version 4 object, and a change deals a new shoe like any table rule", async () => {
+    remote.token = "token";
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    cards.createShoe.mockClear();
+    await act(async () => { await ctx.actions.changeSetting("insurance", false); });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, insurance: false });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads insurance off from a version 3 object and on from a version 4 one", async () => {
+    remote.getSettings.mockResolvedValue({ v: 3, surrender: "late" });
+    const old = setup({ signedIn: true });
+    await flush();
+    expect(old.ctx.state.settings.insurance).toBe(false);
+    cleanup();
+    remote.getSettings.mockResolvedValue({ v: 4, insurance: true });
+    const current = setup({ signedIn: true });
+    await flush();
+    expect(current.ctx.state.settings.insurance).toBe(true);
+  });
+});

@@ -8,6 +8,7 @@ import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
 import CardCountDisplay from "../components/CardCountDisplay/CardCountDisplay";
 import CenterMessage from "../components/CenterMessage/CenterMessage";
+import OfferOptions from "../components/OfferOptions/OfferOptions";
 import DealerArea from "../components/DealerArea/DealerArea";
 import DeckStack from "../components/DeckStack/DeckStack";
 import PlayerOptions from "../components/PlayerOptions/PlayerOptions";
@@ -805,6 +806,267 @@ describe("Surrender (#91)", () => {
       const game = { ...board(["8", "8"], "K"), hands: [hand(["10", "6"]), hand(["9", "7"])], selectedHandIndex: 1 };
       renderUI(<GameBoard />, { game });
       expect(screen.getAllByText("Surrender")).toHaveLength(1);
+    });
+  });
+});
+
+describe("Offers (#91): insurance, even money and early surrender", () => {
+  const { OFFERS, PEEK } = GamePhases;
+  const props = { index: 0, active: true, gamePhase: OFFERS, handCount: 1, maxSplitHands: 0, credits: 1000 };
+  const INSURANCE = { insurance: true, evenMoney: false, surrender: false, peek: true };
+  const EVEN = { insurance: false, evenMoney: true, surrender: false, peek: true };
+  const buttons = (container) => [...container.querySelectorAll(".options-wrap button")].map((b) => b.textContent);
+  const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+  // A real table at the offers: Vegas rules, a bet of 10, the cards dealt and settled in front of the player.
+  const table = (codes, settings = {}, upTo = "DEAL_DONE") => {
+    let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(codes) });
+    for (const [key, value] of Object.entries(settings)) s = step(s, { type: "SET_SETTING", key, value });
+    return [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: upTo }].reduce(step, s);
+  };
+
+  describe("CenterMessage", () => {
+    it("names the offer that is open", () => {
+      const message = (offers) => { const { unmount, container } = renderUI(<CenterMessage gamePhase={OFFERS} offers={offers} />); const text = container.firstChild.textContent; unmount(); return text; };
+      expect(message(INSURANCE)).toBe("Insurance?");
+      expect(message(EVEN)).toBe("Even money?");
+      expect(message({ ...INSURANCE, surrender: true })).toBe("Insurance or surrender?");
+      expect(message({ ...INSURANCE, insurance: false, surrender: true })).toBe("Surrender?");
+    });
+
+    it("says nothing at OFFERS without offers, and says what the dealer is doing at PEEK", () => {
+      const { container, rerender } = renderUI(<CenterMessage gamePhase={OFFERS} offers={null} />);
+      expect(container.firstChild.textContent).toBe("");
+      rerender(<CenterMessage gamePhase={PEEK} />);
+      expect(container.firstChild.textContent).toBe("Dealer checks for blackjack...");
+    });
+
+    it("waiting for the server still wins over an offer", () => {
+      renderUI(<CenterMessage gamePhase={OFFERS} offers={INSURANCE} waiting />);
+      expect(screen.getByText("Waiting for the server...")).toBeTruthy();
+    });
+  });
+
+  describe("OfferOptions", () => {
+    const stake = 5;
+    const handlers = () => ({ onInsurance: vi.fn(), onEvenMoney: vi.fn(), onSurrender: vi.fn(), onDecline: vi.fn() });
+
+    it("insurance offered: 'Insurance $5' and 'No thanks', in that order", () => {
+      const { container } = renderUI(<OfferOptions offers={INSURANCE} stake={stake} {...handlers()} />);
+      expect(buttons(container)).toEqual(["Insurance $5", "No thanks"]);
+      expect(screen.getByRole("group", { name: "Offers" })).toBeTruthy();
+      expect(container.querySelector(".options-wrap")).not.toBeNull(); // the class the busy board hides
+    });
+
+    it("a half-dollar stake is shown as it is: $2.5", () => {
+      renderUI(<OfferOptions offers={INSURANCE} stake={2.5} {...handlers()} />);
+      expect(screen.getByText("Insurance $2.5")).toBeTruthy();
+    });
+
+    it("even money offered: 'Even money' and 'No thanks'", () => {
+      const { container } = renderUI(<OfferOptions offers={EVEN} stake={stake} {...handlers()} />);
+      expect(buttons(container)).toEqual(["Even money", "No thanks"]);
+    });
+
+    it("early surrender and insurance together, then each one alone", () => {
+      const { container, rerender } = renderUI(<OfferOptions offers={{ ...INSURANCE, surrender: true }} stake={stake} {...handlers()} />);
+      expect(buttons(container)).toEqual(["Insurance $5", "Surrender", "No thanks"]);
+      rerender(<OfferOptions offers={{ ...INSURANCE, insurance: false, surrender: true }} stake={stake} {...handlers()} />);
+      expect(buttons(container)).toEqual(["Surrender", "No thanks"]);
+    });
+
+    it("an offer already used is gone, and 'No thanks' is always there", () => {
+      const { container } = renderUI(<OfferOptions offers={{ ...INSURANCE, insurance: false }} stake={stake} {...handlers()} />);
+      expect(buttons(container)).toEqual(["No thanks"]);
+    });
+
+    it("each button calls its own handler", () => {
+      const h = handlers();
+      renderUI(<OfferOptions offers={{ insurance: true, evenMoney: true, surrender: true }} stake={stake} {...h} />);
+      for (const name of ["Insurance $5", "Even money", "Surrender", "No thanks"]) fireEvent.click(screen.getByText(name));
+      expect([h.onInsurance, h.onEvenMoney, h.onSurrender, h.onDecline].map((fn) => fn.mock.calls.length)).toEqual([1, 1, 1, 1]);
+    });
+  });
+
+  describe("PlayerHand", () => {
+    it("shows the offers on the hand in play at OFFERS and sends each to the game (surrender for this hand)", () => {
+      const { gameActions } = renderUI(<PlayerHand {...props} index={3} offers={{ ...INSURANCE, surrender: true }} hand={hand(["10", "6"])} />);
+      for (const name of ["Insurance $5", "Surrender", "No thanks"]) fireEvent.click(screen.getByText(name));
+      expect(gameActions.takeInsurance).toHaveBeenCalledOnce();
+      expect(gameActions.surrender.mock.calls).toEqual([[3]]);
+      expect(gameActions.declineOffers).toHaveBeenCalledOnce();
+      expect(gameActions.evenMoney).not.toHaveBeenCalled();
+      expect(screen.queryByText("Hit")).toBeNull(); // the player's options wait for the offers
+    });
+
+    it("even money goes to the game", () => {
+      const { gameActions } = renderUI(<PlayerHand {...props} offers={EVEN} hand={hand(["A", "K"], { isBlackjack: true, status: HandStatus.DONE, totals: [21], total: 21 })} />);
+      fireEvent.click(screen.getByText("Even money"));
+      expect(gameActions.evenMoney).toHaveBeenCalledOnce();
+    });
+
+    it("the stake follows the bet: $5 on a $10 bet, $2.5 on a $5 bet", () => {
+      renderUI(<PlayerHand {...props} offers={INSURANCE} hand={hand(["10", "6"], { bet: 5 })} />);
+      expect(screen.getByText("Insurance $2.5")).toBeTruthy();
+    });
+
+    it("no offers when not at OFFERS, when it is not the hand in play, or when none are passed", () => {
+      renderUI(<PlayerHand {...props} gamePhase={GamePhases.PLAYER_TURN} offers={INSURANCE} hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("No thanks")).toBeNull();
+      cleanup();
+      renderUI(<PlayerHand {...props} active={false} offers={INSURANCE} hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("No thanks")).toBeNull();
+      cleanup();
+      renderUI(<PlayerHand {...props} offers={null} hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("No thanks")).toBeNull();
+    });
+
+    describe("labels", () => {
+      const insured = (extra = {}) => hand(["10", "6"], { totals: [16], total: 16, insurance: 5, ...extra });
+      const view = (h, gamePhase) => renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={h} />).container;
+
+      it.each([OFFERS, PEEK, GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN])("an insured hand shows its insurance next to the bet (%s)", (gamePhase) => {
+        expect(live(view(insured(), gamePhase))).toBe("Total: 16 | Bet: $10 | Insurance: $5");
+      });
+
+      it("a half-dollar insurance shows as $2.5", () => {
+        expect(live(view(insured({ bet: 5, insurance: 2.5 }), PEEK))).toBe("Total: 16 | Bet: $5 | Insurance: $2.5");
+      });
+
+      it("an uninsured hand, or one whose insurance was refused (0), shows nothing about it", () => {
+        expect(live(view(hand(["10", "6"], { totals: [16], total: 16 }), PEEK))).toBe("Total: 16 | Bet: $10");
+        expect(live(view(insured({ insurance: 0 }), GamePhases.POST_ROUND))).toBe("Total: 16 | Bet: $10");
+        expect(screen.queryByText(/Insurance/)).toBeNull();
+      });
+
+      it.each([GamePhases.POST_ROUND, GamePhases.END_ROUND])("settled, a paid insurance says so (%s)", (gamePhase) => {
+        const container = view(insured({ result: HandResult.LOSE, insurancePayout: 15 }), gamePhase);
+        expect(live(container)).toBe("Total: 16 | Bet: $10 | Insurance: $5 Lose Insurance pays $15");
+        expect(container.querySelector(".hand-total > span:not(.ht-size) .hand-result.Win").textContent).toBe(" Insurance pays $15");
+      });
+
+      it("settled, a lost insurance says so", () => {
+        const container = view(insured({ result: HandResult.LOSE, insurancePayout: 0 }), GamePhases.POST_ROUND);
+        expect(live(container)).toBe("Total: 16 | Bet: $10 | Insurance: $5 Lose Insurance lost");
+        expect(container.querySelector(".hand-result.Lose").textContent).not.toBe("");
+      });
+
+      it("the outcome of the insurance waits for the round to settle", () => {
+        const container = view(insured({ result: HandResult.NONE, insurancePayout: 15 }), GamePhases.DEALER_TURN);
+        expect(live(container)).toBe("Total: 16 | Bet: $10 | Insurance: $5");
+      });
+
+      it("an insured early surrender shows both: 'Surrendered' at once and the insurance outcome at the end", () => {
+        const gone = insured({ surrendered: true, result: HandResult.SURRENDER, status: HandStatus.DONE, insurancePayout: 15 });
+        expect(live(view(gone, PEEK))).toBe("Total: 16 | Bet: $10 | Insurance: $5 Surrendered");
+        cleanup();
+        expect(live(view(gone, GamePhases.POST_ROUND))).toBe("Total: 16 | Bet: $10 | Insurance: $5 Surrendered Insurance pays $15");
+      });
+
+      it("even money reads 'Even money' at once, instead of 'Win', next to the Blackjack label", () => {
+        const even = hand(["A", "K"], { totals: [21], total: 21, isBlackjack: true, result: HandResult.WIN, evenMoney: true, status: HandStatus.DONE });
+        for (const gamePhase of [PEEK, GamePhases.DEALER_TURN, GamePhases.POST_ROUND]) {
+          const container = view(even, gamePhase);
+          expect(live(container), gamePhase).toBe("Total: 21 | Bet: $10 Even money Blackjack");
+          expect(container.querySelector(".hand-result.Win")).toBeTruthy();
+          cleanup();
+        }
+      });
+
+      it("a declined blackjack shows nothing before the settle, then Win or Push as always", () => {
+        const bj = hand(["A", "K"], { totals: [21], total: 21, isBlackjack: true, result: HandResult.NONE, status: HandStatus.DONE });
+        expect(live(view(bj, OFFERS))).toBe("Total: 21 | Bet: $10 Blackjack");
+      });
+
+      it("the invisible size copy carries the same text, so the strip does not change width", () => {
+        const container = view(insured({ result: HandResult.LOSE, insurancePayout: 15 }), GamePhases.POST_ROUND);
+        expect(container.querySelector(".hand-total > .ht-size").textContent).toBe(live(container));
+      });
+    });
+  });
+
+  describe("GameBoard", () => {
+    it("at OFFERS it shows the question and the buttons, and no player options", () => {
+      const { container } = renderUI(<GameBoard />, { game: table(["10", "A", "6", "K"]) });
+      expect(screen.getByText("Insurance?")).toBeTruthy();
+      expect(buttons(container)).toEqual(["Insurance $5", "No thanks"]);
+      expect(screen.queryByText("Hit")).toBeNull();
+    });
+
+    it("sends the buttons to the game", () => {
+      const { gameActions } = renderUI(<GameBoard />, { game: table(["10", "A", "6", "K"], { surrender: "early" }) });
+      for (const name of ["Insurance $5", "Surrender", "No thanks"]) fireEvent.click(screen.getByText(name));
+      expect(gameActions.takeInsurance).toHaveBeenCalledOnce();
+      expect(gameActions.surrender.mock.calls).toEqual([[0]]);
+      expect(gameActions.declineOffers).toHaveBeenCalledOnce();
+    });
+
+    it("a player blackjack gets 'Even money' and the question to match", () => {
+      const { gameActions, container } = renderUI(<GameBoard />, { game: table(["A", "A", "K", "5"]) });
+      expect(screen.getByText("Even money?")).toBeTruthy();
+      expect(buttons(container)).toEqual(["Even money", "No thanks"]);
+      fireEvent.click(screen.getByText("Even money"));
+      expect(gameActions.evenMoney).toHaveBeenCalledOnce();
+    });
+
+    it("a table click at OFFERS does not continue or decline anything", () => {
+      const { gameActions, container } = renderUI(<GameBoard />, { game: table(["10", "A", "6", "K"]) });
+      fireEvent.click(container.querySelector(".board"));
+      expect(gameActions.continueRound).not.toHaveBeenCalled();
+      expect(gameActions.declineOffers).not.toHaveBeenCalled();
+    });
+
+    it("the offers are not passed on once the phase has moved on: the peek has no buttons and says what the dealer does", () => {
+      const peeking = step(table(["10", "A", "6", "K"]), { type: "DECLINE_OFFERS" });
+      expect(peeking.phase).toBe(PEEK);
+      const { container } = renderUI(<GameBoard />, { game: peeking });
+      expect(screen.getByText("Dealer checks for blackjack...")).toBeTruthy();
+      expect(buttons(container)).toEqual([]);
+      expect(screen.queryByText("No thanks")).toBeNull();
+      expect(live(container.querySelector(".player-hand"))).toBe("Total: 16 | Bet: $10");
+    });
+
+    it("the insurance is shown on the hand once taken", () => {
+      const insured = step(table(["10", "A", "6", "K"]), { type: "TAKE_INSURANCE" });
+      const { container } = renderUI(<GameBoard />, { game: insured });
+      expect(live(container.querySelector(".player-hand"))).toBe("Total: 16 | Bet: $10 | Insurance: $5");
+    });
+
+    describe("the dealt hole card stays out of the page until the peek", () => {
+      it("nothing of the hole card (rank, suit, id, count) is in the DOM at OFFERS, and it appears when the peek shows a blackjack", () => {
+        const [p1, up, p2, hole] = stackedShoe(["10", "A", "6", "K"]);
+        const secret = { ...hole, suit: "spades", id: "king-spades-0-1" }; // every other card on the table is a heart
+        let s = step(initialGameState, { type: "START_GAME", shoe: [p1, up, p2, secret] });
+        s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" }].reduce(step, s);
+        expect(s.phase).toBe(OFFERS);
+        expect(s.dealerHole.cards).toEqual([secret]); // the engine has it, the page must not
+        const leaks = /king|spades/i;
+
+        const { container, unmount } = renderUI(<GameBoard />, { game: s });
+        expect(container.querySelectorAll(".dealer .fly-card")).toHaveLength(2); // the ace and a plain back
+        expect(container.querySelector(".dealer-hand .hand-total > span:not(.ht-size)").textContent).toBe("Total: 11");
+        expect(container.innerHTML).not.toContain(secret.id);
+        expect(container.innerHTML).not.toMatch(leaks);
+        expect(container.textContent).not.toMatch(leaks);
+        expect(s.runningCount).toBe(-1); // 10 -1, ace -1, 6 +1: the hole card's -1 is not counted yet
+        expect(container.querySelector(".count-value").textContent).toBe("-1");
+        unmount();
+
+        // The same table through the peek, with the other cards unchanged.
+        const peeked = step(step(s, { type: "DECLINE_OFFERS" }), { type: "PEEK" });
+        expect(peeked.dealer.isBlackjack).toBe(true);
+        renderUI(<GameBoard />, { game: peeked });
+        expect(screen.getByAltText("king of spades")).toBeTruthy(); // the search above is not vacuous
+      });
+
+      it("while the peek is pending the hole card is still a back", () => {
+        const [p1, up, p2, hole] = stackedShoe(["10", "A", "6", "K"]);
+        const secret = { ...hole, suit: "spades", id: "king-spades-0-1" };
+        const peeking = ["ADD_BET", "DEAL", "DEAL_DONE", "DECLINE_OFFERS"].reduce((acc, type) => step(acc, type === "ADD_BET" ? { type, amount: 10 } : { type }), step(initialGameState, { type: "START_GAME", shoe: [p1, up, p2, secret] }));
+        expect(peeking.phase).toBe(PEEK);
+        const { container } = renderUI(<GameBoard />, { game: peeking });
+        expect(container.innerHTML).not.toMatch(/king|spades/i);
+        expect(container.innerHTML).not.toContain(secret.id);
+      });
     });
   });
 });

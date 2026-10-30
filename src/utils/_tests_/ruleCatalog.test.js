@@ -89,6 +89,17 @@ describe("ruleCatalog (#91)", () => {
     for (const o of byKey("surrender").options) expect(o.hint).not.toMatch(/peeks|like Late/);
   });
 
+  it("insurance is a plain checkbox with a hint, on by default, shown in every mode", () => {
+    const rule = byKey("insurance");
+    expect(rule.input).toBe("checkbox");
+    expect(rule.label()).toBe("Insurance and Even Money");
+    expect(rule.hint).toMatch(/insure for half your bet.*pays 2:1.*even money/);
+    expect(rule.showWhen).toBeUndefined();
+    expect(rule.options).toBeUndefined();
+    expect(initialGameState.settings.insurance).toBe(true);
+    for (const mode of Object.values(DealerHoleOptions)) expect(visibleIn(settings(mode)).map((r) => r.key)).toContain("insurance");
+  });
+
   describe("visibleIn", () => {
     it("hides 'if the dealer has blackjack, you lose' with a US peek, since the blackjack is found before any stake is added", () => {
       expect(visibleIn(settings(DealerHoleOptions.US_PEEK)).map((r) => r.key)).not.toContain("noHoleCardLoss");

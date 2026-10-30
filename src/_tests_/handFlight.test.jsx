@@ -6,11 +6,11 @@ import DealerArea from "../components/DealerArea/DealerArea";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import GameBoard from "../components/GameBoard/GameBoard";
 import { EASING, cardTiming, hold, landed, queue, reserve } from "../utils/cardAnimation";
-import { stackedShoe } from "../utils/_tests_/stackedShoe";
+import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
 import { GamePhases } from "../utils/constants/gamePhases";
-import { initialGameState } from "../utils/gameReducer";
+import { initialGameState, gameReducer } from "../utils/gameReducer";
 
 const timing = cardTiming(1000);
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
@@ -369,5 +369,43 @@ describe("GameBoard flights", () => {
     Object.assign(gameState, { hands: [second, first] });
     rerender(<GameBoard />);
     expect(container.querySelectorAll(".player-hand")[1]).toBe(elA);
+  });
+});
+
+describe("offers and the peek (#91)", () => {
+  const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+  const atOffers = (codes = ["10", "A", "6", "K"]) => [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" }].reduce(step, step(initialGameState, { type: "START_GAME", shoe: stackedShoe(codes) }));
+  const busy = (c) => c.querySelector(".board").classList.contains("busy");
+
+  it("while the dealt cards are still moving, OFFERS reads Dealing... and its buttons sit in the busy board (hidden); then the question and the buttons", () => {
+    const { container } = renderUI(<GameBoard />, { game: atOffers() });
+    expect(screen.getByText("Insurance?")).toBeTruthy();
+    act(() => { reserve(performance.now() + 2000); });
+    expect(busy(container)).toBe(true);
+    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(screen.queryByText("Insurance?")).toBeNull();
+    expect(container.querySelector(".board.busy .options-wrap")).not.toBeNull(); // .board.busy .options-wrap { visibility: hidden }
+    advance(2100);
+    expect(busy(container)).toBe(false);
+    expect(screen.getByText("Insurance?")).toBeTruthy();
+  });
+
+  it("the hole card keeps its element from OFFERS through the peek: it flips in place and does not fly again", () => {
+    const offered = atOffers();
+    const peeked = step(step(offered, { type: "DECLINE_OFFERS" }), { type: "PEEK" });
+    expect(peeked.dealer.isBlackjack).toBe(true);
+    const { container, rerender } = renderUI(<Flight><DealerArea dealer={offered.dealer} hiddenCount={offered.dealerHole.cards.length} /></Flight>);
+    settleDeal();
+    const [upEl, holeEl] = container.querySelectorAll(".fly-card");
+    expect(holeEl.querySelector("img")).toBeNull();
+    expect(flights()).toHaveLength(2);
+
+    rerender(<Flight><DealerArea dealer={peeked.dealer} hiddenCount={peeked.dealerHole.cards.length} /></Flight>);
+    const now = container.querySelectorAll(".fly-card");
+    expect([now[0], now[1]]).toEqual([upEl, holeEl]);
+    expect(flights()).toHaveLength(2); // nothing flew a second time
+    finishAnimations();
+    expect(screen.getByAltText("king of hearts")).toBeTruthy();
+    expect(live(container)).toBe("Total: 21 Blackjack");
   });
 });
