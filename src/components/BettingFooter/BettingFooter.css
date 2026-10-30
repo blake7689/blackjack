@@ -93,6 +93,8 @@
 .footer-middle {
   flex: 1 1 0;
   display: flex;
+  flex-direction: column; /* the auto deal button sits under the bet box and Clear */
+  gap: 4px;
   align-items: center;
   justify-content: center;
   min-width: 0;
@@ -173,6 +175,11 @@
   background:#28a745; color:#fff; padding:10px 14px; border-radius:10px; border:none; 
   cursor:pointer; flex: 0 0 auto; }
 .deal:disabled, .clear:disabled { opacity:0.5; cursor:not-allowed; }
+
+.auto-deal-toggle {
+  background:#555; color:#fff; padding:3px 10px; border-radius:8px; border:none; font-size:12px;
+  cursor:pointer; flex: 0 0 auto;
+}
 .deal.hidden {
   display: none !important;
   pointer-events: none;

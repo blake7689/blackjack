@@ -1,4 +1,5 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
 import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS, sanitizeSettings } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -14,7 +15,8 @@ export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const { player, getCredits, applyCreditEvent } = usePlayer();
   const signedIn = player != null;
-  const { deckCount, includeCutCard, playTimeout } = state.settings;
+  const { deckCount, includeCutCard, playTimeout, autoDealDelay } = state.settings;
+  const onGame = useLocation().pathname === "/game";
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
   const stateRef = useRef(state);
@@ -47,16 +49,23 @@ export function GameProvider({ children }) {
 
   // One timer drives the automatic steps (dealer, settle, results, next round), each after Rate of Play or, while a card is still moving, after it lands (stepWait). Its cleanup cancels it
   // whenever the state moves on or the provider unmounts, so a stale step can never fire into a new game.
-  const auto = nextAutoAction(state);
+  // Auto deal's own steps (CONTINUE, DEAL) wait while the player is off the game page; gating here clears the timer in the same commit.
+  const next = nextAutoAction(state);
+  const auto = (next === "CONTINUE" || next === "DEAL") && !onGame ? null : next;
   const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}`;
   useEffect(() => {
     if (!autoKey) return;
     const type = autoKey.split("|")[0];
     const timer = setTimeout(() => {
-      dispatch({ type, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
-    }, stepWait(Number(playTimeout)));
+      dispatch({ type, auto: true, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
+    }, stepWait(Number(type === "DEAL" ? autoDealDelay : playTimeout)));
     return () => clearTimeout(timer);
-  }, [autoKey, playTimeout, makeShoe, getCredits]);
+  }, [autoKey, playTimeout, autoDealDelay, makeShoe, getCredits]);
+
+  // Leaving the game page cancels a pending deal (it is not a pause: coming back carries on with the next round). //
+  useEffect(() => {
+    if (!onGame) dispatch({ type: "CANCEL_AUTO_DEAL" });
+  }, [onGame, state.autoDealPending]);
 
   const actions = useMemo(() => ({
     startGame: () => dispatch({ type: "START_GAME", shoe: makeShoe() }),
@@ -70,6 +79,8 @@ export function GameProvider({ children }) {
     triple: (handIdx) => dispatch({ type: "TRIPLE", handIdx, credits: getCredits(), refill: makeShoe }),
     split: (handIdx) => dispatch({ type: "SPLIT", handIdx, credits: getCredits(), refill: makeShoe }),
     continueRound: () => dispatch({ type: "CONTINUE" }),
+    pauseAutoDeal: () => dispatch({ type: "PAUSE_AUTO_DEAL" }),
+    resumeAutoDeal: () => dispatch({ type: "RESUME_AUTO_DEAL" }),
     // Table settings deal a fresh shoe built with the new values and reset the table.
     changeSetting: (key, value) => actions.changeSettings({ [key]: value }),
     // Applies at once; when signed in, also saves the whole settings object. The promise rejects if the save fails.

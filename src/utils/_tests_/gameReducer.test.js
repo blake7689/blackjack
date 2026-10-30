@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings } from "../gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES } from "../gameReducer";
 import { GamePhases } from "../constants/gamePhases";
 import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus } from "./stackedShoe";
 
@@ -702,6 +702,234 @@ describe("server answers to bets (#23)", () => {
       expect(run(refused, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE }).notice).toBeNull();
       expect(run(refused, { type: "CONTINUE" }).notice).not.toBeNull();
       expect(run(refused, { type: "CONTINUE" }, { type: "END_ROUND" }).notice).toBeNull();
+    });
+  });
+});
+
+describe("auto deal (#88)", () => {
+  const AUTO = { resetInitialBet: true, autoDeal: true };
+  const withSettings = (state, settings) => ({ ...state, settings: { ...state.settings, ...settings } });
+  // A round played to POST_ROUND (a $10 bet) with auto deal on unless `settings` says otherwise.
+  const finished = (settings = AUTO) => withSettings(playRound({ cards: ["10", "10", "9", "7"] }).state, settings);
+  // The same, with the rebet on the table and the DEAL step armed.
+  const armed = (settings = AUTO) => run(finished(settings), { type: "CONTINUE" }, { type: "END_ROUND" });
+  const poor = (state = finished()) => run(state, { type: "CONTINUE" }, { type: "END_ROUND", credits: 5 });
+
+  describe("autoDealOn and nextAutoAction", () => {
+    it("needs the setting, Reset Bet, and no pause", () => {
+      expect(autoDealOn(initialGameState)).toBe(false);
+      expect(autoDealOn(withSettings(initialGameState, { autoDeal: true }))).toBe(false); // ineffective without the rebet
+      expect(autoDealOn(withSettings(initialGameState, { resetInitialBet: true }))).toBe(false);
+      expect(autoDealOn(withSettings(initialGameState, AUTO))).toBe(true);
+      expect(autoDealOn({ ...withSettings(initialGameState, AUTO), autoDealPaused: true })).toBe(false);
+    });
+
+    it("POST_ROUND continues by itself only while auto deal is on", () => {
+      expect(nextAutoAction(finished())).toBe("CONTINUE");
+      expect(nextAutoAction(finished({ autoDeal: false }))).toBeNull();
+      expect(nextAutoAction(finished({ resetInitialBet: false }))).toBeNull();
+      expect(nextAutoAction({ ...finished(), autoDealPaused: true })).toBeNull();
+    });
+
+    it("PRE_DEAL deals by itself only while a deal is pending", () => {
+      expect(nextAutoAction(armed())).toBe("DEAL");
+      expect(nextAutoAction({ ...armed(), autoDealPending: false })).toBeNull();
+    });
+
+    it("the whole chain is CONTINUE, END_ROUND, DEAL", () => {
+      let s = { ...finished(), shoe: stackedShoe(["10", "10", "9", "7", "2"]) };
+      const order = [];
+      while (nextAutoAction(s) && s.phase !== GamePhases.DEALING) { order.push(nextAutoAction(s)); s = run(s, { type: nextAutoAction(s), auto: true }); }
+      expect(order).toEqual(["CONTINUE", "END_ROUND", "DEAL"]);
+      expect(s).toMatchObject({ phase: GamePhases.DEALING, autoDealPending: false });
+    });
+  });
+
+  describe("END_ROUND", () => {
+    it("arms the deal when the rebet is placed with auto deal on", () => {
+      expect(armed()).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 10, autoDealPending: true, autoDealPaused: false, notice: null });
+    });
+
+    it("does not arm it with auto deal off, paused, or Reset Bet off", () => {
+      expect(armed({ resetInitialBet: true, autoDeal: false })).toMatchObject({ betCircle: 10, autoDealPending: false });
+      expect(run({ ...finished(), autoDealPaused: true }, { type: "CONTINUE" }, { type: "END_ROUND" })).toMatchObject({ betCircle: 10, autoDealPending: false });
+      expect(armed({ resetInitialBet: false, autoDeal: true })).toMatchObject({ betCircle: 0, autoDealPending: false, autoDealPaused: false });
+    });
+
+    it("pauses with a notice when the rebet is not affordable, and places nothing", () => {
+      const before = finished();
+      const s = poor(before);
+      expect(s).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: true });
+      expect(s.notice).toBe("Not enough credits to rebet $10: auto deal paused");
+      expect(s.creditEvents).toEqual(before.creditEvents); // no rebet event
+      expect(nextAutoAction(s)).toBeNull();
+    });
+
+    it("writes a four-digit bet with its thousands separator", () => {
+      const s = run({ ...finished(), initialBet: 1500 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
+      expect(s.notice).toBe(`Not enough credits to rebet $${(1500).toLocaleString()}: auto deal paused`);
+      expect(s.notice).toMatch(/^Not enough credits to rebet \$1\D?500: auto deal paused$/);
+    });
+
+    it("keeps the old behaviour with auto deal off: no notice, no pause", () => {
+      for (const settings of [{ resetInitialBet: true, autoDeal: false }, { resetInitialBet: false, autoDeal: true }]) {
+        expect(poor(finished(settings))).toMatchObject({ betCircle: 0, autoDealPending: false, autoDealPaused: false, notice: null });
+      }
+    });
+
+    it("does not pause when nothing was bet in the round (initialBet 0)", () => {
+      const s = run({ ...finished(), initialBet: 0 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0 });
+      expect(s).toMatchObject({ autoDealPaused: false, notice: null, autoDealPending: false });
+    });
+
+    it("a paused game stays paused when the rebet is placed (nothing is armed)", () => {
+      const s = run({ ...finished(), autoDealPaused: true }, { type: "CONTINUE" }, { type: "END_ROUND" });
+      expect(s).toMatchObject({ autoDealPaused: true, autoDealPending: false, notice: null });
+    });
+
+    it("the notice and the pending deal survive the cut-card branch", () => {
+      const fresh = stackedShoe(["2", "3"]);
+      const cut = { ...finished(), cutCardFound: true };
+      const broke = run(cut, { type: "CONTINUE" }, { type: "END_ROUND", credits: 5, shoe: fresh });
+      expect(broke).toMatchObject({ shoe: fresh, cutCardFound: false, autoDealPaused: true, betCircle: 0 });
+      expect(broke.notice).toBe("Not enough credits to rebet $10: auto deal paused");
+      const rich = run(cut, { type: "CONTINUE" }, { type: "END_ROUND", shoe: fresh });
+      expect(rich).toMatchObject({ shoe: fresh, cutCardFound: false, autoDealPending: true, betCircle: 10 });
+    });
+  });
+
+  describe("DEAL", () => {
+    it("an automatic deal goes through the same path as a manual one", () => {
+      const stacked = { ...armed(), shoe: stackedShoe(["10", "10", "9", "7", "2"]) };
+      const auto = run(stacked, { type: "DEAL", auto: true });
+      expect(auto).toMatchObject({ phase: GamePhases.DEALING, initialBet: 10, autoDealPending: false });
+      expect(auto).toEqual(run(stacked, { type: "DEAL" }));
+      expect(events(auto).at(-1)).toEqual(bet(10, true, true));
+      expect(auto.creditEvents.filter((e) => e.kind === "bet" && e.newRound)).toHaveLength(2); // round 1 and this one
+    });
+
+    it("a stale automatic DEAL with nothing pending changes nothing", () => {
+      const s = { ...armed(), autoDealPending: false };
+      expect(run(s, { type: "DEAL", auto: true })).toBe(s);
+      expect(run({ ...s, shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "DEAL" }).phase).toBe(GamePhases.DEALING); // the player's own click still deals
+    });
+
+    it("a manual deal while one is pending deals once and clears the pending flag", () => {
+      const s = run({ ...armed(), shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "DEAL" });
+      expect(s).toMatchObject({ phase: GamePhases.DEALING, autoDealPending: false });
+      expect(run(s, { type: "DEAL", auto: true })).toBe(s);
+    });
+  });
+
+  describe("betting while a deal is pending", () => {
+    it("an accepted ADD_BET or CLEAR_BET cancels it", () => {
+      expect(run(armed(), { type: "ADD_BET", amount: 5 })).toMatchObject({ betCircle: 15, autoDealPending: false });
+      expect(run(armed(), { type: "CLEAR_BET" })).toMatchObject({ betCircle: 0, autoDealPending: false });
+    });
+
+    it("a refused ADD_BET leaves it alone", () => {
+      const s = armed();
+      expect(run(s, { type: "ADD_BET", amount: 50, credits: 5 })).toBe(s);
+      expect(s.autoDealPending).toBe(true);
+    });
+  });
+
+  describe("PAUSE, CANCEL and RESUME", () => {
+    it("PAUSE pauses and clears a pending deal", () => {
+      expect(run(armed(), { type: "PAUSE_AUTO_DEAL" })).toMatchObject({ autoDealPaused: true, autoDealPending: false, betCircle: 10 });
+      expect(nextAutoAction(run(finished(), { type: "PAUSE_AUTO_DEAL" }))).toBeNull(); // POST_ROUND waits for the click
+    });
+
+    it("PAUSE on a paused game with nothing pending returns the same state", () => {
+      const s = run(armed(), { type: "PAUSE_AUTO_DEAL" });
+      expect(run(s, { type: "PAUSE_AUTO_DEAL" })).toBe(s);
+    });
+
+    it("CANCEL drops a pending deal without pausing; with none it returns the same state", () => {
+      expect(run(armed(), { type: "CANCEL_AUTO_DEAL" })).toMatchObject({ autoDealPending: false, autoDealPaused: false, betCircle: 10 });
+      const idle = finished();
+      expect(run(idle, { type: "CANCEL_AUTO_DEAL" })).toBe(idle);
+    });
+
+    it("RESUME clears the pause and the notice, and re-arms only with a bet on the table in PRE_DEAL", () => {
+      const broke = poor();
+      expect(broke.notice).not.toBeNull();
+      expect(run(broke, { type: "RESUME_AUTO_DEAL" })).toMatchObject({ autoDealPaused: false, autoDealPending: false, notice: null }); // no bet: waits for the next round
+      const paused = run(armed(), { type: "PAUSE_AUTO_DEAL" });
+      expect(run(paused, { type: "RESUME_AUTO_DEAL" })).toMatchObject({ autoDealPaused: false, autoDealPending: true, betCircle: 10 });
+      const resumed = run(run(finished(), { type: "PAUSE_AUTO_DEAL" }), { type: "RESUME_AUTO_DEAL" });
+      expect(resumed).toMatchObject({ autoDealPaused: false, autoDealPending: false });
+      expect(nextAutoAction(resumed)).toBe("CONTINUE"); // POST_ROUND carries on
+    });
+
+    it("RESUME arms nothing when auto deal is off", () => {
+      const s = run({ ...armed({ resetInitialBet: true, autoDeal: false }), autoDealPaused: true }, { type: "RESUME_AUTO_DEAL" });
+      expect(s).toMatchObject({ autoDealPending: false, autoDealPaused: false });
+    });
+
+    it("START_GAME and RESET_GAME clear the pause and the pending deal", () => {
+      const paused = run(armed(), { type: "PAUSE_AUTO_DEAL" });
+      expect(run(paused, { type: "START_GAME", shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPaused: false, autoDealPending: false });
+      expect(run(armed(), { type: "START_GAME", shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPending: false, betCircle: 0 });
+      expect(run(paused, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).toMatchObject({ autoDealPaused: false, autoDealPending: false });
+      expect(run(armed(), { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).toMatchObject({ autoDealPending: false });
+    });
+  });
+
+  describe("settings changes", () => {
+    it("SET_SETTING drops a pending deal when auto deal or Reset Bet is turned off, one key or several", () => {
+      expect(run(armed(), { type: "SET_SETTING", key: "autoDeal", value: false }).autoDealPending).toBe(false);
+      expect(run(armed(), { type: "SET_SETTING", key: "resetInitialBet", value: false }).autoDealPending).toBe(false);
+      expect(run(armed(), { type: "SET_SETTING", values: { resetInitialBet: false, autoDeal: false } }).autoDealPending).toBe(false);
+    });
+
+    it("SET_SETTING keeps a pending deal for other changes (a new delay included)", () => {
+      expect(run(armed(), { type: "SET_SETTING", key: "autoDealDelay", value: 500 })).toMatchObject({ autoDealPending: true, settings: { autoDealDelay: 500 } });
+      expect(run(armed(), { type: "SET_SETTING", key: "playTimeout", value: 500 }).autoDealPending).toBe(true);
+    });
+
+    it("SET_SETTING of autoDeal clears the pause (enabling it must not need a Resume); other keys leave it", () => {
+      const paused = { ...finished({ resetInitialBet: true, autoDeal: false }), autoDealPaused: true };
+      expect(run(paused, { type: "SET_SETTING", key: "autoDeal", value: true }).autoDealPaused).toBe(false);
+      expect(run(paused, { type: "SET_SETTING", values: { autoDeal: true, autoDealDelay: 500 } }).autoDealPaused).toBe(false);
+      expect(run(paused, { type: "SET_SETTING", key: "autoDealDelay", value: 500 }).autoDealPaused).toBe(true);
+    });
+
+    it("SET_SETTING with a new shoe resets the table and its pending deal", () => {
+      expect(run(armed(), { type: "SET_SETTING", key: "deckCount", value: 3, shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPending: false, betCircle: 0 });
+    });
+
+    it("LOAD_SETTINGS drops a pending deal the saved settings turn off, and keeps one they leave on", () => {
+      const saved = { v: 1, ...armed().settings }; // the table rules stay the same, or the new shoe would reset the table
+      expect(run(armed(), { type: "LOAD_SETTINGS", saved, shoe: [] }).autoDealPending).toBe(true);
+      expect(run(armed(), { type: "LOAD_SETTINGS", saved: { ...saved, autoDeal: false }, shoe: [] }).autoDealPending).toBe(false);
+      expect(run(armed(), { type: "LOAD_SETTINGS", saved: { ...saved, resetInitialBet: false }, shoe: [] }).autoDealPending).toBe(false); // no Reset Bet
+    });
+  });
+
+  describe("saved settings", () => {
+    it("defaults to off with a 3 second delay", () => {
+      expect(initialGameState.settings).toMatchObject({ autoDeal: false, autoDealDelay: 3000 });
+      expect(sanitizeSettings(undefined)).toMatchObject({ autoDeal: false, autoDealDelay: 3000 });
+    });
+
+    it("clamps and rounds the delay into 0-10000", () => {
+      expect(sanitizeSettings({ autoDealDelay: 99999 }).autoDealDelay).toBe(10000);
+      expect(sanitizeSettings({ autoDealDelay: -5 }).autoDealDelay).toBe(0);
+      expect(sanitizeSettings({ autoDealDelay: 0 }).autoDealDelay).toBe(0);
+      expect(sanitizeSettings({ autoDealDelay: 10000 }).autoDealDelay).toBe(10000);
+      expect(sanitizeSettings({ autoDealDelay: 1234.6 }).autoDealDelay).toBe(1235);
+      expect(SETTING_RANGES.autoDealDelay).toEqual([0, 10000]);
+    });
+
+    it("falls back to the defaults for the wrong type", () => {
+      expect(sanitizeSettings({ autoDealDelay: "500", autoDeal: "true", resetInitialBet: true })).toMatchObject({ autoDealDelay: 3000, autoDeal: false });
+    });
+
+    it("keeps autoDeal only with Reset Bet on", () => {
+      expect(sanitizeSettings({ autoDeal: true, resetInitialBet: true }).autoDeal).toBe(true);
+      expect(sanitizeSettings({ autoDeal: true, resetInitialBet: false }).autoDeal).toBe(false);
+      expect(sanitizeSettings({ autoDeal: true }).autoDeal).toBe(false);
     });
   });
 });

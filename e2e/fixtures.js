@@ -16,7 +16,8 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // Returns what the tests assert on: the ledger calls, requests that failed, endpoints nobody stubbed.
 // startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
-export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCredits = 1000, topUps = [] } = {}) {
+// settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real).
+export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCredits = 1000, topUps = [], settings = { v: 1, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   const replies = [...topUps];
   const stub = { bets: [], settles: [], topups: [], failed: [], unknown: [] };
@@ -36,7 +37,7 @@ export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCred
         await hold(meDelayMs);
         return json({ ...PLAYER, credits });
       case 'GET /player/me/settings':
-        return json({ v: 1, playTimeout: 250 }); // the fastest Rate of Play, so a round runs quickly but the flights are real
+        return json(settings);
       case 'POST /ledger/bet': {
         const body = req.postDataJSON();
         stub.bets.push(body);

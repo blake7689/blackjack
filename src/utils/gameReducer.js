@@ -26,6 +26,8 @@ export const initialGameState = {
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
     doubleFaceDown: false, // a double's card stays hidden until REVEAL_HIDDEN
+    autoDeal: false, // rounds continue and deal by themselves (needs resetInitialBet)
+    autoDealDelay: 3000, // ms between the rebet and the automatic deal
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -45,6 +47,8 @@ export const initialGameState = {
   pendingBets: [], // bets sent to the server and not yet answered: { seq, handTag, amount, newRound }
   nextHandTag: 1,
   notice: null, // a message about the round, such as a refused bet
+  autoDealPaused: false, // the player stopped auto deal, or a rebet was unaffordable; Resume clears it
+  autoDealPending: false, // a rebet is on the table and the automatic DEAL step is armed
 };
 
 // Changing these settings deals a new shoe and resets the table. //
@@ -52,12 +56,12 @@ export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehavio
   "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
-export const SETTING_RANGES = { deckCount: [1, 5], playTimeout: [250, 5000], maxSplitHands: [2, 4] };
+export const SETTING_RANGES = { deckCount: [1, 5], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
 // fall back to the default for anything else, and fill what's missing from the defaults.
 export function sanitizeSettings(saved) {
-  return Object.fromEntries(Object.entries(initialGameState.settings).map(([key, fallback]) => {
+  const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, fallback]) => {
     const value = saved?.[key];
     if (typeof value !== typeof fallback) return [key, fallback];
     if (key === "dealerHoleBehaviour") return [key, Object.values(DealerHoleOptions).includes(value) ? value : fallback];
@@ -66,6 +70,12 @@ export function sanitizeSettings(saved) {
     if (!range || (key === "maxSplitHands" && value === 0)) return [key, value];
     return [key, Math.min(range[1], Math.max(range[0], Math.round(value)))];
   }));
+  return settings.resetInitialBet ? settings : { ...settings, autoDeal: false }; // auto deal needs the rebet
+}
+
+// Auto deal runs only with Reset bet on and while the player has not stopped it.
+export function autoDealOn(state) {
+  return state.settings.autoDeal && state.settings.resetInitialBet && !state.autoDealPaused;
 }
 
 const emptyRound = {
@@ -119,7 +129,7 @@ function countSeen(state, reset = false) {
 
 function resetTable(state, shoe, phase) {
   const refunded = state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 ? credit(state, local(state.betCircle)) : state;
-  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false, pendingBets: [] }, true);
+  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false, pendingBets: [], autoDealPending: false }, true);
 }
 
 // The player may act on a hand only on their turn, on the selected hand, while it is still in play. //
@@ -185,14 +195,18 @@ function playerAction(state, action) {
 export function gameReducer(state, action) {
   switch (action.type) {
     case "START_GAME":
-      return resetTable(state, action.shoe, GamePhases.PRE_DEAL);
+      return { ...resetTable(state, action.shoe, GamePhases.PRE_DEAL), autoDealPaused: false };
 
     case "RESET_GAME":
-      return resetTable(state, action.shoe, action.phase);
+      return { ...resetTable(state, action.shoe, action.phase), autoDealPaused: false };
 
     case "SET_SETTING": {
       // { key, value } for one setting, or { values } for several at once (a rules preset).
-      const next = { ...state, settings: { ...state.settings, ...(action.values ?? { [action.key]: action.value }) } };
+      const values = action.values ?? { [action.key]: action.value };
+      const settings = { ...state.settings, ...values };
+      // Enabling auto deal starts it running; a pending deal does not outlive turning it off.
+      const next = { ...state, settings, autoDealPaused: "autoDeal" in values ? false : state.autoDealPaused };
+      next.autoDealPending = state.autoDealPending && autoDealOn(next);
       return action.shoe ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
     }
 
@@ -200,20 +214,22 @@ export function gameReducer(state, action) {
       // Saved settings arrive after sign-in. Between rounds a changed table setting deals the new shoe;
       // a round in progress is never reset.
       const next = { ...state, settings: sanitizeSettings(action.saved) };
+      next.autoDealPending = state.autoDealPending && autoDealOn(next);
       const tableChanged = RESET_SETTINGS.some((key) => next.settings[key] !== state.settings[key]);
       return tableChanged && state.phase === GamePhases.PRE_DEAL ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
     }
 
     case "ADD_BET":
       if (state.phase !== GamePhases.PRE_DEAL || action.amount > action.credits) return state;
-      return credit({ ...state, betCircle: state.betCircle + action.amount }, local(-action.amount));
+      return credit({ ...state, betCircle: state.betCircle + action.amount, autoDealPending: false }, local(-action.amount));
 
     case "CLEAR_BET":
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
-      return credit({ ...state, betCircle: 0 }, local(state.betCircle));
+      return credit({ ...state, betCircle: 0, autoDealPending: false }, local(state.betCircle));
 
     case "DEAL": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
+      if (action.auto && !state.autoDealPending) return state; // a timer step that was cancelled
       const { result, next, refilled } = draw(state, action.refill,
         (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings));
       const dealt = {
@@ -224,6 +240,7 @@ export function gameReducer(state, action) {
         dealer: result.dealer,
         dealerHole: result.dealerHoleCards,
         initialBet: state.betCircle,
+        autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
       };
       // The chips already left the shown balance; this stakes them on the server and opens the round.
@@ -302,11 +319,26 @@ export function gameReducer(state, action) {
 
     case "END_ROUND": {
       const { initialBet } = state;
+      const on = autoDealOn(state);
       const rebet = state.settings.resetInitialBet && initialBet > 0 && action.credits >= initialBet;
-      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0 };
+      const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
+      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0,
+        autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
+        notice: broke ? `Not enough credits to rebet $${initialBet.toLocaleString()}: auto deal paused` : null };
       if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;
+    }
+
+    case "PAUSE_AUTO_DEAL":
+      return state.autoDealPaused && !state.autoDealPending ? state : { ...state, autoDealPaused: true, autoDealPending: false };
+
+    case "CANCEL_AUTO_DEAL": // the player left the game page: drop a pending deal but do not pause
+      return state.autoDealPending ? { ...state, autoDealPending: false } : state;
+
+    case "RESUME_AUTO_DEAL": {
+      const next = { ...state, autoDealPaused: false, notice: null };
+      return { ...next, autoDealPending: autoDealOn(next) && state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 };
     }
 
     default:
@@ -325,6 +357,8 @@ export function nextAutoAction(state) {
       if (state.pendingBets.length > 0) return null;
       return state.hands.some((h) => h.hiddenCards.length > 0) ? "REVEAL_HIDDEN" : "SETTLE";
     case GamePhases.RESULTS: return "FINISH_RESULTS";
+    case GamePhases.POST_ROUND: return autoDealOn(state) ? "CONTINUE" : null;
+    case GamePhases.PRE_DEAL: return state.autoDealPending ? "DEAL" : null;
     case GamePhases.END_ROUND: return "END_ROUND";
     default: return null;
   }

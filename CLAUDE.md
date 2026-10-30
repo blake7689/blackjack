@@ -115,6 +115,15 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   the circle, nothing pending): the API counts a correct code refused by a guard as a wrong entry toward the per-player lockout (5 wrong, then 10 min).
   Nothing about the feature may be in the DOM before the 7 taps (no role/tabindex/aria on the balance, prompt not rendered). Every refusal shows one
   generic message. The real code is never in the repo, bundle, tests, logs or PR (tests use a dummy).
+- Auto deal (#88): settings `autoDeal` and `autoDealDelay` (0-10000 ms, default 3000; not in `RESET_SETTINGS` or the presets); `autoDealOn(state)` needs `autoDeal`,
+  `resetInitialBet` and `!autoDealPaused`, and `sanitizeSettings` turns a saved `autoDeal` off without `resetInitialBet`. Two reducer fields: `autoDealPaused`
+  (sticky: Pause button, or an unaffordable rebet, which also sets the notice after `emptyRound`; cleared by Resume, START_GAME/RESET_GAME and enabling `autoDeal`)
+  and `autoDealPending` (armed by END_ROUND when a rebet was placed; cleared by ADD_BET, CLEAR_BET, DEAL, any table reset, Pause, and leaving `/game`).
+  `nextAutoAction` gives CONTINUE (POST_ROUND) and DEAL (PRE_DEAL, pending) on the one existing timer; DEAL waits `stepWait(autoDealDelay)`, so delay 0 means right
+  after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
+  `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
+  shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal); it stops click
+  propagation because `.board` treats a click as CONTINUE. There is no Undo action, only ADD_BET and CLEAR_BET.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.
