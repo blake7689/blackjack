@@ -28,7 +28,8 @@ test('cold-start session restore waits out a slow API (#75)', async ({ page }) =
   expect(api.failed).toEqual([]);
 });
 
-// Seed 6 (mulberry32), US peek, 2 decks. Before the deal the page uses 4 random numbers (router keys), the settings load builds
+// Seed 6 (mulberry32), the Vegas table of the fixture (US peek, 6 decks, dealer hits soft 17; STALE until the seed is re-picked for 6 decks: it was
+// picked for 2 decks, so the cards below no longer match #91 Step A). Before the deal the page uses 4 random numbers (router keys), the settings load builds
 // one shoe and Start Game a second one; the deal draws from that.
 //   player jack of clubs + 4 of diamonds = 14, dealer 8 of clubs up + 7 of spades in the hole (15, no blackjack).
 //   Hit draws the 3 of spades (17); Stay; the dealer flips the hole card and draws.

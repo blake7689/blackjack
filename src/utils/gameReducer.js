@@ -1,6 +1,7 @@
 import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
 import { canSplit } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
@@ -10,7 +11,7 @@ import * as engine from "./gameEngine";
 
 export const initialGameState = {
   settings: {
-    deckCount: 2,
+    deckCount: 6, // the defaults are the Vegas preset (utils/rulePresets.js)
     includeCutCard: true,
     playTimeout: 1000,
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK,
@@ -21,7 +22,14 @@ export const initialGameState = {
     dealerDrawsOnPlayerBust: false,
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
     showCardCount: true,
-    maxSplitHands: 0, // 0 = unlimited; 2 = one split per round
+    maxSplitHands: 4, // 0 = unlimited; 2 = one split per round
+    dealerHitsSoft17: true,
+    blackjackPayout: BlackjackPayouts.THREE_TWO,
+    doubleOn: DoubleOn.ANY, // hard totals only
+    doubleAfterSplit: true,
+    resplitAces: false,
+    hitSplitAces: false,
+    noHoleCardLoss: NoHoleCardLoss.ORIGINAL, // a dealer blackjack found after the player added stakes: takes only the first bet
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
@@ -53,18 +61,39 @@ export const initialGameState = {
 
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
-  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands"];
+  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands",
+  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
-export const SETTING_RANGES = { deckCount: [1, 5], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
+export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
+
+// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above; every save before that is `v: 1`.
+// A missing rule key in a `v: 1` object gets today's behaviour from LEGACY_RULES, so an existing table never changes payout.
+// `{}`, a missing `v` and `v: 2` get the Vegas defaults. The next save writes `v: 2` with every key.
+// Whoever adds a rule key later (PR 2 surrender, PR 3 insurance) must bump SETTINGS_VERSION and decide the fill for older versions.
+export const SETTINGS_VERSION = 2;
+export const LEGACY_RULES = {
+  deckCount: 2, maxSplitHands: 0, dealerHitsSoft17: false, blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY,
+  doubleAfterSplit: true, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
+};
+
+// Settings that hold one of a fixed list of strings.
+const ENUM_SETTINGS = {
+  dealerHoleBehaviour: Object.values(DealerHoleOptions),
+  blackjackPayout: Object.values(BlackjackPayouts),
+  doubleOn: Object.values(DoubleOn),
+  noHoleCardLoss: Object.values(NoHoleCardLoss),
+};
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
-// fall back to the default for anything else, and fill what's missing from the defaults.
+// fall back to the default (or, for a `v: 1` object, the legacy rule) for anything else, and fill what's missing.
 export function sanitizeSettings(saved) {
-  const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, fallback]) => {
+  const legacy = saved?.v === 1;
+  const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, standard]) => {
+    const fallback = legacy && key in LEGACY_RULES ? LEGACY_RULES[key] : standard;
     const value = saved?.[key];
     if (typeof value !== typeof fallback) return [key, fallback];
-    if (key === "dealerHoleBehaviour") return [key, Object.values(DealerHoleOptions).includes(value) ? value : fallback];
+    if (key in ENUM_SETTINGS) return [key, ENUM_SETTINGS[key].includes(value) ? value : fallback];
     if (key === "chipValues") return [key, parseChipValues(value).join(",") || fallback];
     const range = SETTING_RANGES[key];
     if (!range || (key === "maxSplitHands" && value === 0)) return [key, value];

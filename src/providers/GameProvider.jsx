@@ -1,15 +1,13 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
-import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS, sanitizeSettings } from "../utils/gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS, SETTINGS_VERSION, sanitizeSettings } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { createShoe } from "../utils/cards";
 import { usePlayer } from "../hooks/usePlayer";
 import { getToken } from "../utils/api";
 import { getSettings, saveSettings } from "../utils/playerEngine";
 import { stepWait } from "../utils/cardAnimation";
-
-const SETTINGS_VERSION = 1;
 
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);

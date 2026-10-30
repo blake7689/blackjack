@@ -413,7 +413,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 1, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 2, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -424,13 +424,13 @@ describe("saved settings (#36)", () => {
   });
 
   it("clamps and rounds numbers into range, but keeps maxSplitHands 0 (unlimited)", () => {
-    expect(sanitizeSettings({ deckCount: 9, playTimeout: 10, maxSplitHands: 7 })).toMatchObject({ deckCount: 5, playTimeout: 250, maxSplitHands: 4 });
+    expect(sanitizeSettings({ deckCount: 9, playTimeout: 10, maxSplitHands: 7 })).toMatchObject({ deckCount: 8, playTimeout: 250, maxSplitHands: 4 });
     expect(sanitizeSettings({ deckCount: 2.6, maxSplitHands: 0 })).toMatchObject({ deckCount: 3, maxSplitHands: 0 });
   });
 
   it("falls back to the default for a wrong type or an unknown dealer mode", () => {
     expect(sanitizeSettings({ includeCutCard: "yes", deckCount: "4", dealerHoleBehaviour: "drawAfter_noDraw21" }))
-      .toMatchObject({ includeCutCard: true, deckCount: 2, dealerHoleBehaviour: defaults.dealerHoleBehaviour });
+      .toMatchObject({ includeCutCard: true, deckCount: 6, dealerHoleBehaviour: defaults.dealerHoleBehaviour });
     expect(sanitizeSettings({ dealerHoleBehaviour: "drawAfter" }).dealerHoleBehaviour).toBe("drawAfter");
   });
 

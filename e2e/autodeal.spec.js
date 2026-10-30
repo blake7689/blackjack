@@ -1,11 +1,11 @@
-import { test, expect, stubApi, seedRandom } from './fixtures';
+import { test, expect, stubApi, seedRandom, VEGAS } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
 // Auto deal (#88): after the first round the table continues, rebets and deals the next round by itself. The test clicks Deal once,
-// for round 1; every later click is a card action. Cards are the smoke test's (seed 6, see smoke.spec.js): player 14, dealer 8 up and 7 in the hole.
+// for round 1; every later click is a card action. Cards are the smoke test's (seed 6, see smoke.spec.js, to be re-picked for the 6-deck Vegas fixture): player 14, dealer 8 up and 7 in the hole.
 test('auto deal continues, rebets and deals the next round with no click (#88)', async ({ page }) => {
-  const api = await stubApi(page, { settings: { v: 1, playTimeout: 250, resetInitialBet: true, autoDeal: true, autoDealDelay: 300 } });
+  const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, resetInitialBet: true, autoDeal: true, autoDealDelay: 300 } });
   await seedRandom(page, 6);
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await page.goto('/');

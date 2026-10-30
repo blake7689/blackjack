@@ -300,7 +300,7 @@ describe("GameProvider", () => {
     remote.getSettings.mockRejectedValue(new Error("offline"));
     const { ctx } = setup({ signedIn: true });
     await flush();
-    expect(ctx.state.settings.deckCount).toBe(2);
+    expect(ctx.state.settings.deckCount).toBe(6);
     setup();
     expect(remote.getSettings).toHaveBeenCalledTimes(1);
   });
@@ -317,7 +317,7 @@ describe("GameProvider", () => {
       </MemoryRouter>
     );
     await act(async () => answer({ deckCount: 5 }));
-    expect(ctx.state.settings.deckCount).toBe(2);
+    expect(ctx.state.settings.deckCount).toBe(6);
   });
 
   it("saves the whole settings object when signed in, and nothing when signed out", async () => {
@@ -326,7 +326,7 @@ describe("GameProvider", () => {
     expect(remote.saveSettings).not.toHaveBeenCalled();
     remote.token = "token";
     await act(async () => { await ctx.actions.changeSetting("deckCount", 3); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 1, ...ctx.state.settings });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 2, ...ctx.state.settings });
     expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
 
@@ -730,7 +730,7 @@ describe("GameProvider auto deal (#88)", () => {
       const { ctx } = setup();
       await act(async () => { await ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
       const saved = remote.saveSettings.mock.calls[0][0];
-      expect(saved).toMatchObject({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
+      expect(saved).toMatchObject({ v: 2, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
       expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
       expect(cards.createShoe).not.toHaveBeenCalled();
     });

@@ -331,7 +331,7 @@ describe("Settings", () => {
     fireEvent.click(screen.getByLabelText("Save tripleDown"));
     fireEvent.click(screen.getByLabelText("Save tripleDrawsOnBust"));
     expect(gameActions.changeSetting.mock.calls).toEqual([["tripleDown", true], ["tripleDrawsOnBust", true]]);
-    expect(screen.getByLabelText("rulePreset").value).toBe("US");
+    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
   });
 
   it("offers the face-down double option, off by default", () => {
@@ -356,29 +356,29 @@ describe("Settings", () => {
     const confirm = vi.spyOn(window, "confirm");
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
     const preset = screen.getByLabelText("rulePreset");
-    expect(preset.value).toBe("US");
+    expect(preset.value).toBe("Vegas");
     expect(screen.getByRole("option", { name: "Custom" }).disabled).toBe(true);
 
-    fireEvent.change(preset, { target: { value: "EU" } });
+    fireEvent.change(preset, { target: { value: "Europe" } });
     expect(confirm).not.toHaveBeenCalled();
-    expect(gameActions.changeSettings).toHaveBeenCalledWith(RULE_PRESETS.EU);
-    expect(preset.value).toBe("EU");
+    expect(gameActions.changeSettings).toHaveBeenCalledWith(RULE_PRESETS.Europe);
+    expect(preset.value).toBe("Europe");
     expect(screen.getByLabelText("dealerHoleBehaviour").value).toBe("drawAfter");
 
     fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
     expect(preset.value).toBe("Custom");
     fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
-    expect(preset.value).toBe("EU");
+    expect(preset.value).toBe("Europe");
   });
 
   it("asks once before a preset resets a round in progress", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PLAYER_TURN } });
     const preset = screen.getByLabelText("rulePreset");
-    fireEvent.change(preset, { target: { value: "EU" } });
+    fireEvent.change(preset, { target: { value: "Europe" } });
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
-    expect(preset.value).toBe("US");
-    fireEvent.change(preset, { target: { value: "EU" } });
+    expect(preset.value).toBe("Vegas");
+    fireEvent.change(preset, { target: { value: "Europe" } });
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
   });
@@ -443,12 +443,12 @@ describe("Settings", () => {
     expect(screen.getByRole("tab", { name: "Player" }).getAttribute("aria-selected")).toBe("true");
   });
 
-  it("offers 2, 3, 4 or Unlimited hands after splits, Unlimited by default", () => {
+  it("offers 2, 3, 4 or Unlimited hands after splits, 4 by default", () => {
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
     const select = screen.getByLabelText("maxSplitHands");
     expect([...select.options].map((o) => o.text)).toEqual(["2", "3", "4", "Unlimited"]);
-    expect(select.value).toBe("0");
-    expect(screen.getByText("Max Hands After Splits: Unlimited")).toBeTruthy();
+    expect(select.value).toBe("4");
+    expect(screen.getByText("Max Hands After Splits: 4")).toBeTruthy();
     fireEvent.change(select, { target: { value: "3" } });
     expect(screen.getByText("Max Hands After Splits: 3")).toBeTruthy();
     fireEvent.click(screen.getByLabelText("Save maxSplitHands"));

@@ -171,7 +171,7 @@ describe("DeckStack", () => {
     const shoe = [...stackedShoe(["5", "6"]), { id: "CUT-1", type: "cut" }];
     renderUI(<DeckStack shoe={shoe} />, { game: { cutCardFound: true } });
     expect(screen.getByText("Shoe: 2")).toBeTruthy();
-    expect(screen.getByText(/Decks: 2/)).toBeTruthy();
+    expect(screen.getByText(/Decks: 6/)).toBeTruthy();
     expect(screen.getByText(/Cut Card Found/)).toBeTruthy();
   });
 
