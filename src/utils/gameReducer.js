@@ -2,7 +2,7 @@ import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
-import { canSplit } from "./blackjackLogic";
+import { canSplit, canDouble, isSplitAces, cents } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
@@ -190,6 +190,7 @@ function playerAction(state, action) {
   }
 
   if (action.type === "HIT") {
+    if (isSplitAces(hand) && !state.settings.hitSplitAces) return state; // a split ace may only be split again or stood on
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerHit(hand, shoe, cut, refill));
     return countSeen(advance(next, replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
@@ -197,28 +198,34 @@ function playerAction(state, action) {
   if (hand.bet <= 0 || action.credits < hand.bet) return state; // a hand whose stake was refused can't add to it
 
   if (action.type === "DOUBLE") {
-    if (hand.cards.length !== 2) return state;
+    if (!canDouble(hand, state.settings)) return state;
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill, state.settings.doubleFaceDown));
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   if (action.type === "TRIPLE") {
-    // Must return here: anything else falls through to the split code. Needs two more stakes.
-    if (!state.settings.tripleDown || hand.cards.length !== 2 || action.credits < hand.bet * 2) return state;
+    // Must return here: anything else falls through to the split code. Needs two more stakes. Allowed where a double is.
+    if (!state.settings.tripleDown || !canDouble(hand, state.settings) || action.credits < hand.bet * 2) return state;
     const { result, next, refilled } = draw(state, action.refill,
       (shoe, cut, refill) => engine.playerTripleDown(hand, shoe, cut, refill, state.settings.tripleDrawsOnBust));
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet * 2, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   // SPLIT
-  if (!canSplit(hand, state.hands.length, state.settings.maxSplitHands)) return state;
+  const { maxSplitHands, resplitAces, hitSplitAces } = state.settings;
+  if (!canSplit(hand, state.hands.length, maxSplitHands, resplitAces)) return state;
   const { result, next, refilled } = draw(state, action.refill,
-    (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, state.settings.blackJackOnSplit));
+    (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, { blackJackOnSplit: state.settings.blackJackOnSplit, resplitAces, hitSplitAces }));
   // Both new hands start as copies of the parent; the second one is a new hand and gets its own tag (it takes the new stake).
   const [first, second] = result.newHandsArray;
   const splitOff = { ...second, tag: next.nextHandTag };
   const split = credit({ ...next, nextHandTag: next.nextHandTag + 1 }, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: splitOff.tag });
-  return countSeen(advance(split, replaceHand(state.hands, handIdx, first, splitOff), handIdx), refilled);
+  // A split ace left waiting to be split again that no longer can be (the hand limit) has nothing to do: finish it before
+  // advance(), or the turn could stay on a finished hand. Every ace-split hand of the round is checked, not just the new ones.
+  const hands = replaceHand(state.hands, handIdx, first, splitOff).map((h) =>
+    isSplitAces(h) && !hitSplitAces && h.status === HandStatus.PLAYING && !canSplit(h, state.hands.length + 1, maxSplitHands, resplitAces)
+      ? { ...h, status: HandStatus.DONE } : h);
+  return countSeen(advance(split, hands, handIdx), refilled);
 }
 
 export function gameReducer(state, action) {
@@ -306,7 +313,7 @@ export function gameReducer(state, action) {
 
     case "DEALER_STEP": {
       const { result, next, refilled } = draw(state, action.refill,
-        (shoe, cut, refill) => engine.dealerPlay(state.dealer, { cards: [] }, shoe, state.dealerSkipDraw, cut, refill));
+        (shoe, cut, refill) => engine.dealerPlay(state.dealer, { cards: [] }, shoe, state.dealerSkipDraw, cut, refill, state.settings.dealerHitsSoft17));
       const stillPlaying = result.dealer.status === HandStatus.PLAYING || result.dealer.status === HandStatus.DRAW_HOLE;
       return countSeen({ ...next, dealer: result.dealer, phase: stillPlaying ? GamePhases.DEALER_TURN : GamePhases.SETTLING_HANDS }, refilled);
     }
@@ -335,11 +342,11 @@ export function gameReducer(state, action) {
     }
 
     case "SETTLE":
-      return { ...state, hands: engine.settleHands(state.hands, state.dealer), phase: GamePhases.RESULTS };
+      return { ...state, hands: engine.settleHands(state.hands, state.dealer, state.settings), phase: GamePhases.RESULTS };
 
     case "FINISH_RESULTS": {
       // Always settle, even a total loss, so the server closes the round.
-      const payout = state.hands.reduce((sum, h) => sum + h.payout, 0);
+      const payout = cents(state.hands.reduce((sum, h) => sum + h.payout, 0));
       return credit({ ...state, phase: GamePhases.POST_ROUND }, { kind: "settle", amount: payout });
     }
 

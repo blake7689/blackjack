@@ -34,7 +34,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const updatedDealerHandStatus =
     dealerHandStatus === HandStatus.NONE ?
     getDealerHandEvaluation(
-      dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false, dealerCardsAll.length
+      dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false, dealerCardsAll.length, settings.dealerHitsSoft17
     ).handStatus :
     dealerHandStatus;
   
@@ -43,6 +43,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
       cards: playerCards, 
       hiddenCards: [], // a face-down double's card, kept out of `cards` until REVEAL_HIDDEN
       bet: bet, 
+      baseStake: bet, // the first bet; a dealer blackjack found later takes only this with noHoleCardLoss "original"
       status: playerHandEvaluation.handStatus,
       isBlackjack: playerHasBlackjack, 
       isDouble: false,
@@ -85,8 +86,8 @@ export function dealerShowsSecondCard(hands, settings) {
 }
 
 // Settle Hands //
-export function settleHands(hands, dealer) {
-  return hands.map((hand) => settleHand(hand, dealer));
+export function settleHands(hands, dealer, rules) {
+  return hands.map((hand) => settleHand(hand, dealer, rules));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -175,8 +176,8 @@ export function playerTripleDown(hand, shoe, setCutCardFound, resetShoe, drawsOn
   return { hand: newHand, shoe };
 }
 
-// Player Split //
-export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnSplit) {
+// Player Split. rules: { blackJackOnSplit, resplitAces, hitSplitAces } //
+export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { blackJackOnSplit = false, resplitAces = false, hitSplitAces = false } = {}) {
   const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const card2 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const hand1Cards = [hand.cards[0], card1];
@@ -190,8 +191,9 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
   if (!blackJackOnSplit && hand1Evaluation.isBlackjack) { hand1Evaluation.isBlackjack = false; }
   if (!blackJackOnSplit && hand2Evaluation.isBlackjack) { hand2Evaluation.isBlackjack = false; }
 
-  // Split aces get one card each and stand. //
+  // Split aces get one card each and stand, unless they may be hit, or may be split again when the card is another ace. //
   const splitAces = hand.cards[0].rank === "ace";
+  const standsAfterOne = (cards) => splitAces && !hitSplitAces && !(resplitAces && cards[1].rank === "ace");
 
   const newHand1 = {
     ...hand,
@@ -199,7 +201,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
     cards: hand1Cards,
     total: hand1Totals.total,
     totals: hand1Totals.totals,
-    status: splitAces ? HandStatus.DONE : hand1Evaluation.handStatus,
+    status: standsAfterOne(hand1Cards) ? HandStatus.DONE : hand1Evaluation.handStatus,
     result: hand1Evaluation.handResult,
     isBlackjack: hand1Evaluation.isBlackjack,
     isBusted: hand1Evaluation.isBusted
@@ -207,11 +209,12 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, blackJackOnS
 
   const newHand2 = {
     ...hand,
+    baseStake: 0, // the split-off hand's whole stake is an added one
     isSplit: true,
     cards: hand2Cards,
     total: hand2Totals.total,
     totals: hand2Totals.totals,
-    status: splitAces ? HandStatus.DONE : hand2Evaluation.handStatus,
+    status: standsAfterOne(hand2Cards) ? HandStatus.DONE : hand2Evaluation.handStatus,
     result: hand2Evaluation.handResult,
     isBlackjack: hand2Evaluation.isBlackjack,
     isBusted: hand2Evaluation.isBusted
@@ -241,7 +244,7 @@ export function revealDealerHole(dealer, hole) {
 }
 
 // Dealer logic: one step (reveal any hole card, then draw at most one card) //
-export function dealerPlay(dealer, hole, shoe, skipDraw = false, setCutCardFound, resetShoe) {
+export function dealerPlay(dealer, hole, shoe, skipDraw = false, setCutCardFound, resetShoe, hitsSoft17 = false) {
   let dealerCards = [...dealer.cards, ...hole.cards];
   const needsCard = dealer.status === HandStatus.PLAYING || (dealer.status === HandStatus.DRAW_HOLE && dealerCards.length < 2);
   const atTwoForBlackjackCheck = () => dealer.checkBlackjackOnly && dealerCards.length >= 2;
@@ -252,7 +255,7 @@ export function dealerPlay(dealer, hole, shoe, skipDraw = false, setCutCardFound
 
   const dealerTotals = getHandTotals(dealerCards);
   const stopAtTwo = atTwoForBlackjackCheck();
-  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.totals, dealer, skipDraw || stopAtTwo, dealerCards.length);
+  const newHandEvaluation = getDealerHandEvaluation(dealerTotals.totals, dealer, skipDraw || stopAtTwo, dealerCards.length, hitsSoft17);
 
   const newDealer = { 
     ...dealer, 

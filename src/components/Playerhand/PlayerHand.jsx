@@ -8,15 +8,18 @@ import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
-import { canSplit } from "../../utils/blackjackLogic";
+import { canSplit, canDouble, isSplitAces } from "../../utils/blackjackLogic";
 
-function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits }) {
+// The rule props default to the rules the game had before #91, so a caller that passes none gets those.
+function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits,
+  doubleOn = "any", doubleAfterSplit = true, resplitAces = false, hitSplitAces = false }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(hand.cards);
   const { hit, stand, double, triple, split } = useGameActions();
   const canAffordStake = hand.bet > 0 && credits >= hand.bet; // a hand whose stake was refused can't add to it
   const showResult = (gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND) && hand.result !== HandResult.NONE;
+  const mayDouble = canDouble(hand, { doubleOn, doubleAfterSplit }) && canAffordStake;
   const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
 
   return (
@@ -53,9 +56,10 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
           onDouble={() => double(index)}
           onTriple={() => triple(index)}
           onSplit={() => split(index)}
-          showDouble={hand.cards.length === 2 && canAffordStake}
-          showTriple={tripleDown && hand.cards.length === 2 && canAffordStake && credits >= 2 * hand.bet}
-          showSplit={canSplit(hand, handCount, maxSplitHands) && canAffordStake}
+          showHit={hitSplitAces || !isSplitAces(hand)}
+          showDouble={mayDouble}
+          showTriple={tripleDown && mayDouble && credits >= 2 * hand.bet}
+          showSplit={canSplit(hand, handCount, maxSplitHands, resplitAces) && canAffordStake}
         />
       )}
     </div>

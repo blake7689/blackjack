@@ -22,7 +22,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Saved settings (#36): `GameProvider` loads `GET /api/player/me/settings` on sign-in and applies it with one
   `LOAD_SETTINGS` (cleaned by `sanitizeSettings`: unknown keys dropped, wrong types and unknown dealer modes fall
   back to defaults, numbers clamped to `SETTING_RANGES`, `maxSplitHands` 0 kept). `changeSettings` saves the whole
-  `{ v: 1, ...settings }` object when signed in and returns the save promise. A new setting needs only a default
+  `{ v: 2, ...settings }` object when signed in and returns the save promise. A new setting needs only a default
   in `initialGameState.settings` (and a range if it is a number).
 - Round state: `src/utils/gameReducer.js` (pure reducer; `nextAutoAction` names the next automatic step).
   `GameProvider` = `useReducer` + one timer effect (cleanup cancels it on reset or unmount) + a credit-event
@@ -55,8 +55,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),
-  `blackjackPaysImmediately`. Test each mode with each toggle. Rule presets (A5) live in `utils/rulePresets.js`;
-  the default settings equal the US preset, and `playRound` starts from the bare mode (pays-immediately off).
+  `blackjackPaysImmediately`. Test each mode with each toggle. Five rule presets (#91: Vegas, Atlantic City,
+  Europe, Australia, Singapore) live in `utils/rulePresets.js` and the rule controls' text in `utils/ruleCatalog.js`; the default settings
+  equal Vegas. `playRound` starts from `LEGACY_RULES` (the pre-#91 rules: S17, 2 decks, no split limit, a dealer blackjack takes all) and
+  the bare mode (pays-immediately off); a scenario for a new rule sets it in `rules`.
 - `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek, `blackjackPaysImmediately`,
   or EU with `dealerDrawsOnPlayerBlackjack` off. US no peek hides a dealer blackjack until
   `revealDealerHole`, and it then wins every bet, doubles and splits included.
@@ -66,8 +68,16 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
-- Splits: `canSplit(hand, handCount, maxSplitHands)`; `maxSplitHands` (2-4, or 0 = unlimited, the default) caps the
-  hands in a round, each split takes one more stake, and split aces never resplit.
+- Splits: `canSplit(hand, handCount, maxSplitHands, resplitAces)`; `maxSplitHands` (2-4, or 0 = unlimited; default 4) caps the
+  hands in a round and each split takes one more stake. Split aces get one card and stand unless `hitSplitAces`; with `resplitAces`
+  a hand of A,A stays PLAYING (Stay or Split, no Hit). In SPLIT every ace-split hand that can no longer split is set DONE before
+  `advance()` (or the turn can stay on a finished hand). `canDouble` (hard 9-11 / 10-11 means no ace counted as 11; never on split
+  aces; DAS) also gates TRIPLE.
+- Saved settings carry `v` (2 since #91). Only a `v: 1` object gets `LEGACY_RULES` for a missing or invalid rule key; `{}`, no `v`
+  and `v: 2` get the Vegas defaults. A PR that adds a rule key must bump `SETTINGS_VERSION` and decide the fill for older versions.
+- Original-bet-only (`noHoleCardLoss: "original"`): every hand has `baseStake` (the first bet; 0 on a split-off hand). A dealer
+  blackjack gives back `bet - baseStake` of a hand that did not bust (a busted hand is never refunded), paid in the one round
+  `settle`. The rounded blackjack payout (6:5 pays 2.2x) and the round sum are rounded to the cent (`cents`).
 - Triple down (#21): settings `tripleDown` and `tripleDrawsOnBust` (both off, not in `RESET_SETTINGS` or the presets). In
   `playerAction` the `TRIPLE` branch must return before the SPLIT code (anything not DOUBLE falls through to it) and needs
   `credits >= bet * 2`; the one ledger `bet` is `hand.bet * 2`.
