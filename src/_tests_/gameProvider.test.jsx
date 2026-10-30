@@ -895,3 +895,59 @@ describe("GameProvider: no save before the saved settings have loaded (#91)", ()
     expect(remote.saveSettings).not.toHaveBeenCalled();
   });
 });
+
+describe("GameProvider surrender (#91)", () => {
+  it("surrender(handIdx) gives up the hand: half the bet comes back in the one settle, and the dealer takes no card", () => {
+    shoes.push(stackedShoe(["10", "6", "6", "K", "2"])); // Vegas: late surrender, the dealer peeks, 6 + K = 16
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+    act(() => { ctx.actions.surrender(0); });
+    expect(ctx.state.hands[0]).toMatchObject({ surrendered: true, result: "Surrendered" });
+    expect(ctx.state.phase).toBe(GamePhases.DEALER_TURN);
+    for (let i = 0; i < 8 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(ctx.state.dealer.cards).toHaveLength(2);
+    expect(events(player)).toEqual([{ kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, { kind: "settle", amount: 5 }]);
+  });
+
+  it("an ignored surrender (setting none) changes nothing", () => {
+    shoes.push(stackedShoe(["10", "6", "6", "K", "2"]));
+    const { ctx } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => { ctx.actions.changeSetting("surrender", "none"); });
+    shoes.push(stackedShoe(["10", "6", "6", "K", "2"]));
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    const before = ctx.state;
+    act(() => { ctx.actions.surrender(0); });
+    expect(ctx.state).toBe(before);
+  });
+
+  it("saves surrender in the version 3 object, and a change deals a new shoe like any table rule", async () => {
+    remote.token = "token";
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    cards.createShoe.mockClear();
+    await act(async () => { await ctx.actions.changeSetting("surrender", "early"); });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 3, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 3, surrender: "early" });
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads a saved version 2 object (no surrender key) as none, and a version 3 one as saved", async () => {
+    remote.getSettings.mockResolvedValue({ v: 2, dealerHitsSoft17: true, deckCount: 6 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.surrender).toBe("none");
+    remote.getSettings.mockResolvedValue({ v: 3, surrender: "earlyNoAce" });
+    const second = setup({ signedIn: true });
+    await flush();
+    expect(second.ctx.state.settings.surrender).toBe("earlyNoAce");
+  });
+});

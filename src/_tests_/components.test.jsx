@@ -666,3 +666,138 @@ describe("BettingFooter auto deal control (#88)", () => {
     expect(gameActions.continueRound).not.toHaveBeenCalled();
   });
 });
+
+describe("Surrender (#91)", () => {
+  const props = { index: 0, active: true, gamePhase: GamePhases.PLAYER_TURN, handCount: 1, maxSplitHands: 0, credits: 1000 };
+  const label = (container) => live(container);
+  // A hand after a surrender: DONE, flagged, with the result the engine gave it.
+  const given = (result, extra = {}) => hand(["10", "6"], { status: HandStatus.DONE, surrendered: true, result, totals: [16], total: 16, ...extra });
+
+  describe("PlayerOptions", () => {
+    it("hides Surrender by default and shows it, last, when asked; the click calls onSurrender", () => {
+      const onSurrender = vi.fn();
+      const { rerender, container } = renderUI(<PlayerOptions onHit={vi.fn()} onStay={vi.fn()} />);
+      expect(screen.queryByText("Surrender")).toBeNull();
+      rerender(<PlayerOptions onHit={vi.fn()} onStay={vi.fn()} showSurrender onSurrender={onSurrender} />);
+      expect([...container.querySelectorAll("button")].map((b) => b.textContent)).toEqual(["Hit", "Stay", "Surrender"]);
+      fireEvent.click(screen.getByText("Surrender"));
+      expect(onSurrender).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("PlayerHand buttons", () => {
+    it("shows Surrender only when told to, and sends it to the game for this hand", () => {
+      const { gameActions, unmount } = renderUI(<PlayerHand {...props} index={2} showSurrender hand={hand(["10", "6"])} />);
+      fireEvent.click(screen.getByText("Surrender"));
+      expect(gameActions.surrender.mock.calls).toEqual([[2]]);
+      unmount();
+      renderUI(<PlayerHand {...props} hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("Surrender")).toBeNull();
+    });
+
+    it("no button when it is not this hand's turn, even if the board allows it", () => {
+      renderUI(<PlayerHand {...props} active={false} showSurrender hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("Surrender")).toBeNull();
+      cleanup();
+      renderUI(<PlayerHand {...props} gamePhase={GamePhases.DEALER_TURN} showSurrender hand={hand(["10", "6"])} />);
+      expect(screen.queryByText("Surrender")).toBeNull();
+    });
+  });
+
+  describe("PlayerHand label", () => {
+    it.each([GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS, GamePhases.POST_ROUND, GamePhases.END_ROUND])(
+      "an at-once surrender shows 'Surrendered' straight away (%s)", (gamePhase) => {
+        const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.SURRENDER)} />);
+        expect(label(container)).toBe("Total: 16 | Bet: $10 Surrendered");
+        expect(screen.queryByText(/pending/)).toBeNull();
+        expect(container.querySelector(".hand-result.Surrendered")).toBeTruthy();
+      });
+
+    it.each([GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS])("a waiting surrender shows 'Surrender pending' while the round plays on (%s)", (gamePhase) => {
+      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.NONE)} />);
+      expect(label(container)).toBe("Total: 16 | Bet: $10 Surrender pending");
+      expect(screen.queryByText(/Lose|Win|Push/)).toBeNull();
+    });
+
+    it("a waiting surrender settled as a loss to the dealer blackjack shows 'Lose' once the round is over, and nothing about pending", () => {
+      for (const gamePhase of [GamePhases.POST_ROUND, GamePhases.END_ROUND]) {
+        const { container, unmount } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.LOSE)} />);
+        expect(label(container)).toBe("Total: 16 | Bet: $10 Lose");
+        unmount();
+      }
+    });
+
+    it("a waiting surrender settled to half shows 'Surrendered' once the round is over", () => {
+      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={GamePhases.POST_ROUND} hand={given(HandResult.SURRENDER)} />);
+      expect(label(container)).toBe("Total: 16 | Bet: $10 Surrendered");
+    });
+
+    it("the invisible size copy carries the final text, so the strip does not change width", () => {
+      for (const result of [HandResult.SURRENDER, HandResult.NONE]) {
+        const { container, unmount } = renderUI(<PlayerHand {...props} active={false} gamePhase={GamePhases.DEALER_TURN} hand={given(result)} />);
+        const copy = container.querySelector(".hand-total > .ht-size");
+        expect(copy.getAttribute("aria-hidden")).toBe("true");
+        expect(copy.textContent).toBe(label(container));
+        expect(copy.textContent).toMatch(result === HandResult.NONE ? /Surrender pending/ : /Surrendered/);
+        unmount();
+      }
+    });
+
+    it("a hand that was not surrendered and has no result shows no label before the round ends", () => {
+      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={GamePhases.DEALER_TURN} hand={hand(["10", "9"], { status: HandStatus.DONE })} />);
+      expect(label(container)).toBe("Total: 20 | Bet: $10");
+      expect(container.querySelector(".hand-result")).toBeNull();
+    });
+
+    it("an ordinary result still waits for the round to end", () => {
+      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={GamePhases.DEALER_TURN} hand={hand(["10", "9"], { status: HandStatus.DONE, result: HandResult.WIN })} />);
+      expect(container.querySelector(".hand-result")).toBeNull();
+    });
+  });
+
+  describe("GameBoard", () => {
+    const board = (cards, dealerCode, settings = {}, extra = {}) => ({
+      phase: GamePhases.PLAYER_TURN,
+      hands: [hand(cards, extra)],
+      dealer: { cards: stackedShoe([dealerCode]), dealerDisplayTotal: 10 },
+      shoe: stackedShoe(["2", "3"]),
+      settings: { ...initialGameState.settings, ...settings },
+    });
+    const shown = (game) => { const { unmount } = renderUI(<GameBoard />, { game }); const yes = screen.queryByText("Surrender") !== null; unmount(); return yes; };
+
+    it("late against a ten: the button is there, and sends Surrender for hand 0", () => {
+      const { gameActions } = renderUI(<GameBoard />, { game: board(["10", "6"], "K") });
+      fireEvent.click(screen.getByText("Surrender"));
+      expect(gameActions.surrender.mock.calls).toEqual([[0]]);
+    });
+
+    it("none hides it, whatever the dealer shows", () => {
+      expect(shown(board(["10", "6"], "K", { surrender: "none" }))).toBe(false);
+      expect(shown(board(["10", "6"], "6", { surrender: "none" }))).toBe(false);
+    });
+
+    it("early is offered against every up card; earlyNoAce is hidden against an ace only", () => {
+      for (const up of ["6", "K", "A"]) expect(shown(board(["10", "6"], up, { surrender: "early" })), `early ${up}`).toBe(true);
+      expect(shown(board(["10", "6"], "K", { surrender: "earlyNoAce" }))).toBe(true);
+      expect(shown(board(["10", "6"], "A", { surrender: "earlyNoAce" }))).toBe(false);
+    });
+
+    it("is hidden after a hit (three cards), on a split hand, and after a double", () => {
+      expect(shown(board(["2", "3", "4"], "K"))).toBe(false);
+      expect(shown(board(["8", "3"], "K", {}, { isSplit: true }))).toBe(false);
+      expect(shown(board(["5", "6"], "K", {}, { isDouble: true }))).toBe(false);
+    });
+
+    it("is hidden outside the player's turn, with no dealer card needed", () => {
+      for (const phase of [GamePhases.PRE_DEAL, GamePhases.DEALING, GamePhases.DEALER_TURN, GamePhases.POST_ROUND]) {
+        expect(shown({ ...board(["10", "6"], "K"), phase, dealer: { cards: [], dealerDisplayTotal: 0 } }), phase).toBe(false);
+      }
+    });
+
+    it("is shown on the hand in play only", () => {
+      const game = { ...board(["8", "8"], "K"), hands: [hand(["10", "6"]), hand(["9", "7"])], selectedHandIndex: 1 };
+      renderUI(<GameBoard />, { game });
+      expect(screen.getAllByText("Surrender")).toHaveLength(1);
+    });
+  });
+});
