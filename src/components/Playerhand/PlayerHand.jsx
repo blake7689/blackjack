@@ -9,10 +9,11 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
 import { canSplit, canDouble, isSplitAces } from "../../utils/blackjackLogic";
+import { DoubleOn } from "../../utils/constants/ruleOptions";
 
 // The rule props default to the rules the game had before #91, so a caller that passes none gets those.
 function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, tripleDown, credits,
-  doubleOn = "any", doubleAfterSplit = true, resplitAces = false, hitSplitAces = false }) {
+  doubleOn = DoubleOn.ANY, doubleAfterSplit = true, resplitAces = false, hitSplitAces = false }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(hand.cards);

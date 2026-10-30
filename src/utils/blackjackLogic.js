@@ -103,12 +103,12 @@ export function canSplit(hand, handCount, maxSplitHands, resplitAces = false) {
 }
 
 // Double (and triple) down: two cards, never on split aces, after a split only with doubleAfterSplit, and with doubleOn
-// 9-11 or 10-11 only on a hard total (no ace that can count as 11) in that range. //
+// 9-11 or 10-11 only when the best total is in that range (a two-card hand with an ace is always soft, at least 12, so only hard hands match). //
 export function canDouble(hand, { doubleOn = DoubleOn.ANY, doubleAfterSplit = true } = {}) {
   if (hand.cards.length !== 2 || isSplitAces(hand) || (hand.isSplit && !doubleAfterSplit)) return false;
   if (doubleOn === DoubleOn.ANY) return true;
-  const { totals, total } = getHandTotals(hand.cards);
-  return totals.length === 1 && total >= (doubleOn === DoubleOn.NINE_TO_ELEVEN ? 9 : 10) && total <= 11;
+  const { total } = getHandTotals(hand.cards);
+  return total >= (doubleOn === DoubleOn.NINE_TO_ELEVEN ? 9 : 10) && total <= 11;
 }
 
 // Check total for blackjack //
