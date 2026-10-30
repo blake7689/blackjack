@@ -38,9 +38,10 @@ export const confirmBets = (state) =>
 // `rules` sets any other game settings on top of LEGACY_RULES, e.g. { dealerDrawsOnPlayerBust: true }.
 // `offers` answers the offers step in order (reducer action types in lower case: "take_insurance", "even_money", "surrender");
 // what is left unanswered is declined. `afterDeal` may be the OFFERS state; `afterOffers` is the state once the offers and the peek are over.
+// `credits` is the balance the deal and the offers see (insurance must be affordable); the bets themselves always go through.
 // The server answers every bet once the round reaches settling: it confirms them all, except the ledger bets whose
 // position in `refuse` (0 = the opening bet, 1 = the next bet, ...) is listed, which it refuses.
-export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], offers = [], blackJackOnSplit = false, rules = {}, refuse = [] }) {
+export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], offers = [], blackJackOnSplit = false, rules = {}, refuse = [], credits = RICH }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   // Scenarios start from the rules the game had before #91 (S17, 2 decks, no split limit, a dealer blackjack takes all); `rules` changes them.
@@ -50,11 +51,11 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], of
   // Scenarios start from the bare mode: a blackjack waits for the dealer unless `rules` says otherwise.
   for (const [key, value] of Object.entries({ blackjackPaysImmediately: false, ...rules })) s = step(s, { type: "SET_SETTING", key, value });
   s = step(s, { type: "ADD_BET", amount: bet });
-  s = step(s, { type: "DEAL" });
+  s = step(s, { type: "DEAL", credits });
   s = step(s, { type: "DEAL_DONE" }); // the cards sit on the table for one step, then play (or the dealer) begins
   const afterDeal = s;
   const offerQueue = [...offers];
-  while (s.phase === GamePhases.OFFERS) s = step(s, { type: (offerQueue.shift() ?? "decline_offers").toUpperCase(), handIdx: 0 });
+  while (s.phase === GamePhases.OFFERS) s = step(s, { type: (offerQueue.shift() ?? "decline_offers").toUpperCase(), handIdx: 0, credits });
   while (s.phase === GamePhases.PEEK) s = step(s, { type: "PEEK" });
   const afterOffers = s;
 
