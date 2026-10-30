@@ -12,6 +12,7 @@ import {
   getHandTotals,
   settleHand,
   canDouble,
+  canSurrender,
   canSplit,
   isSplitAces,
   cents
@@ -578,5 +579,85 @@ describe("settleHand: 6:5 and original-bet-only", () => {
     expect(cents(6.6000000000000005)).toBe(6.6);
     expect(cents(11.000000000000002)).toBe(11);
     expect(cents(2.5)).toBe(2.5);
+  });
+});
+
+describe("canSurrender", () => {
+  const hand = (codes, extra = {}) => ({ cards: stackedShoe(codes), ...extra });
+  const dealerShowing = (code) => ({ cards: stackedShoe([code]) });
+  const rules = (surrender) => ({ surrender });
+  const ALL_UPS = ["2", "6", "9", "10", "K", "A"];
+
+  it.each(ALL_UPS)("none is never offered (dealer shows %s)", (up) => {
+    expect(canSurrender(hand(["10", "6"]), dealerShowing(up), rules("none"))).toBe(false);
+  });
+
+  it.each(["late", "early"])("%s is offered against every up card", (value) => {
+    for (const up of ALL_UPS) expect(canSurrender(hand(["10", "6"]), dealerShowing(up), rules(value))).toBe(true);
+  });
+
+  it("earlyNoAce is offered against everything but an ace (a ten-value card included)", () => {
+    for (const up of ["2", "6", "9", "10", "K"]) expect(canSurrender(hand(["10", "6"]), dealerShowing(up), rules("earlyNoAce"))).toBe(true);
+    expect(canSurrender(hand(["10", "6"]), dealerShowing("A"), rules("earlyNoAce"))).toBe(false);
+  });
+
+  it("only the first two cards: not after a hit or a triple", () => {
+    for (const value of ["late", "early", "earlyNoAce"]) {
+      expect(canSurrender(hand(["2", "3", "4"]), dealerShowing("6"), rules(value))).toBe(false);
+      expect(canSurrender(hand(["2", "3", "2", "3"]), dealerShowing("6"), rules(value))).toBe(false);
+      expect(canSurrender(hand(["2"]), dealerShowing("6"), rules(value))).toBe(false);
+    }
+  });
+
+  it("never on a split hand", () => {
+    for (const value of ["late", "early", "earlyNoAce"]) expect(canSurrender(hand(["8", "3"], { isSplit: true }), dealerShowing("6"), rules(value))).toBe(false);
+  });
+
+  it("never on a doubled hand (a face-down double has two shown cards and the flag)", () => {
+    for (const value of ["late", "early", "earlyNoAce"]) expect(canSurrender(hand(["5", "6"], { isDouble: true }), dealerShowing("6"), rules(value))).toBe(false);
+  });
+
+  it("with surrender off, the dealer is not read at all", () => {
+    expect(canSurrender(hand(["10", "6"]), { cards: [] }, rules("none"))).toBe(false);
+  });
+});
+
+describe("settleHand: surrender", () => {
+  const surrendered = { bet: 10, baseStake: 10, surrendered: true, status: HandStatus.DONE, isBusted: false, isBlackjack: false, total: 16, payout: 0 };
+  const noBlackjack = { total: 20, isBusted: false, isBlackjack: false };
+  const blackjack = { total: 21, isBusted: false, isBlackjack: true };
+
+  it("a waiting surrender with no dealer blackjack becomes SURRENDER and pays half", () => {
+    const r = settleHand({ ...surrendered, result: HandResult.NONE }, noBlackjack);
+    expect([r.result, r.payout]).toEqual([HandResult.SURRENDER, 5]);
+  });
+
+  it("a waiting surrender does not compare totals: a dealer bust or a lower dealer total still pays half, not a win", () => {
+    for (const dealer of [{ total: 24, isBusted: true, isBlackjack: false }, { total: 12, isBusted: false, isBlackjack: false }]) {
+      expect(settleHand({ ...surrendered, result: HandResult.NONE }, dealer)).toMatchObject({ result: HandResult.SURRENDER, payout: 5 });
+    }
+  });
+
+  it("a waiting surrender against a dealer blackjack becomes LOSE and pays nothing, with either rule for the added stakes", () => {
+    for (const noHoleCardLoss of ["all", "original"]) {
+      const r = settleHand({ ...surrendered, result: HandResult.NONE }, blackjack, { noHoleCardLoss });
+      expect([r.result, r.payout]).toEqual([HandResult.LOSE, 0]);
+    }
+  });
+
+  it("an at-once SURRENDER pays half the bet, whatever the dealer", () => {
+    for (const dealer of [noBlackjack, blackjack]) {
+      const r = settleHand({ ...surrendered, result: HandResult.SURRENDER }, dealer);
+      expect([r.result, r.payout]).toEqual([HandResult.SURRENDER, 5]);
+    }
+  });
+
+  it("half of a $1 and a $5 bet is exact", () => {
+    expect(settleHand({ ...surrendered, bet: 1, result: HandResult.SURRENDER }, noBlackjack).payout).toBe(0.5);
+    expect(settleHand({ ...surrendered, bet: 5, result: HandResult.NONE }, noBlackjack).payout).toBe(2.5);
+  });
+
+  it("an ordinary hand with no surrender flag is unchanged", () => {
+    expect(settleHand({ ...surrendered, surrendered: undefined, result: HandResult.NONE, total: 20 }, { total: 18, isBusted: false })).toMatchObject({ result: HandResult.WIN, payout: 20 });
   });
 });

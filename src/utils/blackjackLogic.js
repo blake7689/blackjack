@@ -1,7 +1,7 @@
 import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
-import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 
 // The dealer draws its second card after the player acts. //
 export const isEU = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions.EU;
@@ -111,6 +111,13 @@ export function canDouble(hand, { doubleOn = DoubleOn.ANY, doubleAfterSplit = tr
   return total >= (doubleOn === DoubleOn.NINE_TO_ELEVEN ? 9 : 10) && total <= 11;
 }
 
+// Surrender: the first two cards of a hand that was not split or doubled. Late and early are offered on the same hands (what differs
+// is what happens next: see playerSurrender); earlyNoAce is never offered against an ace. //
+export function canSurrender(hand, dealer, { surrender }) {
+  return surrender !== SurrenderOptions.NONE && hand.cards.length === 2 && !hand.isSplit && !hand.isDouble
+    && !(surrender === SurrenderOptions.EARLY_NO_ACE && dealer.cards[0].value === 11);
+}
+
 // Check total for blackjack //
 export function isTotalBlackjack(total) {
   if (!total) return false;
@@ -167,7 +174,9 @@ export const cents = (amount) => Math.round(amount * 100) / 100;
 export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.THREE_TWO, noHoleCardLoss = NoHoleCardLoss.ALL } = {}) {
   let result = hand.result;
   if (result === HandResult.NONE) {
-    if (hand.isBusted) {
+    if (hand.surrendered) {
+      result = dealer.isBlackjack ? HandResult.LOSE : HandResult.SURRENDER; // a waiting surrender: only a dealer blackjack takes the half
+    } else if (hand.isBusted) {
       result = HandResult.LOSE;
     } else if (hand.isBlackjack && dealer.isBlackjack) {
       result = HandResult.PUSH;
@@ -190,6 +199,8 @@ export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.TH
   } else if (result === HandResult.LOSE && dealer.isBlackjack && !hand.isBusted && noHoleCardLoss === NoHoleCardLoss.ORIGINAL) {
     // Stakes added after the first bet (double, triple, split) are given back; a hand that busted loses everything.
     payout = Math.max(0, hand.bet - (hand.baseStake ?? hand.bet));
+  } else if (result === HandResult.SURRENDER) {
+    payout = hand.bet / 2;
   } else if (result === HandResult.WIN) {
     payout = hand.bet * 2;
   } else if (result === HandResult.PUSH) {

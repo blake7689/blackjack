@@ -10,7 +10,7 @@ const byKey = (key) => RULE_CATALOG.find((r) => r.key === key);
 describe("ruleCatalog (#91)", () => {
   it("lists the table rules this PR adds, plus deck count and split limit", () => {
     expect(RULE_CATALOG.map((r) => r.key)).toEqual([
-      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss",
+      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender",
     ]);
   });
 
@@ -45,7 +45,7 @@ describe("ruleCatalog (#91)", () => {
 
   it("a select carries the stored values, each with a label and a one-line hint", () => {
     const stored = {
-      blackjackPayout: ["3:2", "6:5"], doubleOn: ["any", "9-11", "10-11"], noHoleCardLoss: ["all", "original"], maxSplitHands: [2, 3, 4, 0],
+      blackjackPayout: ["3:2", "6:5"], doubleOn: ["any", "9-11", "10-11"], noHoleCardLoss: ["all", "original"], surrender: ["none", "late", "early", "earlyNoAce"], maxSplitHands: [2, 3, 4, 0],
     };
     for (const rule of RULE_CATALOG.filter((r) => r.input === "select")) {
       expect(rule.options.map((o) => o.value)).toEqual(stored[rule.key]);
@@ -74,6 +74,20 @@ describe("ruleCatalog (#91)", () => {
     for (const preset of Object.values(RULE_PRESETS)) {
       for (const rule of RULE_CATALOG.filter((r) => r.input === "checkbox")) expect(typeof preset[rule.key]).toBe("boolean");
     }
+  });
+
+  it("surrender has four options with plain names and a hint each, and is shown in every dealer mode", () => {
+    const rule = byKey("surrender");
+    expect(rule.input).toBe("select");
+    expect(rule.label()).toBe("Surrender");
+    expect(rule.options.map((o) => o.label)).toEqual(["None", "Late", "Early", "Early (not against an ace)"]);
+    expect(rule.showWhen).toBeUndefined();
+    for (const mode of Object.values(DealerHoleOptions)) expect(visibleIn(settings(mode)).map((r) => r.key)).toContain("surrender");
+  });
+
+  it("the two early hints say they work like Late with a dealer who peeks (the PR 2 limit; PR 3 removes it)", () => {
+    for (const value of ["early", "earlyNoAce"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).toMatch(/dealer who peeks.*like Late/);
+    for (const value of ["none", "late"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).not.toMatch(/peeks/);
   });
 
   describe("visibleIn", () => {

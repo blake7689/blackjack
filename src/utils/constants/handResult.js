@@ -3,4 +3,5 @@ export const HandResult = {
   WIN: "Win",
   LOSE: "Lose",
   PUSH: "Push",
+  SURRENDER: "Surrendered",
 };

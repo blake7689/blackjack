@@ -1,5 +1,5 @@
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
-import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 import { SETTING_RANGES } from "./gameReducer";
 
 // The table rules in plain language (#91). Settings reads its controls from here, so the words live in one place.
@@ -29,6 +29,12 @@ export const RULE_CATALOG = [
       { value: NoHoleCardLoss.ALL, label: "Everything you staked", hint: "The dealer's blackjack takes doubles and splits too." },
       { value: NoHoleCardLoss.ORIGINAL, label: "Only your first bet", hint: "Doubles and splits are given back (a hand that busted is not)." },
     ] },
+  { key: "surrender", label: () => "Surrender", input: "select", options: [
+    { value: SurrenderOptions.NONE, label: "None", hint: "You can't give up a hand." },
+    { value: SurrenderOptions.LATE, label: "Late", hint: "Give up half your bet on your first two cards. If the dealer has blackjack, you lose the whole bet." },
+    { value: SurrenderOptions.EARLY, label: "Early", hint: "Give up half your bet before the dealer checks for blackjack. You keep the half even if the dealer has one. With a dealer who peeks, this works like Late." },
+    { value: SurrenderOptions.EARLY_NO_ACE, label: "Early (not against an ace)", hint: "Like Early, but not offered when the dealer shows an ace. With a dealer who peeks, this works like Late." },
+  ] },
 ];
 
 // The rules that apply to these settings (a rule that does not apply has no effect and is not shown).

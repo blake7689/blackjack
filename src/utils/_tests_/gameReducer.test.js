@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES } from "../gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES, RESET_SETTINGS } from "../gameReducer";
+import { RULE_PRESETS } from "../rulePresets";
 import { GamePhases } from "../constants/gamePhases";
 import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus } from "./stackedShoe";
 
@@ -413,7 +414,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 2, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 3, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -934,16 +935,16 @@ describe("auto deal (#88)", () => {
   });
 });
 
-describe("saved settings, version 2 (#91): no silent payout change", () => {
+describe("saved settings, versions 1 to 3 (#91): no silent payout change", () => {
   const vegas = initialGameState.settings;
   // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none",
   };
 
   it("exports the version and the legacy values", () => {
-    expect(SETTINGS_VERSION).toBe(2);
+    expect(SETTINGS_VERSION).toBe(3);
     expect(LEGACY_RULES).toEqual(legacy);
   });
 
@@ -957,10 +958,10 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   it.each([
     ["{} (a player who never saved)", {}],
     ["no version", { tripleDown: false }],
-    ["v: 2 with nothing else", { v: 2 }],
+    ["v: 3 with nothing else", { v: 3 }],
     ["null", null],
     ["undefined", undefined],
-    ["a future version", { v: 3 }],
+    ["a future version", { v: 4 }],
     ["a version that is a string", { v: "1" }],
   ])("%s gets the Vegas defaults", (_name, saved) => {
     expect(sanitizeSettings(saved)).toEqual(vegas);
@@ -995,8 +996,8 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   describe("wrong types and unknown values fall back", () => {
     const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
 
-    it("to the Vegas default for v: 2", () => {
-      expect(sanitizeSettings({ v: 2, ...bad })).toEqual(vegas);
+    it("to the Vegas default for v: 3", () => {
+      expect(sanitizeSettings({ v: 3, ...bad })).toEqual(vegas);
     });
 
     it("to the Vegas default for {}", () => {
@@ -1030,7 +1031,7 @@ describe("saved settings, version 2 (#91): no silent payout change", () => {
   });
 
   it("drops unknown keys, and the version is not a setting", () => {
-    const s = sanitizeSettings({ v: 2, bogus: 1, rigDeck: true });
+    const s = sanitizeSettings({ v: 3, bogus: 1, rigDeck: true });
     expect(s).toEqual(vegas);
     expect(s).not.toHaveProperty("v");
   });
@@ -1118,5 +1119,167 @@ describe("split aces (#91): the turn never rests on a finished hand", () => {
     expect(s.hands[0].status).toBe(HandStatus.PLAYING);
     expect(run(s, { type: "DOUBLE", handIdx: 0 })).toBe(s);
     expect(run(s, { type: "TRIPLE", handIdx: 0 })).toBe(s);
+  });
+});
+
+describe("SURRENDER (#91)", () => {
+  const set = (s, values) => run(s, { type: "SET_SETTING", values });
+  // The automatic steps to the end of the round; the server confirms the bets when settling waits for them.
+  const finish = (state) => {
+    let s = state;
+    while (nextAutoAction(s) || s.pendingBets.length) s = nextAutoAction(s) ? run(s, { type: nextAutoAction(s) }) : confirmBets(s);
+    return s;
+  };
+  // Vegas defaults: late surrender, US peek. 10-6 against a 6 with a king in the hole.
+  const vegasHand = () => dealt(["10", "6", "6", "K", "5"]);
+  // US no peek: the dealer's hole card is still hidden, so a late surrender against a ten waits.
+  const waitingHand = () => run(set(started(["10", "K", "6", "5", "9"]), { dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }),
+    { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+
+  describe("is ignored (the very same state comes back)", () => {
+    it("outside PLAYER_TURN", () => {
+      const pre = started(["10", "6", "6", "K"]);
+      expect(run(pre, { type: "SURRENDER", handIdx: 0 })).toBe(pre);
+      const dealingNow = dealing(["10", "6", "6", "K"]);
+      expect(run(dealingNow, { type: "SURRENDER", handIdx: 0 })).toBe(dealingNow);
+      const stood = run(vegasHand(), { type: "STAND", handIdx: 0 });
+      expect(stood.phase).toBe(GamePhases.DEALER_TURN);
+      expect(run(stood, { type: "SURRENDER", handIdx: 0 })).toBe(stood);
+      expect(run(initialGameState, { type: "SURRENDER", handIdx: 0 })).toBe(initialGameState);
+    });
+
+    it("on a hand that is not the current one", () => {
+      const s = vegasHand();
+      expect(run(s, { type: "SURRENDER", handIdx: 1 })).toBe(s);
+    });
+
+    it("on a finished hand", () => {
+      const s = vegasHand();
+      const finished = { ...s, hands: [{ ...s.hands[0], status: HandStatus.DONE }] };
+      expect(run(finished, { type: "SURRENDER", handIdx: 0 })).toBe(finished);
+    });
+
+    it("when the setting is none, or the hand has had a hit", () => {
+      const off = set(vegasHand(), { surrender: "none" });
+      expect(run(off, { type: "SURRENDER", handIdx: 0 })).toBe(off);
+      const hit = run(dealt(["2", "6", "3", "K", "4"]), { type: "HIT", handIdx: 0 });
+      expect(run(hit, { type: "SURRENDER", handIdx: 0 })).toBe(hit);
+    });
+
+    it("when earlyNoAce meets an ace", () => {
+      const s = set(dealt(["10", "A", "6", "5"]), { surrender: "earlyNoAce" });
+      expect(run(s, { type: "SURRENDER", handIdx: 0 })).toBe(s);
+    });
+
+    it("after a refused opening bet emptied the round", () => {
+      const s = vegasHand();
+      const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+      expect(voided.hands).toEqual([]);
+      expect(run(voided, { type: "SURRENDER", handIdx: 0 })).toBe(voided);
+    });
+  });
+
+  describe("fixed at once", () => {
+    it("ends the hand with result SURRENDER and moves to the dealer without drawing, booking or counting anything", () => {
+      const before = vegasHand();
+      const s = run(before, { type: "SURRENDER", handIdx: 0 });
+      expect(s).toMatchObject({ phase: GamePhases.DEALER_TURN, selectedHandIndex: 0, betCircle: 10 });
+      expect(s.hands[0]).toMatchObject({ surrendered: true, result: HandResult.SURRENDER, status: HandStatus.DONE, bet: 10 });
+      expect(s.shoe).toBe(before.shoe);
+      expect(s.creditEvents).toBe(before.creditEvents);
+      expect(s.pendingBets).toBe(before.pendingBets);
+      expect(s.runningCount).toBe(before.runningCount);
+      expect(before.hands[0]).not.toHaveProperty("surrendered"); // the old state is untouched
+    });
+
+    it("is pure: StrictMode runs it twice with the same result", () => {
+      const before = vegasHand();
+      const action = { type: "SURRENDER", handIdx: 0, refill: outOfCards, credits: 1000 };
+      expect(gameReducer(before, action)).toEqual(gameReducer(before, action));
+    });
+
+    it("then runs the automatic steps to the one settle of half the bet", () => {
+      const s = finish(run(vegasHand(), { type: "SURRENDER", handIdx: 0 }));
+      expect(events(s).filter((e) => e.kind === "settle")).toEqual([settle(5)]);
+    });
+  });
+
+  describe("a waiting surrender (late, no hole card, ace or ten up)", () => {
+    it("is DONE and flagged with result NONE, the dealer's turn, and no credit event", () => {
+      const before = waitingHand();
+      expect(before.phase).toBe(GamePhases.PLAYER_TURN);
+      const s = run(before, { type: "SURRENDER", handIdx: 0 });
+      expect(s.phase).toBe(GamePhases.DEALER_TURN);
+      expect(s.hands[0]).toMatchObject({ surrendered: true, result: HandResult.NONE, status: HandStatus.DONE });
+      expect(s.creditEvents).toBe(before.creditEvents);
+    });
+
+    it("the dealer reveals the hole and stops at two cards (10-5 is under 17), then the half is settled", () => {
+      const s = finish(run(waitingHand(), { type: "SURRENDER", handIdx: 0 }));
+      expect(s.dealer.cards).toHaveLength(2);
+      expect(s.hands[0]).toMatchObject({ result: HandResult.SURRENDER, payout: 5 });
+    });
+  });
+});
+
+describe("surrender in saved settings (#91)", () => {
+  const vegas = initialGameState.settings;
+  const surrenderOf = (saved) => sanitizeSettings(saved).surrender;
+
+  it("the default is late, so the default settings are Vegas with surrender", () => {
+    expect(vegas.surrender).toBe("late");
+    expect(vegas).toMatchObject(RULE_PRESETS.Vegas);
+  });
+
+  it("is a table rule: changing it deals a new shoe and resets the table", () => {
+    expect(RESET_SETTINGS).toContain("surrender");
+  });
+
+  it.each([
+    ["v: 1", { v: 1 }, "none"],
+    ["v: 2 (saved before surrender existed)", { v: 2 }, "none"],
+    ["v: 3", { v: 3 }, "late"],
+    ["a future version", { v: 4 }, "late"],
+    ["{}", {}, "late"],
+    ["no version", { tripleDown: false }, "late"],
+    ["a string version", { v: "1" }, "late"],
+    ["a string 2", { v: "2" }, "late"],
+    ["v: 0", { v: 0 }, "late"],
+    ["a fractional version", { v: 1.5 }, "late"],
+    ["null", null, "late"],
+    ["undefined", undefined, "late"],
+  ])("a missing key in %s gets %s", (_name, saved, expected) => {
+    expect(surrenderOf(saved)).toBe(expected);
+  });
+
+  it.each([1, 2, 3])("a valid saved value is kept in v: %s", (v) => {
+    for (const surrender of ["none", "late", "early", "earlyNoAce"]) expect(surrenderOf({ v, surrender })).toBe(surrender);
+  });
+
+  it.each([
+    ["v: 1", 1, "none"], ["v: 2", 2, "none"], ["v: 3", 3, "late"], ["{}", undefined, "late"],
+  ])("an unknown value or a wrong type falls back to the %s fill", (_name, v, expected) => {
+    for (const surrender of ["sometimes", "", "LATE", 3, true, null, ["late"], { value: "late" }]) expect(surrenderOf({ v, surrender })).toBe(expected);
+  });
+
+  it("only surrender is filled by version 3: a v: 2 object keeps Vegas for its other missing keys", () => {
+    const s = sanitizeSettings({ v: 2 });
+    expect(s).toEqual({ ...vegas, surrender: "none" });
+  });
+
+  it("LOAD_SETTINGS of a v: 2 object between rounds deals the new shoe: surrender went from late to none", () => {
+    const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
+    const fresh = stackedShoe(["4", "5"]);
+    const loaded = gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 2, ...RULE_PRESETS.Vegas, surrender: undefined }, shoe: fresh });
+    expect(loaded.settings.surrender).toBe("none");
+    expect(loaded.shoe).toBe(fresh);
+  });
+
+  it("LOAD_SETTINGS of the same surrender leaves the shoe alone; a changed one never resets a round in progress", () => {
+    const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
+    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
+    const round = dealt(["10", "6", "6", "K", "5"]);
+    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "none" }, shoe: stackedShoe(["4"]) });
+    expect([loaded.phase, loaded.hands, loaded.shoe, loaded.settings.surrender]).toEqual([round.phase, round.hands, round.shoe, "none"]);
   });
 });

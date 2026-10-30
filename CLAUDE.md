@@ -57,8 +57,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),
   `blackjackPaysImmediately`. Test each mode with each toggle. Five rule presets (#91: Vegas, Atlantic City,
   Europe, Australia, Singapore) live in `utils/rulePresets.js` and the rule controls' text in `utils/ruleCatalog.js`; the default settings
-  equal Vegas. `playRound` starts from `LEGACY_RULES` (the pre-#91 rules: S17, 2 decks, no split limit, a dealer blackjack takes all) and
-  the bare mode (pays-immediately off); a scenario for a new rule sets it in `rules`.
+  equal Vegas. `playRound` starts from `LEGACY_RULES` (the pre-#91 rules: S17, 2 decks, no split limit, a dealer blackjack takes all, no surrender) and
+  the bare mode (pays-immediately off); a scenario for a new rule sets it in `rules`. `surrender` (none / late / early / earlyNoAce) is a preset
+  key: Vegas and Atlantic City `late`, Europe and Australia `none`, Singapore `earlyNoAce`.
 - `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek, `blackjackPaysImmediately`,
   or EU with `dealerDrawsOnPlayerBlackjack` off. US no peek hides a dealer blackjack until
   `revealDealerHole`, and it then wins every bet, doubles and splits included.
@@ -73,8 +74,15 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   a hand of A,A stays PLAYING (Stay or Split, no Hit). In SPLIT every ace-split hand that can no longer split is set DONE before
   `advance()` (or the turn can stay on a finished hand). `canDouble` (hard 9-11 / 10-11 means no ace counted as 11; never on split
   aces; DAS) also gates TRIPLE.
-- Saved settings carry `v` (2 since #91). Only a `v: 1` object gets `LEGACY_RULES` for a missing or invalid rule key; `{}`, no `v`
-  and `v: 2` get the Vegas defaults. A PR that adds a rule key must bump `SETTINGS_VERSION` and decide the fill for older versions.
+- Surrender (#91): `canSurrender` (pure; first two cards, never split or doubled; `earlyNoAce` never vs an ace) and `engine.playerSurrender`.
+  Every surrender sets `surrendered: true`: at once (`result` SURRENDER) or, for `late` with no peek against an ace or ten, waiting (`result`
+  NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered round has one hand. The
+  dealer takes its second card after any surrender and stops at two (`dealerShowsSecondCard`, `dealerOnlyChecksBlackjack`, `dealerNeedsToPlay`
+  read the flag). In US peek `early` and `earlyNoAce` work like `late` until the offers step (PR 3); PR 3 must remove that sentence from the
+  catalogue hints.
+- Saved settings carry `v` (3 since #91 surrender). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
+  older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`; `{}`, no `v` and `v: 3`
+  get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
 - Original-bet-only (`noHoleCardLoss: "original"`): every hand has `baseStake` (the first bet; 0 on a split-off hand). A dealer
   blackjack gives back `bet - baseStake` of a hand that did not bust (a busted hand is never refunded), paid in the one round
   `settle`. The rounded blackjack payout (6:5 pays 2.2x) and the round sum are rounded to the cent (`cents`).
