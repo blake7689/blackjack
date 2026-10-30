@@ -59,7 +59,7 @@ describe("card hints", () => {
 
   it("playerSplit marks only the card that moves to the new hand", () => {
     const { hands } = deal(["8", "10", "8", "7"]);
-    const { newHandsArray } = playerSplit(hands[0], stackedShoe(["3", "4"]), () => {}, outOfCards, false);
+    const { newHandsArray } = playerSplit(hands[0], stackedShoe(["3", "4"]), () => {}, outOfCards, {});
     expect(newHandsArray.map((h) => h.cards.map((c) => c.moved))).toEqual([[undefined, undefined], [true, undefined]]);
     expect(hands[0].cards[1].moved).toBeUndefined();
   });

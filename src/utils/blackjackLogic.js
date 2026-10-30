@@ -1,6 +1,7 @@
 import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "../utils/constants/dealerHoleOptions";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
 
 // The dealer draws its second card after the player acts. //
 export const isEU = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions.EU;
@@ -67,8 +68,8 @@ export function getHandEvaluation(totals, hand, newCardsLength) {
   return { handStatus, handResult, isBlackjack, isBusted };
 }
 
-// Evaluates dealer hand (stands on all 17s) //
-export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount) {
+// Evaluates dealer hand: stands on every 17, or hits a soft 17 (an ace still counted as 11) when hitsSoft17 //
+export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount, hitsSoft17 = false) {
   let handStatus = hand.status;
   let isBusted = hand.isBusted;
   const isBlackjack = cardCount === 2 && totals.includes(21);
@@ -81,7 +82,7 @@ export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount) {
   if (totals.every(n => n > 21)) {
     handStatus = HandStatus.DONE;
     isBusted = true;
-  } else if (totals.some(n => n >= 17 && n <= 21)) {
+  } else if (totals.some(n => n >= 17 && n <= 21) && !(hitsSoft17 && Math.max(...totals) === 17 && totals.length > 1)) {
     handStatus = HandStatus.DONE;
   } else {
     handStatus = HandStatus.PLAYING;
@@ -90,12 +91,24 @@ export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount) {
   return { handStatus, isBusted, isBlackjack };
 }
 
+// A hand made by splitting aces //
+export const isSplitAces = (hand) => hand.isSplit && hand.cards[0].rank === "ace";
+
 // Two cards of equal value (10-J-Q-K pair), while the round has fewer than maxSplitHands hands (0 = unlimited). //
-// Split aces never resplit. //
-export function canSplit(hand, handCount, maxSplitHands) {
+// Split aces resplit only with resplitAces. //
+export function canSplit(hand, handCount, maxSplitHands, resplitAces = false) {
   return hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value
     && (maxSplitHands === 0 || handCount < maxSplitHands)
-    && !(hand.isSplit && hand.cards[0].rank === "ace");
+    && (resplitAces || !isSplitAces(hand));
+}
+
+// Double (and triple) down: two cards, never on split aces, after a split only with doubleAfterSplit, and with doubleOn
+// 9-11 or 10-11 only when the best total is in that range (a two-card hand with an ace is always soft, at least 12, so only hard hands match). //
+export function canDouble(hand, { doubleOn = DoubleOn.ANY, doubleAfterSplit = true } = {}) {
+  if (hand.cards.length !== 2 || isSplitAces(hand) || (hand.isSplit && !doubleAfterSplit)) return false;
+  if (doubleOn === DoubleOn.ANY) return true;
+  const { total } = getHandTotals(hand.cards);
+  return total >= (doubleOn === DoubleOn.NINE_TO_ELEVEN ? 9 : 10) && total <= 11;
 }
 
 // Check total for blackjack //
@@ -147,8 +160,11 @@ export function getHandTotals(cards) {
 
 // ---- SETTLEMENT ----
 
+export const cents = (amount) => Math.round(amount * 100) / 100;
+
 // Returns a settled copy; never mutates the hand (it lives in React state) //
-export function settleHand(hand, dealer) {
+// rules (settings): blackjackPayout, noHoleCardLoss. Without them: 3:2, and a dealer blackjack takes every stake. //
+export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.THREE_TWO, noHoleCardLoss = NoHoleCardLoss.ALL } = {}) {
   let result = hand.result;
   if (result === HandResult.NONE) {
     if (hand.isBusted) {
@@ -170,7 +186,10 @@ export function settleHand(hand, dealer) {
 
   let payout = 0;
   if (result === HandResult.WIN && hand.isBlackjack) {
-    payout = hand.bet * 2.5;
+    payout = cents(hand.bet * (blackjackPayout === BlackjackPayouts.SIX_FIVE ? 2.2 : 2.5));
+  } else if (result === HandResult.LOSE && dealer.isBlackjack && !hand.isBusted && noHoleCardLoss === NoHoleCardLoss.ORIGINAL) {
+    // Stakes added after the first bet (double, triple, split) are given back; a hand that busted loses everything.
+    payout = Math.max(0, hand.bet - (hand.baseStake ?? hand.bet));
   } else if (result === HandResult.WIN) {
     payout = hand.bet * 2;
   } else if (result === HandResult.PUSH) {

@@ -10,17 +10,25 @@ const CORS = {
 const PLAYER = { userName: 'tester', email: 'tester@e2e.test', firstName: 'Test', lastName: 'Er' };
 const hold = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The saved table rules the tests play with (version 2): the Vegas preset, written out so a later change to the defaults moves no test.
+export const VEGAS = {
+  v: 2, deckCount: 6, dealerHoleBehaviour: 'drawEarly_Check', dealerHitsSoft17: true, blackjackPayout: '3:2', doubleOn: 'any',
+  doubleAfterSplit: true, maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: 'original',
+  blackjackPaysImmediately: true, blackJackOnSplit: false, dealerDrawsOnPlayerBust: false, dealerDrawsOnceOn21: false,
+  dealerDrawsOnPlayerBlackjack: true,
+};
+
 const stubs = new WeakMap(); // page -> stub, so the auto fixture below can check it after the test
 
 // Answers every API call the app makes. The deliberate holds live here, in the handler, not in the tests.
-// Returns what the tests assert on: the ledger calls, requests that failed, endpoints nobody stubbed.
+// Returns what the tests assert on: the ledger calls, the saved settings, requests that failed, endpoints nobody stubbed.
 // startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
 // settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real).
-export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCredits = 1000, topUps = [], settings = { v: 1, playTimeout: 250 } } = {}) {
+export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   const replies = [...topUps];
-  const stub = { bets: [], settles: [], topups: [], failed: [], unknown: [] };
+  const stub = { bets: [], settles: [], topups: [], saves: [], failed: [], unknown: [] };
   stubs.set(page, stub);
   page.on('requestfailed', (r) => { if (r.url().startsWith('http://api.e2e.test')) stub.failed.push(`${r.method()} ${r.url()} ${r.failure()?.errorText}`); });
 
@@ -38,6 +46,9 @@ export async function stubApi(page, { loginDelayMs = 0, meDelayMs = 0, startCred
         return json({ ...PLAYER, credits });
       case 'GET /player/me/settings':
         return json(settings);
+      case 'PUT /player/me/settings':
+        stub.saves.push(req.postDataJSON());
+        return json({});
       case 'POST /ledger/bet': {
         const body = req.postDataJSON();
         stub.bets.push(body);

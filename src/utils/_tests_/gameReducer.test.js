@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES } from "../gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES } from "../gameReducer";
 import { GamePhases } from "../constants/gamePhases";
 import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus } from "./stackedShoe";
 
@@ -413,7 +413,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 1, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 2, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -424,13 +424,13 @@ describe("saved settings (#36)", () => {
   });
 
   it("clamps and rounds numbers into range, but keeps maxSplitHands 0 (unlimited)", () => {
-    expect(sanitizeSettings({ deckCount: 9, playTimeout: 10, maxSplitHands: 7 })).toMatchObject({ deckCount: 5, playTimeout: 250, maxSplitHands: 4 });
+    expect(sanitizeSettings({ deckCount: 9, playTimeout: 10, maxSplitHands: 7 })).toMatchObject({ deckCount: 8, playTimeout: 250, maxSplitHands: 4 });
     expect(sanitizeSettings({ deckCount: 2.6, maxSplitHands: 0 })).toMatchObject({ deckCount: 3, maxSplitHands: 0 });
   });
 
   it("falls back to the default for a wrong type or an unknown dealer mode", () => {
     expect(sanitizeSettings({ includeCutCard: "yes", deckCount: "4", dealerHoleBehaviour: "drawAfter_noDraw21" }))
-      .toMatchObject({ includeCutCard: true, deckCount: 2, dealerHoleBehaviour: defaults.dealerHoleBehaviour });
+      .toMatchObject({ includeCutCard: true, deckCount: 6, dealerHoleBehaviour: defaults.dealerHoleBehaviour });
     expect(sanitizeSettings({ dealerHoleBehaviour: "drawAfter" }).dealerHoleBehaviour).toBe("drawAfter");
   });
 
@@ -931,5 +931,192 @@ describe("auto deal (#88)", () => {
       expect(sanitizeSettings({ autoDeal: true, resetInitialBet: false }).autoDeal).toBe(false);
       expect(sanitizeSettings({ autoDeal: true }).autoDeal).toBe(false);
     });
+  });
+});
+
+describe("saved settings, version 2 (#91): no silent payout change", () => {
+  const vegas = initialGameState.settings;
+  // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
+  const legacy = {
+    dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0,
+  };
+
+  it("exports the version and the legacy values", () => {
+    expect(SETTINGS_VERSION).toBe(2);
+    expect(LEGACY_RULES).toEqual(legacy);
+  });
+
+  it("the defaults are Vegas: 6 decks, H17, 3:2, any two cards, DAS, 4 hands, no resplit or hit of aces, original bet only", () => {
+    expect(vegas).toMatchObject({
+      deckCount: 6, dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, maxSplitHands: 4,
+      resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", dealerHoleBehaviour: "drawEarly_Check",
+    });
+  });
+
+  it.each([
+    ["{} (a player who never saved)", {}],
+    ["no version", { tripleDown: false }],
+    ["v: 2 with nothing else", { v: 2 }],
+    ["null", null],
+    ["undefined", undefined],
+    ["a future version", { v: 3 }],
+    ["a version that is a string", { v: "1" }],
+  ])("%s gets the Vegas defaults", (_name, saved) => {
+    expect(sanitizeSettings(saved)).toEqual(vegas);
+  });
+
+  it("v: 1 with no rule keys gets the legacy rules, and nothing else changes", () => {
+    expect(sanitizeSettings({ v: 1 })).toEqual({ ...vegas, ...legacy });
+    expect(sanitizeSettings({ v: 1, playTimeout: 500, tripleDown: true })).toEqual({ ...vegas, ...legacy, playTimeout: 500, tripleDown: true });
+  });
+
+  it("v: 1 keeps a saved deck count and split limit, and fills the same keys only when they are missing", () => {
+    expect(sanitizeSettings({ v: 1, deckCount: 3, maxSplitHands: 2 })).toMatchObject({ ...legacy, deckCount: 3, maxSplitHands: 2 });
+    expect(sanitizeSettings({ v: 1, maxSplitHands: 0 })).toMatchObject({ maxSplitHands: 0, deckCount: 2 });
+    expect(sanitizeSettings({ v: 1, deckCount: 5 }).deckCount).toBe(5);
+  });
+
+  it("a v: 1 EU table keeps S17 and the dealer blackjack taking everything", () => {
+    const eu = sanitizeSettings({ v: 1, dealerHoleBehaviour: "drawAfter", dealerDrawsOnPlayerBlackjack: true, deckCount: 2 });
+    expect(eu).toMatchObject({ dealerHoleBehaviour: "drawAfter", dealerHitsSoft17: false, noHoleCardLoss: "all", blackjackPayout: "3:2" });
+  });
+
+  it("a v: 2 EU table without the new keys gets Vegas values for them", () => {
+    expect(sanitizeSettings({ v: 2, dealerHoleBehaviour: "drawAfter" })).toMatchObject({ dealerHitsSoft17: true, noHoleCardLoss: "original", deckCount: 6 });
+  });
+
+  it("valid rule values are kept in both versions", () => {
+    const rules = { dealerHitsSoft17: true, blackjackPayout: "6:5", doubleOn: "10-11", doubleAfterSplit: false, resplitAces: true, hitSplitAces: true, noHoleCardLoss: "original" };
+    expect(sanitizeSettings({ v: 2, ...rules })).toMatchObject(rules);
+    expect(sanitizeSettings({ v: 1, ...rules })).toMatchObject(rules);
+  });
+
+  describe("wrong types and unknown values fall back", () => {
+    const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
+
+    it("to the Vegas default for v: 2", () => {
+      expect(sanitizeSettings({ v: 2, ...bad })).toEqual(vegas);
+    });
+
+    it("to the Vegas default for {}", () => {
+      expect(sanitizeSettings(bad)).toEqual(vegas);
+    });
+
+    it("to the legacy value for v: 1", () => {
+      expect(sanitizeSettings({ v: 1, ...bad })).toEqual({ ...vegas, ...legacy });
+    });
+
+    it("an unknown enum value and a wrong-type one fall back separately", () => {
+      expect(sanitizeSettings({ v: 2, blackjackPayout: "6:5", doubleOn: "all" })).toMatchObject({ blackjackPayout: "6:5", doubleOn: "any" });
+      expect(sanitizeSettings({ v: 1, noHoleCardLoss: "everything" }).noHoleCardLoss).toBe("all");
+      expect(sanitizeSettings({ v: 2, noHoleCardLoss: "everything" }).noHoleCardLoss).toBe("original");
+    });
+  });
+
+  it("clamps deckCount into 1-8 and keeps 3, 5 and 7", () => {
+    expect(sanitizeSettings({ v: 2, deckCount: 0 }).deckCount).toBe(1);
+    expect(sanitizeSettings({ v: 2, deckCount: 9 }).deckCount).toBe(8);
+    expect(sanitizeSettings({ v: 2, deckCount: -4 }).deckCount).toBe(1);
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8]) expect(sanitizeSettings({ v: 2, deckCount: n }).deckCount).toBe(n);
+    expect(SETTING_RANGES.deckCount).toEqual([1, 8]);
+  });
+
+  it("maxSplitHands: 0 (no limit) is kept, 1 becomes 2, 9 becomes 4", () => {
+    expect(sanitizeSettings({ v: 2, maxSplitHands: 0 }).maxSplitHands).toBe(0);
+    expect(sanitizeSettings({ v: 2, maxSplitHands: 1 }).maxSplitHands).toBe(2);
+    expect(sanitizeSettings({ v: 2, maxSplitHands: 9 }).maxSplitHands).toBe(4);
+    expect(sanitizeSettings({ v: 2, maxSplitHands: 3 }).maxSplitHands).toBe(3);
+  });
+
+  it("drops unknown keys, and the version is not a setting", () => {
+    const s = sanitizeSettings({ v: 2, bogus: 1, rigDeck: true });
+    expect(s).toEqual(vegas);
+    expect(s).not.toHaveProperty("v");
+  });
+
+  it("autoDeal is turned off without resetInitialBet, and kept with it", () => {
+    expect(sanitizeSettings({ v: 2, autoDeal: true }).autoDeal).toBe(false);
+    expect(sanitizeSettings({ v: 2, autoDeal: true, resetInitialBet: true }).autoDeal).toBe(true);
+  });
+
+  it("LOAD_SETTINGS between rounds applies the legacy rules of a v: 1 table and deals its shoe", () => {
+    const fresh = stackedShoe(["4", "5"]);
+    const loaded = gameReducer(started(["2", "3"]), { type: "LOAD_SETTINGS", saved: { v: 1 }, shoe: fresh });
+    expect(loaded.settings).toMatchObject(legacy);
+    expect(loaded.shoe).toBe(fresh);
+  });
+
+  it("LOAD_SETTINGS of {} keeps the Vegas defaults without touching the shoe", () => {
+    const table = started(["2", "3"]);
+    const loaded = gameReducer(table, { type: "LOAD_SETTINGS", saved: {} });
+    expect(loaded.settings).toEqual(vegas);
+    expect(loaded.shoe).toBe(table.shoe);
+  });
+});
+
+describe("split aces (#91): the turn never rests on a finished hand", () => {
+  const AA = ["A", "10", "A", "7"]; // A-A against 10-7 (hole 7)
+  const table = (rules, cards) => run(started(cards), { type: "SET_SETTING", values: { ...LEGACY_RULES, blackjackPaysImmediately: false, ...rules } },
+    { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+  const split = (s) => run(s, { type: "SPLIT", handIdx: s.selectedHandIndex });
+  const onFinishedHand = (s) => s.phase === GamePhases.PLAYER_TURN && s.hands[s.selectedHandIndex].status === HandStatus.DONE;
+
+  it("a split ace that gets an ace stays playing and may split again", () => {
+    const s = split(table({ resplitAces: true, maxSplitHands: 4 }, [...AA, "A", "K"]));
+    expect(s.hands.map((h) => [h.cards.map((c) => c.rank[0]).join(""), h.status])).toEqual([["aa", HandStatus.PLAYING], ["ak", HandStatus.DONE]]);
+    expect(s.phase).toBe(GamePhases.PLAYER_TURN);
+    expect(s.selectedHandIndex).toBe(0);
+  });
+
+  it("an ace pair at the hand limit is finished at once, so the turn moves on", () => {
+    const s = split(table({ resplitAces: true, maxSplitHands: 2 }, [...AA, "A", "K"]));
+    expect(s.hands.map((h) => h.status)).toEqual([HandStatus.DONE, HandStatus.DONE]);
+    expect(s.phase).not.toBe(GamePhases.PLAYER_TURN);
+  });
+
+  it("every ace-split hand of the round is checked, not just the two made by this split", () => {
+    // [A-A][A-A]; splitting the first at the limit (3) makes [A-K][A-K][A-A]: the old second hand can no longer split.
+    const first = split(table({ resplitAces: true, maxSplitHands: 3 }, [...AA, "A", "A", "K", "K"]));
+    expect(first.hands.map((h) => h.status)).toEqual([HandStatus.PLAYING, HandStatus.PLAYING]);
+    const second = split(first);
+    expect(second.hands).toHaveLength(3);
+    expect(second.hands.map((h) => h.status)).toEqual([HandStatus.DONE, HandStatus.DONE, HandStatus.DONE]);
+    expect(second.phase).not.toBe(GamePhases.PLAYER_TURN);
+  });
+
+  it("an ace hand that may still hit is not finished at the limit", () => {
+    const s = split(table({ resplitAces: true, hitSplitAces: true, maxSplitHands: 2 }, [...AA, "A", "A"]));
+    expect(s.hands.map((h) => h.status)).toEqual([HandStatus.PLAYING, HandStatus.PLAYING]);
+    expect(s.phase).toBe(GamePhases.PLAYER_TURN);
+  });
+
+  it("walking a long ace round never leaves the selected hand finished during the player's turn", () => {
+    let s = table({ resplitAces: true, maxSplitHands: 0 }, [...AA, "A", "A", "A", "K", "K", "K", "K", "K", "K"]);
+    let handCount = 1;
+    for (let i = 0; i < 12 && s.phase === GamePhases.PLAYER_TURN; i++) {
+      expect(onFinishedHand(s)).toBe(false);
+      const hand = s.hands[s.selectedHandIndex];
+      const canSplitAgain = hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value;
+      s = run(s, { type: canSplitAgain ? "SPLIT" : "STAND", handIdx: s.selectedHandIndex });
+      handCount = s.hands.length;
+    }
+    expect(onFinishedHand(s)).toBe(false);
+    expect(s.phase).not.toBe(GamePhases.PLAYER_TURN);
+    expect(handCount).toBeGreaterThan(2);
+  });
+
+  it("HIT on an A-A that may only split or stand does nothing; with hitSplitAces it draws", () => {
+    const s = split(table({ resplitAces: true, maxSplitHands: 0 }, [...AA, "A", "K", "5"]));
+    expect(run(s, { type: "HIT", handIdx: 0 })).toBe(s);
+    const hits = split(table({ resplitAces: true, hitSplitAces: true, maxSplitHands: 0 }, [...AA, "A", "K", "5"]));
+    expect(run(hits, { type: "HIT", handIdx: 0 }).hands[0].cards).toHaveLength(3);
+  });
+
+  it("DOUBLE and TRIPLE on a split ace do nothing, even with hitSplitAces and every double rule on", () => {
+    const s = split(table({ hitSplitAces: true, tripleDown: true, doubleAfterSplit: true }, [...AA, "5", "4", "3", "2"]));
+    expect(s.hands[0].status).toBe(HandStatus.PLAYING);
+    expect(run(s, { type: "DOUBLE", handIdx: 0 })).toBe(s);
+    expect(run(s, { type: "TRIPLE", handIdx: 0 })).toBe(s);
   });
 });

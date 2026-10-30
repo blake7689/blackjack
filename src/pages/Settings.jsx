@@ -7,6 +7,7 @@ import { DealerHoleLabels } from "../utils/constants/dealerHoleOptions";
 import { RESET_SETTINGS, SETTING_RANGES } from "../utils/gameReducer";
 import { isEU } from "../utils/blackjackLogic";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
+import { visibleIn } from "../utils/ruleCatalog";
 import { validateField } from "../utils/validation";
 import { ALLOWED_CHIPS } from "../utils/constants/chips";
 import { parseChipValues, formatChipValues } from "../utils/chips";
@@ -24,9 +25,8 @@ const RESET_CONFIRM = "Changing this setting will reset the current game. Any be
 
 const TABS = [{ id: "player", label: "Player" }, { id: "game", label: "Game" }, { id: "dev", label: "Dev" }];
 
-// Game settings with a tab of their own; the rest are on the Game tab.
+// Game settings with a tab of their own; the rest are on the Game tab. The table rules come from utils/ruleCatalog.js.
 const GAME_SETTINGS = [
-  { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", range: SETTING_RANGES.deckCount },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "autoDeal", label: () => "Auto Deal", input: "checkbox", showWhen: (s) => s.resetInitialBet },
@@ -35,8 +35,6 @@ const GAME_SETTINGS = [
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
     options: Object.entries(DealerHoleLabels).map(([value, label]) => ({ value, label })) },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
-  { key: "maxSplitHands", label: (v) => `Max Hands After Splits: ${v === 0 ? "Unlimited" : v}`, input: "select",
-    options: [2, 3, 4].map((n) => ({ value: n, label: String(n) })).concat({ value: 0, label: "Unlimited" }) },
   { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
   // With no dealer card to compare against, a blackjack must pay at once.
   { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
@@ -222,8 +220,9 @@ export default function Settings() {
           </label>
           )}
 
-          {GAME_SETTINGS.filter((setting) => (setting.tab ?? "game") === tab && (setting.showWhen?.(drafts) ?? true)).map((setting) => {
+          {[...visibleIn(drafts), ...GAME_SETTINGS].filter((setting) => (setting.tab ?? "game") === tab && (setting.showWhen?.(drafts) ?? true)).map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];
+            const hint = setting.options?.find((o) => o.value === drafts[setting.key])?.hint ?? setting.hint;
             return (
               <div key={setting.key}>
                 <hr className="divider" />
@@ -241,6 +240,7 @@ export default function Settings() {
                       onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
                   </label>
                 )}
+                {hint && <p className="chip-hint">{hint}</p>}
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (
                   <div className="reset-warning">Changing this setting will reset the current game.</div>
                 )}

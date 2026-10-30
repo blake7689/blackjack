@@ -1,0 +1,54 @@
+import { test, expect, stubApi } from './fixtures';
+
+// Table rules on the Settings page (#91): the controls come from the saved settings, and a save writes version 2 with the whole key set.
+async function openGameSettings(page) {
+  const settingsLoaded = page.waitForResponse('**/player/me/settings');
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Log in' }).click();
+  await page.getByPlaceholder('Username or Email').fill('tester');
+  await page.getByPlaceholder('Password').fill('not-a-real-password');
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  await (await settingsLoaded).finished();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  // A save before the load is applied is refused (it would overwrite the stored table): wait until the loaded table shows (the fixture's Rate of Play).
+  await page.getByRole('tab', { name: 'Dev' }).click();
+  await expect(page.getByLabel('playTimeout', { exact: true })).toHaveValue('250');
+  await page.getByRole('tab', { name: 'Game' }).click();
+}
+
+const control = (page, key) => page.getByLabel(key, { exact: true });
+
+test('a new player sees the Vegas rules, and changing one saves version 2 with every setting (#91)', async ({ page }) => {
+  const api = await stubApi(page);
+  await openGameSettings(page);
+  await expect(control(page, 'dealerHitsSoft17')).toBeChecked();
+  await expect(control(page, 'blackjackPayout')).toHaveValue('3:2');
+  await expect(control(page, 'doubleOn')).toHaveValue('any');
+  await expect(control(page, 'deckCount')).toHaveValue('6');
+  await expect(control(page, 'noHoleCardLoss')).toHaveCount(0); // a peek finds a dealer blackjack before any extra stake
+
+  await control(page, 'blackjackPayout').selectOption('6:5');
+  await expect(page.getByText(/A \$10 blackjack wins only \$12/)).toBeVisible();
+  await control(page, 'Save blackjackPayout').click();
+
+  await expect.poll(() => api.saves.length).toBe(1);
+  expect(api.saves[0]).toMatchObject({ v: 2, blackjackPayout: '6:5', dealerHitsSoft17: true, noHoleCardLoss: 'original', deckCount: 6, maxSplitHands: 4 });
+  expect(Object.keys(api.saves[0])).toEqual(expect.arrayContaining(['dealerHoleBehaviour', 'doubleOn', 'doubleAfterSplit', 'resplitAces', 'hitSplitAces', 'playTimeout']));
+});
+
+test('a table saved before #91 keeps its payout rules, and the next save upgrades it to version 2 with them (#91)', async ({ page }) => {
+  const api = await stubApi(page, { settings: { v: 1, playTimeout: 250, dealerHoleBehaviour: 'drawAfter' } });
+  await openGameSettings(page);
+  await expect(control(page, 'dealerHitsSoft17')).not.toBeChecked(); // the old table stood on soft 17
+  await expect(control(page, 'deckCount')).toHaveValue('2');
+  await expect(control(page, 'maxSplitHands')).toHaveValue('0');
+  await expect(control(page, 'noHoleCardLoss')).toHaveValue('all'); // with no hole card, a dealer blackjack still takes everything
+
+  await control(page, 'resplitAces').check();
+  await control(page, 'Save resplitAces').click();
+
+  await expect.poll(() => api.saves.length).toBe(1);
+  expect(api.saves[0]).toMatchObject({
+    v: 2, resplitAces: true, dealerHitsSoft17: false, noHoleCardLoss: 'all', blackjackPayout: '3:2', deckCount: 2, maxSplitHands: 0, dealerHoleBehaviour: 'drawAfter',
+  });
+});

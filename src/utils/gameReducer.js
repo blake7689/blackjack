@@ -1,7 +1,8 @@
 import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
-import { canSplit } from "./blackjackLogic";
+import { BlackjackPayouts, DoubleOn, NoHoleCardLoss } from "./constants/ruleOptions";
+import { canSplit, canDouble, isSplitAces, cents } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
@@ -10,7 +11,7 @@ import * as engine from "./gameEngine";
 
 export const initialGameState = {
   settings: {
-    deckCount: 2,
+    deckCount: 6, // the defaults are the Vegas preset (utils/rulePresets.js)
     includeCutCard: true,
     playTimeout: 1000,
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK,
@@ -21,7 +22,14 @@ export const initialGameState = {
     dealerDrawsOnPlayerBust: false,
     blackjackPaysImmediately: true, // matches the US preset; makes no difference with a peek
     showCardCount: true,
-    maxSplitHands: 0, // 0 = unlimited; 2 = one split per round
+    maxSplitHands: 4, // 0 = unlimited; 2 = one split per round
+    dealerHitsSoft17: true,
+    blackjackPayout: BlackjackPayouts.THREE_TWO,
+    doubleOn: DoubleOn.ANY, // hard totals only
+    doubleAfterSplit: true,
+    resplitAces: false,
+    hitSplitAces: false,
+    noHoleCardLoss: NoHoleCardLoss.ORIGINAL, // a dealer blackjack found after the player added stakes: takes only the first bet
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
@@ -53,18 +61,39 @@ export const initialGameState = {
 
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
-  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands"];
+  "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands",
+  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
-export const SETTING_RANGES = { deckCount: [1, 5], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
+export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
+
+// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above; every save before that is `v: 1`.
+// A missing rule key in a `v: 1` object gets today's behaviour from LEGACY_RULES, so an existing table never changes payout.
+// `{}`, a missing `v` and `v: 2` get the Vegas defaults. The next save writes `v: 2` with every key.
+// Whoever adds a rule key later (PR 2 surrender, PR 3 insurance) must bump SETTINGS_VERSION and decide the fill for older versions.
+export const SETTINGS_VERSION = 2;
+export const LEGACY_RULES = {
+  deckCount: 2, maxSplitHands: 0, dealerHitsSoft17: false, blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY,
+  doubleAfterSplit: true, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
+};
+
+// Settings that hold one of a fixed list of strings.
+const ENUM_SETTINGS = {
+  dealerHoleBehaviour: Object.values(DealerHoleOptions),
+  blackjackPayout: Object.values(BlackjackPayouts),
+  doubleOn: Object.values(DoubleOn),
+  noHoleCardLoss: Object.values(NoHoleCardLoss),
+};
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
-// fall back to the default for anything else, and fill what's missing from the defaults.
+// fall back to the default (or, for a `v: 1` object, the legacy rule) for anything else, and fill what's missing.
 export function sanitizeSettings(saved) {
-  const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, fallback]) => {
+  const legacy = saved?.v === 1;
+  const settings = Object.fromEntries(Object.entries(initialGameState.settings).map(([key, standard]) => {
+    const fallback = legacy && key in LEGACY_RULES ? LEGACY_RULES[key] : standard;
     const value = saved?.[key];
     if (typeof value !== typeof fallback) return [key, fallback];
-    if (key === "dealerHoleBehaviour") return [key, Object.values(DealerHoleOptions).includes(value) ? value : fallback];
+    if (key in ENUM_SETTINGS) return [key, ENUM_SETTINGS[key].includes(value) ? value : fallback];
     if (key === "chipValues") return [key, parseChipValues(value).join(",") || fallback];
     const range = SETTING_RANGES[key];
     if (!range || (key === "maxSplitHands" && value === 0)) return [key, value];
@@ -161,6 +190,7 @@ function playerAction(state, action) {
   }
 
   if (action.type === "HIT") {
+    if (isSplitAces(hand) && !state.settings.hitSplitAces) return state; // a split ace may only be split again or stood on
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerHit(hand, shoe, cut, refill));
     return countSeen(advance(next, replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
@@ -168,28 +198,34 @@ function playerAction(state, action) {
   if (hand.bet <= 0 || action.credits < hand.bet) return state; // a hand whose stake was refused can't add to it
 
   if (action.type === "DOUBLE") {
-    if (hand.cards.length !== 2) return state;
+    if (!canDouble(hand, state.settings)) return state;
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerDouble(hand, shoe, cut, refill, state.settings.doubleFaceDown));
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   if (action.type === "TRIPLE") {
-    // Must return here: anything else falls through to the split code. Needs two more stakes.
-    if (!state.settings.tripleDown || hand.cards.length !== 2 || action.credits < hand.bet * 2) return state;
+    // Must return here: anything else falls through to the split code. Needs two more stakes. Allowed where a double is.
+    if (!state.settings.tripleDown || !canDouble(hand, state.settings) || action.credits < hand.bet * 2) return state;
     const { result, next, refilled } = draw(state, action.refill,
       (shoe, cut, refill) => engine.playerTripleDown(hand, shoe, cut, refill, state.settings.tripleDrawsOnBust));
     return countSeen(advance(credit(next, { kind: "bet", amount: hand.bet * 2, newRound: false, alreadyDeducted: false, handTag: hand.tag }), replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
 
   // SPLIT
-  if (!canSplit(hand, state.hands.length, state.settings.maxSplitHands)) return state;
+  const { maxSplitHands, resplitAces, hitSplitAces } = state.settings;
+  if (!canSplit(hand, state.hands.length, maxSplitHands, resplitAces)) return state;
   const { result, next, refilled } = draw(state, action.refill,
-    (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, state.settings.blackJackOnSplit));
+    (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, { blackJackOnSplit: state.settings.blackJackOnSplit, resplitAces, hitSplitAces }));
   // Both new hands start as copies of the parent; the second one is a new hand and gets its own tag (it takes the new stake).
   const [first, second] = result.newHandsArray;
   const splitOff = { ...second, tag: next.nextHandTag };
   const split = credit({ ...next, nextHandTag: next.nextHandTag + 1 }, { kind: "bet", amount: hand.bet, newRound: false, alreadyDeducted: false, handTag: splitOff.tag });
-  return countSeen(advance(split, replaceHand(state.hands, handIdx, first, splitOff), handIdx), refilled);
+  // A split ace left waiting to be split again that no longer can be (the hand limit) has nothing to do: finish it before
+  // advance(), or the turn could stay on a finished hand. Every ace-split hand of the round is checked, not just the new ones.
+  const hands = replaceHand(state.hands, handIdx, first, splitOff).map((h) =>
+    isSplitAces(h) && !hitSplitAces && h.status === HandStatus.PLAYING && !canSplit(h, state.hands.length + 1, maxSplitHands, resplitAces)
+      ? { ...h, status: HandStatus.DONE } : h);
+  return countSeen(advance(split, hands, handIdx), refilled);
 }
 
 export function gameReducer(state, action) {
@@ -277,7 +313,7 @@ export function gameReducer(state, action) {
 
     case "DEALER_STEP": {
       const { result, next, refilled } = draw(state, action.refill,
-        (shoe, cut, refill) => engine.dealerPlay(state.dealer, { cards: [] }, shoe, state.dealerSkipDraw, cut, refill));
+        (shoe, cut, refill) => engine.dealerPlay(state.dealer, { cards: [] }, shoe, state.dealerSkipDraw, cut, refill, state.settings.dealerHitsSoft17));
       const stillPlaying = result.dealer.status === HandStatus.PLAYING || result.dealer.status === HandStatus.DRAW_HOLE;
       return countSeen({ ...next, dealer: result.dealer, phase: stillPlaying ? GamePhases.DEALER_TURN : GamePhases.SETTLING_HANDS }, refilled);
     }
@@ -306,11 +342,11 @@ export function gameReducer(state, action) {
     }
 
     case "SETTLE":
-      return { ...state, hands: engine.settleHands(state.hands, state.dealer), phase: GamePhases.RESULTS };
+      return { ...state, hands: engine.settleHands(state.hands, state.dealer, state.settings), phase: GamePhases.RESULTS };
 
     case "FINISH_RESULTS": {
       // Always settle, even a total loss, so the server closes the round.
-      const payout = state.hands.reduce((sum, h) => sum + h.payout, 0);
+      const payout = cents(state.hands.reduce((sum, h) => sum + h.payout, 0));
       return credit({ ...state, phase: GamePhases.POST_ROUND }, { kind: "settle", amount: payout });
     }
 

@@ -3,7 +3,7 @@ import { HandStatus } from "../constants/handStatus";
 import { HandResult } from "../constants/handResult";
 import { GamePhases } from "../constants/gamePhases";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
-import { gameReducer, initialGameState, nextAutoAction } from "../gameReducer";
+import { gameReducer, initialGameState, nextAutoAction, LEGACY_RULES } from "../gameReducer";
 
 const RANK_CODES = { A: "ace", K: "king", Q: "queen", J: "jack" };
 const DECK = buildDeck(0);
@@ -35,12 +35,14 @@ export const confirmBets = (state) =>
 // Plays one round through gameReducer, as GameProvider does: start, bet, deal, deal done, the player's actions in order
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
 // `beforeReveal` is the state just before a face-down double's card is turned over (null if none).
-// `rules` sets any other game settings, e.g. { dealerDrawsOnPlayerBust: true }.
+// `rules` sets any other game settings on top of LEGACY_RULES, e.g. { dealerDrawsOnPlayerBust: true }.
 // The server answers every bet once the round reaches settling: it confirms them all, except the ledger bets whose
 // position in `refuse` (0 = the opening bet, 1 = the next bet, ...) is listed, which it refuses.
 export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {}, refuse = [] }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
+  // Scenarios start from the rules the game had before #91 (S17, 2 decks, no split limit, a dealer blackjack takes all); `rules` changes them.
+  s = step(s, { type: "SET_SETTING", values: LEGACY_RULES });
   s = step(s, { type: "SET_SETTING", key: "dealerHoleBehaviour", value: mode });
   s = step(s, { type: "SET_SETTING", key: "blackJackOnSplit", value: blackJackOnSplit });
   // Scenarios start from the bare mode: a blackjack waits for the dealer unless `rules` says otherwise.

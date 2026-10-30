@@ -300,7 +300,7 @@ describe("GameProvider", () => {
     remote.getSettings.mockRejectedValue(new Error("offline"));
     const { ctx } = setup({ signedIn: true });
     await flush();
-    expect(ctx.state.settings.deckCount).toBe(2);
+    expect(ctx.state.settings.deckCount).toBe(6);
     setup();
     expect(remote.getSettings).toHaveBeenCalledTimes(1);
   });
@@ -317,22 +317,25 @@ describe("GameProvider", () => {
       </MemoryRouter>
     );
     await act(async () => answer({ deckCount: 5 }));
-    expect(ctx.state.settings.deckCount).toBe(2);
+    expect(ctx.state.settings.deckCount).toBe(6);
   });
 
   it("saves the whole settings object when signed in, and nothing when signed out", async () => {
-    const { ctx } = setup();
+    const { ctx } = setup({ signedIn: true });
+    await flush(); // the saved settings have loaded
     await act(async () => { await ctx.actions.changeSetting("playTimeout", 500); });
     expect(remote.saveSettings).not.toHaveBeenCalled();
     remote.token = "token";
     await act(async () => { await ctx.actions.changeSetting("deckCount", 3); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 1, ...ctx.state.settings });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 2, ...ctx.state.settings });
     expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
 
   it("saves chipValues as a flat comma-separated string, without resetting the game", async () => {
     remote.token = "token";
-    const { ctx } = setup();
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    cards.createShoe.mockClear(); // the sign-in load built its own shoe
     await act(async () => { await ctx.actions.changeSettings({ chipValues: "5,25" }); });
     const saved = remote.saveSettings.mock.calls[0][0];
     expect(saved.chipValues).toBe("5,25");
@@ -727,12 +730,168 @@ describe("GameProvider auto deal (#88)", () => {
 
     it("saves the flat object with both new keys, and a table setting is not reset by them", async () => {
       remote.token = "token";
-      const { ctx } = setup();
+      const { ctx } = setup({ signedIn: true });
+      await flush();
+      cards.createShoe.mockClear(); // the sign-in load built its own shoe
       await act(async () => { await ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
       const saved = remote.saveSettings.mock.calls[0][0];
-      expect(saved).toMatchObject({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
+      expect(saved).toMatchObject({ v: 2, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
       expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
       expect(cards.createShoe).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("GameProvider saved table rules (#91)", () => {
+  const legacy = {
+    dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0,
+  };
+  const vegas = {
+    dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
+    noHoleCardLoss: "original", deckCount: 6, maxSplitHands: 4,
+  };
+  const cardsIn = (ctx) => ctx.state.shoe.filter((c) => c.type === "card").length;
+
+  it("a player who never saved ({}) signs in on Vegas, with a six-deck shoe", async () => {
+    remote.getSettings.mockResolvedValue({});
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject(vegas);
+    expect(cards.createShoe).toHaveBeenLastCalledWith(6, true);
+    act(() => ctx.actions.startGame());
+    expect(cardsIn(ctx)).toBe(312);
+  });
+
+  it("a v: 2 object without the rule keys also signs in on Vegas", async () => {
+    remote.getSettings.mockResolvedValue({ v: 2, playTimeout: 500 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...vegas, playTimeout: 500 });
+  });
+
+  it("a v: 1 object loads the legacy rules, and the shoe has the legacy two decks", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, playTimeout: 500 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...legacy, playTimeout: 500 });
+    expect(cards.createShoe).toHaveBeenLastCalledWith(2, true);
+    act(() => ctx.actions.startGame());
+    expect(cardsIn(ctx)).toBe(104);
+  });
+
+  it("a v: 1 object with its own deck count and split limit keeps them, and the shoe is that size", async () => {
+    remote.getSettings.mockResolvedValue({ v: 1, deckCount: 3, maxSplitHands: 2 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ ...legacy, deckCount: 3, maxSplitHands: 2 });
+    expect(cards.createShoe).toHaveBeenLastCalledWith(3, true);
+  });
+
+  it("a setting change saves { v: 2, ...every setting }", async () => {
+    remote.token = "token";
+    remote.getSettings.mockResolvedValue({});
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    await act(async () => { await ctx.actions.changeSetting("blackjackPayout", "6:5"); });
+    const saved = remote.saveSettings.mock.calls[0][0];
+    expect(saved.v).toBe(2);
+    expect(Object.keys(saved).sort()).toEqual(["v", ...Object.keys(ctx.state.settings)].sort());
+    expect(saved).toMatchObject({ ...vegas, blackjackPayout: "6:5" });
+  });
+
+  it("a v: 1 table that changes one setting is saved as v: 2 with its legacy rule values (no silent payout change)", async () => {
+    remote.token = "token";
+    remote.getSettings.mockResolvedValue({ v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
+    const saved = remote.saveSettings.mock.calls[0][0];
+    expect(saved).toMatchObject({ v: 2, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(saved.dealerHitsSoft17).toBe(false);
+    expect(saved.noHoleCardLoss).toBe("all");
+  });
+
+  it("a rule change is a table setting: it deals a fresh shoe and resets the table", async () => {
+    const { ctx } = setup();
+    act(() => { ctx.actions.changeSetting("dealerHitsSoft17", false); });
+    expect(ctx.state.settings.dealerHitsSoft17).toBe(false);
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("GameProvider: no save before the saved settings have loaded (#91)", () => {
+  const stored = { v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 };
+  const legacyRules = { dealerHitsSoft17: false, blackjackPayout: "3:2", noHoleCardLoss: "all", maxSplitHands: 0 };
+  const signInOut = (ctx, player, signedIn) => (
+    <MemoryRouter initialEntries={["/game"]}>
+      <PlayerContext.Provider value={signedIn ? player : { player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    </MemoryRouter>
+  );
+
+  it("a change made before the load returns applies here, is rejected, and never overwrites the stored table", async () => {
+    remote.token = "token";
+    remote.getSettings.mockReturnValue(new Promise(() => {})); // never answers
+    const { ctx } = setup({ signedIn: true });
+    let outcome;
+    await act(async () => { outcome = await ctx.actions.changeSetting("playTimeout", 750).then(() => "saved", (e) => e.message); });
+    expect(outcome).toBe("Settings have not loaded yet");
+    expect(ctx.state.settings.playTimeout).toBe(750); // still applied locally
+    expect(remote.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("once the load resolves, the same change saves v: 2 with the loaded values, and a v: 1 table's legacy rules are written, not Vegas", async () => {
+    remote.token = "token";
+    let answer;
+    remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const { ctx } = setup({ signedIn: true });
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 750).catch(() => {}); });
+    expect(remote.saveSettings).not.toHaveBeenCalled();
+    await act(async () => answer(stored));
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
+    expect(remote.saveSettings).toHaveBeenCalledTimes(1);
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 2, ...legacyRules, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+  });
+
+  it("a failed load keeps rejecting saves, while the change still applies here", async () => {
+    remote.token = "token";
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    for (const value of [600, 700]) {
+      await act(async () => { await expect(ctx.actions.changeSetting("playTimeout", value)).rejects.toThrow("Settings have not loaded yet"); });
+      expect(ctx.state.settings.playTimeout).toBe(value);
+    }
+    expect(remote.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("signing out and back in needs a second load before saves work again", async () => {
+    remote.token = "token";
+    remote.getSettings.mockResolvedValue(stored);
+    const { ctx, player, rerender } = setup({ signedIn: true });
+    await flush();
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 600); });
+    expect(remote.saveSettings).toHaveBeenCalledTimes(1);
+
+    rerender(signInOut(ctx, player, false));
+    let second;
+    remote.getSettings.mockReturnValue(new Promise((resolve) => { second = resolve; }));
+    rerender(signInOut(ctx, player, true));
+    await act(async () => { await expect(ctx.actions.changeSetting("playTimeout", 700)).rejects.toThrow("Settings have not loaded yet"); });
+    expect(remote.saveSettings).toHaveBeenCalledTimes(1);
+    expect(remote.getSettings).toHaveBeenCalledTimes(2);
+    await act(async () => second(stored));
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 700); });
+    expect(remote.saveSettings).toHaveBeenCalledTimes(2);
+  });
+
+  it("signed out (no token) resolves with no save, loaded or not", async () => {
+    const { ctx } = setup();
+    await act(async () => { await expect(ctx.actions.changeSetting("playTimeout", 500)).resolves.toBeUndefined(); });
+    expect(ctx.state.settings.playTimeout).toBe(500);
+    expect(remote.saveSettings).not.toHaveBeenCalled();
   });
 });

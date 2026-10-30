@@ -28,14 +28,16 @@ test('cold-start session restore waits out a slow API (#75)', async ({ page }) =
   expect(api.failed).toEqual([]);
 });
 
-// Seed 6 (mulberry32), US peek, 2 decks. Before the deal the page uses 4 random numbers (router keys), the settings load builds
-// one shoe and Start Game a second one; the deal draws from that.
-//   player jack of clubs + 4 of diamonds = 14, dealer 8 of clubs up + 7 of spades in the hole (15, no blackjack).
-//   Hit draws the 3 of spades (17); Stay; the dealer flips the hole card and draws.
+// Seed 183 (mulberry32), the Vegas table of the fixture (US peek, 6 decks, dealer hits soft 17). Before the deal the page uses 4 random numbers (router keys),
+// the settings load builds one shoe and Start Game a second one; the deal draws from that. The shuffle consumes Math.random in proportion to the shoe
+// size, so a change of the fixture's deck count means a new seed. To re-pick: replay those steps over createShoe (src/utils/cards.js) and keep a round whose
+// cards are all different, with no pair, no blackjack, no ace or ten up, a Hit that neither busts nor makes 21, and a dealer that has to draw.
+//   player king of diamonds + 4 of clubs = 14, dealer 6 of clubs up + jack of hearts in the hole (16, no blackjack).
+//   Hit draws the 5 of hearts (19); Stay; the dealer flips the hole card and draws the 3 of diamonds (19: a push).
 // If the app's use of Math.random changes, these card assertions fail first and the seed needs re-picking.
 test('options stay hidden while cards move through a whole round (#72)', async ({ page }) => {
   const api = await stubApi(page);
-  await seedRandom(page, 6);
+  await seedRandom(page, 183);
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await submitLogin(page);
   await (await settingsLoaded).finished(); // each settings load builds a shoe, so the shoe is settled before Start Game
@@ -63,14 +65,14 @@ test('options stay hidden while cards move through a whole round (#72)', async (
   });
 
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
-  await expect(page.getByRole('img', { name: 'jack of clubs' })).toBeVisible();
-  await expect(page.getByRole('img', { name: '4 of diamonds' })).toBeVisible();
-  await expect(page.getByRole('img', { name: '8 of clubs' })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
+  await expect(page.getByRole('img', { name: '4 of clubs' })).toBeVisible();
+  await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
   await page.getByRole('button', { name: 'Hit' }).click({ timeout: 15_000 });
-  await expect(page.getByRole('img', { name: '3 of spades' })).toBeVisible();
+  await expect(page.getByRole('img', { name: '5 of hearts' })).toBeVisible();
   await page.getByRole('button', { name: 'Stay' }).click({ timeout: 15_000 });
   await expect(page.getByText('Click anywhere to continue...')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole('img', { name: '7 of spades' })).toBeVisible(); // the hole card was flipped
+  await expect(page.getByRole('img', { name: 'jack of hearts' })).toBeVisible(); // the hole card was flipped
   await page.getByText('Click anywhere to continue...').click();
   await expect(page.getByText('Place your bets!')).toBeVisible();
 
