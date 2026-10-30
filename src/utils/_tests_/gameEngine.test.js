@@ -6,7 +6,8 @@ import { initialGameState } from "../gameReducer";
 import { stackedShoe, outOfCards, Modes } from "./stackedShoe";
 
 // Animation hints are plain data on copies of the cards: the shoe's own cards are never touched.
-const settings = (mode) => ({ ...initialGameState.settings, dealerHoleBehaviour: mode });
+// insurance off: these tests are about the cards, and an ace up would offer insurance and defer the peek
+const settings = (mode) => ({ ...initialGameState.settings, dealerHoleBehaviour: mode, insurance: false });
 const deal = (codes, mode = Modes.PEEK) => {
   const shoe = stackedShoe(codes);
   const originals = [...shoe];

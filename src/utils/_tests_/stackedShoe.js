@@ -36,9 +36,11 @@ export const confirmBets = (state) =>
 // (a hand with no action left stands), then the automatic dealer and settlement steps up to POST_ROUND.
 // `beforeReveal` is the state just before a face-down double's card is turned over (null if none).
 // `rules` sets any other game settings on top of LEGACY_RULES, e.g. { dealerDrawsOnPlayerBust: true }.
+// `offers` answers the offers step in order (reducer action types in lower case: "take_insurance", "even_money", "surrender");
+// what is left unanswered is declined. `afterDeal` may be the OFFERS state; `afterOffers` is the state once the offers and the peek are over.
 // The server answers every bet once the round reaches settling: it confirms them all, except the ledger bets whose
 // position in `refuse` (0 = the opening bet, 1 = the next bet, ...) is listed, which it refuses.
-export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], blackJackOnSplit = false, rules = {}, refuse = [] }) {
+export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], offers = [], blackJackOnSplit = false, rules = {}, refuse = [] }) {
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   // Scenarios start from the rules the game had before #91 (S17, 2 decks, no split limit, a dealer blackjack takes all); `rules` changes them.
@@ -51,6 +53,10 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
   s = step(s, { type: "DEAL" });
   s = step(s, { type: "DEAL_DONE" }); // the cards sit on the table for one step, then play (or the dealer) begins
   const afterDeal = s;
+  const offerQueue = [...offers];
+  while (s.phase === GamePhases.OFFERS) s = step(s, { type: (offerQueue.shift() ?? "decline_offers").toUpperCase(), handIdx: 0 });
+  while (s.phase === GamePhases.PEEK) s = step(s, { type: "PEEK" });
+  const afterOffers = s;
 
   const queue = [...actions];
   while (s.phase === GamePhases.PLAYER_TURN) {
@@ -71,6 +77,7 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
 
   return {
     afterDeal,
+    afterOffers,
     beforeReveal,
     state: s,
     hands: s.hands,
@@ -78,6 +85,7 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], bl
     results: s.hands.map((h) => h.result),
     payout: s.hands.reduce((sum, h) => sum + h.payout, 0),
     staked: s.hands.reduce((sum, h) => sum + h.bet, 0),
+    insuranceStaked: s.hands.reduce((sum, h) => sum + (h.insurance ?? 0), 0),
     cardsLeft: s.shoe.length,
   };
 }

@@ -776,10 +776,17 @@ describe("Surrender (#91)", () => {
       expect(shown(board(["10", "6"], "6", { surrender: "none" }))).toBe(false);
     });
 
-    it("early is offered against every up card; earlyNoAce is hidden against an ace only", () => {
-      for (const up of ["6", "K", "A"]) expect(shown(board(["10", "6"], up, { surrender: "early" })), `early ${up}`).toBe(true);
-      expect(shown(board(["10", "6"], "K", { surrender: "earlyNoAce" }))).toBe(true);
-      expect(shown(board(["10", "6"], "A", { surrender: "earlyNoAce" }))).toBe(false);
+    it("early with no peek is offered against every up card; earlyNoAce is hidden against an ace only", () => {
+      const noPeek = { dealerHoleBehaviour: "drawEarly_NoCheck" };
+      for (const up of ["6", "K", "A"]) expect(shown(board(["10", "6"], up, { ...noPeek, surrender: "early" })), `early ${up}`).toBe(true);
+      expect(shown(board(["10", "6"], "K", { ...noPeek, surrender: "earlyNoAce" }))).toBe(true);
+      expect(shown(board(["10", "6"], "A", { ...noPeek, surrender: "earlyNoAce" }))).toBe(false);
+    });
+
+    it("with a peek, early is a move on the turn against a 2-9 only: against an ace or ten it was offered before the peek", () => {
+      expect(shown(board(["10", "6"], "6", { surrender: "early" }))).toBe(true);
+      for (const up of ["K", "A"]) expect(shown(board(["10", "6"], up, { surrender: "early" })), `early ${up}`).toBe(false);
+      expect(shown(board(["10", "6"], "K", { surrender: "earlyNoAce" }))).toBe(false);
     });
 
     it("is hidden after a hit (three cards), on a split hand, and after a double", () => {

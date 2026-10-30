@@ -1167,7 +1167,10 @@ describe("SURRENDER (#91)", () => {
     });
 
     it("when earlyNoAce meets an ace", () => {
-      const s = set(dealt(["10", "A", "6", "5"]), { surrender: "earlyNoAce" });
+      // The rules are set before the deal (insurance off, so an ace up offers nothing and the hand is on the turn).
+      const table = set(started(["10", "A", "6", "5"]), { surrender: "earlyNoAce", insurance: false });
+      const s = run(table, { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+      expect(s.phase).toBe(GamePhases.PLAYER_TURN);
       expect(run(s, { type: "SURRENDER", handIdx: 0 })).toBe(s);
     });
 

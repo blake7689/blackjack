@@ -1251,7 +1251,8 @@ describe("rule presets (#91): one signature scenario each, with the preset's own
     expect(r.dealer.cards).toHaveLength(3);
     expect(r.results).toEqual([LOSE]);
     const bj = playRound({ cards: ["10", "A", "9", "K"], rules: preset("Vegas") });
-    expect(bj.afterDeal.dealer.isBlackjack).toBe(true);
+    expect(bj.afterOffers.dealer.isBlackjack).toBe(true); // an ace up offers insurance, so the peek waits for it
+    expect(bj.afterDeal.phase).toBe(GamePhases.OFFERS);
   });
 
   it("Atlantic City: no hole card, and a dealer blackjack after a double takes only the original bet", () => {
@@ -1306,7 +1307,7 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
   // A surplus draw by the player or the dealer shows in `cardsLeft`.
   const SPARES = ["9", "9"];
   const play = (mode, surrender, up, hole, extra = {}) =>
-    playRound({ cards: ["10", up, "6", hole, ...SPARES], mode, actions: ["surrender"], bet: extra.bet ?? 10, rules: { surrender, ...extra.rules } });
+    playRound({ cards: ["10", up, "6", hole, ...SPARES], mode, actions: ["surrender"], offers: ["surrender"], bet: extra.bet ?? 10, rules: { surrender, ...extra.rules } });
   const surrendered = (r, payout) => {
     expect(r.results).toEqual([SURRENDER]);
     expect(r.hands[0]).toMatchObject({ surrendered: true, status: HandStatus.DONE, payout });
@@ -1337,9 +1338,9 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
   });
 
   describe("US peek, a dealer blackjack at the deal", () => {
-    // The round ends before the player has a turn, so no value can be used: even Early loses everything (the limit noted in the hint, until PR 3).
+    // The round ends before the player has a turn, so late has nothing to give up. Early is offered before the peek (below).
     it.each([
-      ["late", "K", "A"], ["late", "A", "K"], ["early", "K", "A"], ["early", "A", "K"], ["earlyNoAce", "K", "A"], ["earlyNoAce", "A", "K"], ["none", "K", "A"],
+      ["late", "K", "A"], ["late", "A", "K"], ["earlyNoAce", "A", "K"], ["none", "K", "A"],
     ])("%s with %s up: no player turn, the bet is lost", (surrender, up, hole) => {
       const r = play(Modes.PEEK, surrender, up, hole);
       expect(r.afterDeal.hands[0].status).toBe(HandStatus.DONE);
@@ -1347,6 +1348,20 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
       expect(r.afterDeal.dealer.isBlackjack).toBe(true);
       expect(r.hands[0].surrendered).toBeUndefined();
       expect([r.results, r.payout, settles(r)]).toEqual([[LOSE], 0, [0]]);
+    });
+  });
+
+  describe("US peek, early surrender is offered before the peek", () => {
+    it.each([["early", "K", "A"], ["early", "A", "K"], ["earlyNoAce", "K", "A"]])("%s with %s up: the half is kept although the dealer has blackjack", (surrender, up, hole) => {
+      const r = play(Modes.PEEK, surrender, up, hole);
+      expect(r.afterDeal.phase).toBe(GamePhases.OFFERS);
+      surrendered(r, 5);
+      expect(r.dealer.isBlackjack).toBe(true);
+    });
+
+    it("declined, the peek finds the blackjack and the bet is lost", () => {
+      const r = playRound({ cards: ["10", "K", "6", "A", ...SPARES], actions: ["surrender"], rules: { surrender: "early" } });
+      expect([r.results, r.payout]).toEqual([[LOSE], 0]);
     });
   });
 

@@ -113,9 +113,44 @@ export function canDouble(hand, { doubleOn = DoubleOn.ANY, doubleAfterSplit = tr
 
 // Surrender: the first two cards of a hand that was not split or doubled. Late and early are offered on the same hands (what differs
 // is what happens next: see playerSurrender); earlyNoAce is never offered against an ace. //
-export function canSurrender(hand, dealer, { surrender }) {
+// In a peek game early surrender against an ace or ten is offered before the peek (OFFERS), never again on the turn; the setting
+// can also change mid-round (LOAD_SETTINGS), so the turn guard reads the settings, not what was offered.
+export function canSurrender(hand, dealer, settings) {
+  const { surrender } = settings;
   return surrender !== SurrenderOptions.NONE && hand.cards.length === 2 && !hand.isSplit && !hand.isDouble
-    && !(surrender === SurrenderOptions.EARLY_NO_ACE && dealer.cards[0].value === 11);
+    && !(surrender === SurrenderOptions.EARLY_NO_ACE && dealer.cards[0].value === 11) && !earlyOffer(dealer.cards[0], settings);
+}
+
+// ---- OFFERS (insurance, even money, early surrender) ----
+
+// Insurance costs half the bet, to the cent. //
+export const insuranceStake = (bet) => cents(bet / 2);
+
+const isPeek = (settings) => settings.dealerHoleBehaviour === DealerHoleOptions.US_PEEK;
+
+// A player blackjack that the settings pay in full at the deal without a peek: nothing to insure, so no even money. //
+export const bjPaysWithoutPeek = (settings) => settings.blackjackPaysImmediately || (isEU(settings) && !settings.dealerDrawsOnPlayerBlackjack);
+
+// Early surrender against an ace or ten is decided before the dealer peeks, so it exists only in a peek game; with no
+// hole card (or no peek) the player acts first anyway and surrender stays a move on the turn. earlyNoAce: a ten only. //
+export function earlyOffer(up, settings) {
+  const { surrender } = settings;
+  return (surrender === SurrenderOptions.EARLY || surrender === SurrenderOptions.EARLY_NO_ACE) && isPeek(settings)
+    && (up.value === 10 || (up.value === 11 && surrender === SurrenderOptions.EARLY));
+}
+
+// What the player is offered before the first move: { insurance, evenMoney, surrender } (booleans), or null when nothing is
+// offered and the round plays exactly as it always did. Insurance only on an ace, only if the stake is affordable
+// (`credits` undefined = unknown = affordable, like the credit checks on double and split). A blackjack gets even money, not insurance. //
+export function offersAtDeal(playerCards, up, settings, bet, credits) {
+  const blackjack = getHandTotals(playerCards).total === 21;
+  const ace = settings.insurance && up.value === 11;
+  const offers = {
+    evenMoney: ace && blackjack && (isPeek(settings) || !bjPaysWithoutPeek(settings)),
+    insurance: ace && !blackjack && !(credits < insuranceStake(bet)),
+    surrender: !blackjack && earlyOffer(up, settings),
+  };
+  return offers.evenMoney || offers.insurance || offers.surrender ? offers : null;
 }
 
 // Check total for blackjack //
@@ -194,7 +229,7 @@ export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.TH
   }
 
   let payout = 0;
-  if (result === HandResult.WIN && hand.isBlackjack) {
+  if (result === HandResult.WIN && hand.isBlackjack && !hand.evenMoney) { // even money is paid 1:1 like any win
     payout = cents(hand.bet * (blackjackPayout === BlackjackPayouts.SIX_FIVE ? 2.2 : 2.5));
   } else if (result === HandResult.LOSE && dealer.isBlackjack && !hand.isBusted && noHoleCardLoss === NoHoleCardLoss.ORIGINAL) {
     // Stakes added after the first bet (double, triple, split) are given back; a hand that busted loses everything.
@@ -207,7 +242,11 @@ export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.TH
     payout = hand.bet;
   }
 
-  return { ...hand, result, payout };
+  // Insurance pays 2:1 on a dealer blackjack (the stake comes back too) and is lost otherwise. It joins the hand's payout, so the
+  // round still settles once.
+  const insured = hand.insurance > 0;
+  const insurancePayout = insured && dealer.isBlackjack ? hand.insurance * 3 : 0;
+  return { ...hand, result, payout: payout + insurancePayout, ...(insured && { insurancePayout }) };
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

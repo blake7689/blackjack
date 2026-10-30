@@ -1,5 +1,5 @@
 import { getHandTotals, isTotalBlackjack, getDealerHandEvaluation, getInitialPlayerHandEvaluation, 
-  getInitialDealerHandEvaluation, getHandEvaluation, settleHand, isEU } from "./blackjackLogic";
+  getInitialDealerHandEvaluation, getHandEvaluation, settleHand, isEU, offersAtDeal, bjPaysWithoutPeek } from "./blackjackLogic";
 import { drawCardFromShoe } from "./cards";
 import { HandResult } from "./constants/handResult";
 import { HandStatus } from "./constants/handStatus";
@@ -8,8 +8,10 @@ import { SurrenderOptions } from "./constants/ruleOptions";
 
 // ---- GAME ACTIONS ----
 
-// Deal Initial Hands //
-export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
+// Deal Initial Hands. credits: the balance after the bet (only insurance's affordability reads it). //
+// Returns `offers` (see offersAtDeal): null when nothing is offered. In a peek game with something offered the peek waits: the dealer
+// shows one card, the hole card stays in dealerHoleCards, and a player blackjack does not win yet (peekDealer finishes the deal). //
+export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings, credits) {
   const playerFirstCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
   const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
@@ -21,14 +23,17 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
   const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCardsAll);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
+  const offers = offersAtDeal(playerCards, dealerUpCard, settings, bet, credits);
+  const deferPeek = dealerPeeks && offers !== null;
   // Only a peek reveals a dealer blackjack now; with no peek it stays hidden until the dealer's turn.
-  const dealerBlackjackRevealed = dealerPeeks && dealerCardsAll.length === 2 && isTotalBlackjack(dealerTotals.total);
+  const dealerBlackjackRevealed = dealerPeeks && !deferPeek && dealerCardsAll.length === 2 && isTotalBlackjack(dealerTotals.total);
   // Animation hints go on copies. The hole card carries one only when the peek shows it at the deal.
   const dealerUpShown = { ...dealerUpCard, dealOrder: 1 };
   const dealerCardsShowing = dealerBlackjackRevealed ? [dealerUpShown, { ...dealerHoleCard[0], dealOrder: 3, revealed: true }] : [dealerUpShown];
   const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
   // An EU dealer that won't draw on a player blackjack has nothing to compare it with, so it must pay now.
-  const blackjackPaysNow = dealerPeeks || settings.blackjackPaysImmediately || (drawsAfter && !settings.dealerDrawsOnPlayerBlackjack);
+  // A deferred peek has not found out yet, so the blackjack waits for it.
+  const blackjackPaysNow = !deferPeek && (dealerPeeks || bjPaysWithoutPeek(settings));
   const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, blackjackPaysNow);
   const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, settings);
 
@@ -65,7 +70,21 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings) {
     },
     shoe,
     dealerHoleCards: { cards: dealerBlackjackRevealed ? [] : dealerHoleCard },
+    offers: offers && { ...offers, peek: deferPeek },
   };
+}
+
+// The deferred peek (after OFFERS): what dealRound would have done at the deal. A dealer blackjack is shown and ends every hand
+// except an even-money hand (already paid 1:1) and a surrendered one (early surrender keeps its half); without one, the player's
+// blackjack wins at once and the hole card stays face down. //
+export function peekDealer(hands, dealer, hole) {
+  const full = revealDealerHole(dealer, hole);
+  const peeked = hands.map((h) => {
+    if (h.evenMoney || h.surrendered) return h;
+    const { handStatus, handResult } = getInitialPlayerHandEvaluation(h.isBlackjack, full.isBlackjack, true);
+    return { ...h, status: handStatus, result: handResult };
+  });
+  return full.isBlackjack ? { hands: peeked, dealer: { ...full, status: HandStatus.DONE }, hole: { cards: [] } } : { hands: peeked, dealer, hole };
 }
 
 // Dealer only plays when a hand still depends on the dealer's total //
@@ -80,10 +99,10 @@ export function dealerOnlyChecksBlackjack(hands, settings) {
   return hands.filter((h) => !h.isBusted && h.result === HandResult.NONE).every((h) => h.isBlackjack || h.surrendered || (onceOn21 && h.total === 21));
 }
 
-// Rules that show the dealer's second card although no hand depends on it (it still counts) //
+// Rules that show the dealer's second card although no hand depends on it (it still counts): a surrender or an insurance bet rides on it //
 export function dealerShowsSecondCard(hands, settings) {
   return (settings.dealerDrawsOnPlayerBust && hands.every((h) => h.isBusted)) ||
-    (settings.dealerDrawsOnPlayerBlackjack && hands.some((h) => h.isBlackjack)) || hands.some((h) => h.surrendered);
+    (settings.dealerDrawsOnPlayerBlackjack && hands.some((h) => h.isBlackjack)) || hands.some((h) => h.surrendered || h.insurance > 0);
 }
 
 // Settle Hands //
@@ -211,6 +230,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { blackJackO
   const newHand2 = {
     ...hand,
     baseStake: 0, // the split-off hand's whole stake is an added one
+    ...(hand.insurance > 0 && { insurance: 0 }), // the insurance stays on the first hand: it must not be paid twice
     isSplit: true,
     cards: hand2Cards,
     total: hand2Totals.total,
