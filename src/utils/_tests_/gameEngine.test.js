@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { dealRound, revealDealerHole, revealHiddenCards, playerSplit, playerDouble } from "../gameEngine";
+import { dealRound, revealDealerHole, revealHiddenCards, playerSplit, playerDouble, playerSurrender, dealerNeedsToPlay, dealerOnlyChecksBlackjack, dealerShowsSecondCard } from "../gameEngine";
+import { HandResult } from "../constants/handResult";
+import { HandStatus } from "../constants/handStatus";
 import { initialGameState } from "../gameReducer";
 import { stackedShoe, outOfCards, Modes } from "./stackedShoe";
 
@@ -62,5 +64,69 @@ describe("card hints", () => {
     const { newHandsArray } = playerSplit(hands[0], stackedShoe(["3", "4"]), () => {}, outOfCards, {});
     expect(newHandsArray.map((h) => h.cards.map((c) => c.moved))).toEqual([[undefined, undefined], [true, undefined]]);
     expect(hands[0].cards[1].moved).toBeUndefined();
+  });
+});
+
+describe("playerSurrender", () => {
+  const hand = { tag: 1, bet: 10, baseStake: 10, status: HandStatus.PLAYING, result: HandResult.NONE, cards: [], hiddenCards: [] };
+  const up = (code) => stackedShoe([code])[0];
+  const surrender = (value, mode, upCode) => playerSurrender(hand, up(upCode), { surrender: value, dealerHoleBehaviour: mode });
+
+  it("always ends the hand and flags it, on a copy that keeps everything else", () => {
+    const s = surrender("late", Modes.PEEK, "6");
+    expect(s).toMatchObject({ tag: 1, bet: 10, baseStake: 10, status: HandStatus.DONE, surrendered: true });
+    expect(s).not.toBe(hand);
+    expect(hand).not.toHaveProperty("surrendered");
+  });
+
+  it("late with no hole card against an ace or a ten waits; the dealer's blackjack decides at settlement", () => {
+    for (const mode of [Modes.NO_PEEK, Modes.EU]) {
+      for (const code of ["A", "10", "K"]) expect(surrender("late", mode, code).result).toBe(HandResult.NONE);
+    }
+  });
+
+  it("late against 2-9 is fixed at once, in every mode (no blackjack is possible)", () => {
+    for (const mode of [Modes.PEEK, Modes.NO_PEEK, Modes.EU]) {
+      for (const code of ["2", "6", "9"]) expect(surrender("late", mode, code).result).toBe(HandResult.SURRENDER);
+    }
+  });
+
+  it("late with a peek is fixed at once even against an ace or ten: the peek already ruled the blackjack out", () => {
+    for (const code of ["A", "10"]) expect(surrender("late", Modes.PEEK, code).result).toBe(HandResult.SURRENDER);
+  });
+
+  it("early and earlyNoAce are always fixed at once, whatever the mode or up card", () => {
+    for (const value of ["early", "earlyNoAce"]) {
+      for (const mode of [Modes.PEEK, Modes.NO_PEEK, Modes.EU]) {
+        for (const code of ["6", "10", "A"]) expect(surrender(value, mode, code).result).toBe(HandResult.SURRENDER);
+      }
+    }
+  });
+});
+
+describe("dealer helpers with a surrendered hand", () => {
+  const live = { isBusted: false, isBlackjack: false, total: 16, result: HandResult.NONE };
+  const waiting = { ...live, surrendered: true, status: HandStatus.DONE };
+  const atOnce = { ...waiting, result: HandResult.SURRENDER };
+  const rules = (extra = {}) => ({ dealerHoleBehaviour: Modes.EU, dealerDrawsOnceOn21: false, dealerDrawsOnPlayerBust: false, dealerDrawsOnPlayerBlackjack: false, ...extra });
+
+  it("dealerNeedsToPlay: neither a waiting nor an at-once surrender needs the dealer's total", () => {
+    expect(dealerNeedsToPlay([live])).toBe(true);
+    expect(dealerNeedsToPlay([waiting])).toBe(false);
+    expect(dealerNeedsToPlay([atOnce])).toBe(false);
+  });
+
+  it("dealerOnlyChecksBlackjack: a waiting surrender needs only the blackjack check; an at-once one is not waiting at all", () => {
+    expect(dealerOnlyChecksBlackjack([live], rules())).toBe(false);
+    expect(dealerOnlyChecksBlackjack([waiting], rules())).toBe(true);
+    expect(dealerOnlyChecksBlackjack([atOnce], rules())).toBe(true); // nothing waits: the empty list
+  });
+
+  it("dealerShowsSecondCard: true after a surrender, only through the surrendered clause", () => {
+    expect(dealerShowsSecondCard([live], rules())).toBe(false);
+    expect(dealerShowsSecondCard([waiting], rules())).toBe(true);
+    expect(dealerShowsSecondCard([atOnce], rules())).toBe(true);
+    // with both rules on, a live hand that is neither busted nor a blackjack still gives false
+    expect(dealerShowsSecondCard([live], rules({ dealerDrawsOnPlayerBust: true, dealerDrawsOnPlayerBlackjack: true }))).toBe(false);
   });
 });
