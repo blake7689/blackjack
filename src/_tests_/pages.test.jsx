@@ -745,4 +745,59 @@ describe("Settings table rules (#91)", () => {
     open({ settings: { ...initialGameState.settings, deckCount: 2, dealerHitsSoft17: false, maxSplitHands: 0, noHoleCardLoss: "all" } });
     expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
   });
+
+  describe("surrender", () => {
+    it("is a select of four choices on the Game tab, set to Late for Vegas, in every dealer mode", () => {
+      for (const mode of ["drawEarly_Check", "drawEarly_NoCheck", "drawAfter"]) {
+        open(withMode(mode));
+        const select = screen.getByLabelText("surrender");
+        expect(select.value).toBe("late");
+        expect([...select.options].map((o) => [o.value, o.text])).toEqual([
+          ["none", "None"], ["late", "Late"], ["early", "Early"], ["earlyNoAce", "Early (not against an ace)"]]);
+        expect(screen.getByText("Surrender")).toBeTruthy();
+        cleanup();
+      }
+    });
+
+    it("shows the hint of the selected option, and the hint follows the selection before it is saved", () => {
+      open();
+      expect(screen.getByText(/Give up half your bet on your first two cards\. If the dealer has blackjack/)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "none" } });
+      expect(screen.getByText("You can't give up a hand.")).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "early" } });
+      expect(screen.getByText(/before the dealer checks for blackjack\. You keep the half even if the dealer has one\..*works like Late/)).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "earlyNoAce" } });
+      expect(screen.getByText(/not offered when the dealer shows an ace\..*works like Late/)).toBeTruthy();
+    });
+
+    it("saves the chosen value with its Save button", () => {
+      const { gameActions } = open();
+      expect(screen.getByLabelText("Save surrender")).toBeTruthy();
+      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "early" } });
+      fireEvent.click(screen.getByLabelText("Save surrender"));
+      expect(gameActions.changeSetting.mock.calls).toEqual([["surrender", "early"]]);
+    });
+
+    it("a change warns that it resets a round in progress", () => {
+      open({ phase: GamePhases.PLAYER_TURN });
+      expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
+      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "none" } });
+      expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+    });
+
+    it("the Singapore preset applies earlyNoAce, and Europe turns it off", () => {
+      const { gameActions } = open();
+      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: "Singapore" } });
+      expect(gameActions.changeSettings.mock.calls[0][0].surrender).toBe("earlyNoAce");
+      expect(screen.getByLabelText("surrender").value).toBe("earlyNoAce");
+      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: "Europe" } });
+      expect(gameActions.changeSettings.mock.calls[1][0].surrender).toBe("none");
+      expect(screen.getByLabelText("surrender").value).toBe("none");
+    });
+
+    it("a Vegas table with surrender none (what a version 2 save becomes) shows Custom", () => {
+      open({ settings: { ...initialGameState.settings, surrender: "none" } });
+      expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+    });
+  });
 });

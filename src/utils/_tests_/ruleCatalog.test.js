@@ -76,6 +76,20 @@ describe("ruleCatalog (#91)", () => {
     }
   });
 
+  it("surrender has four options with plain names and a hint each, and is shown in every dealer mode", () => {
+    const rule = byKey("surrender");
+    expect(rule.input).toBe("select");
+    expect(rule.label()).toBe("Surrender");
+    expect(rule.options.map((o) => o.label)).toEqual(["None", "Late", "Early", "Early (not against an ace)"]);
+    expect(rule.showWhen).toBeUndefined();
+    for (const mode of Object.values(DealerHoleOptions)) expect(visibleIn(settings(mode)).map((r) => r.key)).toContain("surrender");
+  });
+
+  it("the two early hints say they work like Late with a dealer who peeks (the PR 2 limit; PR 3 removes it)", () => {
+    for (const value of ["early", "earlyNoAce"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).toMatch(/dealer who peeks.*like Late/);
+    for (const value of ["none", "late"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).not.toMatch(/peeks/);
+  });
+
   describe("visibleIn", () => {
     it("hides 'if the dealer has blackjack, you lose' with a US peek, since the blackjack is found before any stake is added", () => {
       expect(visibleIn(settings(DealerHoleOptions.US_PEEK)).map((r) => r.key)).not.toContain("noHoleCardLoss");

@@ -25,6 +25,20 @@ describe("rulePresetOf", () => {
     expect(rulePresetOf({ ...initialGameState.settings, playTimeout: 250, resetInitialBet: true })).toBe("Vegas");
   });
 
+  it("a Vegas table with surrender none (what a version 2 save becomes) is Custom; Europe and Australia are unchanged by it", () => {
+    expect(rulePresetOf({ ...initialGameState.settings, surrender: "none" })).toBe(CUSTOM);
+    for (const name of ["Vegas", "Atlantic City", "Singapore"]) {
+      expect(rulePresetOf({ ...initialGameState.settings, ...RULE_PRESETS[name], surrender: "none" }), name).toBe(CUSTOM);
+    }
+    for (const name of ["Europe", "Australia"]) expect(rulePresetOf({ ...initialGameState.settings, ...RULE_PRESETS[name], surrender: "none" }), name).toBe(name);
+  });
+
+  it("each preset has its surrender value: Vegas and Atlantic City late, Europe and Australia none, Singapore earlyNoAce", () => {
+    expect(Object.fromEntries(Object.entries(RULE_PRESETS).map(([name, p]) => [name, p.surrender]))).toEqual({
+      Vegas: "late", "Atlantic City": "late", Europe: "none", Australia: "none", Singapore: "earlyNoAce",
+    });
+  });
+
   it("a table with a different deck count, or US no peek, matches no preset", () => {
     expect(rulePresetOf({ ...initialGameState.settings, deckCount: 5 })).toBe(CUSTOM);
     expect(rulePresetOf({ ...RULE_PRESETS.Vegas, dealerHoleBehaviour: DealerHoleOptions.US_NO_PEEK })).toBe(CUSTOM);
