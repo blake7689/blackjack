@@ -471,3 +471,57 @@ describe("GameBoard", () => {
     expect(container.querySelector(".dealer-area")).toBeNull();
   });
 });
+
+describe("BettingFooter auto deal control (#88)", () => {
+  const on = { ...initialGameState.settings, resetInitialBet: true, autoDeal: true };
+  const toggle = (name) => screen.queryByRole("button", { name });
+
+  it("has no Pause or Resume button unless auto deal and Reset Bet are both on", () => {
+    for (const settings of [initialGameState.settings, { ...initialGameState.settings, autoDeal: true }, { ...initialGameState.settings, resetInitialBet: true }]) {
+      renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL, settings } });
+      expect(toggle(/auto deal/)).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("shows Pause, and Resume once paused, and each calls its action", () => {
+    const { gameActions, rerender, gameState } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL, settings: on } });
+    const pause = toggle("Pause auto deal");
+    expect(pause.textContent).toBe("Pause");
+    expect(toggle("Resume auto deal")).toBeNull();
+    fireEvent.click(pause);
+    expect(gameActions.pauseAutoDeal).toHaveBeenCalledTimes(1);
+    expect(gameActions.resumeAutoDeal).not.toHaveBeenCalled();
+
+    gameState.autoDealPaused = true;
+    rerender(<BettingFooter />);
+    const resume = toggle("Resume auto deal");
+    expect(resume.textContent).toBe("Resume");
+    expect(toggle("Pause auto deal")).toBeNull();
+    fireEvent.click(resume);
+    expect(gameActions.resumeAutoDeal).toHaveBeenCalledTimes(1);
+    expect(gameActions.pauseAutoDeal).toHaveBeenCalledTimes(1);
+  });
+
+  it("is there in every phase, and a pending deal adds no countdown", () => {
+    const { container } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PLAYER_TURN, settings: on, betCircle: 10, autoDealPending: true } });
+    expect(toggle("Pause auto deal")).not.toBeNull();
+    expect(container.textContent).not.toMatch(/countdown|dealing in|seconds|\d\s*s\b/i);
+  });
+
+  it("clicking it does not reach the board's click, which would continue the round", () => {
+    const { gameActions, container } = renderUI(<GameBoard />, { game: { phase: GamePhases.POST_ROUND, settings: on } });
+    fireEvent.click(screen.getByRole("button", { name: "Pause auto deal" }));
+    expect(gameActions.pauseAutoDeal).toHaveBeenCalledTimes(1);
+    expect(gameActions.continueRound).not.toHaveBeenCalled();
+    fireEvent.click(container.querySelector(".board")); // the board itself still continues
+    expect(gameActions.continueRound).toHaveBeenCalledTimes(1);
+  });
+
+  it("Resume does not continue the round either", () => {
+    const { gameActions } = renderUI(<GameBoard />, { game: { phase: GamePhases.POST_ROUND, settings: on, autoDealPaused: true } });
+    fireEvent.click(screen.getByRole("button", { name: "Resume auto deal" }));
+    expect(gameActions.resumeAutoDeal).toHaveBeenCalledTimes(1);
+    expect(gameActions.continueRound).not.toHaveBeenCalled();
+  });
+});

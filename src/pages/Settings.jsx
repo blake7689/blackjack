@@ -29,6 +29,9 @@ const GAME_SETTINGS = [
   { key: "deckCount", label: (v) => `Deck size: ${v}`, input: "range", range: SETTING_RANGES.deckCount },
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
+  { key: "autoDeal", label: () => "Auto Deal", input: "checkbox", showWhen: (s) => s.resetInitialBet },
+  { key: "autoDealDelay", label: (v) => `Auto Deal Delay: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.autoDealDelay, step: 100,
+    showWhen: (s) => s.resetInitialBet && s.autoDeal },
   { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
     options: Object.entries(DealerHoleLabels).map(([value, label]) => ({ value, label })) },
   { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
@@ -75,7 +78,7 @@ function SettingInput({ setting, value, forced, disabled, onChange }) {
     );
   }
   return (
-    <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} value={value}
+    <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} step={setting.step} value={value}
       onChange={(e) => onChange(Number(e.target.value))} className="range-input" />
   );
 }
@@ -143,6 +146,11 @@ export default function Settings() {
 
   const saveSetting = (key) => {
     if (RESET_SETTINGS.includes(key) && midRound && !confirm(RESET_CONFIRM)) return;
+    if (key === "resetInitialBet" && !drafts[key]) { // auto deal cannot run without the rebet
+      setEdits({ ...edits, autoDeal: false });
+      remember(changeSettings({ resetInitialBet: false, autoDeal: false }));
+      return;
+    }
     remember(changeSetting(key, drafts[key]));
   };
 
@@ -214,7 +222,7 @@ export default function Settings() {
           </label>
           )}
 
-          {GAME_SETTINGS.filter((setting) => (setting.tab ?? "game") === tab).map((setting) => {
+          {GAME_SETTINGS.filter((setting) => (setting.tab ?? "game") === tab && (setting.showWhen?.(drafts) ?? true)).map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];
             return (
               <div key={setting.key}>

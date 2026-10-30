@@ -22,8 +22,8 @@ function Chip({ value, onClick }) {
 
 export default function BettingFooter() {
   const { player } = usePlayer();
-  const { betCircle, phase, settings } = useGameState();
-  const { addBet, clearBet, deal } = useGameActions();
+  const { betCircle, phase, settings, autoDealPaused } = useGameState();
+  const { addBet, clearBet, deal, pauseAutoDeal, resumeAutoDeal } = useGameActions();
   const footerRef = useRef(null);
   useCssVarHeight(footerRef, "--bet-footer-space");
 
@@ -56,6 +56,17 @@ export default function BettingFooter() {
               Clear
             </button>
           </div>
+          {settings.autoDeal && settings.resetInitialBet && (
+            // Inside .board, whose click moves on from the results: stop the click there.
+            <button
+              type="button"
+              className="auto-deal-toggle"
+              aria-label={autoDealPaused ? "Resume auto deal" : "Pause auto deal"}
+              onClick={(e) => { e.stopPropagation(); (autoDealPaused ? resumeAutoDeal : pauseAutoDeal)(); }}
+            >
+              {autoDealPaused ? "Resume" : "Pause"}
+            </button>
+          )}
         </div>
         <div className="footer-right">
           <button

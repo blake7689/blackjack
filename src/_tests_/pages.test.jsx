@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { screen, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import Home from "../pages/Home";
 import Game from "../pages/Game";
@@ -527,5 +527,92 @@ describe("App", () => {
     renderUI(<App />, { path: "/" });
     expect(screen.getByText("BlakeJack")).toBeTruthy();
     expect(screen.getByText("Home")).toBeTruthy();
+  });
+});
+
+describe("Settings auto deal (#88)", () => {
+  const game = (settings = {}, phase = GamePhases.PRE_DEAL) => ({ phase, settings: { ...initialGameState.settings, ...settings } });
+  const open = (settings, phase) => renderUI(<Settings />, { path: "/settings?tab=game", game: game(settings, phase) });
+
+  it("shows Auto Deal only while Reset Bet is on, and its delay only while Auto Deal is on too (drafts count before Save)", () => {
+    open();
+    expect(screen.queryByLabelText("autoDeal")).toBeNull();
+    expect(screen.queryByLabelText("autoDealDelay")).toBeNull();
+    fireEvent.click(screen.getByLabelText("resetInitialBet"));
+    expect(screen.getByLabelText("autoDeal").checked).toBe(false);
+    expect(screen.queryByLabelText("autoDealDelay")).toBeNull();
+    fireEvent.click(screen.getByLabelText("autoDeal"));
+    expect(screen.getByLabelText("autoDealDelay")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("autoDeal"));
+    expect(screen.queryByLabelText("autoDealDelay")).toBeNull();
+    fireEvent.click(screen.getByLabelText("autoDeal"));
+    fireEvent.click(screen.getByLabelText("resetInitialBet")); // Reset Bet off again hides both
+    expect(screen.queryByLabelText("autoDeal")).toBeNull();
+    expect(screen.queryByLabelText("autoDealDelay")).toBeNull();
+  });
+
+  it("is on the Game tab only", () => {
+    renderUI(<Settings />, { path: "/settings?tab=dev", game: game({ resetInitialBet: true, autoDeal: true }) });
+    expect(screen.queryByLabelText("autoDeal")).toBeNull();
+    expect(screen.queryByLabelText("autoDealDelay")).toBeNull();
+  });
+
+  it("the delay slider runs 0 to 10 seconds in steps of 0.1, shows seconds, and saves milliseconds", () => {
+    const { gameActions } = open({ resetInitialBet: true, autoDeal: true });
+    const slider = screen.getByLabelText("autoDealDelay");
+    expect([slider.min, slider.max, slider.step, slider.value]).toEqual(["0", "10000", "100", "3000"]);
+    expect(screen.getByText("Auto Deal Delay: 3 seconds")).toBeTruthy();
+    fireEvent.change(slider, { target: { value: "1500" } });
+    expect(screen.getByText("Auto Deal Delay: 1.5 seconds")).toBeTruthy();
+    fireEvent.click(screen.getByLabelText("Save autoDealDelay"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("autoDealDelay", 1500);
+    cleanup();
+    open({ resetInitialBet: true, autoDeal: true, autoDealDelay: 0 });
+    expect(screen.getByText("Auto Deal Delay: 0 seconds")).toBeTruthy();
+  });
+
+  it("saves Auto Deal by itself", () => {
+    const { gameActions } = open({ resetInitialBet: true });
+    fireEvent.click(screen.getByLabelText("autoDeal"));
+    fireEvent.click(screen.getByLabelText("Save autoDeal"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("autoDeal", true);
+  });
+
+  it("saving Reset Bet off sends one changeSettings with auto deal off too, and forgets the autoDeal draft", () => {
+    const { gameActions, gameState, rerender } = open({ resetInitialBet: true });
+    fireEvent.click(screen.getByLabelText("autoDeal")); // an unsaved draft: on
+    fireEvent.click(screen.getByLabelText("resetInitialBet"));
+    fireEvent.click(screen.getByLabelText("Save resetInitialBet"));
+    expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
+    expect(gameActions.changeSettings).toHaveBeenCalledWith({ resetInitialBet: false, autoDeal: false });
+    expect(gameActions.changeSetting).not.toHaveBeenCalled();
+
+    gameState.settings = { ...gameState.settings, resetInitialBet: false, autoDeal: false }; // what the provider does with it
+    rerender(<Settings />);
+    fireEvent.click(screen.getByLabelText("resetInitialBet")); // Reset Bet back on
+    expect(screen.getByLabelText("autoDeal").checked).toBe(false); // not the stale draft
+  });
+
+  it("saving Reset Bet off also turns a saved Auto Deal off", () => {
+    const { gameActions } = open({ resetInitialBet: true, autoDeal: true });
+    fireEvent.click(screen.getByLabelText("resetInitialBet"));
+    fireEvent.click(screen.getByLabelText("Save resetInitialBet"));
+    expect(gameActions.changeSettings).toHaveBeenCalledWith({ resetInitialBet: false, autoDeal: false });
+  });
+
+  it("saving Reset Bet on is the ordinary single save", () => {
+    const { gameActions } = open();
+    fireEvent.click(screen.getByLabelText("resetInitialBet"));
+    fireEvent.click(screen.getByLabelText("Save resetInitialBet"));
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("resetInitialBet", true);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+  });
+
+  it("reports a failed save of Reset Bet off like any other", async () => {
+    const changeSettings = vi.fn().mockRejectedValue(new Error("offline"));
+    renderUI(<Settings />, { path: "/settings?tab=game", game: game({ resetInitialBet: true, autoDeal: true }), actions: { changeSettings } });
+    fireEvent.click(screen.getByLabelText("resetInitialBet"));
+    fireEvent.click(screen.getByLabelText("Save resetInitialBet"));
+    expect((await screen.findByRole("status")).textContent).toContain("Couldn't save your settings");
   });
 });

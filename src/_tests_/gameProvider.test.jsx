@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act } from "@testing-library/react";
+import { render, act, cleanup } from "@testing-library/react";
+import { MemoryRouter, useNavigate } from "react-router-dom";
 import { GameProvider } from "../providers/GameProvider";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { PlayerContext } from "../context/PlayerContext";
@@ -23,13 +24,14 @@ vi.mock("../utils/cards", async (importOriginal) => {
 function Probe({ ctx }) {
   ctx.state = useGameState();
   ctx.actions = useGameActions();
+  ctx.navigate = useNavigate();
   return null;
 }
 
 // The fake server answers each bet at once with `answer(event)`; with answer = null the test answers by hand
 // through player.reports[seq](outcome).
-function setup({ signedIn = false, answer = () => "confirmed" } = {}) {
-  const credits = { value: 100 };
+function setup({ signedIn = false, answer = () => "confirmed", path = "/game", credits: startCredits = 100 } = {}) {
+  const credits = { value: startCredits };
   const reports = {};
   const player = {
     player: signedIn ? { userName: "alice" } : null,
@@ -44,9 +46,11 @@ function setup({ signedIn = false, answer = () => "confirmed" } = {}) {
   };
   const ctx = {};
   const utils = render(
-    <PlayerContext.Provider value={player}>
-      <GameProvider><Probe ctx={ctx} /></GameProvider>
-    </PlayerContext.Provider>
+    <MemoryRouter initialEntries={[path]}>
+      <PlayerContext.Provider value={player}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    </MemoryRouter>
   );
   return { ctx, player, ...utils };
 }
@@ -306,9 +310,11 @@ describe("GameProvider", () => {
     remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
     const { ctx, rerender } = setup({ signedIn: true });
     rerender(
-      <PlayerContext.Provider value={{ player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
-        <GameProvider><Probe ctx={ctx} /></GameProvider>
-      </PlayerContext.Provider>
+      <MemoryRouter initialEntries={["/game"]}>
+        <PlayerContext.Provider value={{ player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
+          <GameProvider><Probe ctx={ctx} /></GameProvider>
+        </PlayerContext.Provider>
+      </MemoryRouter>
     );
     await act(async () => answer({ deckCount: 5 }));
     expect(ctx.state.settings.deckCount).toBe(2);
@@ -346,5 +352,387 @@ describe("GameProvider", () => {
     const second = setup({ signedIn: true });
     await flush();
     expect(second.ctx.state.settings.chipValues).toBe("1,5,10,25,50,100,1000,5000,10000,20000,50000,100000");
+  });
+});
+
+describe("GameProvider auto deal (#88)", () => {
+  const DELAY = 2500; // not a multiple of the 1000 ms Rate of Play, so the three timers cannot be confused
+  const AUTO = { resetInitialBet: true, autoDeal: true, autoDealDelay: DELAY };
+  // Round 1 (a win for the player), round 2 (the same), round 3 (stops on the player's turn).
+  const WIN = ["10", "10", "9", "6", "K"];
+  const threeRounds = () => stackedShoe([...WIN, ...WIN, "8", "10", "9", "7", "K", "2"]);
+  const newRoundBets = (player) => events(player).filter((e) => e.kind === "bet" && e.newRound);
+
+  // Starts a game with auto deal on, bets $10 and deals by hand: the only manual deal of the tests.
+  function startAuto({ settings = AUTO, ...options } = {}) {
+    const result = setup(options);
+    act(() => result.ctx.actions.startGame());
+    act(() => { result.ctx.actions.changeSettings(settings); });
+    act(() => result.ctx.actions.addBet(10));
+    act(() => result.ctx.actions.deal());
+    return result;
+  }
+  // From DEALING to the results screen: the player stands and the automatic dealer steps run.
+  const playOut = (ctx) => {
+    tick(); // DEAL_DONE
+    act(() => ctx.actions.stand(0));
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+  };
+  // From the results screen to the armed deal: CONTINUE, then END_ROUND, one Rate of Play each.
+  const toArmed = (ctx) => {
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+  };
+  const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
+
+  it("continues, rebets and deals by itself after exactly the delay, through the ledger like a manual deal", () => {
+    shoes.push(threeRounds());
+    const { ctx, player, container } = startAuto();
+    playOut(ctx);
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    tick(); // no click: the results move on after one step
+    expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+    tick(); // END_ROUND rebets
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 10, autoDealPending: true });
+    advance(DELAY - 1);
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(newRoundBets(player)).toHaveLength(1);
+    advance(1);
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    expect(ctx.state.autoDealPending).toBe(false);
+    expect(container.textContent).toBe(""); // no countdown or other text of its own
+
+    const all = events(player);
+    expect(all).toEqual([
+      { kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, { kind: "settle", amount: 20 },
+      { kind: "local", amount: -10 }, { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null },
+    ]);
+    expect(all[4]).toEqual(all[1]); // the auto deal's opening bet has the shape of the manual one
+    expect(newRoundBets(player)).toHaveLength(2);
+    expect(ctx.state.hands[0].cards).toHaveLength(2);
+  });
+
+  it("with a delay of 0 deals right after the CONTINUE and END_ROUND steps", () => {
+    shoes.push(threeRounds());
+    const { ctx, player } = startAuto({ settings: { ...AUTO, autoDealDelay: 0 } });
+    playOut(ctx);
+    toArmed(ctx);
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, autoDealPending: true });
+    advance(0);
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    expect(newRoundBets(player)).toHaveLength(2);
+  });
+
+  it("a card still in the air holds the automatic deal until it lands, plus a beat of 0.3 x the delay", () => {
+    shoes.push(threeRounds());
+    const { ctx } = startAuto();
+    playOut(ctx);
+    toArmed(ctx);
+    queue.free = performance.now() + 6000; // the table is still busy
+    act(() => { ctx.actions.changeSettings({ autoDealDelay: 2000 }); }); // re-arms the DEAL timer with the new delay
+    expect(ctx.state.autoDealPending).toBe(true);
+    advance(6000 + 600 - 1); // max(2000, 6000 + 0.3 * 2000)
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    advance(1);
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+  });
+
+  it("deals two rounds in a row (the timer re-arms each time)", () => {
+    shoes.push(threeRounds());
+    const { ctx, player } = startAuto();
+    playOut(ctx);
+    toArmed(ctx);
+    advance(DELAY);
+    expect(newRoundBets(player)).toHaveLength(2);
+    playOut(ctx);
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    toArmed(ctx);
+    advance(DELAY - 1);
+    expect(newRoundBets(player)).toHaveLength(2);
+    advance(1);
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    expect(newRoundBets(player)).toHaveLength(3);
+    expect(ctx.state.hands[0].cards.map((c) => c.rank)).toEqual(["8", "9"]); // round 3 came off the stacked shoe
+  });
+
+  it("with auto deal off, the results wait for the click and no extra timer runs", () => {
+    shoes.push(threeRounds());
+    const { ctx, player } = startAuto({ settings: { resetInitialBet: true } });
+    playOut(ctx);
+    expect(vi.getTimerCount()).toBe(0);
+    advance(60_000);
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    act(() => ctx.actions.continueRound());
+    tick(); // END_ROUND
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 10, autoDealPending: false });
+    expect(vi.getTimerCount()).toBe(0);
+    advance(60_000);
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(newRoundBets(player)).toHaveLength(1);
+  });
+
+  describe("an unaffordable rebet", () => {
+    // $1,000 bet, lost (18 against 19): the balance is 0 at the end of the round.
+    const loseBig = () => {
+      shoes.push(stackedShoe(["10", "10", "8", "9", "5", "5"]));
+      const result = setup({ credits: 1000 });
+      act(() => result.ctx.actions.startGame());
+      act(() => { result.ctx.actions.changeSettings(AUTO); });
+      act(() => result.ctx.actions.addBet(1000));
+      act(() => result.ctx.actions.deal());
+      playOut(result.ctx);
+      return result;
+    };
+
+    it("pauses with the notice, places no bet and never schedules a deal", () => {
+      const { ctx, player } = loseBig();
+      const before = events(player).length;
+      tick(); // CONTINUE
+      tick(); // END_ROUND: 0 < $1,000
+      expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: true });
+      expect(ctx.state.notice).toBe(`Not enough credits to rebet $${(1000).toLocaleString()}: auto deal paused`);
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+      expect(events(player)).toHaveLength(before);
+    });
+
+    it("keeps the old behaviour (no notice, no pause) with auto deal off", () => {
+      shoes.push(stackedShoe(["10", "10", "8", "9", "5", "5"]));
+      const { ctx } = setup({ credits: 1000 });
+      act(() => ctx.actions.startGame());
+      act(() => { ctx.actions.changeSettings({ resetInitialBet: true }); });
+      act(() => ctx.actions.addBet(1000));
+      act(() => ctx.actions.deal());
+      playOut(ctx);
+      act(() => ctx.actions.continueRound());
+      tick(); // END_ROUND
+      expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPaused: false, notice: null });
+    });
+  });
+
+  describe("cancelling", () => {
+    // Everything here starts from the armed deal, DELAY away.
+    const armedGame = (options) => {
+      shoes.push(threeRounds());
+      const result = startAuto(options);
+      playOut(result.ctx);
+      toArmed(result.ctx);
+      expect(result.ctx.state.autoDealPending).toBe(true);
+      return result;
+    };
+    // Nothing deals, however long it waits.
+    const staysUndealt = (ctx, player) => {
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+      expect(newRoundBets(player)).toHaveLength(1);
+    };
+
+    it("Pause cancels the pending deal; Resume re-arms it with the bet still on the table", () => {
+      const { ctx, player } = armedGame();
+      act(() => ctx.actions.pauseAutoDeal());
+      expect(ctx.state).toMatchObject({ autoDealPaused: true, autoDealPending: false, betCircle: 10 });
+      staysUndealt(ctx, player);
+      act(() => ctx.actions.resumeAutoDeal());
+      expect(ctx.state).toMatchObject({ autoDealPaused: false, autoDealPending: true });
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(newRoundBets(player)).toHaveLength(2);
+    });
+
+    it("Pause on the results screen stops the chain there; Resume carries on", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      playOut(ctx);
+      act(() => ctx.actions.pauseAutoDeal());
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+      act(() => ctx.actions.resumeAutoDeal());
+      toArmed(ctx);
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    });
+
+    it("betting or clearing cancels it, but a refused chip does not", () => {
+      const first = armedGame();
+      act(() => first.ctx.actions.addBet(10_000)); // more than the balance: refused
+      expect(first.ctx.state.autoDealPending).toBe(true);
+      act(() => first.ctx.actions.addBet(5));
+      expect(first.ctx.state).toMatchObject({ betCircle: 15, autoDealPending: false });
+      staysUndealt(first.ctx, first.player);
+      cleanup();
+
+      const second = armedGame();
+      act(() => second.ctx.actions.clearBet());
+      expect(second.ctx.state).toMatchObject({ betCircle: 0, autoDealPending: false });
+      staysUndealt(second.ctx, second.player);
+    });
+
+    it("a manual Deal during the wait deals once, and no second automatic deal follows", () => {
+      const { ctx, player } = armedGame();
+      advance(DELAY - 1);
+      act(() => ctx.actions.deal());
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(newRoundBets(player)).toHaveLength(2);
+      advance(1); // where the automatic deal would have fired
+      advance(1000); // DEAL_DONE
+      expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+      expect(newRoundBets(player)).toHaveLength(2);
+    });
+
+    it("resetGame and startGame cancel it, and startGame also clears a pause", () => {
+      const reset = armedGame();
+      act(() => reset.ctx.actions.resetGame());
+      expect(reset.ctx.state.phase).toBe(GamePhases.NONE);
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(reset.ctx.state.phase).toBe(GamePhases.NONE);
+      expect(newRoundBets(reset.player)).toHaveLength(1);
+      cleanup();
+
+      const restart = armedGame();
+      act(() => restart.ctx.actions.pauseAutoDeal());
+      act(() => restart.ctx.actions.startGame());
+      expect(restart.ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: false });
+      staysUndealt(restart.ctx, restart.player);
+    });
+
+    it("unmounting cancels the timer", () => {
+      const { unmount, player } = armedGame();
+      expect(vi.getTimerCount()).toBe(1);
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(newRoundBets(player)).toHaveLength(1);
+    });
+
+    it("turning auto deal off in settings drops the pending deal", () => {
+      const { ctx, player } = armedGame();
+      act(() => { ctx.actions.changeSettings({ resetInitialBet: false, autoDeal: false }); });
+      expect(ctx.state.autoDealPending).toBe(false);
+      staysUndealt(ctx, player);
+    });
+  });
+
+  describe("leaving the game page", () => {
+    it("navigating away cancels the pending deal without pausing; coming back does not deal it", () => {
+      shoes.push(threeRounds());
+      const { ctx, player } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      advance(DELAY - 1);
+      act(() => ctx.navigate("/settings"));
+      expect(ctx.state).toMatchObject({ autoDealPending: false, autoDealPaused: false, betCircle: 10 });
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+      act(() => ctx.navigate("/game"));
+      expect(ctx.state).toMatchObject({ autoDealPending: false, autoDealPaused: false });
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+      expect(newRoundBets(player)).toHaveLength(1);
+      act(() => ctx.actions.deal()); // the player's own Deal still works
+      expect(newRoundBets(player)).toHaveLength(2);
+    });
+
+    it("the next round is automatic again after coming back (leaving is not a pause)", () => {
+      shoes.push(threeRounds());
+      const { ctx, player } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      act(() => ctx.navigate("/"));
+      act(() => ctx.navigate("/game"));
+      act(() => ctx.actions.deal());
+      playOut(ctx);
+      toArmed(ctx);
+      advance(DELAY);
+      expect(newRoundBets(player)).toHaveLength(3);
+    });
+
+    it("the results screen waits off the page and carries on when the player is back", () => {
+      shoes.push(threeRounds());
+      const { ctx, player } = startAuto();
+      playOut(ctx);
+      act(() => ctx.navigate("/settings"));
+      expect(vi.getTimerCount()).toBe(0);
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+      act(() => ctx.navigate("/game"));
+      toArmed(ctx);
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(newRoundBets(player)).toHaveLength(2);
+    });
+
+    it("auto deal switched on in Settings mid-round neither continues nor deals until the player is back on /game", () => {
+      shoes.push(threeRounds());
+      const { ctx, player } = setup();
+      act(() => ctx.actions.startGame());
+      act(() => ctx.actions.addBet(10));
+      act(() => ctx.actions.deal());
+      tick();
+      act(() => ctx.navigate("/settings"));
+      act(() => { ctx.actions.changeSettings(AUTO); }); // Save on the Settings page
+      act(() => ctx.actions.stand(0)); // (the round itself finishes on its own timers)
+      for (let i = 0; i < 6; i++) tick();
+      expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+      const sent = events(player).length;
+      advance(60_000);
+      expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+      expect(events(player)).toHaveLength(sent);
+      expect(vi.getTimerCount()).toBe(0);
+      act(() => ctx.navigate("/game"));
+      toArmed(ctx);
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(newRoundBets(player)).toHaveLength(2);
+    });
+
+    it("a game first opened off the page stays quiet", () => {
+      const { ctx } = setup({ path: "/settings" });
+      expect(ctx.state.autoDealPending).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  describe("saved settings", () => {
+    it("loads and cleans the delay and the switch on sign-in", async () => {
+      remote.getSettings.mockResolvedValue({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: 99999 });
+      const high = setup({ signedIn: true });
+      await flush();
+      expect(high.ctx.state.settings).toMatchObject({ autoDeal: true, autoDealDelay: 10000 });
+      cleanup();
+      remote.getSettings.mockResolvedValue({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: -5 });
+      const low = setup({ signedIn: true });
+      await flush();
+      expect(low.ctx.state.settings.autoDealDelay).toBe(0);
+      cleanup();
+      remote.getSettings.mockResolvedValue({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: "soon" });
+      const bad = setup({ signedIn: true });
+      await flush();
+      expect(bad.ctx.state.settings.autoDealDelay).toBe(3000);
+      cleanup();
+      remote.getSettings.mockResolvedValue({ v: 1, autoDeal: true }); // no Reset Bet: auto deal cannot run
+      const off = setup({ signedIn: true });
+      await flush();
+      expect(off.ctx.state.settings.autoDeal).toBe(false);
+    });
+
+    it("saves the flat object with both new keys, and a table setting is not reset by them", async () => {
+      remote.token = "token";
+      const { ctx } = setup();
+      await act(async () => { await ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
+      const saved = remote.saveSettings.mock.calls[0][0];
+      expect(saved).toMatchObject({ v: 1, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
+      expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
+      expect(cards.createShoe).not.toHaveBeenCalled();
+    });
   });
 });
