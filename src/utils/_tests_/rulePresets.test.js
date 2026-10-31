@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../rulePresets";
-import { initialGameState } from "../gameReducer";
+import { initialGameState, SETTINGS_VERSION } from "../gameReducer";
+import { VEGAS } from "../../../e2e/vegas";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
 
 describe("rulePresetOf", () => {
@@ -117,5 +118,12 @@ describe("the five presets (#91)", () => {
   it("each preset still differs from every other in at least one key", () => {
     const names = Object.keys(TABLE);
     for (const a of names) for (const b of names) if (a !== b) expect(RULE_PRESETS[a]).not.toEqual(RULE_PRESETS[b]);
+  });
+});
+
+// e2e/vegas.js writes the Vegas rules out on purpose (a change to the defaults moves no e2e test), so this is the one place they are kept in step.
+describe("e2e Vegas fixture", () => {
+  it("equals the saved settings of the Vegas preset", () => {
+    expect(VEGAS).toEqual({ v: SETTINGS_VERSION, ...RULE_PRESETS.Vegas });
   });
 });
