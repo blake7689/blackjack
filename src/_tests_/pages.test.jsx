@@ -21,6 +21,15 @@ const flush = () => act(async () => {});
 
 // ---- the rules section (#91) ----
 const NO_HOLE = "If the Dealer Has Blackjack, You Lose";
+const TOGGLE_NAME = {
+  tripleDown: "Triple Down", tripleDrawsOnBust: "Always Draw the Second Triple Card, Even on a Bust", doubleFaceDown: "Double Down Card Face Down",
+  blackJackOnSplit: "Blackjack on Split", dealerDrawsOnPlayerBlackjack: "EU: Dealer Draws 2nd Card on a Player Blackjack",
+  blackjackPaysImmediately: "Blackjack Pays Immediately", dealerDrawsOnceOn21: "EU: Dealer Draws Only Once Against a 21",
+  dealerDrawsOnPlayerBust: "Dealer Draws 2nd Card After a Player Bust", dealerHoleNoCheck: "Dealer doesn't check the hole card",
+};
+// The toggles are named by their visible label.
+const box = (key) => screen.getByRole("checkbox", { name: TOGGLE_NAME[key] });
+const queryBox = (key) => screen.queryByRole("checkbox", { name: TOGGLE_NAME[key] });
 const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const rulesGroup = (name) => within(screen.getByRole("group", { name }));
 // An option button reads "6:5 +1.39% house edge" (the chosen one has no number; jsdom drops the spaces): match the label, with or without the number.
@@ -338,18 +347,18 @@ describe("Settings", () => {
   it("offers the dealer rule options, and forces blackjack-pays-now when the EU dealer won't draw on it", () => {
     const { gameActions } = openLive({ phase: GamePhases.PRE_DEAL });
     expect(screen.queryByText(/NoDraw21/)).toBeNull();
-    const paysNow = screen.getByLabelText("blackjackPaysImmediately");
+    const paysNow = box("blackjackPaysImmediately");
     fireEvent.click(paysNow);
     expect([paysNow.checked, paysNow.disabled]).toEqual([false, false]);
 
     fireEvent.click(option("Second Card", "Dealt after you play"));
-    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBlackjack"));
+    fireEvent.click(box("dealerDrawsOnPlayerBlackjack"));
     expect([paysNow.checked, paysNow.disabled]).toEqual([true, true]);
 
-    for (const key of ["dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust"]) fireEvent.click(screen.getByLabelText(key));
+    for (const key of ["dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust"]) fireEvent.click(box(key));
     expect(gameActions.changeSettings.mock.calls).toEqual([
       [{ blackjackPaysImmediately: false }],
-      [{ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }],
+      [{ dealerHoleBehaviour: "drawAfter" }], // the player switched blackjackPaysImmediately off: it is kept
       [{ dealerDrawsOnPlayerBlackjack: false }],
       [{ dealerDrawsOnceOn21: true }],
       [{ dealerDrawsOnPlayerBust: true }],
@@ -359,9 +368,9 @@ describe("Settings", () => {
 
   it("offers triple down, and only lets the always-draw option be changed while it is on", () => {
     const { gameActions } = openLive();
-    const draws = screen.getByLabelText("tripleDrawsOnBust");
+    const draws = box("tripleDrawsOnBust");
     expect(draws.disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText("tripleDown"));
+    fireEvent.click(box("tripleDown"));
     expect(draws.disabled).toBe(false);
     fireEvent.click(draws);
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ tripleDown: true }], [{ tripleDrawsOnBust: true }]]);
@@ -370,7 +379,7 @@ describe("Settings", () => {
 
   it("offers the face-down double option, off by default", () => {
     const { gameActions } = open();
-    const faceDown = screen.getByLabelText("doubleFaceDown");
+    const faceDown = box("doubleFaceDown");
     expect(faceDown.checked).toBe(false);
     expect(screen.getByText("Double Down Card Face Down")).toBeTruthy();
     fireEvent.click(faceDown);
@@ -379,9 +388,9 @@ describe("Settings", () => {
 
   it("shows the always-draw option unticked while triple down is off, without losing the saved choice", () => {
     openLive({ settings: { ...initialGameState.settings, tripleDrawsOnBust: true } });
-    const draws = screen.getByLabelText("tripleDrawsOnBust");
+    const draws = box("tripleDrawsOnBust");
     expect([draws.disabled, draws.checked]).toEqual([true, false]);
-    fireEvent.click(screen.getByLabelText("tripleDown"));
+    fireEvent.click(box("tripleDown"));
     expect([draws.disabled, draws.checked]).toEqual([false, true]);
   });
 
@@ -398,10 +407,10 @@ describe("Settings", () => {
     expect(tile("Vegas").getAttribute("aria-pressed")).toBe("false");
     expect(pressed("Second Card")).toBe("Dealt after you play");
 
-    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
+    fireEvent.click(box("dealerDrawsOnPlayerBust"));
     expect(customTile()).toBeTruthy();
     expect(tile("Europe").getAttribute("aria-pressed")).toBe("false");
-    fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
+    fireEvent.click(box("dealerDrawsOnPlayerBust"));
     expect(customTile()).toBeNull();
     expect(tile("Europe").getAttribute("aria-pressed")).toBe("true");
   });
@@ -465,7 +474,8 @@ describe("Settings", () => {
     expect(tab("Player").getAttribute("aria-selected")).toBe("false");
     expect(screen.getByRole("group", { name: "Table rules" })).toBeTruthy();
     for (const group of ["Second Card", "Deck size: 6", "Max Hands After Splits: 4"]) expect(screen.getByRole("group", { name: group })).toBeTruthy();
-    for (const key of ["dealerDrawsOnceOn21", "includeCutCard", "resetInitialBet", "blackJackOnSplit"]) expect(screen.getByLabelText(key)).toBeTruthy();
+    for (const key of ["dealerDrawsOnceOn21", "blackJackOnSplit"]) expect(box(key)).toBeTruthy();
+    for (const key of ["includeCutCard", "resetInitialBet"]) expect(screen.getByLabelText(key)).toBeTruthy();
     expect(screen.queryByText("Delete Profile")).toBeNull();
     expect(screen.queryByLabelText("playTimeout")).toBeNull();
 
@@ -474,7 +484,7 @@ describe("Settings", () => {
     expect(screen.getByLabelText("playTimeout")).toBeTruthy();
     expect(screen.getByLabelText("showCardCount")).toBeTruthy();
     expect(screen.queryByRole("group", { name: "Table rules" })).toBeNull();
-    expect(screen.queryByLabelText("blackJackOnSplit")).toBeNull();
+    expect(queryBox("blackJackOnSplit")).toBeNull();
   });
 
   it("opens the Player tab for an unknown tab in the URL", () => {
@@ -524,7 +534,7 @@ describe("Settings", () => {
     rerender(<Settings />);
     expect(pressed("Deck size: 4")).toBe("4");
     expect(screen.getByLabelText("resetInitialBet").checked).toBe(true);
-    expect(screen.getByLabelText("blackJackOnSplit").checked).toBe(true);
+    expect(box("blackJackOnSplit").checked).toBe(true);
     expect(screen.getByLabelText("includeCutCard").checked).toBe(false);
     expect(customTile()).toBeTruthy();
   });
@@ -818,11 +828,11 @@ describe("Settings table rules (#91)", () => {
     for (const [group, label] of [["Soft 17", "Stands"], ["Blackjack Pays", "6:5"], ["Surrender", "None"], ["Second Card", "Dealt after you play"], ["Insurance and Even Money", "Off"]]) {
       fireEvent.click(option(group, label));
     }
-    for (const key of ["blackJackOnSplit", "dealerDrawsOnceOn21", "dealerHoleNoCheck"]) fireEvent.click(screen.getByLabelText(key));
+    for (const key of ["blackJackOnSplit", "dealerDrawsOnceOn21", "dealerHoleNoCheck"]) fireEvent.click(box(key));
     expect(confirm).toHaveBeenCalledTimes(8);
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
     confirm.mockClear();
-    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(screen.getByLabelText(key));
+    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(box(key));
     expect(confirm).not.toHaveBeenCalled();
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ tripleDown: true }], [{ doubleFaceDown: true }]]);
   });
@@ -1092,27 +1102,27 @@ describe("Settings rules section (#91)", () => {
     expect(details.map((d) => d.querySelector("summary").textContent)).toEqual(["Customize rules", "House variations", "Advanced"]);
     for (const d of details) expect(d.open).toBe(false);
     expect(within(details[0]).queryByRole("group", { name: "Surrender" })).toBeTruthy();
-    expect(within(details[1]).getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual(["tripleDown", "tripleDrawsOnBust", "doubleFaceDown"]);
-    expect(within(details[2]).getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual([
-      "blackJackOnSplit", "dealerDrawsOnPlayerBlackjack", "blackjackPaysImmediately", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust", "dealerHoleNoCheck"]);
+    expect(within(details[1]).getAllByRole("checkbox").map((c) => c.closest("label").textContent)).toEqual(["tripleDown", "tripleDrawsOnBust", "doubleFaceDown"].map((k) => TOGGLE_NAME[k]));
+    expect(within(details[2]).getAllByRole("checkbox").map((c) => c.closest("label").textContent)).toEqual([
+      "blackJackOnSplit", "dealerDrawsOnPlayerBlackjack", "blackjackPaysImmediately", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust", "dealerHoleNoCheck"].map((k) => TOGGLE_NAME[k]));
     expect(within(details[1]).getByText(/not casino rules/)).toBeTruthy();
     expect(within(details[2]).getByText(/makes the table Custom/)).toBeTruthy();
   });
 
   it("a change in Advanced makes the table Custom, and putting it back brings the preset back", () => {
     const { gameActions } = openLive();
-    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    fireEvent.click(box("blackJackOnSplit"));
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ blackJackOnSplit: true }]]);
     expect(customTile()).toBeTruthy();
     expect(customTile().textContent).toContain("about 0.6% house edge"); // not counted: the same estimate as Vegas
-    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    fireEvent.click(box("blackJackOnSplit"));
     expect(customTile()).toBeNull();
     expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("a change in House variations does not change the table, and its edge is not counted", () => {
     const { gameActions } = openLive();
-    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(screen.getByLabelText(key));
+    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(box(key));
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(2);
     expect(customTile()).toBeNull();
     expect(edgeLine()).toBe("This table: ≈ about 0.6% house edge (estimate)");
@@ -1120,30 +1130,30 @@ describe("Settings rules section (#91)", () => {
 
   it("'Dealer doesn't check the hole card' writes the mode and the blackjack timing, makes the table Custom, and is undone by unticking", () => {
     const { gameActions } = openLive();
-    const box = screen.getByLabelText("dealerHoleNoCheck");
-    expect(box.checked).toBe(false);
+    const noCheck = box("dealerHoleNoCheck");
+    expect(noCheck.checked).toBe(false);
     expect(screen.getByText("Dealer doesn't check the hole card")).toBeTruthy();
-    fireEvent.click(box);
+    fireEvent.click(noCheck);
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }]]);
-    expect(box.checked).toBe(true);
+    expect(noCheck.checked).toBe(true);
     expect(customTile()).toBeTruthy();
     expect(screen.getByRole("group", { name: NO_HOLE })).toBeTruthy(); // no peek: a dealer blackjack is found after the stakes
-    fireEvent.click(box);
+    fireEvent.click(noCheck);
     expect(gameActions.changeSettings).toHaveBeenLastCalledWith({ dealerHoleBehaviour: "drawEarly_Check", blackjackPaysImmediately: true });
-    expect(box.checked).toBe(false);
+    expect(noCheck.checked).toBe(false);
     expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true"); // the pairing restores the preset's own values
   });
 
   it("is hidden in EU, where there is no hole card to check", () => {
     open({ settings: { ...initialGameState.settings, ...RULE_PRESETS.Europe } });
-    expect(screen.queryByLabelText("dealerHoleNoCheck")).toBeNull();
-    expect(screen.getByLabelText("dealerDrawsOnceOn21")).toBeTruthy();
+    expect(queryBox("dealerHoleNoCheck")).toBeNull();
+    expect(box("dealerDrawsOnceOn21")).toBeTruthy();
   });
 
   it("Second Card shows 'Dealer peeks' chosen for a US no-peek table, and clicking it does nothing", () => {
     const { gameActions } = open(settingsWith({ dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }));
     expect(pressed("Second Card")).toBe("Dealer peeks for blackjack");
-    expect(screen.getByLabelText("dealerHoleNoCheck").checked).toBe(true);
+    expect(box("dealerHoleNoCheck").checked).toBe(true);
     fireEvent.click(option("Second Card", "Dealer peeks for blackjack"));
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
     fireEvent.click(option("Second Card", "Dealt after you play"));
@@ -1159,14 +1169,33 @@ describe("Settings rules section (#91)", () => {
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(3);
     expect(customTile()).toBeNull();
     expect(tile("Atlantic City").getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByLabelText("blackjackPaysImmediately").checked).toBe(false);
+    expect(box("blackjackPaysImmediately").checked).toBe(false);
+  });
+
+  it("a blackjack timing the player set on purpose in Advanced is kept when the dealer mode changes; one that still follows the mode moves with it", () => {
+    // Vegas with "Blackjack Pays Immediately" switched off: it no longer follows the peek, so neither Second Card nor the checkbox touches it.
+    const off = settingsWith({ blackjackPaysImmediately: false });
+    let view = open(off);
+    fireEvent.click(option("Second Card", "Dealt after you play"));
+    fireEvent.click(box("dealerHoleNoCheck"));
+    expect(view.gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawAfter" }], [{ dealerHoleBehaviour: "drawEarly_NoCheck" }]]);
+    cleanup();
+    // An EU table that pays a blackjack at once on purpose keeps doing so when the dealer starts to peek.
+    view = open(settingsWith({ ...RULE_PRESETS.Europe, blackjackPaysImmediately: true }));
+    fireEvent.click(option("Second Card", "Dealer peeks for blackjack"));
+    expect(view.gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawEarly_Check" }]]);
+    cleanup();
+    // The same EU table with the preset's own timing (waits) moves to the peek's.
+    view = open(settingsWith(RULE_PRESETS.Europe));
+    fireEvent.click(option("Second Card", "Dealer peeks for blackjack"));
+    expect(view.gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawEarly_Check", blackjackPaysImmediately: true }]]);
   });
 
   it("the Advanced checkboxes show the saved values, and disable only Always-draw (triple down off) and a forced blackjack payment", () => {
     open(settingsWith({ ...RULE_PRESETS.Europe, dealerDrawsOnPlayerBlackjack: false }));
-    const forced = screen.getByLabelText("blackjackPaysImmediately");
+    const forced = box("blackjackPaysImmediately");
     expect([forced.checked, forced.disabled]).toEqual([true, true]);
-    expect(screen.getByLabelText("dealerDrawsOnPlayerBlackjack").disabled).toBe(false);
-    expect(screen.getByLabelText("tripleDrawsOnBust").disabled).toBe(true);
+    expect(box("dealerDrawsOnPlayerBlackjack").disabled).toBe(false);
+    expect(box("tripleDrawsOnBust").disabled).toBe(true);
   });
 });

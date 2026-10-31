@@ -16,7 +16,6 @@ async function openGameSettings(page) {
   await page.getByRole('tab', { name: 'Game' }).click();
 }
 
-const control = (page, key) => page.getByLabel(key, { exact: true });
 const group = (page, name) => page.getByRole('group', { name, exact: true });
 // An option reads "6:5 +1.39% house edge": match the label at the start of the name; the lookahead stops "Early" matching "Early (not against an ace)".
 const option = (page, name, label) => group(page, name).getByRole('button', { name: new RegExp(`^${label.replace(/[()]/g, '\\$&')}(?= [+-]\\d|$)`) });
@@ -115,13 +114,13 @@ test('a change in Advanced makes the table Custom, and putting it back shows the
   const api = await stubApi(page);
   await openGameSettings(page);
   await openDetails(page, 'Advanced');
-  await control(page, 'blackJackOnSplit').check();
+  await page.getByRole('checkbox', { name: 'Blackjack on Split' }).check();
   await expect(customTile(page)).toContainText('Custom');
   await expect(tile(page, 'Vegas', false)).toBeVisible();
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.saves[0]).toMatchObject({ v: 4, blackJackOnSplit: true });
 
-  await control(page, 'blackJackOnSplit').uncheck();
+  await page.getByRole('checkbox', { name: 'Blackjack on Split' }).uncheck();
   await expect(customTile(page)).toHaveCount(0);
   await expect(tile(page, 'Vegas')).toBeVisible();
   await expect.poll(() => api.saves.length).toBe(2);

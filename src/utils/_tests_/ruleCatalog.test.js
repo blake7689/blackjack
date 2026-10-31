@@ -227,6 +227,31 @@ describe("ruleCatalog (#91)", () => {
       expect(selectedValue(rule, settings(EU))).toBe(EU);
     });
 
+    it("the blackjack timing follows the mode only while it still holds the current mode's pairing; a value set on purpose is left out of the patch", () => {
+      const second = byKey("dealerHoleBehaviour");
+      const noCheck = toggle("dealerHoleBehaviour");
+      const pairs = (mode) => ({ ...VEGAS, dealerHoleBehaviour: mode, blackjackPaysImmediately: mode === US_PEEK });
+      const kept = (mode) => ({ ...VEGAS, dealerHoleBehaviour: mode, blackjackPaysImmediately: mode !== US_PEEK }); // the opposite of the pairing
+      // Following the pairing: it moves to the new mode's pairing, from each of the three modes.
+      expect(patchFor(second, EU, pairs(US_PEEK))).toEqual({ dealerHoleBehaviour: EU, blackjackPaysImmediately: false });
+      expect(patchFor(second, US_PEEK, pairs(EU))).toEqual({ dealerHoleBehaviour: US_PEEK, blackjackPaysImmediately: true });
+      expect(patchFor(second, US_PEEK, pairs(US_NO_PEEK))).toEqual({ dealerHoleBehaviour: US_PEEK, blackjackPaysImmediately: true });
+      expect(patchFor(noCheck, true, pairs(US_PEEK))).toEqual({ dealerHoleBehaviour: US_NO_PEEK, blackjackPaysImmediately: false });
+      expect(patchFor(noCheck, false, pairs(US_NO_PEEK))).toEqual({ dealerHoleBehaviour: US_PEEK, blackjackPaysImmediately: true });
+      // Set on purpose: only the mode is written.
+      for (const mode of [US_PEEK, US_NO_PEEK, EU]) {
+        expect(patchFor(second, mode === EU ? US_PEEK : EU, kept(mode)), mode).toEqual({ dealerHoleBehaviour: mode === EU ? US_PEEK : EU });
+      }
+      expect(patchFor(noCheck, true, kept(US_PEEK))).toEqual({ dealerHoleBehaviour: US_NO_PEEK });
+      expect(patchFor(noCheck, false, kept(US_NO_PEEK))).toEqual({ dealerHoleBehaviour: US_PEEK });
+    });
+
+    it("a table without a stored timing counts as set on purpose, so no key is invented", () => {
+      const { blackjackPaysImmediately, ...bare } = VEGAS;
+      expect(blackjackPaysImmediately).toBe(true);
+      expect(patchFor(byKey("dealerHoleBehaviour"), EU, bare)).toEqual({ dealerHoleBehaviour: EU });
+    });
+
     it("the 'doesn't check' checkbox is ticked only for US no peek, and writes the mode and the paired blackjack timing", () => {
       const rule = toggle("dealerHoleBehaviour");
       expect(selectedValue(rule, settings(US_NO_PEEK))).toBe(true);
@@ -327,7 +352,7 @@ describe("ruleCatalog (#91)", () => {
       const noPeek = choicesFor(byKey("dealerHoleBehaviour"), { ...VEGAS, dealerHoleBehaviour: US_NO_PEEK });
       expect(noPeek.map((c) => c.selected)).toEqual([true, false]);
       expect(noPeek[0].delta).toBe(0);
-      const eu = choicesFor(byKey("dealerHoleBehaviour"), { ...VEGAS, dealerHoleBehaviour: EU });
+      const eu = choicesFor(byKey("dealerHoleBehaviour"), { ...VEGAS, dealerHoleBehaviour: EU, blackjackPaysImmediately: false });
       expect(eu.map((c) => c.selected)).toEqual([false, true]);
       expect(eu[0].patch).toEqual({ dealerHoleBehaviour: US_PEEK, blackjackPaysImmediately: true });
     });

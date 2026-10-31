@@ -149,6 +149,14 @@ describe("houseEdge (#91): the hole card", () => {
     expect(delta({ ...mode, noHoleCardLoss: "original" }, peek)).toBeCloseTo(0.01, 6);
   });
 
+  it("a table with no hole card and no noHoleCardLoss value still gives a finite estimate (the rule counts as 0)", () => {
+    const { noHoleCardLoss, ...bare } = { ...VEGAS, ...EU };
+    expect(noHoleCardLoss).toBe("original");
+    expect(Number.isFinite(houseEdge(bare))).toBe(true);
+    expect(houseEdge(bare)).toBe(houseEdge(VEGAS));
+    expect(formatEdge(houseEdge(bare))).toBe("0.6%");
+  });
+
   it("US no peek and Europe cost the same", () => {
     for (const noHoleCardLoss of ["all", "original"]) {
       expect(houseEdge({ ...VEGAS, ...NO_PEEK, noHoleCardLoss })).toBe(houseEdge({ ...VEGAS, ...EU, noHoleCardLoss }));
