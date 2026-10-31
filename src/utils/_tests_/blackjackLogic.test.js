@@ -14,6 +14,7 @@ import {
   canDouble,
   canSurrender,
   canSplit,
+  canHit,
   isSplitAces,
   cents,
   insuranceStake,
@@ -457,6 +458,39 @@ describe("isSplitAces and canSplit (resplitAces)", () => {
     expect(canSplit(hand, 4, 4, true)).toBe(false); // the limit still applies
     expect(canSplit(hand, 9, 0, true)).toBe(true); // 0 = no limit
     expect(canSplit({ cards: stackedShoe(["A", "K"]), isSplit: true }, 2, 4, true)).toBe(false); // not a pair
+  });
+});
+
+describe("canHit", () => {
+  const hand = (codes, isSplit, extra = {}) => ({ cards: stackedShoe(codes), isSplit, ...extra });
+  const OPTIONS = [["hitSplitAces false", { hitSplitAces: false }], ["hitSplitAces omitted", {}], ["hitSplitAces true", { hitSplitAces: true }]];
+
+  describe.each(OPTIONS)("%s", (_name, options) => {
+    it.each([
+      ["unsplit A-A", hand(["A", "A"], false)],
+      ["unsplit A-5", hand(["A", "5"], false)],
+      ["unsplit K-7", hand(["K", "7"], false)],
+      ["split 8-3", hand(["8", "3"], true)],
+      ["split K-A (the ace came second)", hand(["K", "A"], true)],
+    ])("%s may hit", (_label, h) => {
+      expect(canHit(h, options)).toBe(true);
+    });
+  });
+
+  it.each([
+    ["false", [{ hitSplitAces: false }], false],
+    ["omitted options", [], false],
+    ["empty options", [{}], false],
+    ["true", [{ hitSplitAces: true }], true],
+  ])("a split ace with hitSplitAces %s -> %j", (_name, args, expected) => {
+    expect(canHit(hand(["A", "5"], true), ...args)).toBe(expected);
+  });
+
+  it("only the first card counts, and card count, status and bet are ignored", () => {
+    const three = hand(["A", "5", "3"], true, { status: HandStatus.DONE, bet: 50 });
+    expect(canHit(three)).toBe(false);
+    expect(canHit(three, { hitSplitAces: true })).toBe(true);
+    expect(canHit(hand(["5", "A", "3"], true, { status: HandStatus.DONE, bet: 50 }))).toBe(true);
   });
 });
 

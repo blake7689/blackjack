@@ -9,7 +9,7 @@ import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { HandResult } from "../../utils/constants/handResult";
-import { canSplit, canDouble, isSplitAces, insuranceStake } from "../../utils/blackjackLogic";
+import { canHit, canSplit, canDouble, insuranceStake } from "../../utils/blackjackLogic";
 import { DoubleOn } from "../../utils/constants/ruleOptions";
 
 // The rule props default to the rules the game had before #91, so a caller that passes none gets those.
@@ -77,7 +77,7 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
           onTriple={() => triple(index)}
           onSplit={() => split(index)}
           onSurrender={() => surrender(index)}
-          showHit={hitSplitAces || !isSplitAces(hand)}
+          showHit={canHit(hand, { hitSplitAces })}
           showDouble={mayDouble}
           showTriple={tripleDown && mayDouble && credits >= 2 * hand.bet}
           showSplit={canSplit(hand, handCount, maxSplitHands, resplitAces) && canAffordStake}

@@ -102,6 +102,12 @@ export function canSplit(hand, handCount, maxSplitHands, resplitAces = false) {
     && (resplitAces || !isSplitAces(hand));
 }
 
+// Hit: any hand, except a split ace unless hitSplitAces (it may then only be split again or stood on). Whose turn it is and the
+// hand's status are checked by the caller (canAct). //
+export function canHit(hand, { hitSplitAces = false } = {}) {
+  return hitSplitAces || !isSplitAces(hand);
+}
+
 // Double (and triple) down: two cards, never on split aces, after a split only with doubleAfterSplit, and with doubleOn
 // 9-11 or 10-11 only when the best total is in that range (a two-card hand with an ace is always soft, at least 12, so only hard hands match). //
 export function canDouble(hand, { doubleOn = DoubleOn.ANY, doubleAfterSplit = true } = {}) {

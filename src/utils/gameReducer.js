@@ -3,7 +3,7 @@ import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
-import { canSplit, canDouble, canSurrender, isSplitAces, cents, insuranceStake } from "./blackjackLogic";
+import { canHit, canSplit, canDouble, canSurrender, cents, insuranceStake } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
@@ -236,7 +236,7 @@ function playerAction(state, action) {
   }
 
   if (action.type === "HIT") {
-    if (isSplitAces(hand) && !state.settings.hitSplitAces) return state; // a split ace may only be split again or stood on
+    if (!canHit(hand, state.settings)) return state;
     const { result, next, refilled } = draw(state, action.refill, (shoe, cut, refill) => engine.playerHit(hand, shoe, cut, refill));
     return countSeen(advance(next, replaceHand(state.hands, handIdx, result.hand), handIdx), refilled);
   }
@@ -269,7 +269,7 @@ function playerAction(state, action) {
   // A split ace left waiting to be split again that no longer can be (the hand limit) has nothing to do: finish it before
   // advance(), or the turn could stay on a finished hand. Every ace-split hand of the round is checked, not just the new ones.
   const hands = replaceHand(state.hands, handIdx, first, splitOff).map((h) =>
-    isSplitAces(h) && !hitSplitAces && h.status === HandStatus.PLAYING && !canSplit(h, state.hands.length + 1, maxSplitHands, resplitAces)
+    !canHit(h, { hitSplitAces }) && h.status === HandStatus.PLAYING && !canSplit(h, state.hands.length + 1, maxSplitHands, resplitAces)
       ? { ...h, status: HandStatus.DONE } : h);
   return countSeen(advance(split, hands, handIdx), refilled);
 }
