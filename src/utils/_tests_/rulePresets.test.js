@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../rulePresets";
 import { initialGameState, SETTINGS_VERSION } from "../gameReducer";
-import { VEGAS } from "../../../e2e/fixtures";
+import { VEGAS } from "../../../e2e/vegas";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
 
 describe("rulePresetOf", () => {
@@ -121,7 +121,7 @@ describe("the five presets (#91)", () => {
   });
 });
 
-// e2e/fixtures.js writes the Vegas rules out on purpose (a change to the defaults moves no e2e test), so this is the one place they are kept in step.
+// e2e/vegas.js writes the Vegas rules out on purpose (a change to the defaults moves no e2e test), so this is the one place they are kept in step.
 describe("e2e Vegas fixture", () => {
   it("equals the saved settings of the Vegas preset", () => {
     expect(VEGAS).toEqual({ v: SETTINGS_VERSION, ...RULE_PRESETS.Vegas });
