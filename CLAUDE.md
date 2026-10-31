@@ -91,6 +91,14 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (the API has no such field; a refused one voids only the insurance, in `BET_REJECTED`). `settleHand` pays it 3x its stake when the dealer has
   blackjack, inside the hand's `payout`, so the round still settles once. Even money is `evenMoney: true` (WIN, 2x). `dealerShowsSecondCard`
   reads `insurance`; `dealerOnlyChecksBlackjack` must not (a live insured hand still needs the dealer's total). `playRound` takes `offers`.
+- Rules section (#91 PR 4): the Settings Game tab shows `components/RulesSection` (preset tiles with summary and estimated house edge, Customize groups,
+  House variations, Advanced) above the settings that keep their own Save button. It applies at once through `applyRules(patch)` in Settings: a patch that changes
+  nothing does nothing (a click on the chosen option or tile must never call `changeSettings`: GameProvider deals a new shoe for any `RESET_SETTINGS` key in the patch, even unchanged),
+  and one with a `RESET_SETTINGS` key asks to confirm only mid-round. All rule wording (labels, hints, groups, summaries, the edge notes, the app toggles' labels) lives in
+  `ruleCatalog.js` only; an entry may carry `selected(settings)` / `patch(value, settings)` when the control is not just `settings[key]` (Second card: no peek shows as
+  "peeks"; it and the Advanced checkbox "Dealer doesn't check the hole card" write `dealerHoleBehaviour` together with `blackjackPaysImmediately: v === US_PEEK`, the preset pairing).
+  `utils/houseEdge.js` is an additive estimate (baseline 0.4469 + Wizard of Odds rule effects; sources, calculator comparison and the UNVERIFIED figures are in its header comment);
+  insurance, House variations and Advanced are not counted; `noHoleCardLoss` counts only without a peek (`"all"` +0.11, `"original"` +0.01). A change to a rule effect needs its source.
 - Saved settings carry `v` (4 since #91 insurance). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
   older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`, `v: 1` to `v: 3` get
   `insurance: false`; `{}`, no `v` and `v: 4` get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
