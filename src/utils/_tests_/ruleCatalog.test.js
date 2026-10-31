@@ -13,7 +13,6 @@ const settings = (dealerHoleBehaviour) => ({ ...initialGameState.settings, deale
 const byKey = (key) => RULE_CATALOG.find((r) => r.key === key);
 const toggle = (key) => APP_TOGGLES.find((t) => t.key === key);
 const VEGAS = RULE_PRESETS.Vegas;
-const choice = (key, label, s = VEGAS) => choicesFor(byKey(key), s).find((c) => c.label === label);
 
 describe("ruleCatalog (#91)", () => {
   it("lists the table rules, grouped, in the order the Customize groups show them", () => {
