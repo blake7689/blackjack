@@ -65,7 +65,7 @@ export function houseEdge(s) {
   if (!s.doubleAfterSplit) edge += 0.14;
   if (s.resplitAces && s.maxSplitHands !== 2) edge -= 0.08; // with 2 hands there is no second split to make
   if (s.hitSplitAces) edge -= 0.19;
-  if (s.dealerHoleBehaviour !== DealerHoleOptions.US_PEEK) edge += NO_HOLE_LOSS[s.noHoleCardLoss]; // a peek finds the blackjack first
+  if (s.dealerHoleBehaviour !== DealerHoleOptions.US_PEEK) edge += (NO_HOLE_LOSS[s.noHoleCardLoss] ?? 0); // a peek finds the blackjack first
   return round(edge);
 }
 
@@ -74,8 +74,7 @@ export const edgeDelta = (settings, patch) => round(houseEdge({ ...settings, ...
 
 // "0.6%": one decimal, as on a preset tile.
 export function formatEdge(edge) {
-  const rounded = Math.round(edge * 10) / 10;
-  return `${(rounded === 0 ? 0 : rounded).toFixed(1)}%`;
+  return `${(Math.round(edge * 10) / 10).toFixed(1)}%`;
 }
 
 // "+1.39%" / "-0.07%": two decimals, as in the source table; "" when it rounds to nothing.

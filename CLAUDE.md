@@ -96,7 +96,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   nothing does nothing (a click on the chosen option or tile must never call `changeSettings`: GameProvider deals a new shoe for any `RESET_SETTINGS` key in the patch, even unchanged),
   and one with a `RESET_SETTINGS` key asks to confirm only mid-round. All rule wording (labels, hints, groups, summaries, the edge notes, the app toggles' labels) lives in
   `ruleCatalog.js` only; an entry may carry `selected(settings)` / `patch(value, settings)` when the control is not just `settings[key]` (Second card: no peek shows as
-  "peeks"; it and the Advanced checkbox "Dealer doesn't check the hole card" write `dealerHoleBehaviour` together with `blackjackPaysImmediately: v === US_PEEK`, the preset pairing).
+  "peeks"; it and the Advanced checkbox "Dealer doesn't check the hole card" write `dealerHoleBehaviour`, and move `blackjackPaysImmediately` to the new mode's preset pairing (true with a peek) only while it still holds the current mode's pairing).
   `utils/houseEdge.js` is an additive estimate (baseline 0.4469 + Wizard of Odds rule effects; sources, calculator comparison and the UNVERIFIED figures are in its header comment);
   insurance, House variations and Advanced are not counted; `noHoleCardLoss` counts only without a peek (`"all"` +0.11, `"original"` +0.01). A change to a rule effect needs its source.
 - Saved settings carry `v` (4 since #91 insurance). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is

@@ -49,7 +49,7 @@ function Toggles({ title, note, section, settings, onApply }) {
         const forced = rule.forcedOn?.(settings) ?? false;
         return (
           <label key={rule.id ?? rule.key} className="toggle-row">
-            <input type="checkbox" className="checkbox-input" aria-label={rule.id ?? rule.key} disabled={disabled || forced}
+            <input type="checkbox" className="checkbox-input" disabled={disabled || forced}
               checked={(selectedValue(rule, settings) && !disabled) || forced}
               onChange={(e) => onApply(patchFor(rule, e.target.checked, settings))} />
             {rule.label()}
@@ -88,15 +88,12 @@ export default function RulesSection({ settings, onApply }) {
       <p aria-live="polite" className="chip-hint">This table: <EdgeText edge={edge} /> (estimate)</p>
       <details className="rule-details">
         <summary>{CUSTOMIZE_TITLE}</summary>
-        {GROUPS.map((group) => {
-          const inGroup = rules.filter((rule) => rule.group === group);
-          return inGroup.length > 0 && (
-            <div key={group} className="rule-group">
-              <h4>{group}</h4>
-              {inGroup.map((rule) => <Segmented key={rule.key} rule={rule} settings={settings} onApply={onApply} />)}
-            </div>
-          );
-        })}
+        {GROUPS.map((group) => (
+          <div key={group} className="rule-group">
+            <h4>{group}</h4>
+            {rules.filter((rule) => rule.group === group).map((rule) => <Segmented key={rule.key} rule={rule} settings={settings} onApply={onApply} />)}
+          </div>
+        ))}
       </details>
       <Toggles title={VARIATIONS_TITLE} note={VARIATIONS_NOTE} section="variations" settings={settings} onApply={onApply} />
       <Toggles title={ADVANCED_TITLE} note={ADVANCED_NOTE} section="advanced" settings={settings} onApply={onApply} />

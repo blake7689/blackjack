@@ -24,6 +24,13 @@ export const EDGE_NOTE = "House edge is an estimate for a player who uses basic 
 export const VARIATIONS_NOTE = "These change how this app deals, not casino rules. They are not counted in the house edge.";
 export const ADVANCED_NOTE = "These change how this app deals, not casino rules. A change here makes the table Custom. They are not counted in the house edge.";
 
+// A change of dealer mode also moves blackjackPaysImmediately to the new mode's preset pairing (true with a peek, false without a hole
+// card or with no peek), but only while it still holds the pairing of the current mode: a value the player set on purpose stays.
+const modePatch = (mode, s) => ({
+  dealerHoleBehaviour: mode,
+  ...(s.blackjackPaysImmediately === (s.dealerHoleBehaviour === US_PEEK) && { blackjackPaysImmediately: mode === US_PEEK }),
+});
+
 const ON_OFF = [{ value: true, label: "On" }, { value: false, label: "Off" }];
 const surrenderText = { none: "No surrender", late: "Late surrender", early: "Early surrender", earlyNoAce: "Early surrender (not against an ace)" };
 
@@ -37,8 +44,7 @@ export const RULE_CATALOG = [
     ],
     // No peek (US) shows as "peeks"; the Advanced checkbox "Dealer doesn't check the hole card" says the rest.
     selected: (s) => (s.dealerHoleBehaviour === US_NO_PEEK ? US_PEEK : s.dealerHoleBehaviour),
-    // A blackjack pays at once with a peek and waits without a hole card: the same pairing the presets use.
-    patch: (v) => ({ dealerHoleBehaviour: v, blackjackPaysImmediately: v === US_PEEK }),
+    patch: (v, s) => modePatch(v, s),
     summary: { line: 2, text: (v, s) => (v === EU ? "Dealt after you play" : s.dealerHoleBehaviour === US_NO_PEEK ? "Dealer doesn't check the hole card" : "Dealer peeks") } },
   { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", input: "checkbox",
     choices: [{ value: false, label: "Stands" }, { value: true, label: "Hits" }],
@@ -92,7 +98,7 @@ export const APP_TOGGLES = [
   { key: "dealerHoleBehaviour", id: "dealerHoleNoCheck", section: "advanced", label: () => "Dealer doesn't check the hole card", input: "checkbox",
     showWhen: (s) => s.dealerHoleBehaviour !== EU,
     selected: (s) => s.dealerHoleBehaviour === US_NO_PEEK,
-    patch: (v) => ({ dealerHoleBehaviour: v ? US_NO_PEEK : US_PEEK, blackjackPaysImmediately: !v }) },
+    patch: (v, s) => modePatch(v ? US_NO_PEEK : US_PEEK, s) },
 ];
 
 // The rules that apply to these settings (a rule that does not apply has no effect and is not shown).
