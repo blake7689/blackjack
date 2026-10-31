@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { playRound, stackedShoe, outOfCards, confirmBets, Modes, HandResult, HandStatus } from "./stackedShoe";
 import { gameReducer, nextAutoAction } from "../gameReducer";
 import { GamePhases } from "../constants/gamePhases";
-import { canSplit, settleHand } from "../blackjackLogic";
+import { canSplit, canSurrender, settleHand } from "../blackjackLogic";
 import { drawCardFromShoe, cardsRemaining, trueCount } from "../cards";
 import { RULE_PRESETS } from "../rulePresets";
 
@@ -1251,7 +1251,8 @@ describe("rule presets (#91): one signature scenario each, with the preset's own
     expect(r.dealer.cards).toHaveLength(3);
     expect(r.results).toEqual([LOSE]);
     const bj = playRound({ cards: ["10", "A", "9", "K"], rules: preset("Vegas") });
-    expect(bj.afterDeal.dealer.isBlackjack).toBe(true);
+    expect(bj.afterOffers.dealer.isBlackjack).toBe(true); // an ace up offers insurance, so the peek waits for it
+    expect(bj.afterDeal.phase).toBe(GamePhases.OFFERS);
   });
 
   it("Atlantic City: no hole card, and a dealer blackjack after a double takes only the original bet", () => {
@@ -1306,7 +1307,7 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
   // A surplus draw by the player or the dealer shows in `cardsLeft`.
   const SPARES = ["9", "9"];
   const play = (mode, surrender, up, hole, extra = {}) =>
-    playRound({ cards: ["10", up, "6", hole, ...SPARES], mode, actions: ["surrender"], bet: extra.bet ?? 10, rules: { surrender, ...extra.rules } });
+    playRound({ cards: ["10", up, "6", hole, ...SPARES], mode, actions: ["surrender"], offers: ["surrender"], bet: extra.bet ?? 10, rules: { surrender, ...extra.rules } });
   const surrendered = (r, payout) => {
     expect(r.results).toEqual([SURRENDER]);
     expect(r.hands[0]).toMatchObject({ surrendered: true, status: HandStatus.DONE, payout });
@@ -1337,9 +1338,9 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
   });
 
   describe("US peek, a dealer blackjack at the deal", () => {
-    // The round ends before the player has a turn, so no value can be used: even Early loses everything (the limit noted in the hint, until PR 3).
+    // The round ends before the player has a turn, so late has nothing to give up. Early is offered before the peek (below).
     it.each([
-      ["late", "K", "A"], ["late", "A", "K"], ["early", "K", "A"], ["early", "A", "K"], ["earlyNoAce", "K", "A"], ["earlyNoAce", "A", "K"], ["none", "K", "A"],
+      ["late", "K", "A"], ["late", "A", "K"], ["earlyNoAce", "A", "K"], ["none", "K", "A"],
     ])("%s with %s up: no player turn, the bet is lost", (surrender, up, hole) => {
       const r = play(Modes.PEEK, surrender, up, hole);
       expect(r.afterDeal.hands[0].status).toBe(HandStatus.DONE);
@@ -1347,6 +1348,20 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
       expect(r.afterDeal.dealer.isBlackjack).toBe(true);
       expect(r.hands[0].surrendered).toBeUndefined();
       expect([r.results, r.payout, settles(r)]).toEqual([[LOSE], 0, [0]]);
+    });
+  });
+
+  describe("US peek, early surrender is offered before the peek", () => {
+    it.each([["early", "K", "A"], ["early", "A", "K"], ["earlyNoAce", "K", "A"]])("%s with %s up: the half is kept although the dealer has blackjack", (surrender, up, hole) => {
+      const r = play(Modes.PEEK, surrender, up, hole);
+      expect(r.afterDeal.phase).toBe(GamePhases.OFFERS);
+      surrendered(r, 5);
+      expect(r.dealer.isBlackjack).toBe(true);
+    });
+
+    it("declined, the peek finds the blackjack and the bet is lost", () => {
+      const r = playRound({ cards: ["10", "K", "6", "A", ...SPARES], actions: ["surrender"], rules: { surrender: "early" } });
+      expect([r.results, r.payout]).toEqual([[LOSE], 0]);
     });
   });
 
@@ -1569,6 +1584,608 @@ describe("surrender (#91): every dealer mode, value and up card", () => {
       const ace = withPreset("Singapore", ["10", "A", "6", "K"]);
       expect(ace.hands[0].surrendered).toBeUndefined();
       expect([ace.results, ace.payout]).toEqual([[LOSE], 0]);
+    });
+  });
+});
+
+describe("offers (#91): insurance, even money and early surrender at the offers", () => {
+  const { SURRENDER } = HandResult;
+  const { OFFERS, PEEK, PLAYER_TURN, DEALER_TURN } = GamePhases;
+  const step = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1e9, ...a }), state);
+  const settles = (r) => r.state.creditEvents.filter((e) => e.kind === "settle").map((e) => e.amount);
+  const ledger = (r) => r.state.creditEvents.filter((e) => e.kind === "bet" || e.kind === "settle");
+  const SPARES = ["9", "9"]; // a draw by the player or the dealer that should not happen shows in `cardsLeft`
+  const modes = [["US peek", Modes.PEEK], ["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]];
+  const takeIns = "take_insurance";
+  const INSURANCE_BET = { kind: "bet", amount: 5, newRound: false, alreadyDeducted: false, side: "insurance" };
+
+  // Bet 10, insurance on. Cards in table order: the player's two, the dealer's up card, the hole card (EU: drawn after the player's own draws).
+  const round = (mode, { player = ["10", "6"], up = "A", hole = "6", draws = [], rules = {}, ...rest } = {}) => playRound({
+    cards: mode === Modes.EU ? [player[0], up, player[1], ...draws, hole, ...SPARES] : [player[0], up, player[1], hole, ...draws, ...SPARES],
+    mode, rules: { insurance: true, ...rules }, ...rest,
+  });
+
+  describe.each(modes)("%s: insurance against an ace", (_name, mode) => {
+    const peek = mode === Modes.PEEK;
+
+    it("stops at OFFERS with one dealer card showing and the hole card still hidden", () => {
+      const r = round(mode, { hole: "K" });
+      expect(r.afterDeal.phase).toBe(OFFERS);
+      expect(r.afterDeal.offers).toEqual({ insurance: true, evenMoney: false, surrender: false, peek });
+      expect(r.afterDeal.dealer.cards).toHaveLength(1);
+      expect(r.afterDeal.hands[0]).toMatchObject({ status: HandStatus.PLAYING, result: HandResult.NONE });
+      if (mode !== Modes.EU) expect(r.afterDeal.dealerHole.cards).toHaveLength(1); // dealt, but face down and unresolved
+      expect(r.afterDeal.dealer.isBlackjack).toBeFalsy(); // a deferred peek has decided nothing yet
+    });
+
+    it("taken against a dealer blackjack: insurance pays 2:1 and the hand's stake is lost, in one settle (net 0)", () => {
+      const r = round(mode, { hole: "K", offers: [takeIns] });
+      expect(r.dealer.isBlackjack).toBe(true);
+      expect(r.hands[0]).toMatchObject({ result: LOSE, insurance: 5, insurancePayout: 15, payout: 15 });
+      expect([r.payout, settles(r), r.insuranceStaked]).toEqual([15, [15], 5]);
+      expect(ledger(r)).toEqual([expect.objectContaining({ kind: "bet", amount: 10, newRound: true }), expect.objectContaining(INSURANCE_BET), expect.objectContaining({ kind: "settle", amount: 15 })]);
+      expect(r.staked + r.insuranceStaked - r.payout).toBe(0);
+    });
+
+    it("declined against a dealer blackjack: the whole bet is lost, no second ledger bet", () => {
+      const r = round(mode, { hole: "K", offers: ["decline_offers"] });
+      expect(r.hands[0].insurance).toBeUndefined();
+      expect(r.hands[0].insurancePayout).toBeUndefined();
+      expect([r.results, r.payout, settles(r)]).toEqual([[LOSE], 0, [0]]);
+      expect(ledger(r).filter((e) => e.kind === "bet")).toHaveLength(1);
+    });
+
+    it("taken, no dealer blackjack, the player loses: insurance is lost with the bet (net -15)", () => {
+      const r = round(mode, { hole: "6", offers: [takeIns] }); // 16 against a soft 17
+      expect(r.dealer.isBlackjack).toBe(false);
+      expect(r.hands[0]).toMatchObject({ result: LOSE, insurance: 5, insurancePayout: 0, payout: 0 });
+      expect([r.payout, settles(r)]).toEqual([0, [0]]);
+    });
+
+    it("taken, no dealer blackjack, the player wins: only the hand pays (net +5)", () => {
+      const r = round(mode, { player: ["10", "9"], hole: "6", offers: [takeIns] });
+      expect(r.hands[0]).toMatchObject({ result: WIN, insurancePayout: 0, payout: 20 });
+      expect([r.payout, settles(r)]).toEqual([20, [20]]);
+      expect(r.staked + r.insuranceStaked - r.payout).toBe(-5);
+    });
+
+    it("declined, no dealer blackjack: the round plays as it always did", () => {
+      const r = round(mode, { player: ["10", "9"], hole: "6" });
+      expect([r.results, r.payout, settles(r), r.insuranceStaked]).toEqual([[WIN], 20, [20], 0]);
+    });
+
+    it("sends the insurance as a ledger bet for half the stake, newRound false, tagged with the hand", () => {
+      const s = step(round(mode, { hole: "K" }).afterDeal, { type: "TAKE_INSURANCE" });
+      const event = s.creditEvents.at(-1);
+      expect(event).toMatchObject({ ...INSURANCE_BET, handTag: s.hands[0].tag });
+      expect(s.pendingBets.at(-1)).toMatchObject({ amount: 5, newRound: false, side: "insurance", handTag: s.hands[0].tag });
+      expect(s.hands[0].bet).toBe(10); // the hand's own stake and the bet circle are untouched
+      expect(s.betCircle).toBe(10);
+    });
+
+    it("is not offered against a ten, and the round never visits OFFERS or PEEK", () => {
+      const r = round(mode, { up: "K", hole: "6" });
+      expect(r.afterDeal.phase).toBe(PLAYER_TURN);
+      expect(r.afterDeal.offers).toBeNull();
+    });
+
+    it("is not offered with the setting off", () => {
+      const r = round(mode, { hole: "K", rules: { insurance: false } });
+      expect(r.afterDeal.phase).not.toBe(OFFERS);
+      expect(r.afterDeal.offers).toBeNull();
+      expect([r.results, r.payout]).toEqual([[LOSE], 0]);
+    });
+
+    it("is not offered when the balance cannot cover half the bet, and the round plays on", () => {
+      const r = round(mode, { hole: "K", credits: 4 });
+      expect(r.afterDeal.phase).not.toBe(OFFERS);
+      expect(r.afterDeal.offers).toBeNull();
+      expect(r.payout).toBe(0);
+    });
+
+    it("is offered when the balance covers exactly half the bet", () => {
+      expect(round(mode, { hole: "K", credits: 5 }).afterDeal.phase).toBe(OFFERS);
+    });
+
+    it("a player blackjack gets even money, not insurance", () => {
+      const r = round(mode, { player: ["A", "K"], hole: "6" });
+      expect(r.afterDeal.offers).toMatchObject({ evenMoney: true, insurance: false });
+    });
+  });
+
+  describe.each(modes)("%s: insurance on a hand that busts", (_name, mode) => {
+    const peek = mode === Modes.PEEK;
+    const bust = { draws: ["K"], actions: ["hit"] }; // 10-6 hits a king
+
+    // With a peek the dealer's blackjack is found before the player acts, so there is no hit to bust on.
+    if (!peek) {
+      it("busts against a dealer blackjack: insurance still pays 2:1 and the dealer takes its second card", () => {
+        const r = round(mode, { ...bust, hole: "K", offers: [takeIns] });
+        expect(r.hands[0]).toMatchObject({ isBusted: true, result: LOSE, insurancePayout: 15, payout: 15 });
+        expect(r.dealer.cards).toHaveLength(2);
+        expect(r.dealer.isBlackjack).toBe(true);
+        expect([r.payout, settles(r), r.cardsLeft]).toEqual([15, [15], SPARES.length]);
+      });
+    }
+
+    it("busts and the dealer has no blackjack: the dealer still takes its second card, stops at two, and the insurance is lost", () => {
+      const r = round(mode, { ...bust, hole: "5", offers: [takeIns] }); // A-5 is a soft 16: playing on would draw
+      expect(r.hands[0]).toMatchObject({ isBusted: true, result: LOSE, insurancePayout: 0, payout: 0 });
+      expect(r.dealer.cards).toHaveLength(2);
+      expect([r.payout, settles(r), r.cardsLeft]).toEqual([0, [0], SPARES.length]);
+    });
+
+    if (mode === Modes.EU) {
+      it("control: without insurance an all-bust EU round never draws the dealer's second card", () => {
+        const r = round(mode, { ...bust, hole: "5" });
+        expect(r.dealer.cards).toHaveLength(1);
+        expect(r.cardsLeft).toBe(SPARES.length + 1);
+      });
+    }
+  });
+
+  describe("US peek: the deferred peek", () => {
+    it("the hole card is not decided before PEEK, and PEEK reveals a dealer blackjack and ends the hand", () => {
+      const r = round(Modes.PEEK, { hole: "K", offers: [takeIns] });
+      expect(r.afterDeal.dealerHole.cards).toHaveLength(1);
+      const insured = step(r.afterDeal, { type: "TAKE_INSURANCE" });
+      expect(insured.phase).toBe(PEEK);
+      expect(insured.dealer.cards).toHaveLength(1);
+      expect(insured.hands[0].result).toBe(HandResult.NONE); // not decided until the peek
+      const peeked = step(insured, { type: "PEEK" });
+      expect(peeked).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(peeked.dealer).toMatchObject({ isBlackjack: true, status: HandStatus.DONE });
+      expect(peeked.dealer.cards).toHaveLength(2);
+      expect(peeked.dealerHole.cards).toHaveLength(0);
+      expect(peeked.hands[0]).toMatchObject({ result: LOSE, status: HandStatus.DONE });
+    });
+
+    it("no dealer blackjack: the hole card stays face down and the player's turn begins", () => {
+      const r = round(Modes.PEEK, { hole: "6", offers: [takeIns] });
+      expect(r.afterOffers).toMatchObject({ phase: PLAYER_TURN, offers: null });
+      expect(r.afterOffers.dealer.cards).toHaveLength(1);
+      expect(r.afterOffers.dealerHole.cards).toHaveLength(1);
+      expect(r.afterOffers.hands[0].status).toBe(HandStatus.PLAYING);
+    });
+
+    it("late surrender and insurance: a dealer blackjack at the peek takes the hand and pays the insurance, nothing to surrender", () => {
+      const r = round(Modes.PEEK, { hole: "K", offers: [takeIns], actions: ["surrender"], rules: { surrender: "late" } });
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+      expect(r.hands[0]).toMatchObject({ result: LOSE, payout: 15, insurancePayout: 15 });
+      expect(r.hands[0].surrendered).toBeUndefined();
+      expect(settles(r)).toEqual([15]);
+    });
+
+    it("late surrender and insurance: with no blackjack the surrender gives half back and the insurance is lost", () => {
+      const r = round(Modes.PEEK, { hole: "6", offers: [takeIns], actions: ["surrender"], rules: { surrender: "late" } });
+      expect(r.hands[0]).toMatchObject({ result: SURRENDER, surrendered: true, payout: 5, insurancePayout: 0 });
+      expect([r.payout, settles(r)]).toEqual([5, [5]]);
+      expect(r.dealer.cards).toHaveLength(2); // the dealer shows its second card and stops
+      expect(r.cardsLeft).toBe(SPARES.length);
+    });
+
+    it("the peek runs by itself: the next automatic step is PEEK, and OFFERS has none", () => {
+      const r = round(Modes.PEEK, { hole: "6" });
+      expect(nextAutoAction(r.afterDeal)).toBeNull();
+      expect(nextAutoAction(step(r.afterDeal, { type: "DECLINE_OFFERS" }))).toBe("PEEK");
+    });
+
+    it("original-bet-only does not change the peek: the insured hand never had a turn", () => {
+      const r = round(Modes.PEEK, { hole: "K", offers: [takeIns], rules: { noHoleCardLoss: "original" } });
+      expect([r.payout, settles(r)]).toEqual([15, [15]]);
+    });
+  });
+
+  describe.each([["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]])("%s: insurance and the player's turn", (_name, mode) => {
+    it("late surrender against a dealer blackjack: the surrender is void (the whole bet is lost), insurance pays 2:1", () => {
+      const r = round(mode, { hole: "K", offers: [takeIns], actions: ["surrender"], rules: { surrender: "late" } });
+      expect(r.hands[0]).toMatchObject({ surrendered: true, result: LOSE, payout: 15, insurancePayout: 15 });
+      expect([r.payout, settles(r)]).toEqual([15, [15]]);
+    });
+
+    it("late surrender with no dealer blackjack: half comes back, the insurance is lost", () => {
+      const r = round(mode, { hole: "6", offers: [takeIns], actions: ["surrender"], rules: { surrender: "late" } });
+      expect(r.hands[0]).toMatchObject({ surrendered: true, result: SURRENDER, payout: 5, insurancePayout: 0 });
+      expect([r.payout, settles(r)]).toEqual([5, [5]]);
+      expect(r.dealer.cards).toHaveLength(2);
+      expect(r.cardsLeft).toBe(SPARES.length);
+    });
+
+    it("early surrender stays a move on the turn here: insure at OFFERS, surrender later, half is kept even against a blackjack", () => {
+      const r = round(mode, { hole: "K", offers: [takeIns], actions: ["surrender"], rules: { surrender: "early" } });
+      expect(r.afterDeal.offers).toMatchObject({ insurance: true, surrender: false }); // never offered at OFFERS here
+      expect(r.afterOffers.phase).toBe(PLAYER_TURN);
+      expect(r.hands[0]).toMatchObject({ surrendered: true, result: SURRENDER, payout: 20, insurancePayout: 15 }); // 5 back + 15 insurance
+      expect(settles(r)).toEqual([20]);
+    });
+
+    it("early surrender against a ten stays on the turn too: no OFFERS step at all", () => {
+      const r = round(mode, { up: "K", hole: "5", actions: ["surrender"], rules: { surrender: "early", insurance: false } });
+      expect(r.afterDeal.phase).toBe(PLAYER_TURN);
+      expect(r.hands[0]).toMatchObject({ result: SURRENDER, payout: 5 });
+    });
+
+    it("a double after insuring: the dealer's blackjack takes both stakes (all) and the insurance still pays once", () => {
+      const r = round(mode, { player: ["5", "6"], hole: "K", draws: ["10"], offers: [takeIns], actions: ["double"] });
+      expect(r.hands[0]).toMatchObject({ bet: 20, result: LOSE, insurancePayout: 15, payout: 15 });
+      expect(ledger(r).filter((e) => e.kind === "bet").map((e) => e.amount)).toEqual([10, 5, 10]);
+      expect(settles(r)).toEqual([15]);
+    });
+
+    it("a double after insuring with original-bet-only: the added stake comes back, plus the insurance", () => {
+      const r = round(mode, { player: ["5", "6"], hole: "K", draws: ["10"], offers: [takeIns], actions: ["double"], rules: { noHoleCardLoss: "original" } });
+      expect(r.hands[0]).toMatchObject({ bet: 20, result: LOSE, payout: 25, insurancePayout: 15 });
+      expect(settles(r)).toEqual([25]);
+    });
+
+    it("an insured hand that splits: the split-off hand carries no insurance and it is paid once", () => {
+      const r = round(mode, { player: ["8", "8"], hole: "K", draws: ["3", "2"], offers: [takeIns], actions: ["split", "stand", "stand"] });
+      expect(r.hands).toHaveLength(2);
+      expect(r.hands.map((h) => h.insurance ?? 0)).toEqual([5, 0]);
+      expect(r.hands.map((h) => h.insurancePayout)).toEqual([15, undefined]);
+      expect(r.insuranceStaked).toBe(5);
+      expect([r.results, r.payout, settles(r)]).toEqual([[LOSE, LOSE], 15, [15]]);
+      expect(ledger(r).filter((e) => e.kind === "bet").map((e) => e.amount)).toEqual([10, 5, 10]);
+    });
+
+    it("an insured split with original-bet-only: the split-off stake comes back, the insurance once", () => {
+      const r = round(mode, { player: ["8", "8"], hole: "K", draws: ["3", "2"], offers: [takeIns], actions: ["split", "stand", "stand"], rules: { noHoleCardLoss: "original" } });
+      expect([r.payout, settles(r)]).toEqual([25, [25]]); // 0 + 10 (split-off) + 15
+    });
+
+    it("an insured live hand still makes the dealer play out its total (the insurance does not stop the dealer at two)", () => {
+      const r = round(mode, { player: ["10", "9"], hole: "5", offers: [takeIns] }); // A-5 hits both spare nines and busts
+      expect(r.dealer).toMatchObject({ isBusted: true });
+      expect(r.dealer.cards).toHaveLength(4);
+      expect(r.hands[0]).toMatchObject({ result: WIN, payout: 20, insurancePayout: 0 });
+    });
+  });
+
+  describe.each(modes)("%s: even money", (_name, mode) => {
+    const peek = mode === Modes.PEEK;
+    const bj = { player: ["A", "K"] };
+
+    it("is offered on a player blackjack against an ace, and only that", () => {
+      const r = round(mode, { ...bj, hole: "5" });
+      expect(r.afterDeal.phase).toBe(OFFERS);
+      expect(r.afterDeal.offers).toEqual({ insurance: false, evenMoney: true, surrender: false, peek });
+      expect(r.afterDeal.hands[0].result).toBe(HandResult.NONE); // the blackjack is not paid yet
+    });
+
+    it.each([["K", true], ["5", false]])("taken against a dealer hole of %s: paid 1:1 (20), never pushed, no second ledger bet", (hole, dealerBj) => {
+      const r = round(mode, { ...bj, hole, offers: ["even_money"] });
+      expect(r.dealer.isBlackjack).toBe(dealerBj);
+      expect(r.hands[0]).toMatchObject({ result: WIN, evenMoney: true, payout: 20 });
+      expect([r.payout, settles(r)]).toEqual([20, [20]]);
+      expect(ledger(r).filter((e) => e.kind === "bet")).toHaveLength(1);
+    });
+
+    it("taken: the win is fixed at once, before the peek or the dealer's turn", () => {
+      const s = step(round(mode, { ...bj, hole: "K" }).afterDeal, { type: "EVEN_MONEY" });
+      expect(s.hands[0]).toMatchObject({ result: WIN, evenMoney: true, status: HandStatus.DONE });
+      expect(s.phase).toBe(peek ? PEEK : DEALER_TURN);
+    });
+
+    it("declined against a dealer blackjack: a push (10)", () => {
+      const r = round(mode, { ...bj, hole: "K" });
+      expect([r.results, r.payout, settles(r)]).toEqual([[PUSH], 10, [10]]);
+      expect(r.hands[0].evenMoney).toBeUndefined();
+    });
+
+    it("declined, no dealer blackjack: paid 3:2 (25)", () => {
+      const r = round(mode, { ...bj, hole: "5" });
+      expect([r.results, r.payout, settles(r)]).toEqual([[WIN], 25, [25]]);
+    });
+
+    it("with 6:5: declined pays 22, even money still 20", () => {
+      expect(round(mode, { ...bj, hole: "5", rules: { blackjackPayout: "6:5" } }).payout).toBe(22);
+      expect(round(mode, { ...bj, hole: "5", rules: { blackjackPayout: "6:5" }, offers: ["even_money"] }).payout).toBe(20);
+    });
+
+    it("insurance cannot be taken on it (a blackjack gets even money only): the action is ignored", () => {
+      const { afterDeal } = round(mode, { ...bj, hole: "K" });
+      expect(step(afterDeal, { type: "TAKE_INSURANCE" })).toBe(afterDeal);
+    });
+
+    it("is not offered with the insurance setting off: the blackjack waits for the dealer or pays at the deal as before", () => {
+      const r = round(mode, { ...bj, hole: "5", rules: { insurance: false } });
+      expect(r.afterDeal.offers).toBeNull();
+      expect(r.afterDeal.phase).toBe(DEALER_TURN);
+      expect(r.payout).toBe(25);
+    });
+  });
+
+  describe("even money where the blackjack already pays in full at once", () => {
+    const bj = { player: ["A", "K"], hole: "5" };
+
+    it("US no peek with blackjackPaysImmediately: no offer, 25 at the deal", () => {
+      const r = round(Modes.NO_PEEK, { ...bj, rules: { blackjackPaysImmediately: true } });
+      expect(r.afterDeal).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(r.afterDeal.hands[0].result).toBe(WIN);
+      expect([r.payout, settles(r)]).toEqual([25, [25]]);
+    });
+
+    it("EU without dealerDrawsOnPlayerBlackjack: no offer, 25 at the deal", () => {
+      const r = round(Modes.EU, { ...bj, rules: { dealerDrawsOnPlayerBlackjack: false } });
+      expect(r.afterDeal).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(r.afterDeal.hands[0].result).toBe(WIN);
+      expect([r.payout, settles(r)]).toEqual([25, [25]]);
+    });
+
+    it("US no peek without it, and EU with dealerDrawsOnPlayerBlackjack: the offer is made", () => {
+      expect(round(Modes.NO_PEEK, bj).afterDeal.phase).toBe(OFFERS);
+      expect(round(Modes.EU, { ...bj, rules: { dealerDrawsOnPlayerBlackjack: true } }).afterDeal.phase).toBe(OFFERS);
+    });
+
+    it("US peek: blackjackPaysImmediately makes no difference, even money is offered either way", () => {
+      for (const blackjackPaysImmediately of [true, false]) expect(round(Modes.PEEK, { ...bj, rules: { blackjackPaysImmediately } }).afterDeal.phase).toBe(OFFERS);
+    });
+
+    it("US peek with insurance off: the blackjack is paid at the deal as before (25), no OFFERS", () => {
+      const r = round(Modes.PEEK, { ...bj, rules: { insurance: false } });
+      expect(r.afterDeal).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(r.afterDeal.hands[0].result).toBe(WIN);
+      expect(r.payout).toBe(25);
+    });
+  });
+
+  describe("US peek: early surrender at the offers", () => {
+    const early = ({ rules = {}, ...rest } = {}) => round(Modes.PEEK, { rules: { surrender: "early", insurance: false, ...rules }, ...rest });
+
+    it("offered against a ten (no insurance there); taken, the half is kept against a dealer blackjack", () => {
+      const r = early({ up: "K", hole: "A", offers: ["surrender"] });
+      expect(r.afterDeal.offers).toEqual({ insurance: false, evenMoney: false, surrender: true, peek: true });
+      expect(r.hands[0]).toMatchObject({ surrendered: true, result: SURRENDER, payout: 5 });
+      expect(r.dealer.isBlackjack).toBe(true);
+      expect([r.payout, settles(r)]).toEqual([5, [5]]);
+    });
+
+    it("taken with no dealer blackjack: the same half, and the dealer stops at two cards", () => {
+      const r = early({ up: "K", hole: "5", offers: ["surrender"] });
+      expect([r.results, r.payout, r.dealer.cards.length, r.cardsLeft]).toEqual([[SURRENDER], 5, 2, SPARES.length]);
+    });
+
+    it("declined against a dealer blackjack: the whole bet is lost", () => {
+      const r = early({ up: "K", hole: "A" });
+      expect([r.results, r.payout]).toEqual([[LOSE], 0]);
+    });
+
+    it("declined with no blackjack: play begins, and Surrender is no longer offered on the turn", () => {
+      const r = early({ up: "K", hole: "5" });
+      expect(r.afterOffers.phase).toBe(PLAYER_TURN);
+      expect(canSurrender(r.afterOffers.hands[0], r.afterOffers.dealer, r.afterOffers.settings)).toBe(false);
+      expect(step(r.afterOffers, { type: "SURRENDER", handIdx: 0 })).toBe(r.afterOffers);
+    });
+
+    it("earlyNoAce is offered against a ten and not against an ace", () => {
+      expect(early({ up: "K", hole: "5", rules: { surrender: "earlyNoAce" } }).afterDeal.offers).toMatchObject({ surrender: true });
+      const ace = early({ up: "A", hole: "5", rules: { surrender: "earlyNoAce" } });
+      expect(ace.afterDeal.phase).toBe(PLAYER_TURN); // nothing is offered, so no OFFERS step
+      const withInsurance = early({ up: "A", hole: "K", rules: { surrender: "earlyNoAce", insurance: true } });
+      expect(withInsurance.afterDeal.offers).toEqual({ insurance: true, evenMoney: false, surrender: false, peek: true });
+    });
+
+    it("early against a 6 is not an OFFERS matter: it is a turn move, as before", () => {
+      const r = early({ up: "6", hole: "K", actions: ["surrender"] });
+      expect(r.afterDeal.phase).toBe(PLAYER_TURN);
+      expect([r.results, r.payout]).toEqual([[SURRENDER], 5]);
+    });
+
+    it("a player blackjack is never offered a surrender", () => {
+      expect(early({ player: ["A", "K"], up: "K", hole: "5" }).afterDeal.offers).toBeNull();
+    });
+
+    describe("early against an ace with insurance on", () => {
+      const both = (offers, hole) => round(Modes.PEEK, { rules: { surrender: "early" }, offers, hole });
+
+      it("both offers are open together", () => {
+        expect(both([], "K").afterDeal.offers).toEqual({ insurance: true, evenMoney: false, surrender: true, peek: true });
+      });
+
+      it.each([[[takeIns, "surrender"]], [["surrender", takeIns]]])("%j, dealer blackjack: half back plus the insurance, one settle of 20", (offers) => {
+        const r = both(offers, "K");
+        expect(r.hands[0]).toMatchObject({ surrendered: true, result: SURRENDER, insurancePayout: 15, payout: 20 });
+        expect([r.payout, settles(r)]).toEqual([20, [20]]);
+        expect(r.dealer.isBlackjack).toBe(true);
+      });
+
+      it.each([[[takeIns, "surrender"]], [["surrender", takeIns]]])("%j, no dealer blackjack: half back, insurance lost (net -10)", (offers) => {
+        const r = both(offers, "6");
+        expect(r.hands[0]).toMatchObject({ surrendered: true, result: SURRENDER, insurancePayout: 0, payout: 5 });
+        expect([r.payout, settles(r)]).toEqual([5, [5]]);
+        expect(r.staked + r.insuranceStaked - r.payout).toBe(10);
+      });
+
+      it("each answer closes only its own offer; the phase ends when none is left", () => {
+        const first = both([], "K").afterDeal;
+        const insured = step(first, { type: "TAKE_INSURANCE" });
+        expect([insured.phase, insured.offers]).toEqual([OFFERS, { insurance: false, evenMoney: false, surrender: true, peek: true }]);
+        const surrendered = step(first, { type: "SURRENDER", handIdx: 0 });
+        expect([surrendered.phase, surrendered.offers.insurance, surrendered.offers.surrender]).toEqual([OFFERS, true, false]);
+        expect(step(insured, { type: "SURRENDER", handIdx: 0 }).phase).toBe(PEEK);
+      });
+
+      it("surrender at the offers is not the late kind: it is fixed at once, and a dealer blackjack at the peek leaves it alone", () => {
+        const s = step(both([], "K").afterDeal, { type: "SURRENDER", handIdx: 0 });
+        expect(s.hands[0]).toMatchObject({ result: SURRENDER, surrendered: true, status: HandStatus.DONE });
+        expect(step(s, { type: "DECLINE_OFFERS" }, { type: "PEEK" }).hands[0].result).toBe(SURRENDER);
+      });
+    });
+  });
+
+  describe("money", () => {
+    it.each([[1, 0.5, 1.5], [5, 2.5, 7.5], [10, 5, 15], [25, 12.5, 37.5], [3, 1.5, 4.5]])("a bet of %s insures for %s and a dealer blackjack pays %s, to the cent", (bet, stake, back) => {
+      for (const [, mode] of modes) {
+        const r = round(mode, { bet, hole: "K", offers: [takeIns] });
+        expect(r.insuranceStaked).toBe(stake);
+        expect(r.hands[0].insurancePayout).toBe(back);
+        expect([r.payout, settles(r)]).toEqual([back, [back]]);
+        expect(ledger(r)[1]).toMatchObject({ kind: "bet", amount: stake, newRound: false, side: "insurance" });
+      }
+    });
+
+    it("the one settle is the sum of the hand payouts, insurance included, to the cent (bet 5: stake 2.5, pays 7.5)", () => {
+      const r = round(Modes.NO_PEEK, { player: ["8", "8"], hole: "K", draws: ["3", "2"], offers: [takeIns], bet: 5, actions: ["split", "stand", "stand"], rules: { noHoleCardLoss: "original" } });
+      expect(settles(r)).toEqual([r.hands.reduce((sum, h) => sum + h.payout, 0)]);
+      expect(settles(r)).toEqual([12.5]); // 0 + 5 (split-off stake back) + 7.5
+    });
+
+    it("6:5 pays 2.2 times a blackjack, and an odd bet rounds to the cent", () => {
+      expect(round(Modes.PEEK, { player: ["A", "K"], hole: "5", bet: 15, rules: { blackjackPayout: "6:5" } }).payout).toBe(33);
+      expect(round(Modes.PEEK, { player: ["A", "K"], hole: "5", bet: 1, rules: { blackjackPayout: "6:5" } }).payout).toBe(2.2);
+    });
+
+    it("exactly one settle per round, whatever the offers", () => {
+      for (const [, mode] of modes) {
+        for (const offers of [[], [takeIns]]) expect(settles(round(mode, { hole: "K", offers }))).toHaveLength(1);
+        expect(settles(round(mode, { player: ["A", "K"], hole: "K", offers: ["even_money"] }))).toHaveLength(1);
+      }
+    });
+
+    it("TAKE_INSURANCE with a balance below the stake is ignored; the offer stays open", () => {
+      const { afterDeal } = round(Modes.PEEK, { hole: "K" });
+      expect(step(afterDeal, { type: "TAKE_INSURANCE", credits: 4.99 })).toBe(afterDeal);
+      expect(step(afterDeal, { type: "TAKE_INSURANCE", credits: 5 }).hands[0].insurance).toBe(5);
+      expect(step(afterDeal, { type: "TAKE_INSURANCE", credits: undefined }).hands[0].insurance).toBe(5); // unknown balance counts as affordable
+    });
+
+    it("a second TAKE_INSURANCE is ignored (the offer closed): insurance is never stacked", () => {
+      const insured = step(round(Modes.EU, { hole: "K" }).afterDeal, { type: "TAKE_INSURANCE" });
+      expect(insured.phase).toBe(PLAYER_TURN);
+      expect(step(insured, { type: "TAKE_INSURANCE" })).toBe(insured);
+    });
+  });
+
+  describe("the server refuses or is slow", () => {
+    it.each(modes)("%s: a refused insurance bet voids only the insurance: the hand keeps its stake and no insurance is paid", (_name, mode) => {
+      const r = round(mode, { hole: "K", offers: [takeIns], refuse: [1] });
+      expect(r.hands[0]).toMatchObject({ bet: 10, insurance: 0 });
+      expect(r.hands[0].insurancePayout).toBeUndefined();
+      expect(r.state.notice).toMatch(/insurance bet/);
+      expect([r.results, r.payout, settles(r)]).toEqual([[LOSE], 0, [0]]);
+    });
+
+    it("a refused insurance bet leaves the bet circle, the stake and the other ledger bets alone", () => {
+      const insured = step(round(Modes.EU, { hole: "6" }).afterDeal, { type: "TAKE_INSURANCE" });
+      const seq = insured.pendingBets.find((b) => b.side === "insurance").seq;
+      const refused = step(insured, { type: "BET_REJECTED", seq });
+      expect(refused.hands[0]).toMatchObject({ bet: 10, insurance: 0 });
+      expect(refused.betCircle).toBe(insured.betCircle);
+      expect(refused.pendingBets.map((b) => b.side)).toEqual([undefined]); // only the opening bet is left waiting
+    });
+
+    it("a refused insurance bet is found by the hand's tag, after a split moved the indexes", () => {
+      const split = step(round(Modes.NO_PEEK, { player: ["8", "8"], hole: "6", draws: ["3", "2"] }).afterDeal, { type: "TAKE_INSURANCE" }, { type: "SPLIT", handIdx: 0 });
+      const seq = split.pendingBets.find((b) => b.side === "insurance").seq;
+      const refused = step(split, { type: "BET_REJECTED", seq });
+      expect(refused.hands.map((h) => h.insurance ?? 0)).toEqual([0, 0]);
+      expect(refused.hands.map((h) => h.bet)).toEqual([10, 10]);
+    });
+
+    it("a refused opening bet after insuring voids the round: no settle, no offers left, the late answer for the insurance is ignored", () => {
+      const r = round(Modes.PEEK, { hole: "K", offers: [takeIns], refuse: [0] });
+      expect(r.state).toMatchObject({ phase: GamePhases.PRE_DEAL, offers: null, pendingBets: [] });
+      expect(r.hands).toHaveLength(0);
+      expect(settles(r)).toEqual([]);
+      const insuranceSeq = ledger(r).find((e) => e.side === "insurance").seq;
+      expect(step(r.state, { type: "BET_REJECTED", seq: insuranceSeq })).toBe(r.state);
+    });
+
+    it("settling waits for the insurance bet to be answered, then sends the one settle with the insurance in it", () => {
+      let s = step(round(Modes.PEEK, { hole: "K" }).afterDeal, { type: "TAKE_INSURANCE" });
+      while (nextAutoAction(s)) s = step(s, { type: nextAutoAction(s) });
+      expect(s.phase).toBe(GamePhases.SETTLING_HANDS);
+      expect(s.pendingBets.map((b) => b.side)).toEqual([undefined, "insurance"]);
+      expect(s.creditEvents.some((e) => e.kind === "settle")).toBe(false);
+      s = step(s, { type: "BET_CONFIRMED", seq: s.pendingBets[0].seq });
+      expect(nextAutoAction(s)).toBeNull(); // one bet is still waiting
+      s = confirmBets(s);
+      expect(nextAutoAction(s)).toBe("SETTLE");
+      while (nextAutoAction(s)) s = step(s, { type: nextAutoAction(s) });
+      expect(s.creditEvents.filter((e) => e.kind === "settle").map((e) => e.amount)).toEqual([15]);
+    });
+
+    it("settling does not start on the peek: PEEK and the player's moves do not wait for the server", () => {
+      const insured = step(round(Modes.PEEK, { hole: "6" }).afterDeal, { type: "TAKE_INSURANCE" });
+      expect(insured.pendingBets).toHaveLength(2);
+      expect(nextAutoAction(insured)).toBe("PEEK");
+      expect(step(insured, { type: "PEEK" }).phase).toBe(PLAYER_TURN);
+    });
+  });
+
+  describe("presets", () => {
+    it.each(Object.keys(RULE_PRESETS))("%s: insurance is on and an ace up offers it", (name) => {
+      const rules = RULE_PRESETS[name];
+      expect(rules.insurance).toBe(true);
+      const r = playRound({ cards: ["10", "A", "6", "K", ...SPARES], mode: rules.dealerHoleBehaviour, rules });
+      expect(r.afterDeal.phase).toBe(OFFERS);
+      expect(r.afterDeal.offers.insurance).toBe(true);
+    });
+
+    it("Vegas peeks at the offers; Atlantic City, Europe, Australia and Singapore have no hole card to peek at", () => {
+      for (const name of Object.keys(RULE_PRESETS)) {
+        const r = playRound({ cards: ["10", "A", "6", "K", ...SPARES], mode: RULE_PRESETS[name].dealerHoleBehaviour, rules: RULE_PRESETS[name] });
+        expect(r.afterDeal.offers.peek).toBe(name === "Vegas");
+      }
+    });
+
+    it("Singapore has no hole card to peek at: early surrender against a ten stays a move on the turn, with no OFFERS step", () => {
+      expect(playRound({ cards: ["10", "K", "6", "5", ...SPARES], mode: RULE_PRESETS.Singapore.dealerHoleBehaviour, rules: RULE_PRESETS.Singapore }).afterDeal.phase).toBe(PLAYER_TURN);
+    });
+  });
+
+  describe("a round with nothing offered never visits OFFERS or PEEK", () => {
+    // mulberry32: the same shoes on every run.
+    const rng = (seed) => () => {
+      let t = (seed += 0x6d2b79f5);
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const RANKS = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"];
+    const shoeCodes = (seed) => { const next = rng(seed); return Array.from({ length: 24 }, () => RANKS[Math.floor(next() * RANKS.length)]); };
+    const dealt = (codes, mode, rules) => playRound({ cards: codes, mode, rules });
+    const SHOES = Array.from({ length: 300 }, (_, seed) => shoeCodes(seed));
+    const quiet = (r) => {
+      expect([PLAYER_TURN, DEALER_TURN]).toContain(r.afterDeal.phase);
+      expect(r.afterDeal.offers).toBeNull();
+      expect(r.afterOffers).toBe(r.afterDeal);
+    };
+
+    it("insurance off, in every mode, with late, none, and (where it is a turn move) early surrender", () => {
+      for (const codes of SHOES) {
+        for (const surrender of ["late", "none"]) for (const [, mode] of modes) quiet(dealt(codes, mode, { insurance: false, surrender }));
+        for (const mode of [Modes.NO_PEEK, Modes.EU]) for (const surrender of ["early", "earlyNoAce"]) quiet(dealt(codes, mode, { insurance: false, surrender }));
+      }
+    });
+
+    it("insurance on, any up card but an ace, in every mode: no OFFERS and no PEEK", () => {
+      const notAce = SHOES.filter((codes) => codes[1] !== "A");
+      expect(notAce.length).toBeGreaterThan(200);
+      for (const codes of notAce) {
+        for (const [, mode] of modes) {
+          quiet(dealt(codes, mode, { insurance: true, surrender: "late" }));
+          if (mode !== Modes.PEEK) quiet(dealt(codes, mode, { insurance: true, surrender: "early" }));
+        }
+      }
+    });
+
+    it("control: with insurance on an ace up always opens OFFERS (insurance or even money)", () => {
+      const aces = SHOES.filter((codes) => codes[1] === "A");
+      expect(aces.length).toBeGreaterThan(10);
+      for (const codes of aces) for (const [, mode] of modes) {
+        const r = dealt(codes, mode, { insurance: true });
+        expect(r.afterDeal.phase).toBe(OFFERS);
+        expect(r.afterDeal.offers.peek).toBe(mode === Modes.PEEK);
+      }
+    });
+
+    it("a quiet peek round deals exactly as it did: the dealer blackjack is shown at the deal and the player blackjack is paid", () => {
+      const dealerBj = dealt(["9", "K", "7", "A", ...SPARES], Modes.PEEK, { insurance: true });
+      expect(dealerBj.afterDeal).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(dealerBj.afterDeal.dealer.cards).toHaveLength(2);
+      const playerBj = dealt(["A", "K", "K", "5", ...SPARES], Modes.PEEK, { insurance: true });
+      expect(playerBj.afterDeal.hands[0].result).toBe(WIN);
     });
   });
 });

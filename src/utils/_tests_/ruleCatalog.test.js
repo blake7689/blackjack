@@ -10,7 +10,7 @@ const byKey = (key) => RULE_CATALOG.find((r) => r.key === key);
 describe("ruleCatalog (#91)", () => {
   it("lists the table rules this PR adds, plus deck count and split limit", () => {
     expect(RULE_CATALOG.map((r) => r.key)).toEqual([
-      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender",
+      "deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance",
     ]);
   });
 
@@ -85,9 +85,19 @@ describe("ruleCatalog (#91)", () => {
     for (const mode of Object.values(DealerHoleOptions)) expect(visibleIn(settings(mode)).map((r) => r.key)).toContain("surrender");
   });
 
-  it("the two early hints say they work like Late with a dealer who peeks (the PR 2 limit; PR 3 removes it)", () => {
-    for (const value of ["early", "earlyNoAce"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).toMatch(/dealer who peeks.*like Late/);
-    for (const value of ["none", "late"]) expect(byKey("surrender").options.find((o) => o.value === value).hint).not.toMatch(/peeks/);
+  it("no surrender hint says early works like late any more: early is offered before the peek (PR 3)", () => {
+    for (const o of byKey("surrender").options) expect(o.hint).not.toMatch(/peeks|like Late/);
+  });
+
+  it("insurance is a plain checkbox with a hint, on by default, shown in every mode", () => {
+    const rule = byKey("insurance");
+    expect(rule.input).toBe("checkbox");
+    expect(rule.label()).toBe("Insurance and Even Money");
+    expect(rule.hint).toMatch(/insure for half your bet.*pays 2:1.*even money/);
+    expect(rule.showWhen).toBeUndefined();
+    expect(rule.options).toBeUndefined();
+    expect(initialGameState.settings.insurance).toBe(true);
+    for (const mode of Object.values(DealerHoleOptions)) expect(visibleIn(settings(mode)).map((r) => r.key)).toContain("insurance");
   });
 
   describe("visibleIn", () => {

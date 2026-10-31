@@ -10,12 +10,12 @@ const CORS = {
 const PLAYER = { userName: 'tester', email: 'tester@e2e.test', firstName: 'Test', lastName: 'Er' };
 const hold = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// The saved table rules the tests play with (version 3): the Vegas preset, written out so a later change to the defaults moves no test.
+// The saved table rules the tests play with (version 4): the Vegas preset, written out so a later change to the defaults moves no test.
 export const VEGAS = {
-  v: 3, deckCount: 6, dealerHoleBehaviour: 'drawEarly_Check', dealerHitsSoft17: true, blackjackPayout: '3:2', doubleOn: 'any',
+  v: 4, deckCount: 6, dealerHoleBehaviour: 'drawEarly_Check', dealerHitsSoft17: true, blackjackPayout: '3:2', doubleOn: 'any',
   doubleAfterSplit: true, maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: 'original',
   blackjackPaysImmediately: true, blackJackOnSplit: false, dealerDrawsOnPlayerBust: false, dealerDrawsOnceOn21: false,
-  dealerDrawsOnPlayerBlackjack: true, surrender: 'late',
+  dealerDrawsOnPlayerBlackjack: true, surrender: 'late', insurance: true,
 };
 
 const stubs = new WeakMap(); // page -> stub, so the auto fixture below can check it after the test

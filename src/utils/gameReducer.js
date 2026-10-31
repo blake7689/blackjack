@@ -1,8 +1,9 @@
 import { GamePhases } from "./constants/gamePhases";
 import { HandStatus } from "./constants/handStatus";
+import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
-import { canSplit, canDouble, canSurrender, isSplitAces, cents } from "./blackjackLogic";
+import { canSplit, canDouble, canSurrender, isSplitAces, cents, insuranceStake } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import * as engine from "./gameEngine";
 
@@ -31,6 +32,7 @@ export const initialGameState = {
     hitSplitAces: false,
     noHoleCardLoss: NoHoleCardLoss.ORIGINAL, // a dealer blackjack found after the player added stakes: takes only the first bet
     surrender: SurrenderOptions.LATE,
+    insurance: true, // offered against a dealer ace (and even money on a player blackjack)
     chipValues: DEFAULT_CHIP_VALUES,
     tripleDown: false,
     tripleDrawsOnBust: false, // a second triple card is drawn even if the first busted
@@ -45,6 +47,7 @@ export const initialGameState = {
   dealerHole: { cards: [] },
   dealerRevealed: false,
   dealerSkipDraw: false,
+  offers: null, // what the player is still offered before the first move: { insurance, evenMoney, surrender, peek }, or null
   selectedHandIndex: 0,
   betCircle: 0,
   initialBet: 0,
@@ -63,24 +66,24 @@ export const initialGameState = {
 // Changing these settings deals a new shoe and resets the table. //
 export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit",
   "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands",
-  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender"];
+  "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
 export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
 
-// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender; every save
-// before that is `v: 1`. A missing rule key in an older object gets today's behaviour from LEGACY_RULES, so an existing table
-// never changes payout (`v: 1` gets all of them; `v: 1` and `v: 2` get surrender "none"). `{}`, a missing `v` and the current
-// version get the Vegas defaults. The next save writes `v: 3` with every key.
-// Whoever adds a rule key later (PR 3 insurance) must bump SETTINGS_VERSION, add its RULE_SINCE entry and its LEGACY_RULES value.
-export const SETTINGS_VERSION = 3;
+// Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender, version 4
+// insurance; every save before that is `v: 1`. A missing rule key in an older object gets today's behaviour from LEGACY_RULES, so
+// an existing table never changes payout (`v: 1` gets all of them; `v: 1` and `v: 2` get surrender "none"; `v: 1` to `v: 3` get
+// insurance off). `{}`, a missing `v` and the current version get the Vegas defaults. The next save writes `v: 4` with every key.
+// Whoever adds a rule key later must bump SETTINGS_VERSION, add its RULE_SINCE entry and its LEGACY_RULES value.
+export const SETTINGS_VERSION = 4;
 export const LEGACY_RULES = {
   deckCount: 2, maxSplitHands: 0, dealerHitsSoft17: false, blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY,
   doubleAfterSplit: true, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
-  surrender: SurrenderOptions.NONE,
+  surrender: SurrenderOptions.NONE, insurance: false,
 };
 // The saved version that introduced a rule key (a key not listed came with version 2). An older saved object has no such key.
-const RULE_SINCE = { surrender: 3 };
+const RULE_SINCE = { surrender: 3, insurance: 4 };
 
 // Settings that hold one of a fixed list of strings.
 const ENUM_SETTINGS = {
@@ -120,18 +123,20 @@ const emptyRound = {
   dealerHole: { cards: [] },
   dealerRevealed: false,
   dealerSkipDraw: false,
+  offers: null,
   selectedHandIndex: 0,
   notice: null,
 };
 
 // Queues a balance change; GameProvider hands each event to PlayerProvider exactly once. Kinds:
 //   local:  chips moved on the table only ({ amount } is the change to the shown balance)
-//   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted, handTag }); handTag finds the hand
+//   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted, handTag, side }); handTag finds the hand
 //           again when the answer comes (null for the opening bet). Until the server answers it sits in pendingBets.
+//           side: "insurance" tells a refused insurance bet from a refused double or split (the API has no such field).
 //   settle: the round's payout for the server ledger ({ amount }, sent even when 0 to close the round)
 function credit(state, event) {
   const creditSeq = state.creditSeq + 1;
-  const pending = event.kind === "bet" ? [{ seq: creditSeq, handTag: event.handTag, amount: event.amount, newRound: event.newRound }] : [];
+  const pending = event.kind === "bet" ? [{ seq: creditSeq, handTag: event.handTag, amount: event.amount, newRound: event.newRound, ...(event.side && { side: event.side }) }] : [];
   return {
     ...state,
     creditSeq,
@@ -181,6 +186,35 @@ function advance(state, hands, handIdx) {
   const nextIdx = hands.findIndex((h, i) => i > handIdx && h.status !== HandStatus.DONE);
   if (nextIdx !== -1) return { ...state, hands, betCircle, selectedHandIndex: nextIdx };
   return { ...state, hands, betCircle, selectedHandIndex: 0, phase: GamePhases.DEALER_TURN };
+}
+
+// Each offer closes by itself; when none is left open the offers are over: the peek (if it was deferred), else the first move. //
+// While the peek is pending `offers` is kept so PEEK knows; PEEK clears it.
+function closeOffer(state, keys, hands = state.hands) {
+  const offers = { ...state.offers, ...Object.fromEntries(keys.map((key) => [key, false])) };
+  if (offers.insurance || offers.evenMoney || offers.surrender) return { ...state, hands, offers };
+  const phase = offers.peek ? GamePhases.PEEK : hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN;
+  return { ...state, hands, offers: offers.peek ? offers : null, phase };
+}
+
+// The offers all act on the one hand dealt (hand 0). //
+function offerAction(state, action) {
+  if (state.phase !== GamePhases.OFFERS) return state;
+  const hand = state.hands[0];
+  switch (action.type) {
+    case "TAKE_INSURANCE": {
+      const stake = insuranceStake(hand.bet);
+      if (!state.offers.insurance || action.credits < stake) return state;
+      const insured = credit(state, { kind: "bet", amount: stake, newRound: false, alreadyDeducted: false, handTag: hand.tag, side: "insurance" });
+      return closeOffer(insured, ["insurance"], replaceHand(state.hands, 0, { ...hand, insurance: stake }));
+    }
+    case "EVEN_MONEY":
+      return state.offers.evenMoney ? closeOffer(state, ["evenMoney", "insurance"], replaceHand(state.hands, 0, { ...hand, result: HandResult.WIN, evenMoney: true })) : state;
+    case "SURRENDER":
+      return state.offers.surrender ? closeOffer(state, ["surrender"], replaceHand(state.hands, 0, engine.playerSurrender(hand, state.dealer.cards[0], state.settings))) : state;
+    default: // DECLINE_OFFERS
+      return closeOffer(state, ["insurance", "evenMoney", "surrender"]);
+  }
 }
 
 function replaceHand(hands, handIdx, ...replacement) {
@@ -279,7 +313,7 @@ export function gameReducer(state, action) {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
       if (action.auto && !state.autoDealPending) return state; // a timer step that was cancelled
       const { result, next, refilled } = draw(state, action.refill,
-        (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings));
+        (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings, action.credits));
       const dealt = {
         ...next,
         ...emptyRound,
@@ -287,6 +321,7 @@ export function gameReducer(state, action) {
         nextHandTag: state.nextHandTag + 1,
         dealer: result.dealer,
         dealerHole: result.dealerHoleCards,
+        offers: result.offers,
         initialBet: state.betCircle,
         autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
@@ -297,15 +332,31 @@ export function gameReducer(state, action) {
 
     case "DEAL_DONE":
       if (state.phase !== GamePhases.DEALING) return state;
+      if (state.offers) return { ...state, phase: GamePhases.OFFERS };
       return { ...state, phase: state.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN };
+
+    case "TAKE_INSURANCE":
+    case "EVEN_MONEY":
+    case "DECLINE_OFFERS":
+      return offerAction(state, action);
+
+    case "PEEK": {
+      if (state.phase !== GamePhases.PEEK) return state;
+      const { hands, dealer, hole } = engine.peekDealer(state.hands, state.dealer, state.dealerHole);
+      // The same turn order as DEAL_DONE: the dealer's turn if every hand is finished, else the player's.
+      const phase = hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN;
+      return countSeen({ ...state, hands, dealer, dealerHole: hole, offers: null, phase });
+    }
 
     case "HIT":
     case "STAND":
     case "DOUBLE":
     case "TRIPLE":
     case "SPLIT":
-    case "SURRENDER":
       return playerAction(state, action);
+
+    case "SURRENDER":
+      return state.phase === GamePhases.OFFERS ? offerAction(state, action) : playerAction(state, action);
 
     case "DEALER_REVEAL": {
       const dealer = engine.revealDealerHole(state.dealer, state.dealerHole);
@@ -349,6 +400,11 @@ export function gameReducer(state, action) {
           notice: "The server refused your bet, so the round was cancelled." };
       }
       // Find the hand by its tag: its index may have moved since the bet was made.
+      if (bet.side === "insurance") {
+        // Only the insurance is void: the hand's own stake is untouched.
+        const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, insurance: 0 } : h));
+        return { ...state, hands, pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused your $${bet.amount} insurance bet; the hand is not insured.` };
+      }
       const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, bet: h.bet - bet.amount } : h));
       return { ...state, hands, betCircle: hands.reduce((sum, h) => sum + h.bet, 0),
         pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused $${bet.amount} of your stake; that hand plays for less.` };
@@ -399,6 +455,8 @@ export function gameReducer(state, action) {
 export function nextAutoAction(state) {
   switch (state.phase) {
     case GamePhases.DEALING: return "DEAL_DONE";
+    case GamePhases.OFFERS: return null; // the player decides; no timer, and auto deal never declines for them
+    case GamePhases.PEEK: return "PEEK";
     case GamePhases.DEALER_TURN: return state.dealerRevealed ? "DEALER_STEP" : "DEALER_REVEAL";
     // Checks the hands, not the setting: the option may be turned off mid-round.
     // Waits until the server has answered every bet: a refused bet changes what the hands are worth.

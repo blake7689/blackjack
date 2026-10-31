@@ -33,6 +33,15 @@ describe("Header", () => {
     expect(location()).toBe("/");
   });
 
+  it.each([GamePhases.OFFERS, GamePhases.PEEK])("asks before leaving a table waiting at %s: the insured bet would be lost", (phase) => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { gameActions } = renderUI(<Header />, { path: "/game", actions: { getPhase: () => phase } });
+    fireEvent.click(screen.getByText("Home"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(gameActions.resetGame).not.toHaveBeenCalled();
+    expect(location()).toBe("/game");
+  });
+
   it("opens Settings", () => {
     renderUI(<Header />, { path: "/game" });
     fireEvent.click(screen.getByText("Settings"));

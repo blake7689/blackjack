@@ -59,11 +59,11 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   Europe, Australia, Singapore) live in `utils/rulePresets.js` and the rule controls' text in `utils/ruleCatalog.js`; the default settings
   equal Vegas. `playRound` starts from `LEGACY_RULES` (the pre-#91 rules: S17, 2 decks, no split limit, a dealer blackjack takes all, no surrender) and
   the bare mode (pays-immediately off); a scenario for a new rule sets it in `rules`. `surrender` (none / late / early / earlyNoAce) is a preset
-  key: Vegas and Atlantic City `late`, Europe and Australia `none`, Singapore `earlyNoAce`.
+  key: Vegas and Atlantic City `late`, Europe and Australia `none`, Singapore `earlyNoAce`. `insurance` (bool) is a preset key too (true in all five).
 - `getInitialPlayerHandEvaluation` third arg (`blackjackPaysNow`) is true for US peek, `blackjackPaysImmediately`,
-  or EU with `dealerDrawsOnPlayerBlackjack` off. US no peek hides a dealer blackjack until
-  `revealDealerHole`, and it then wins every bet, doubles and splits included.
-- Dealing (#6): `DEAL` sets `DEALING`; the auto step `DEAL_DONE` (one Rate of Play later) moves on to `PLAYER_TURN` or `DEALER_TURN`.
+  or EU with `dealerDrawsOnPlayerBlackjack` off (`bjPaysWithoutPeek`). A deferred peek (see Offers) forces it false and `peekDealer` applies it.
+  US no peek hides a dealer blackjack until `revealDealerHole`, and it then wins every bet, doubles and splits included.
+- Dealing (#6): `DEAL` sets `DEALING`; the auto step `DEAL_DONE` (one Rate of Play later) moves on to `PLAYER_TURN` or `DEALER_TURN` (or `OFFERS`, see Offers).
   Totals, labels and the count are hidden (`visibility`, so no layout shift) and the centre says "Dealing..." meanwhile. Tests step `DEAL_DONE`
   after `DEAL` (`playRound` does). The engine puts animation hints on card copies (`dealOrder`, `revealed`, `moved`), never in place.
 - Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
@@ -78,11 +78,22 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   Every surrender sets `surrendered: true`: at once (`result` SURRENDER) or, for `late` with no peek against an ace or ten, waiting (`result`
   NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered round has one hand. The
   dealer takes its second card after any surrender and stops at two (`dealerShowsSecondCard`, `dealerOnlyChecksBlackjack`, `dealerNeedsToPlay`
-  read the flag). In US peek `early` and `earlyNoAce` work like `late` until the offers step (PR 3); PR 3 must remove that sentence from the
-  catalogue hints.
-- Saved settings carry `v` (3 since #91 surrender). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
-  older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`; `{}`, no `v` and `v: 3`
-  get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
+  read the flag). In a peek game `early` / `earlyNoAce` against an ace or ten are offered at `OFFERS` only (`earlyOffer`), never again on the
+  turn (`canSurrender` excludes them); no-peek and EU keep early surrender on the turn (the player acts before any peek anyway).
+- Offers (#91): `offersAtDeal` (pure) says what is offered at the deal: insurance (setting on, ace up, half the bet, only if affordable), even
+  money (player blackjack vs an ace, not when the settings already pay the blackjack at once) and early surrender (peek game, ace or ten up,
+  non-blackjack hand). Nothing offered = `state.offers` is `null`, no `OFFERS`/`PEEK` phase, and `dealRound` runs exactly as before:
+  never add a step to a round that offers nothing. With an offer in a peek game the peek is
+  deferred: `dealRound` shows one dealer card and leaves the hole card in `dealerHoleCards`, then `OFFERS` waits for the player (no timer: auto
+  deal waits there and never declines), then the auto step `PEEK` (`engine.peekDealer`) does what `dealRound` would have done at the deal,
+  skipping even-money and surrendered hands. Each offer closes alone (`closeOffer`); `DECLINE_OFFERS` closes the rest. Insurance is
+  `hand.insurance` (the stake; zeroed on a split-off hand), a ledger `bet` with `newRound: false` and the reducer-only tag `side: "insurance"`
+  (the API has no such field; a refused one voids only the insurance, in `BET_REJECTED`). `settleHand` pays it 3x its stake when the dealer has
+  blackjack, inside the hand's `payout`, so the round still settles once. Even money is `evenMoney: true` (WIN, 2x). `dealerShowsSecondCard`
+  reads `insurance`; `dealerOnlyChecksBlackjack` must not (a live insured hand still needs the dealer's total). `playRound` takes `offers`.
+- Saved settings carry `v` (4 since #91 insurance). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
+  older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`, `v: 1` to `v: 3` get
+  `insurance: false`; `{}`, no `v` and `v: 4` get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
 - Original-bet-only (`noHoleCardLoss: "original"`): every hand has `baseStake` (the first bet; 0 on a split-off hand). A dealer
   blackjack gives back `bet - baseStake` of a hand that did not bust (a busted hand is never refunded), paid in the one round
   `settle`. The rounded blackjack payout (6:5 pays 2.2x) and the round sum are rounded to the cent (`cents`).
@@ -141,7 +152,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
   `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
   shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal); it stops click
-  propagation because `.board` treats a click as CONTINUE. There is no Undo action, only ADD_BET and CLEAR_BET.
+  propagation because `.board` treats a click as CONTINUE. There is no Undo action, only ADD_BET and CLEAR_BET. `OFFERS` has no automatic step, so auto deal waits there.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

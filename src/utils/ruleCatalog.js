@@ -32,9 +32,11 @@ export const RULE_CATALOG = [
   { key: "surrender", label: () => "Surrender", input: "select", options: [
     { value: SurrenderOptions.NONE, label: "None", hint: "You can't give up a hand." },
     { value: SurrenderOptions.LATE, label: "Late", hint: "Give up half your bet on your first two cards. If the dealer has blackjack, you lose the whole bet." },
-    { value: SurrenderOptions.EARLY, label: "Early", hint: "Give up half your bet before the dealer checks for blackjack. You keep the half even if the dealer has one. With a dealer who peeks, this works like Late." },
-    { value: SurrenderOptions.EARLY_NO_ACE, label: "Early (not against an ace)", hint: "Like Early, but not offered when the dealer shows an ace. With a dealer who peeks, this works like Late." },
+    { value: SurrenderOptions.EARLY, label: "Early", hint: "Give up half your bet before the dealer checks for blackjack. You keep the half even if the dealer has one." },
+    { value: SurrenderOptions.EARLY_NO_ACE, label: "Early (not against an ace)", hint: "Like Early, but not offered when the dealer shows an ace." },
   ] },
+  { key: "insurance", label: () => "Insurance and Even Money", input: "checkbox",
+    hint: "When the dealer shows an ace you may insure for half your bet; it pays 2:1 if the dealer has blackjack. With your own blackjack you may take even money (1:1) at once." },
 ];
 
 // The rules that apply to these settings (a rule that does not apply has no effect and is not shown).

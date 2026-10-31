@@ -414,7 +414,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 3, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 4, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -935,16 +935,16 @@ describe("auto deal (#88)", () => {
   });
 });
 
-describe("saved settings, versions 1 to 3 (#91): no silent payout change", () => {
+describe("saved settings, versions 1 to 4 (#91): no silent payout change", () => {
   const vegas = initialGameState.settings;
   // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none",
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none", insurance: false,
   };
 
   it("exports the version and the legacy values", () => {
-    expect(SETTINGS_VERSION).toBe(3);
+    expect(SETTINGS_VERSION).toBe(4);
     expect(LEGACY_RULES).toEqual(legacy);
   });
 
@@ -958,10 +958,10 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   it.each([
     ["{} (a player who never saved)", {}],
     ["no version", { tripleDown: false }],
-    ["v: 3 with nothing else", { v: 3 }],
+    ["v: 4 with nothing else", { v: 4 }],
     ["null", null],
     ["undefined", undefined],
-    ["a future version", { v: 4 }],
+    ["a future version", { v: 5 }],
     ["a version that is a string", { v: "1" }],
   ])("%s gets the Vegas defaults", (_name, saved) => {
     expect(sanitizeSettings(saved)).toEqual(vegas);
@@ -996,8 +996,8 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   describe("wrong types and unknown values fall back", () => {
     const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
 
-    it("to the Vegas default for v: 3", () => {
-      expect(sanitizeSettings({ v: 3, ...bad })).toEqual(vegas);
+    it("to the Vegas default for v: 4", () => {
+      expect(sanitizeSettings({ v: 4, ...bad })).toEqual(vegas);
     });
 
     it("to the Vegas default for {}", () => {
@@ -1031,7 +1031,7 @@ describe("saved settings, versions 1 to 3 (#91): no silent payout change", () =>
   });
 
   it("drops unknown keys, and the version is not a setting", () => {
-    const s = sanitizeSettings({ v: 3, bogus: 1, rigDeck: true });
+    const s = sanitizeSettings({ v: 4, bogus: 1, rigDeck: true });
     expect(s).toEqual(vegas);
     expect(s).not.toHaveProperty("v");
   });
@@ -1167,7 +1167,10 @@ describe("SURRENDER (#91)", () => {
     });
 
     it("when earlyNoAce meets an ace", () => {
-      const s = set(dealt(["10", "A", "6", "5"]), { surrender: "earlyNoAce" });
+      // The rules are set before the deal (insurance off, so an ace up offers nothing and the hand is on the turn).
+      const table = set(started(["10", "A", "6", "5"]), { surrender: "earlyNoAce", insurance: false });
+      const s = run(table, { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+      expect(s.phase).toBe(GamePhases.PLAYER_TURN);
       expect(run(s, { type: "SURRENDER", handIdx: 0 })).toBe(s);
     });
 
@@ -1264,7 +1267,7 @@ describe("surrender in saved settings (#91)", () => {
 
   it("only surrender is filled by version 3: a v: 2 object keeps Vegas for its other missing keys", () => {
     const s = sanitizeSettings({ v: 2 });
-    expect(s).toEqual({ ...vegas, surrender: "none" });
+    expect(s).toEqual({ ...vegas, surrender: "none", insurance: false });
   });
 
   it("LOAD_SETTINGS of a v: 2 object between rounds deals the new shoe: surrender went from late to none", () => {
@@ -1277,9 +1280,315 @@ describe("surrender in saved settings (#91)", () => {
 
   it("LOAD_SETTINGS of the same surrender leaves the shoe alone; a changed one never resets a round in progress", () => {
     const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
-    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
+    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
     const round = dealt(["10", "6", "6", "K", "5"]);
-    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 3, surrender: "none" }, shoe: stackedShoe(["4"]) });
+    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "none" }, shoe: stackedShoe(["4"]) });
     expect([loaded.phase, loaded.hands, loaded.shoe, loaded.settings.surrender]).toEqual([round.phase, round.hands, round.shoe, "none"]);
+  });
+});
+
+describe("the insurance setting (#91)", () => {
+  const vegas = initialGameState.settings;
+
+  it("is on by default (Vegas), and a change to it is a table change", () => {
+    expect(vegas.insurance).toBe(true);
+    expect(RESET_SETTINGS).toContain("insurance");
+  });
+
+  it("LOAD_SETTINGS between rounds deals a new shoe when insurance changes, and never resets a round in progress", () => {
+    const fresh = stackedShoe(["4", "5"]);
+    const loaded = gameReducer(started(["2", "3"]), { type: "LOAD_SETTINGS", saved: { v: 4, insurance: false }, shoe: fresh });
+    expect(loaded.settings.insurance).toBe(false);
+    expect(loaded.shoe).toBe(fresh);
+    const midRound = dealt(["10", "6", "9", "7"]);
+    const kept = gameReducer(midRound, { type: "LOAD_SETTINGS", saved: { v: 4, insurance: false }, shoe: fresh });
+    expect(kept.settings.insurance).toBe(false);
+    expect(kept.shoe).toBe(midRound.shoe);
+    expect(kept.phase).toBe(GamePhases.PLAYER_TURN);
+  });
+
+  it.each([
+    ["v: 1", { v: 1 }, false],
+    ["v: 2", { v: 2 }, false],
+    ["v: 3 (the version before insurance)", { v: 3 }, false],
+    ["v: 4", { v: 4 }, true],
+    ["a future version", { v: 5 }, true],
+    ["{} (never saved)", {}, true],
+    ["no version", { tripleDown: false }, true],
+    ["null", null, true],
+    ["a version that is a string", { v: "3" }, true],
+    ["v: 0", { v: 0 }, true],
+  ])("a missing insurance key in %s becomes %s", (_name, saved, expected) => {
+    expect(sanitizeSettings(saved).insurance).toBe(expected);
+  });
+
+  it.each([[1], ["yes"], [null], [[]]])("a wrong-type insurance (%j) falls back to the value for its version", (value) => {
+    expect(sanitizeSettings({ v: 4, insurance: value }).insurance).toBe(true);
+    expect(sanitizeSettings({ v: 3, insurance: value }).insurance).toBe(false);
+  });
+
+  it("a saved insurance value is kept at every version", () => {
+    for (const v of [1, 2, 3, 4]) {
+      expect(sanitizeSettings({ v, insurance: true }).insurance).toBe(true);
+      expect(sanitizeSettings({ v, insurance: false }).insurance).toBe(false);
+    }
+  });
+
+  it("an older save keeps its other rules while insurance is filled in off", () => {
+    expect(sanitizeSettings({ v: 3, surrender: "early", dealerHitsSoft17: false })).toMatchObject({ surrender: "early", dealerHitsSoft17: false, insurance: false });
+  });
+
+  it("every preset has insurance on, and the defaults equal Vegas including insurance", () => {
+    for (const name of Object.keys(RULE_PRESETS)) expect(RULE_PRESETS[name].insurance).toBe(true);
+    expect(RULE_PRESETS.Vegas.insurance).toBe(vegas.insurance);
+  });
+});
+
+describe("offers: the reducer (#91)", () => {
+  const { OFFERS, PEEK, PLAYER_TURN, DEALER_TURN } = GamePhases;
+  // Vegas defaults: peek, insurance on, late surrender. Player 10-6 against an ace; the hole card is a king (a dealer blackjack) unless said.
+  const offered = (codes = ["10", "A", "6", "K", "5"], settings = {}, bet = 10) => {
+    const table = started(codes);
+    const set = Object.entries(settings).reduce((s, [key, value]) => run(s, { type: "SET_SETTING", key, value }), table);
+    return run(set, { type: "ADD_BET", amount: bet }, { type: "DEAL" }, { type: "DEAL_DONE" });
+  };
+  const OPEN = { insurance: true, evenMoney: false, surrender: false, peek: true };
+
+  it("DEAL_DONE stops at OFFERS when something is offered, and nothing is automatic there", () => {
+    const s = offered();
+    expect(s).toMatchObject({ phase: OFFERS, offers: OPEN });
+    expect(nextAutoAction(s)).toBeNull();
+    expect(s.hands[0].insurance).toBeUndefined();
+  });
+
+  it("DEAL_DONE goes straight to the turn when nothing is offered", () => {
+    expect(offered(["10", "6", "9", "K", "5"])).toMatchObject({ phase: PLAYER_TURN, offers: null });
+    expect(offered(["10", "A", "6", "K", "5"], { insurance: false })).toMatchObject({ phase: DEALER_TURN, offers: null }); // a peek found the blackjack at the deal
+  });
+
+  it("DEAL gives the balance to the offers: below half the bet, nothing is offered; no balance given counts as enough", () => {
+    const poor = run(started(["10", "A", "6", "K"]), { type: "ADD_BET", amount: 10 }, { type: "DEAL", credits: 4 }, { type: "DEAL_DONE" });
+    expect(poor.offers).toBeNull();
+    expect(poor.phase).toBe(DEALER_TURN);
+    const unknown = gameReducer(gameReducer(started(["10", "A", "6", "K"]), { type: "ADD_BET", amount: 10, credits: 1000 }), { type: "DEAL", refill: outOfCards });
+    expect(unknown.offers).toMatchObject({ insurance: true });
+  });
+
+  describe("TAKE_INSURANCE", () => {
+    it("books half the bet as a ledger bet (newRound false, not yet deducted, tagged side insurance) and closes the offer", () => {
+      const s = run(offered(), { type: "TAKE_INSURANCE" });
+      expect(s.hands[0]).toMatchObject({ insurance: 5, bet: 10 });
+      expect(s.creditEvents.at(-1)).toMatchObject({ kind: "bet", amount: 5, newRound: false, alreadyDeducted: false, handTag: s.hands[0].tag, side: "insurance" });
+      expect(s.pendingBets.at(-1)).toMatchObject({ amount: 5, newRound: false, side: "insurance", handTag: s.hands[0].tag });
+      expect(s.betCircle).toBe(10); // the bet circle is the hand's stake only
+      expect(s).toMatchObject({ phase: PEEK, offers: { ...OPEN, insurance: false } }); // offers kept while the peek is pending
+    });
+
+    it("an odd bet gives a half stake: $5 insures for 2.5", () => {
+      const s = run(offered(undefined, {}, 5), { type: "TAKE_INSURANCE" });
+      expect(s.hands[0].insurance).toBe(2.5);
+      expect(s.creditEvents.at(-1)).toMatchObject({ amount: 2.5 });
+    });
+
+    it("is ignored when the balance is below the stake, equal to it is fine", () => {
+      const s = offered();
+      expect(run(s, { type: "TAKE_INSURANCE", credits: 4.99 })).toBe(s);
+      expect(run(s, { type: "TAKE_INSURANCE", credits: 5 }).hands[0].insurance).toBe(5);
+    });
+
+    it("is ignored when insurance is not offered (a blackjack's even money, early surrender only) or already taken", () => {
+      const evenMoney = offered(["A", "A", "K", "5"]);
+      expect(run(evenMoney, { type: "TAKE_INSURANCE" })).toBe(evenMoney);
+      const earlyOnly = offered(["10", "K", "6", "5"], { surrender: "early" });
+      expect(earlyOnly.offers.insurance).toBe(false);
+      expect(run(earlyOnly, { type: "TAKE_INSURANCE" })).toBe(earlyOnly);
+      const taken = run(offered(["10", "A", "6", "K", "5"], { surrender: "early" }), { type: "TAKE_INSURANCE" });
+      expect(taken.phase).toBe(OFFERS); // early surrender is still open
+      expect(run(taken, { type: "TAKE_INSURANCE" })).toBe(taken);
+    });
+  });
+
+  describe("EVEN_MONEY", () => {
+    it("fixes a 1:1 win at once with no credit event, and goes on to the peek", () => {
+      const before = offered(["A", "A", "K", "5"]);
+      const s = run(before, { type: "EVEN_MONEY" });
+      expect(s.hands[0]).toMatchObject({ result: HandResult.WIN, evenMoney: true, status: HandStatus.DONE });
+      expect(s.creditEvents).toBe(before.creditEvents);
+      expect(s.pendingBets).toBe(before.pendingBets);
+      expect(s.phase).toBe(PEEK);
+    });
+
+    it("without a peek it goes to the dealer's turn (the hand is finished)", () => {
+      const s = run(offered(["A", "A", "K", "5"], { dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }), { type: "EVEN_MONEY" });
+      expect(s.phase).toBe(DEALER_TURN);
+      expect(s.offers).toBeNull();
+    });
+
+    it("is ignored when not offered", () => {
+      const insuranceOnly = offered();
+      expect(run(insuranceOnly, { type: "EVEN_MONEY" })).toBe(insuranceOnly);
+    });
+  });
+
+  describe("SURRENDER at the offers", () => {
+    const early = (codes = ["10", "K", "6", "A", "5"], settings = {}) => offered(codes, { surrender: "early", insurance: false, ...settings });
+
+    it("fixes the surrender at once, without a credit event, and ends the offers", () => {
+      const before = early();
+      const s = run(before, { type: "SURRENDER", handIdx: 0 });
+      expect(s.hands[0]).toMatchObject({ surrendered: true, result: HandResult.SURRENDER, status: HandStatus.DONE });
+      expect(s.creditEvents).toBe(before.creditEvents);
+      expect(s.phase).toBe(PEEK);
+    });
+
+    it("leaves an open insurance offer open", () => {
+      const s = run(offered(["10", "A", "6", "K", "5"], { surrender: "early" }), { type: "SURRENDER", handIdx: 0 });
+      expect(s).toMatchObject({ phase: OFFERS, offers: { insurance: true, surrender: false } });
+    });
+
+    it("is ignored when no surrender is offered (the late kind is a move on the turn)", () => {
+      const lateOnly = offered(["10", "A", "6", "K", "5"]); // insurance offered, surrender late
+      expect(run(lateOnly, { type: "SURRENDER", handIdx: 0 })).toBe(lateOnly);
+    });
+  });
+
+  describe("DECLINE_OFFERS", () => {
+    it("closes every open offer, with no credit event: to the peek when it is deferred", () => {
+      const before = offered(["10", "A", "6", "K", "5"], { surrender: "early" });
+      const s = run(before, { type: "DECLINE_OFFERS" });
+      expect(s).toMatchObject({ phase: PEEK, offers: { insurance: false, evenMoney: false, surrender: false, peek: true } });
+      expect(s.creditEvents).toBe(before.creditEvents);
+    });
+
+    it("to the player's turn when there is no peek", () => {
+      const s = run(offered(["10", "A", "6", "K", "5"], { dealerHoleBehaviour: "drawEarly_NoCheck" }), { type: "DECLINE_OFFERS" });
+      expect(s).toMatchObject({ phase: PLAYER_TURN, offers: null });
+    });
+
+    it("to the dealer's turn when the first hand is already finished (a declined even money, no peek)", () => {
+      const s = run(offered(["A", "A", "K", "5"], { dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }), { type: "DECLINE_OFFERS" });
+      expect(s).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(s.hands[0].result).toBe(HandResult.NONE);
+    });
+  });
+
+  describe("guards: every offer action outside OFFERS leaves the state alone", () => {
+    const states = {
+      "before the deal": started(["10", "A", "6", "K"]),
+      "while dealing": run(started(["10", "A", "6", "K"]), { type: "ADD_BET", amount: 10 }, { type: "DEAL" }),
+      "on the player's turn": offered(["10", "6", "9", "K", "5"]),
+      "on the dealer's turn": offered(["A", "6", "K", "5", "5"]),
+      "at the peek": run(offered(), { type: "DECLINE_OFFERS" }),
+    };
+    it.each(Object.keys(states))("%s", (name) => {
+      const s = states[name];
+      for (const type of ["TAKE_INSURANCE", "EVEN_MONEY", "DECLINE_OFFERS"]) expect(run(s, { type })).toBe(s);
+      if (name !== "at the peek") expect(run(s, { type: "PEEK" })).toBe(s);
+    });
+
+    it("PEEK only runs in the PEEK phase; at OFFERS it does nothing", () => {
+      const s = offered();
+      expect(run(s, { type: "PEEK" })).toBe(s);
+    });
+
+    it("the offer actions do nothing after a refused opening bet emptied the round", () => {
+      const s = offered();
+      const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+      expect(voided.offers).toBeNull();
+      for (const type of ["TAKE_INSURANCE", "EVEN_MONEY", "DECLINE_OFFERS", "PEEK"]) expect(run(voided, { type })).toBe(voided);
+    });
+
+    it("RESET_GAME and START_GAME clear the offers", () => {
+      const s = offered();
+      expect(run(s, { type: "RESET_GAME", shoe: stackedShoe(["2"]), phase: GamePhases.PRE_DEAL }).offers).toBeNull();
+      expect(run(s, { type: "START_GAME", shoe: stackedShoe(["2"]) }).offers).toBeNull();
+    });
+  });
+
+  describe("PEEK", () => {
+    const peeking = (codes, settings = {}) => run(offered(codes, settings), { type: "DECLINE_OFFERS" });
+
+    it("a dealer blackjack: the hole card moves into the dealer's hand, the hand is lost, the dealer's turn follows", () => {
+      const s = run(peeking(["10", "A", "6", "K", "5"]), { type: "PEEK" });
+      expect(s).toMatchObject({ phase: DEALER_TURN, offers: null });
+      expect(s.dealer).toMatchObject({ isBlackjack: true, status: HandStatus.DONE });
+      expect(s.dealer.cards).toHaveLength(2);
+      expect(s.dealerHole.cards).toEqual([]);
+      expect(s.hands[0]).toMatchObject({ result: HandResult.LOSE, status: HandStatus.DONE });
+    });
+
+    it("no dealer blackjack: the hole card stays put and the player's turn begins", () => {
+      const before = peeking(["10", "A", "6", "5", "5"]);
+      const s = run(before, { type: "PEEK" });
+      expect(s).toMatchObject({ phase: PLAYER_TURN, offers: null });
+      expect(s.dealer.cards).toHaveLength(1);
+      expect(s.dealerHole).toEqual(before.dealerHole);
+      expect(s.hands[0].status).toBe(HandStatus.PLAYING);
+    });
+
+    it("counts the revealed hole card, and only when it is revealed", () => {
+      const before = peeking(["10", "A", "6", "K", "5"]);
+      expect(run(before, { type: "PEEK" }).runningCount).toBe(before.runningCount - 1); // a king counts -1
+      const quiet = peeking(["10", "A", "6", "5", "5"]);
+      expect(run(quiet, { type: "PEEK" }).runningCount).toBe(quiet.runningCount); // a hidden 5 is not seen
+    });
+
+    it("skips an even-money hand: the dealer blackjack does not push it", () => {
+      const s = run(offered(["A", "A", "K", "K"]), { type: "EVEN_MONEY" }, { type: "PEEK" });
+      expect(s.dealer.isBlackjack).toBe(true);
+      expect(s.hands[0]).toMatchObject({ result: HandResult.WIN, evenMoney: true });
+    });
+
+    it("skips a surrendered hand: the half is kept against a dealer blackjack", () => {
+      const s = run(offered(["10", "K", "6", "A"], { surrender: "early", insurance: false }), { type: "SURRENDER", handIdx: 0 }, { type: "PEEK" });
+      expect(s.dealer.isBlackjack).toBe(true);
+      expect(s.hands[0]).toMatchObject({ result: HandResult.SURRENDER, surrendered: true });
+      expect(s.phase).toBe(DEALER_TURN);
+    });
+
+    it("a player blackjack declined: pushed by a dealer blackjack, paid when there is none", () => {
+      expect(run(peeking(["A", "A", "K", "K"]), { type: "PEEK" }).hands[0].result).toBe(HandResult.PUSH);
+      const paid = run(peeking(["A", "A", "K", "5"]), { type: "PEEK" });
+      expect(paid.hands[0].result).toBe(HandResult.WIN);
+      expect(paid.phase).toBe(DEALER_TURN);
+    });
+  });
+
+  describe("automatic steps", () => {
+    it("OFFERS has no automatic step; PEEK has one, named PEEK", () => {
+      expect(nextAutoAction({ phase: OFFERS, offers: OPEN })).toBeNull();
+      expect(nextAutoAction({ phase: PEEK })).toBe("PEEK");
+    });
+
+    it("auto deal waits at OFFERS: nothing is armed, the offers are never declined for the player, no pause is set", () => {
+      const table = run(started(["10", "A", "6", "K", "5"]), { type: "SET_SETTING", values: { resetInitialBet: true, autoDeal: true } }, { type: "ADD_BET", amount: 10 });
+      const armed = { ...table, autoDealPending: true };
+      expect(nextAutoAction(armed)).toBe("DEAL");
+      const dealing = run(armed, { type: "DEAL", auto: true });
+      expect(dealing.autoDealPending).toBe(false);
+      const atOffers = run(dealing, { type: "DEAL_DONE" });
+      expect(atOffers.phase).toBe(OFFERS);
+      expect(nextAutoAction(atOffers)).toBeNull();
+      expect(atOffers).toMatchObject({ autoDealPending: false, autoDealPaused: false });
+      expect(run(atOffers, { type: "DEAL", auto: true })).toBe(atOffers);
+      expect(run(atOffers, { type: "CANCEL_AUTO_DEAL" })).toBe(atOffers);
+    });
+
+    it("after the offers the round runs on its normal automatic steps and auto deal is armed by END_ROUND as usual", () => {
+      const table = run(started(["10", "A", "6", "5", "5", "9", "9"]), { type: "SET_SETTING", values: { resetInitialBet: true, autoDeal: true } }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+      let s = run(table, { type: "DECLINE_OFFERS" });
+      expect(nextAutoAction(s)).toBe("PEEK");
+      s = run(s, { type: "PEEK" }, { type: "STAND", handIdx: 0 });
+      while (nextAutoAction(s)) s = run(s, { type: nextAutoAction(s) });
+      s = confirmBets(s);
+      while (nextAutoAction(s) && s.phase !== GamePhases.PRE_DEAL) s = run(s, { type: nextAutoAction(s) });
+      expect(s).toMatchObject({ phase: GamePhases.PRE_DEAL, autoDealPending: true, betCircle: 10 });
+    });
+  });
+
+  it("only an insurance bet carries a side: every other pending bet keeps its exact shape", () => {
+    const s = offered(["10", "A", "6", "K"]);
+    expect(s.pendingBets).toEqual([{ seq: expect.any(Number), handTag: null, amount: 10, newRound: true }]);
+    expect(run(s, { type: "TAKE_INSURANCE" }).pendingBets[1]).toEqual({ seq: expect.any(Number), handTag: s.hands[0].tag, amount: 5, newRound: false, side: "insurance" });
   });
 });

@@ -24,7 +24,7 @@ export function fakePlayer(overrides = {}) {
 export function fakeActions(overrides = {}) {
   return {
     startGame: vi.fn(), resetGame: vi.fn(), addBet: vi.fn(), clearBet: vi.fn(), deal: vi.fn(),
-    hit: vi.fn(), stand: vi.fn(), double: vi.fn(), triple: vi.fn(), split: vi.fn(), surrender: vi.fn(), continueRound: vi.fn(), pauseAutoDeal: vi.fn(), resumeAutoDeal: vi.fn(),
+    hit: vi.fn(), stand: vi.fn(), double: vi.fn(), triple: vi.fn(), split: vi.fn(), surrender: vi.fn(), takeInsurance: vi.fn(), evenMoney: vi.fn(), declineOffers: vi.fn(), continueRound: vi.fn(), pauseAutoDeal: vi.fn(), resumeAutoDeal: vi.fn(),
     changeSetting: vi.fn(() => Promise.resolve()), changeSettings: vi.fn(() => Promise.resolve()), getPhase: vi.fn(() => GamePhases.NONE),
     ...overrides,
   };

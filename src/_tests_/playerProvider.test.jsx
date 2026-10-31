@@ -1035,3 +1035,126 @@ describe("a throw inside a queued ledger step (#100)", () => {
     expect(second.mock.calls).toEqual([[2, "confirmed"]]);
   });
 });
+
+describe("insurance bets in the ledger (#91)", () => {
+  const tick = (ms) => act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+    for (let i = 0; i < 30; i++) await Promise.resolve();
+  });
+  const openingBet = (seq) => ({ seq, kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null });
+  // The game's insurance event: a plain bet for half the stake, tagged `side` for the game's own bookkeeping.
+  const insurance = (seq, extra = {}) => ({ seq, kind: "bet", amount: 5, newRound: false, alreadyDeducted: false, handTag: 1, side: "insurance", ...extra });
+  let error;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => error.mockRestore());
+
+  it("is sent as an ordinary bet: the amount, newRound false and a requestId, and nothing else (the API has no side field)", async () => {
+    const { ctx } = await signedIn();
+    engine.placeBet.mockResolvedValueOnce({ credits: 990 }).mockResolvedValueOnce({ credits: 985 });
+    const report = vi.fn();
+    act(() => ctx.applyCreditEvent({ seq: 0, kind: "local", amount: -10 }, vi.fn()));
+    act(() => ctx.applyCreditEvent(openingBet(1), vi.fn()));
+    act(() => ctx.applyCreditEvent(insurance(2), report));
+    expect(ctx.getCredits()).toBe(985); // taken at once, before the server has answered
+    await tick(0);
+
+    expect(engine.placeBet.mock.calls.map((call) => call.length)).toEqual([3, 3]);
+    expect(engine.placeBet.mock.calls[1]).toEqual([5, false, expect.stringMatching(UUID)]);
+    expect(engine.placeBet.mock.calls[1][2]).not.toBe(engine.placeBet.mock.calls[0][2]);
+    expect(report.mock.calls).toEqual([[2, "confirmed"]]);
+    expect(ctx.player.credits).toBe(985);
+  });
+
+  it("goes after the opening bet and before the settle, one at a time", async () => {
+    const { ctx } = await signedIn();
+    const first = deferred();
+    engine.placeBet.mockReturnValueOnce(first.promise).mockResolvedValue({ credits: 985 });
+    engine.settleRound.mockResolvedValue({ credits: 1000 });
+    act(() => ctx.applyCreditEvent(openingBet(1), vi.fn()));
+    act(() => ctx.applyCreditEvent(insurance(2), vi.fn()));
+    act(() => ctx.applyCreditEvent({ seq: 3, kind: "settle", amount: 15 }, vi.fn()));
+    await tick(0);
+    expect(engine.placeBet).toHaveBeenCalledTimes(1);
+    expect(engine.settleRound).not.toHaveBeenCalled();
+    first.resolve({ credits: 990 });
+    await tick(0);
+    expect(engine.placeBet).toHaveBeenCalledTimes(2);
+    expect(engine.settleRound).toHaveBeenCalledTimes(1);
+    expect(engine.settleRound.mock.calls[0][0]).toBe(15);
+  });
+
+  it("an unknown outcome retries with the same requestId and is charged once; it shows Reconnecting meanwhile", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const server = { credits: 1000, applied: new Map(), lost: 1 };
+    engine.placeBet.mockImplementation(async (amount, _newRound, requestId) => {
+      if (!server.applied.has(requestId)) {
+        server.credits -= amount;
+        server.applied.set(requestId, { credits: server.credits });
+      }
+      if (server.lost-- > 0) throw new TypeError("Failed to fetch");
+      return server.applied.get(requestId);
+    });
+    act(() => ctx.applyCreditEvent(insurance(7), report));
+    await tick(0);
+    expect(engine.placeBet).toHaveBeenCalledTimes(1);
+    expect(ctx.reconnecting).toBe(true);
+    expect(report).not.toHaveBeenCalled();
+    expect(ctx.getCredits()).toBe(995);
+
+    await tick(1000);
+    expect(engine.placeBet).toHaveBeenCalledTimes(2);
+    expect(engine.placeBet.mock.calls[1]).toEqual(engine.placeBet.mock.calls[0]); // the same amount, newRound and requestId
+    expect(server.credits).toBe(995);
+    expect(server.applied.size).toBe(1);
+    expect(ctx.reconnecting).toBe(false);
+    expect(report.mock.calls).toEqual([[7, "confirmed"]]);
+  });
+
+  it("a 503 and then a 200: two calls, one requestId; the settle behind it waits for the answer", async () => {
+    const { ctx } = await signedIn();
+    engine.placeBet.mockRejectedValueOnce(refusal(503, "unavailable")).mockResolvedValueOnce({ credits: 995 });
+    engine.settleRound.mockResolvedValue({ credits: 1010 });
+    act(() => ctx.applyCreditEvent(insurance(1), vi.fn()));
+    act(() => ctx.applyCreditEvent({ seq: 2, kind: "settle", amount: 15 }, vi.fn()));
+    await tick(0);
+    expect(engine.settleRound).not.toHaveBeenCalled();
+    await tick(1000);
+    expect(engine.placeBet).toHaveBeenCalledTimes(2);
+    expect(engine.placeBet.mock.calls[1][2]).toBe(engine.placeBet.mock.calls[0][2]);
+    expect(engine.settleRound).toHaveBeenCalledTimes(1);
+  });
+
+  it("a 400 is a definite refusal: reported rejected, never retried, and the stake is given back", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    engine.placeBet.mockRejectedValue(refusal(400, "Insufficient credits."));
+    engine.getMe.mockResolvedValue({ ...player, credits: 1000 });
+    act(() => ctx.applyCreditEvent(insurance(3), report));
+    expect(ctx.getCredits()).toBe(995);
+    await tick(0);
+    await tick(20_000);
+    expect(engine.placeBet).toHaveBeenCalledTimes(1);
+    expect(report.mock.calls).toEqual([[3, "rejected"]]);
+    expect(ctx.getCredits()).toBe(1000);
+    expect(ctx.reconnecting).toBe(false);
+  });
+
+  it("is dropped unsent, as rejected, after the opening bet was refused (the round never happened)", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    engine.placeBet.mockRejectedValue(refusal(400));
+    engine.getMe.mockResolvedValue({ ...player, credits: 1000 });
+    act(() => ctx.applyCreditEvent({ seq: 0, kind: "local", amount: -10 }, report));
+    act(() => ctx.applyCreditEvent(openingBet(1), report));
+    act(() => ctx.applyCreditEvent(insurance(2), report));
+    await tick(0);
+    expect(engine.placeBet).toHaveBeenCalledTimes(1);
+    expect(report.mock.calls).toEqual([[1, "rejected"], [2, "rejected"]]);
+    expect(ctx.getCredits()).toBe(1000);
+  });
+});

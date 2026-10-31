@@ -33,6 +33,10 @@ describe("rulePresetOf", () => {
     for (const name of ["Europe", "Australia"]) expect(rulePresetOf({ ...initialGameState.settings, ...RULE_PRESETS[name], surrender: "none" }), name).toBe(name);
   });
 
+  it("a table with insurance off (what a version 1 to 3 save becomes) is Custom, for every preset", () => {
+    for (const name of Object.keys(RULE_PRESETS)) expect(rulePresetOf({ ...initialGameState.settings, ...RULE_PRESETS[name], insurance: false }), name).toBe(CUSTOM);
+  });
+
   it("each preset has its surrender value: Vegas and Atlantic City late, Europe and Australia none, Singapore earlyNoAce", () => {
     expect(Object.fromEntries(Object.entries(RULE_PRESETS).map(([name, p]) => [name, p.surrender]))).toEqual({
       Vegas: "late", "Atlantic City": "late", Europe: "none", Australia: "none", Singapore: "earlyNoAce",
@@ -54,23 +58,23 @@ const real = (blackjackPaysImmediately) => ({
 const TABLE = {
   Vegas: {
     dealerHoleBehaviour: PEEK, deckCount: 6, dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", ...real(true),
+    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", insurance: true, ...real(true),
   },
   "Atlantic City": {
     dealerHoleBehaviour: AFTER, deckCount: 8, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", ...real(false),
+    maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "late", insurance: true, ...real(false),
   },
   Europe: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "9-11", doubleAfterSplit: true,
-    maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "all", surrender: "none", ...real(false),
+    maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "all", surrender: "none", insurance: true, ...real(false),
   },
   Australia: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "9-11", doubleAfterSplit: true,
-    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "none", ...real(false),
+    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "none", insurance: true, ...real(false),
   },
   Singapore: {
     dealerHoleBehaviour: AFTER, deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true,
-    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "earlyNoAce", ...real(false),
+    maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "earlyNoAce", insurance: true, ...real(false),
   },
 };
 
@@ -83,9 +87,9 @@ describe("the five presets (#91)", () => {
     expect(RULE_PRESETS[name]).toEqual(TABLE[name]);
   });
 
-  it("every preset sets every rule key (16), so picking one is never order-dependent", () => {
+  it("every preset sets every rule key (17), so picking one is never order-dependent", () => {
     const keys = Object.keys(TABLE.Vegas).sort();
-    expect(keys).toHaveLength(16);
+    expect(keys).toHaveLength(17);
     for (const name of Object.keys(RULE_PRESETS)) expect(Object.keys(RULE_PRESETS[name]).sort()).toEqual(keys);
   });
 
