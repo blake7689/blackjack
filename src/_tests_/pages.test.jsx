@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, fireEvent, act, waitFor, cleanup } from "@testing-library/react";
+import { screen, fireEvent, act, waitFor, cleanup, within } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import Home from "../pages/Home";
 import Game from "../pages/Game";
@@ -10,12 +10,38 @@ import Header from "../components/Header/Header";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { validateField } from "../utils/validation";
 import { RULE_PRESETS } from "../utils/rulePresets";
-import { initialGameState } from "../utils/gameReducer";
+import { initialGameState, LEGACY_RULES } from "../utils/gameReducer";
+import { GROUPS, visibleIn, selectedValue, ruleSummary } from "../utils/ruleCatalog";
+import { houseEdge, formatEdge } from "../utils/houseEdge";
 
 const location = () => screen.getByTestId("location").textContent;
 const type = (label, value) => fireEvent.change(screen.getByPlaceholderText(label), { target: { value } });
 // Lets a rejected or resolved async handler finish.
 const flush = () => act(async () => {});
+
+// ---- the rules section (#91) ----
+const NO_HOLE = "If the Dealer Has Blackjack, You Lose";
+const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const rulesGroup = (name) => within(screen.getByRole("group", { name }));
+// An option button reads "6:5 +1.39% house edge" (the chosen one has no number; jsdom drops the spaces): match the label, with or without the number.
+const option = (group, label) => rulesGroup(group).getByRole("button", { name: new RegExp(`^${escape(label)}(?:\\s*[+-]\\d+\\.\\d\\d%\\s*house edge)?$`) });
+const optionLabels = (group) => rulesGroup(group).getAllByRole("button").map((b) => b.firstChild.textContent);
+const pressed = (group) => rulesGroup(group).getByRole("button", { pressed: true }).firstChild.textContent;
+const presetTiles = () => within(screen.getByRole("group", { name: "Table rules" })).getAllByRole("button");
+const tile = (name) => presetTiles().find((t) => t.querySelector("strong").textContent === name);
+const customTile = () => document.querySelector("[aria-current='true']");
+const open = (game = {}, path = "/settings?tab=game") => renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game } });
+// The fake game state never changes by itself. This one applies a patch the way GameProvider does and re-renders, so a test sees the result.
+function openLive(game = {}, path = "/settings?tab=game") {
+  let view;
+  const changeSettings = vi.fn((patch) => {
+    view.gameState.settings = { ...view.gameState.settings, ...patch };
+    view.rerender(<Settings />);
+    return Promise.resolve();
+  });
+  view = renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game }, actions: { changeSettings } });
+  return view;
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -286,66 +312,73 @@ describe("Settings", () => {
     expect(window.alert).not.toHaveBeenCalled();
   });
 
-  it("saves a table setting, confirming first when a round is in play", () => {
+  it("applies a table rule at once, confirming first when a round is in play; other settings keep their Save button", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
     const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PLAYER_TURN } });
-    const save = screen.getByLabelText("Save deckCount");
+    const save = screen.getByLabelText("Save includeCutCard");
     expect(save.disabled).toBe(true);
-    fireEvent.change(screen.getByLabelText("deckCount"), { target: { value: "4" } });
-    expect(screen.getByText("Deck size: 4")).toBeTruthy();
-    expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+    fireEvent.click(option("Deck size: 6", "4"));
+    expect(confirm).toHaveBeenCalledWith("Changing this setting will reset the current game. Any bets will be lost. Continue?");
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    fireEvent.click(option("Deck size: 6", "4"));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ deckCount: 4 }]]);
+    expect(gameActions.changeSetting).not.toHaveBeenCalled();
+    // A Save-pattern setting that resets the game asks on Save, not before.
+    confirm.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    fireEvent.click(screen.getByLabelText("includeCutCard"));
+    expect(confirm).toHaveBeenCalledTimes(2);
     fireEvent.click(save);
     expect(gameActions.changeSetting).not.toHaveBeenCalled();
     fireEvent.click(save);
-    expect(confirm).toHaveBeenCalledTimes(2);
-    expect(gameActions.changeSetting).toHaveBeenCalledWith("deckCount", 4);
+    expect(confirm).toHaveBeenCalledTimes(4);
+    expect(gameActions.changeSetting).toHaveBeenCalledWith("includeCutCard", false);
   });
 
   it("offers the dealer rule options, and forces blackjack-pays-now when the EU dealer won't draw on it", () => {
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions } = openLive({ phase: GamePhases.PRE_DEAL });
     expect(screen.queryByText(/NoDraw21/)).toBeNull();
     const paysNow = screen.getByLabelText("blackjackPaysImmediately");
     fireEvent.click(paysNow);
     expect([paysNow.checked, paysNow.disabled]).toEqual([false, false]);
 
-    fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
+    fireEvent.click(option("Second Card", "Dealt after you play"));
     fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBlackjack"));
     expect([paysNow.checked, paysNow.disabled]).toEqual([true, true]);
 
-    for (const key of ["dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust"]) {
-      fireEvent.click(screen.getByLabelText(key));
-      fireEvent.click(screen.getByLabelText(`Save ${key}`));
-    }
-    fireEvent.click(screen.getByLabelText("Save dealerDrawsOnPlayerBlackjack"));
-    expect(gameActions.changeSetting.mock.calls).toEqual([
-      ["dealerDrawsOnceOn21", true], ["dealerDrawsOnPlayerBust", true], ["dealerDrawsOnPlayerBlackjack", false]]);
+    for (const key of ["dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust"]) fireEvent.click(screen.getByLabelText(key));
+    expect(gameActions.changeSettings.mock.calls).toEqual([
+      [{ blackjackPaysImmediately: false }],
+      [{ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }],
+      [{ dealerDrawsOnPlayerBlackjack: false }],
+      [{ dealerDrawsOnceOn21: true }],
+      [{ dealerDrawsOnPlayerBust: true }],
+    ]);
+    expect(gameActions.changeSetting).not.toHaveBeenCalled();
   });
 
   it("offers triple down, and only lets the always-draw option be changed while it is on", () => {
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions } = openLive();
     const draws = screen.getByLabelText("tripleDrawsOnBust");
     expect(draws.disabled).toBe(true);
     fireEvent.click(screen.getByLabelText("tripleDown"));
     expect(draws.disabled).toBe(false);
     fireEvent.click(draws);
-    fireEvent.click(screen.getByLabelText("Save tripleDown"));
-    fireEvent.click(screen.getByLabelText("Save tripleDrawsOnBust"));
-    expect(gameActions.changeSetting.mock.calls).toEqual([["tripleDown", true], ["tripleDrawsOnBust", true]]);
-    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ tripleDown: true }], [{ tripleDrawsOnBust: true }]]);
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true"); // House variations are not table rules
   });
 
   it("offers the face-down double option, off by default", () => {
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions } = open();
     const faceDown = screen.getByLabelText("doubleFaceDown");
     expect(faceDown.checked).toBe(false);
     expect(screen.getByText("Double Down Card Face Down")).toBeTruthy();
     fireEvent.click(faceDown);
-    fireEvent.click(screen.getByLabelText("Save doubleFaceDown"));
-    expect(gameActions.changeSetting).toHaveBeenCalledWith("doubleFaceDown", true);
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ doubleFaceDown: true }]]);
   });
 
   it("shows the always-draw option unticked while triple down is off, without losing the saved choice", () => {
-    renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL, settings: { ...initialGameState.settings, tripleDrawsOnBust: true } } });
+    openLive({ settings: { ...initialGameState.settings, tripleDrawsOnBust: true } });
     const draws = screen.getByLabelText("tripleDrawsOnBust");
     expect([draws.disabled, draws.checked]).toEqual([true, false]);
     fireEvent.click(screen.getByLabelText("tripleDown"));
@@ -354,45 +387,46 @@ describe("Settings", () => {
 
   it("applies a rules preset in one step, and shows Custom once a rule is changed", () => {
     const confirm = vi.spyOn(window, "confirm");
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
-    const preset = screen.getByLabelText("rulePreset");
-    expect(preset.value).toBe("Vegas");
-    expect(screen.getByRole("option", { name: "Custom" }).disabled).toBe(true);
+    const { gameActions } = openLive();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.queryByText("Custom")).toBeNull();
 
-    fireEvent.change(preset, { target: { value: "Europe" } });
+    fireEvent.click(tile("Europe"));
     expect(confirm).not.toHaveBeenCalled();
-    expect(gameActions.changeSettings).toHaveBeenCalledWith(RULE_PRESETS.Europe);
-    expect(preset.value).toBe("Europe");
-    expect(screen.getByLabelText("dealerHoleBehaviour").value).toBe("drawAfter");
+    expect(gameActions.changeSettings.mock.calls).toEqual([[RULE_PRESETS.Europe]]);
+    expect(tile("Europe").getAttribute("aria-pressed")).toBe("true");
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("false");
+    expect(pressed("Second Card")).toBe("Dealt after you play");
 
     fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
-    expect(preset.value).toBe("Custom");
+    expect(customTile()).toBeTruthy();
+    expect(tile("Europe").getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(screen.getByLabelText("dealerDrawsOnPlayerBust"));
-    expect(preset.value).toBe("Europe");
+    expect(customTile()).toBeNull();
+    expect(tile("Europe").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("asks once before a preset resets a round in progress", () => {
     const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PLAYER_TURN } });
-    const preset = screen.getByLabelText("rulePreset");
-    fireEvent.change(preset, { target: { value: "Europe" } });
+    const { gameActions } = openLive({ phase: GamePhases.PLAYER_TURN });
+    fireEvent.click(tile("Europe"));
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
-    expect(preset.value).toBe("Vegas");
-    fireEvent.change(preset, { target: { value: "Europe" } });
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(tile("Europe"));
     expect(confirm).toHaveBeenCalledTimes(2);
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
+    expect(tile("Europe").getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("saves table settings without asking before a round, and speed or rebet any time", () => {
+  it("applies table rules without asking before a round, and Save-pattern settings, speed or rebet any time", () => {
     const confirm = vi.spyOn(window, "confirm");
-    const { gameActions, rerender } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
+    const { gameActions, rerender } = open();
     fireEvent.click(screen.getByLabelText("includeCutCard"));
     fireEvent.click(screen.getByLabelText("Save includeCutCard"));
-    fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
-    expect(screen.getByText("Draw After (EU)")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Save dealerHoleBehaviour"));
+    fireEvent.click(option("Second Card", "Dealt after you play"));
     expect(confirm).not.toHaveBeenCalled();
-    expect(gameActions.changeSetting.mock.calls).toEqual([["includeCutCard", false], ["dealerHoleBehaviour", "drawAfter"]]);
+    expect(gameActions.changeSetting.mock.calls).toEqual([["includeCutCard", false]]);
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }]]);
     rerender(<Settings />);
     fireEvent.click(screen.getByRole("tab", { name: "Dev" }));
     fireEvent.change(screen.getByLabelText("playTimeout"), { target: { value: "500" } });
@@ -407,10 +441,14 @@ describe("Settings", () => {
 
   it("warns about a reset only once a game exists", () => {
     renderUI(<Settings />, { path: "/settings?tab=game" });
-    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    fireEvent.click(screen.getByLabelText("includeCutCard"));
     expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
     fireEvent.click(screen.getByText("Back to game"));
     expect(location()).toBe("/game");
+    cleanup();
+    open({ phase: GamePhases.PLAYER_TURN });
+    fireEvent.click(screen.getByLabelText("includeCutCard"));
+    expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
   });
 
   it("shows one tab at a time, as buttons, and keeps the open tab in the URL", () => {
@@ -419,15 +457,15 @@ describe("Settings", () => {
     expect(tab("Player").getAttribute("aria-selected")).toBe("true");
     expect(tab("Player").tagName).toBe("BUTTON");
     expect(screen.getByText("Delete Profile")).toBeTruthy();
-    expect(screen.queryByLabelText("deckCount")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Table rules" })).toBeNull();
 
     fireEvent.click(tab("Game"));
     expect(location()).toBe("/settings?tab=game");
     expect(tab("Game").getAttribute("aria-selected")).toBe("true");
     expect(tab("Player").getAttribute("aria-selected")).toBe("false");
-    for (const key of ["rulePreset", "dealerHoleBehaviour", "dealerDrawsOnceOn21", "deckCount", "includeCutCard", "resetInitialBet", "blackJackOnSplit", "maxSplitHands"]) {
-      expect(screen.getByLabelText(key)).toBeTruthy();
-    }
+    expect(screen.getByRole("group", { name: "Table rules" })).toBeTruthy();
+    for (const group of ["Second Card", "Deck size: 6", "Max Hands After Splits: 4"]) expect(screen.getByRole("group", { name: group })).toBeTruthy();
+    for (const key of ["dealerDrawsOnceOn21", "includeCutCard", "resetInitialBet", "blackJackOnSplit"]) expect(screen.getByLabelText(key)).toBeTruthy();
     expect(screen.queryByText("Delete Profile")).toBeNull();
     expect(screen.queryByLabelText("playTimeout")).toBeNull();
 
@@ -435,7 +473,8 @@ describe("Settings", () => {
     expect(location()).toBe("/settings?tab=dev");
     expect(screen.getByLabelText("playTimeout")).toBeTruthy();
     expect(screen.getByLabelText("showCardCount")).toBeTruthy();
-    expect(screen.queryByLabelText("deckCount")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Table rules" })).toBeNull();
+    expect(screen.queryByLabelText("blackJackOnSplit")).toBeNull();
   });
 
   it("opens the Player tab for an unknown tab in the URL", () => {
@@ -444,15 +483,17 @@ describe("Settings", () => {
   });
 
   it("offers 2, 3, 4 or Unlimited hands after splits, 4 by default", () => {
-    const { gameActions } = renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL } });
-    const select = screen.getByLabelText("maxSplitHands");
-    expect([...select.options].map((o) => o.text)).toEqual(["2", "3", "4", "Unlimited"]);
-    expect(select.value).toBe("4");
+    const { gameActions } = openLive();
+    expect(optionLabels("Max Hands After Splits: 4")).toEqual(["2", "3", "4", "Unlimited"]);
+    expect(pressed("Max Hands After Splits: 4")).toBe("4");
     expect(screen.getByText("Max Hands After Splits: 4")).toBeTruthy();
-    fireEvent.change(select, { target: { value: "3" } });
+    fireEvent.click(option("Max Hands After Splits: 4", "3"));
     expect(screen.getByText("Max Hands After Splits: 3")).toBeTruthy();
-    fireEvent.click(screen.getByLabelText("Save maxSplitHands"));
-    expect(gameActions.changeSetting).toHaveBeenCalledWith("maxSplitHands", 3);
+    expect(pressed("Max Hands After Splits: 3")).toBe("3");
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ maxSplitHands: 3 }]]);
+    fireEvent.click(option("Max Hands After Splits: 3", "Unlimited"));
+    expect(screen.getByText("Max Hands After Splits: Unlimited")).toBeTruthy();
+    expect(gameActions.changeSettings).toHaveBeenLastCalledWith({ maxSplitHands: 0 });
   });
 
   it("picks which chips to show, never leaves none, and saves them in chip order", () => {
@@ -478,12 +519,14 @@ describe("Settings", () => {
 
   it("shows settings that finish loading after the page opened, keeping unsaved edits", () => {
     const { gameState, rerender } = renderUI(<Settings />, { path: "/settings?tab=game" });
-    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
-    gameState.settings = { ...gameState.settings, deckCount: 4, resetInitialBet: true };
+    fireEvent.click(screen.getByLabelText("includeCutCard"));
+    gameState.settings = { ...gameState.settings, deckCount: 4, resetInitialBet: true, blackJackOnSplit: true };
     rerender(<Settings />);
-    expect(screen.getByLabelText("deckCount").value).toBe("4");
+    expect(pressed("Deck size: 4")).toBe("4");
     expect(screen.getByLabelText("resetInitialBet").checked).toBe(true);
     expect(screen.getByLabelText("blackJackOnSplit").checked).toBe(true);
+    expect(screen.getByLabelText("includeCutCard").checked).toBe(false);
+    expect(customTile()).toBeTruthy();
   });
 
   it("says so when a setting can't be saved to the account, and clears it after a good save", async () => {
@@ -493,6 +536,18 @@ describe("Settings", () => {
     fireEvent.click(screen.getByLabelText("Save showCardCount"));
     expect((await screen.findByRole("status")).textContent).toContain("Couldn't save your settings");
     fireEvent.click(screen.getByLabelText("Save showCardCount"));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
+  });
+
+  it("says so when a table rule can't be saved to the account, and clears it after a good save; the notice is the only status", async () => {
+    const changeSettings = vi.fn().mockRejectedValueOnce(new Error("offline")).mockResolvedValueOnce(undefined);
+    renderUI(<Settings />, { path: "/settings?tab=game", game: { phase: GamePhases.PRE_DEAL }, actions: { changeSettings } });
+    expect(screen.queryByRole("status")).toBeNull(); // the live house-edge line is not a status
+    fireEvent.click(option("Surrender", "None"));
+    const notice = await screen.findByRole("status");
+    expect(notice.textContent).toContain("Couldn't save your settings");
+    expect(screen.getAllByRole("status")).toHaveLength(1);
+    fireEvent.click(option("Surrender", "None"));
     await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
 
@@ -618,200 +673,254 @@ describe("Settings auto deal (#88)", () => {
 });
 
 describe("Settings table rules (#91)", () => {
-  const open = (game = {}, path = "/settings?tab=game") => renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game } });
-  const RULE_KEYS = ["deckCount", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "insurance"];
   const withMode = (dealerHoleBehaviour) => ({ settings: { ...initialGameState.settings, dealerHoleBehaviour } });
 
-  it("shows every catalogue rule on the Game tab, with the Vegas values, and none on the other tabs", () => {
+  it("shows every catalogue rule on the Game tab, with the Vegas values chosen, and none on the other tabs", () => {
     open();
-    for (const key of RULE_KEYS) expect(screen.getByLabelText(key), key).toBeTruthy();
-    expect(screen.getByLabelText("dealerHitsSoft17").checked).toBe(true);
-    expect(screen.getByLabelText("blackjackPayout").value).toBe("3:2");
-    expect(screen.getByLabelText("doubleOn").value).toBe("any");
-    expect(screen.getByLabelText("doubleAfterSplit").checked).toBe(true);
-    expect(screen.getByLabelText("resplitAces").checked).toBe(false);
-    expect(screen.getByLabelText("hitSplitAces").checked).toBe(false);
-    expect(screen.getByLabelText("deckCount").value).toBe("6");
-    for (const text of ["Dealer Hits Soft 17", "Blackjack Pays", "Double On", "Double After a Split", "Resplit Aces", "Hit Split Aces", "Deck size: 6"]) {
-      expect(screen.getByText(text), text).toBeTruthy();
+    const rules = visibleIn(initialGameState.settings);
+    expect(rules.map((r) => r.key)).not.toContain("noHoleCardLoss");
+    const label = (rule) => rule.label(selectedValue(rule, initialGameState.settings));
+    for (const rule of rules) {
+      const group = screen.getByRole("group", { name: label(rule) });
+      expect(within(group).getAllByRole("button", { pressed: true }), rule.key).toHaveLength(1);
     }
+    expect(pressed("Deck size: 6")).toBe("6");
+    expect(pressed("Second Card")).toBe("Dealer peeks for blackjack");
+    expect(pressed("Soft 17")).toBe("Hits");
+    expect(pressed("Blackjack Pays")).toBe("3:2");
+    expect(pressed("Insurance and Even Money")).toBe("On");
+    expect(pressed("Double On")).toBe("Any two cards");
+    expect(pressed("Double After a Split")).toBe("On");
+    expect(pressed("Max Hands After Splits: 4")).toBe("4");
+    expect(pressed("Resplit Aces")).toBe("Off");
+    expect(pressed("Hit Split Aces")).toBe("Off");
+    expect(pressed("Surrender")).toBe("Late");
+    expect(screen.getAllByRole("heading", { level: 4 }).map((h) => h.textContent)).toEqual(GROUPS);
+    const labels = rules.map(label);
     for (const tab of ["Player", "Dev"]) {
       fireEvent.click(screen.getByRole("tab", { name: tab }));
-      for (const key of RULE_KEYS) expect(screen.queryByLabelText(key), `${tab} ${key}`).toBeNull();
+      for (const name of labels) expect(screen.queryByRole("group", { name }), `${tab} ${name}`).toBeNull();
     }
   });
 
-  it("the deck-size slider runs from 1 to 8", () => {
-    open();
-    const slider = screen.getByLabelText("deckCount");
-    expect([slider.min, slider.max]).toEqual(["1", "8"]);
-  });
-
-  it("offers each choice by its plain name", () => {
-    open();
-    expect([...screen.getByLabelText("blackjackPayout").options].map((o) => [o.value, o.text])).toEqual([["3:2", "3:2"], ["6:5", "6:5"]]);
-    expect([...screen.getByLabelText("doubleOn").options].map((o) => [o.value, o.text])).toEqual([
-      ["any", "Any two cards"], ["9-11", "Hard 9 to 11"], ["10-11", "Hard 10 to 11"]]);
-  });
-
-  it("shows 'if the dealer has blackjack, you lose' only when the dealer has no hole card", () => {
-    open(withMode("drawEarly_Check"));
-    expect(screen.queryByLabelText("noHoleCardLoss")).toBeNull();
+  it("offers the deck sizes 1, 2, 4, 6 and 8, and a saved 3, 5 or 7 shows as one extra chosen chip that goes once another is picked", () => {
+    openLive();
+    expect(optionLabels("Deck size: 6")).toEqual(["1", "2", "4", "6", "8"]);
     cleanup();
-    for (const mode of ["drawAfter", "drawEarly_NoCheck"]) {
-      open(withMode(mode));
-      const select = screen.getByLabelText("noHoleCardLoss");
-      expect(select.value).toBe("original");
-      expect([...select.options].map((o) => [o.value, o.text])).toEqual([["all", "Everything you staked"], ["original", "Only your first bet"]]);
+    for (const decks of [3, 5, 7]) {
+      openLive({ settings: { ...initialGameState.settings, deckCount: decks } });
+      const group = `Deck size: ${decks}`;
+      expect(optionLabels(group)).toContain(`${decks} decks`);
+      expect(optionLabels(group)).toHaveLength(6);
+      expect(pressed(group)).toBe(`${decks} decks`);
+      fireEvent.click(option(group, "6"));
+      expect(optionLabels("Deck size: 6")).toEqual(["1", "2", "4", "6", "8"]);
       cleanup();
     }
   });
 
-  it("shows it as soon as the dealer mode is edited to one with no peek, before it is saved, and hides it again", () => {
+  it("offers each choice by its plain name", () => {
     open();
-    expect(screen.queryByLabelText("noHoleCardLoss")).toBeNull();
-    fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawAfter" } });
-    expect(screen.getByLabelText("noHoleCardLoss")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("dealerHoleBehaviour"), { target: { value: "drawEarly_Check" } });
-    expect(screen.queryByLabelText("noHoleCardLoss")).toBeNull();
+    expect(optionLabels("Blackjack Pays")).toEqual(["3:2", "6:5"]);
+    expect(optionLabels("Double On")).toEqual(["Any two cards", "Hard 9 to 11", "Hard 10 to 11"]);
+    expect(optionLabels("Soft 17")).toEqual(["Stands", "Hits"]);
+    expect(optionLabels("Second Card")).toEqual(["Dealer peeks for blackjack", "Dealt after you play"]);
+    expect(optionLabels("Surrender")).toEqual(["None", "Late", "Early", "Early (not against an ace)"]);
   });
 
-  it("saves each new rule with the right value", () => {
-    const { gameActions } = open(withMode("drawAfter"));
-    fireEvent.click(screen.getByLabelText("dealerHitsSoft17"));
-    fireEvent.click(screen.getByLabelText("Save dealerHitsSoft17"));
-    fireEvent.change(screen.getByLabelText("blackjackPayout"), { target: { value: "6:5" } });
-    fireEvent.click(screen.getByLabelText("Save blackjackPayout"));
-    fireEvent.change(screen.getByLabelText("doubleOn"), { target: { value: "9-11" } });
-    fireEvent.click(screen.getByLabelText("Save doubleOn"));
-    fireEvent.click(screen.getByLabelText("doubleAfterSplit"));
-    fireEvent.click(screen.getByLabelText("Save doubleAfterSplit"));
-    fireEvent.click(screen.getByLabelText("resplitAces"));
-    fireEvent.click(screen.getByLabelText("Save resplitAces"));
-    fireEvent.click(screen.getByLabelText("hitSplitAces"));
-    fireEvent.click(screen.getByLabelText("Save hitSplitAces"));
-    fireEvent.change(screen.getByLabelText("noHoleCardLoss"), { target: { value: "all" } });
-    fireEvent.click(screen.getByLabelText("Save noHoleCardLoss"));
-    expect(gameActions.changeSetting.mock.calls).toEqual([
-      ["dealerHitsSoft17", false], ["blackjackPayout", "6:5"], ["doubleOn", "9-11"], ["doubleAfterSplit", false],
-      ["resplitAces", true], ["hitSplitAces", true], ["noHoleCardLoss", "all"],
+  it("shows each choice's effect on the house edge, and none on the chosen one", () => {
+    open();
+    const named = (group, label, delta) => rulesGroup(group).getByRole("button", { name: new RegExp(`^${escape(label)}\\s*${escape(delta)}\\s*house edge$`) });
+    expect(named("Blackjack Pays", "6:5", "+1.39%").textContent).toBe("6:5 +1.39% house edge");
+    named("Soft 17", "Stands", "-0.22%");
+    named("Double On", "Hard 9 to 11", "+0.09%");
+    named("Surrender", "Early", "-0.56%");
+    expect(rulesGroup("Blackjack Pays").getByRole("button", { name: "3:2" }).textContent).toBe("3:2");
+    expect(rulesGroup("Insurance and Even Money").getByRole("button", { name: "Off" })).toBeTruthy(); // insurance is not counted
+  });
+
+  it("shows 'if the dealer has blackjack, you lose' only when the dealer has no hole card", () => {
+    open(withMode("drawEarly_Check"));
+    expect(screen.queryByRole("group", { name: NO_HOLE })).toBeNull();
+    cleanup();
+    for (const mode of ["drawAfter", "drawEarly_NoCheck"]) {
+      open(withMode(mode));
+      expect(pressed(NO_HOLE)).toBe("Only your first bet");
+      expect(optionLabels(NO_HOLE)).toEqual(["Everything you staked", "Only your first bet"]);
+      cleanup();
+    }
+  });
+
+  it("shows it as soon as the dealer mode is changed to one with no peek, and hides it again", () => {
+    openLive();
+    expect(screen.queryByRole("group", { name: NO_HOLE })).toBeNull();
+    fireEvent.click(option("Second Card", "Dealt after you play"));
+    expect(screen.getByRole("group", { name: NO_HOLE })).toBeTruthy();
+    fireEvent.click(option("Second Card", "Dealer peeks for blackjack"));
+    expect(screen.queryByRole("group", { name: NO_HOLE })).toBeNull();
+  });
+
+  it("hides Resplit Aces when only two hands are allowed, and brings it back with more", () => {
+    openLive();
+    expect(screen.getByRole("group", { name: "Resplit Aces" })).toBeTruthy();
+    fireEvent.click(option("Max Hands After Splits: 4", "2"));
+    expect(screen.queryByRole("group", { name: "Resplit Aces" })).toBeNull();
+    fireEvent.click(option("Max Hands After Splits: 2", "3"));
+    expect(screen.getByRole("group", { name: "Resplit Aces" })).toBeTruthy();
+  });
+
+  it("applies each rule at once with the right value", () => {
+    const { gameActions } = openLive(withMode("drawAfter"));
+    fireEvent.click(option("Soft 17", "Stands"));
+    fireEvent.click(option("Blackjack Pays", "6:5"));
+    fireEvent.click(option("Double On", "Hard 9 to 11"));
+    fireEvent.click(option("Double After a Split", "Off"));
+    fireEvent.click(option("Resplit Aces", "On"));
+    fireEvent.click(option("Hit Split Aces", "On"));
+    fireEvent.click(option(NO_HOLE, "Everything you staked"));
+    expect(gameActions.changeSettings.mock.calls).toEqual([
+      [{ dealerHitsSoft17: false }], [{ blackjackPayout: "6:5" }], [{ doubleOn: "9-11" }], [{ doubleAfterSplit: false }],
+      [{ resplitAces: true }], [{ hitSplitAces: true }], [{ noHoleCardLoss: "all" }],
     ]);
+    expect(gameActions.changeSetting).not.toHaveBeenCalled();
   });
 
   it("shows the plain-language hint of the chosen option, and of a checkbox", () => {
-    open();
+    openLive();
     expect(screen.getByText("A $10 blackjack wins $15.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("blackjackPayout"), { target: { value: "6:5" } });
+    fireEvent.click(option("Blackjack Pays", "6:5"));
     expect(screen.queryByText("A $10 blackjack wins $15.")).toBeNull();
     expect(screen.getByText(/A \$10 blackjack wins only \$12/)).toBeTruthy();
     expect(screen.getByText("You may double on any first two cards.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("doubleOn"), { target: { value: "10-11" } });
+    fireEvent.click(option("Double On", "Hard 10 to 11"));
     expect(screen.getByText(/only on a hard total of 10 or 11/)).toBeTruthy();
     expect(screen.getByText("Off: each split ace gets one card and stands.")).toBeTruthy();
     expect(screen.getByText("Allows doubling on a hand made by splitting.")).toBeTruthy();
+    expect(screen.getByText(/Hits: the dealer draws on a hand like ace-6/)).toBeTruthy();
   });
 
-  it("a rule change warns that it resets a round in progress", () => {
-    open({ phase: GamePhases.PLAYER_TURN });
-    expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
-    fireEvent.click(screen.getByLabelText("resplitAces"));
-    expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+  it("a rule click during a round asks once; Cancel changes nothing", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const { gameActions } = openLive({ phase: GamePhases.PLAYER_TURN });
+    fireEvent.click(option("Resplit Aces", "On"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(pressed("Resplit Aces")).toBe("Off");
+    fireEvent.click(option("Resplit Aces", "On"));
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ resplitAces: true }]]);
+    expect(pressed("Resplit Aces")).toBe("On");
   });
 
-  it("applying a preset sends all 17 rule keys in one call, and the list names the five presets and Custom", () => {
-    const { gameActions } = open();
-    const select = screen.getByLabelText("rulePreset");
-    expect([...select.options].map((o) => o.text)).toEqual(["Vegas", "Atlantic City", "Europe", "Australia", "Singapore", "Custom"]);
-    fireEvent.change(select, { target: { value: "Singapore" } });
+  it("every table rule asks during a round, the dealer toggles in Advanced too, and a House variation never does", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { gameActions } = open({ phase: GamePhases.DEALER_TURN });
+    for (const [group, label] of [["Soft 17", "Stands"], ["Blackjack Pays", "6:5"], ["Surrender", "None"], ["Second Card", "Dealt after you play"], ["Insurance and Even Money", "Off"]]) {
+      fireEvent.click(option(group, label));
+    }
+    for (const key of ["blackJackOnSplit", "dealerDrawsOnceOn21", "dealerHoleNoCheck"]) fireEvent.click(screen.getByLabelText(key));
+    expect(confirm).toHaveBeenCalledTimes(8);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    confirm.mockClear();
+    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(screen.getByLabelText(key));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ tripleDown: true }], [{ doubleFaceDown: true }]]);
+  });
+
+  it("applying a preset sends all 17 rule keys in one call, and the tiles name the five presets", () => {
+    const { gameActions } = openLive();
+    const tiles = within(screen.getByRole("group", { name: "Table rules" })).getAllByRole("button");
+    expect(tiles.map((t) => t.querySelector("strong").textContent)).toEqual(["Vegas", "Atlantic City", "Europe", "Australia", "Singapore"]);
+    fireEvent.click(tile("Singapore"));
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
     const sent = gameActions.changeSettings.mock.calls[0][0];
     expect(Object.keys(sent)).toHaveLength(17);
     expect(sent).toMatchObject({ doubleOn: "any", maxSplitHands: 3, deckCount: 6, dealerHitsSoft17: false, noHoleCardLoss: "original" });
-    expect(screen.getByLabelText("doubleOn").value).toBe("any");
-    expect(screen.getByLabelText("maxSplitHands").value).toBe("3");
-    expect(screen.getByLabelText("noHoleCardLoss").value).toBe("original");
+    expect(pressed("Double On")).toBe("Any two cards");
+    expect(pressed("Max Hands After Splits: 3")).toBe("3");
+    expect(pressed(NO_HOLE)).toBe("Only your first bet");
   });
 
   it("changing a single rule of a preset shows Custom", () => {
-    open();
-    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
-    fireEvent.click(screen.getByLabelText("dealerHitsSoft17"));
-    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
-    fireEvent.click(screen.getByLabelText("dealerHitsSoft17"));
-    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
+    openLive();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(option("Soft 17", "Stands"));
+    expect(customTile()).toBeTruthy();
+    expect(presetTiles().filter((t) => t.getAttribute("aria-pressed") === "true")).toHaveLength(0);
+    fireEvent.click(option("Soft 17", "Hits"));
+    expect(customTile()).toBeNull();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("a saved table that matches no preset (a legacy two-deck table) shows Custom", () => {
+  it("a saved table that matches no preset (a legacy two-deck table) shows Custom, with its own summary and edge", () => {
     open({ settings: { ...initialGameState.settings, deckCount: 2, dealerHitsSoft17: false, maxSplitHands: 0, noHoleCardLoss: "all" } });
-    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+    expect(customTile()).toBeTruthy();
+    expect(customTile().textContent).toContain("2 decks · Dealer stands on soft 17 · 3:2 · Late surrender");
+    expect(customTile().textContent).toContain("Split any number of hands");
   });
 
   describe("surrender", () => {
-    it("is a select of four choices on the Game tab, set to Late for Vegas, in every dealer mode", () => {
+    it("is four choices on the Game tab, set to Late for Vegas, in every dealer mode", () => {
       for (const mode of ["drawEarly_Check", "drawEarly_NoCheck", "drawAfter"]) {
         open(withMode(mode));
-        const select = screen.getByLabelText("surrender");
-        expect(select.value).toBe("late");
-        expect([...select.options].map((o) => [o.value, o.text])).toEqual([
-          ["none", "None"], ["late", "Late"], ["early", "Early"], ["earlyNoAce", "Early (not against an ace)"]]);
-        expect(screen.getByText("Surrender")).toBeTruthy();
+        expect(pressed("Surrender")).toBe("Late");
+        expect(optionLabels("Surrender")).toEqual(["None", "Late", "Early", "Early (not against an ace)"]);
         cleanup();
       }
     });
 
-    it("shows the hint of the selected option, and the hint follows the selection before it is saved", () => {
-      open();
+    it("shows the hint of the selected option, and the hint follows the selection", () => {
+      openLive();
       expect(screen.getByText(/Give up half your bet on your first two cards\. If the dealer has blackjack/)).toBeTruthy();
-      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "none" } });
+      fireEvent.click(option("Surrender", "None"));
       expect(screen.getByText("You can't give up a hand.")).toBeTruthy();
-      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "early" } });
+      fireEvent.click(option("Surrender", "Early"));
       expect(screen.getByText(/before the dealer checks for blackjack\. You keep the half even if the dealer has one\./)).toBeTruthy();
-      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "earlyNoAce" } });
+      fireEvent.click(option("Surrender", "Early (not against an ace)"));
       expect(screen.getByText(/not offered when the dealer shows an ace\./)).toBeTruthy();
     });
 
-    it("saves the chosen value with its Save button", () => {
+    it("applies the chosen value at once, as one rule", () => {
       const { gameActions } = open();
-      expect(screen.getByLabelText("Save surrender")).toBeTruthy();
-      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "early" } });
-      fireEvent.click(screen.getByLabelText("Save surrender"));
-      expect(gameActions.changeSetting.mock.calls).toEqual([["surrender", "early"]]);
+      expect(screen.queryByLabelText("Save surrender")).toBeNull();
+      fireEvent.click(option("Surrender", "Early"));
+      expect(gameActions.changeSettings.mock.calls).toEqual([[{ surrender: "early" }]]);
     });
 
-    it("a change warns that it resets a round in progress", () => {
-      open({ phase: GamePhases.PLAYER_TURN });
-      expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
-      fireEvent.change(screen.getByLabelText("surrender"), { target: { value: "none" } });
-      expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+    it("a change during a round asks first", () => {
+      const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+      const { gameActions } = open({ phase: GamePhases.PLAYER_TURN });
+      fireEvent.click(option("Surrender", "None"));
+      expect(confirm).toHaveBeenCalledTimes(1);
+      expect(gameActions.changeSettings).not.toHaveBeenCalled();
     });
 
     it("the Singapore preset applies earlyNoAce, and Europe turns it off", () => {
-      const { gameActions } = open();
-      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: "Singapore" } });
+      const { gameActions } = openLive();
+      fireEvent.click(tile("Singapore"));
       expect(gameActions.changeSettings.mock.calls[0][0].surrender).toBe("earlyNoAce");
-      expect(screen.getByLabelText("surrender").value).toBe("earlyNoAce");
-      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: "Europe" } });
+      expect(pressed("Surrender")).toBe("Early (not against an ace)");
+      fireEvent.click(tile("Europe"));
       expect(gameActions.changeSettings.mock.calls[1][0].surrender).toBe("none");
-      expect(screen.getByLabelText("surrender").value).toBe("none");
+      expect(pressed("Surrender")).toBe("None");
     });
 
     it("a Vegas table with surrender none (what a version 2 save becomes) shows Custom", () => {
       open({ settings: { ...initialGameState.settings, surrender: "none" } });
-      expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+      expect(customTile()).toBeTruthy();
     });
   });
 });
 
 describe("Settings: insurance and even money (#91)", () => {
-  const open = (game = {}, path = "/settings?tab=game") => renderUI(<Settings />, { path, game: { phase: GamePhases.PRE_DEAL, ...game } });
   const TEXT = /When the dealer shows an ace you may insure for half your bet; it pays 2:1 if the dealer has blackjack\. With your own blackjack you may take even money \(1:1\) at once\./;
+  const GROUP = "Insurance and Even Money";
 
-  it("is a checkbox on the Game tab, on for Vegas, named 'Insurance and Even Money', with its hint", () => {
+  it("is On / Off on the Game tab, on for Vegas, named 'Insurance and Even Money', with its hint", () => {
     open();
-    const box = screen.getByLabelText("insurance");
-    expect(box.type).toBe("checkbox");
-    expect(box.checked).toBe(true);
-    expect(screen.getByText("Insurance and Even Money")).toBeTruthy();
+    expect(optionLabels(GROUP)).toEqual(["On", "Off"]);
+    expect(pressed(GROUP)).toBe("On");
+    expect(screen.getByText(GROUP)).toBeTruthy();
     expect(screen.getByText(TEXT)).toBeTruthy();
   });
 
@@ -819,65 +928,245 @@ describe("Settings: insurance and even money (#91)", () => {
     open();
     for (const tab of ["Player", "Dev"]) {
       fireEvent.click(screen.getByRole("tab", { name: tab }));
-      expect(screen.queryByLabelText("insurance"), tab).toBeNull();
+      expect(screen.queryByRole("group", { name: GROUP }), tab).toBeNull();
     }
   });
 
   it("is shown in every dealer mode", () => {
     for (const dealerHoleBehaviour of ["drawEarly_Check", "drawEarly_NoCheck", "drawAfter"]) {
       open({ settings: { ...initialGameState.settings, dealerHoleBehaviour } });
-      expect(screen.getByLabelText("insurance"), dealerHoleBehaviour).toBeTruthy();
+      expect(screen.getByRole("group", { name: GROUP }), dealerHoleBehaviour).toBeTruthy();
       cleanup();
     }
   });
 
-  it("shows a table with insurance off unchecked", () => {
+  it("shows a table with insurance off as Off", () => {
     open({ settings: { ...initialGameState.settings, insurance: false } });
-    expect(screen.getByLabelText("insurance").checked).toBe(false);
+    expect(pressed(GROUP)).toBe("Off");
   });
 
-  it("saves the unchecked box with its Save button", () => {
+  it("applies Off at once, with nothing but insurance in the patch", () => {
     const { gameActions } = open();
-    fireEvent.click(screen.getByLabelText("insurance"));
-    fireEvent.click(screen.getByLabelText("Save insurance"));
-    expect(gameActions.changeSetting.mock.calls).toEqual([["insurance", false]]);
+    fireEvent.click(option(GROUP, "Off"));
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ insurance: false }]]);
+    expect(screen.queryByLabelText("Save insurance")).toBeNull();
   });
 
-  it("a change warns that it resets a round in progress (it is a table setting)", () => {
-    open({ phase: GamePhases.PLAYER_TURN });
-    expect(screen.queryByText("Changing this setting will reset the current game.")).toBeNull();
-    fireEvent.click(screen.getByLabelText("insurance"));
-    expect(screen.getByText("Changing this setting will reset the current game.")).toBeTruthy();
+  it("a change during a round asks first (it is a table setting)", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { gameActions } = open({ phase: GamePhases.PLAYER_TURN });
+    fireEvent.click(option(GROUP, "Off"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
   });
 
-  it("also warns while the table waits at the offers or the peek (they count as mid-round)", () => {
+  it("also asks while the table waits at the offers or the peek (they count as mid-round)", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     for (const phase of [GamePhases.OFFERS, GamePhases.PEEK]) {
+      confirm.mockClear();
       open({ phase });
-      fireEvent.click(screen.getByLabelText("insurance"));
-      expect(screen.getByText("Changing this setting will reset the current game."), phase).toBeTruthy();
+      fireEvent.click(option(GROUP, "Off"));
+      expect(confirm, phase).toHaveBeenCalledTimes(1);
       cleanup();
     }
   });
 
   it("every preset applies insurance on", () => {
     const { gameActions } = open({ settings: { ...initialGameState.settings, insurance: false } });
-    for (const name of ["Vegas", "Atlantic City", "Europe", "Australia", "Singapore"]) {
-      fireEvent.change(screen.getByLabelText("rulePreset"), { target: { value: name } });
-    }
+    for (const name of ["Vegas", "Atlantic City", "Europe", "Australia", "Singapore"]) fireEvent.click(tile(name));
     expect(gameActions.changeSettings.mock.calls.map(([sent]) => sent.insurance)).toEqual([true, true, true, true, true]);
   });
 
-  it("unticking it on a preset table shows Custom, and ticking it back shows the preset again", () => {
-    open();
-    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
-    fireEvent.click(screen.getByLabelText("insurance"));
-    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
-    fireEvent.click(screen.getByLabelText("insurance"));
-    expect(screen.getByLabelText("rulePreset").value).toBe("Vegas");
+  it("switching it off on a preset table shows Custom, and switching it back shows the preset again", () => {
+    openLive();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(option(GROUP, "Off"));
+    expect(customTile()).toBeTruthy();
+    fireEvent.click(option(GROUP, "On"));
+    expect(customTile()).toBeNull();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
   });
 
   it("a saved table with insurance off (a version 1 to 3 save) shows Custom, for every preset's other rules", () => {
-    open({ settings: { ...initialGameState.settings, insurance: false } });
-    expect(screen.getByLabelText("rulePreset").value).toBe("Custom");
+    for (const preset of Object.values(RULE_PRESETS)) {
+      open({ settings: { ...initialGameState.settings, ...preset, insurance: false } });
+      expect(customTile()).toBeTruthy();
+      cleanup();
+    }
+  });
+});
+
+describe("Settings rules section (#91)", () => {
+  const settingsWith = (patch) => ({ settings: { ...initialGameState.settings, ...patch } });
+  const edgeLine = () => document.querySelector("[aria-live='polite']").textContent;
+
+  it("shows five preset tiles, each with its name, its two summary lines and its house edge; the current one is pressed", () => {
+    open();
+    for (const [name, preset] of Object.entries(RULE_PRESETS)) {
+      const [line1, line2] = ruleSummary(preset);
+      const button = tile(name);
+      expect(button.textContent).toBe(`${name}${line1}${line2}≈ about ${formatEdge(houseEdge(preset))} house edge`);
+      expect(button.getAttribute("aria-pressed")).toBe(String(name === "Vegas"));
+    }
+    expect(tile("Vegas").textContent).toBe("Vegas6 decks · Dealer hits soft 17 · 3:2 · Late surrenderDealer peeks · Double on any two cards · Split up to 4 hands≈ about 0.6% house edge");
+    expect(tile("Atlantic City").textContent).toContain("about 0.4% house edge");
+    expect(tile("Singapore").textContent).toContain("about 0.2% house edge");
+  });
+
+  it("the tile's spoken edge reads 'about 0.6% house edge', while the sign '≈' is hidden from screen readers", () => {
+    open();
+    const edge = tile("Vegas").querySelector(".rule-edge");
+    expect(edge.querySelector("[aria-hidden='true']").textContent).toBe("≈ ");
+    expect(edge.querySelector(".sr-only").textContent).toBe("about ");
+    expect(screen.getAllByRole("button", { name: /about\s*0\.6%\s*house edge$/ }).map((b) => b.querySelector("strong").textContent)).toEqual(["Vegas", "Europe"]);
+  });
+
+  it("shows no Custom tile for a preset, and a non-interactive Custom tile for any other table", () => {
+    open();
+    expect(customTile()).toBeNull();
+    expect(screen.queryByText("Custom")).toBeNull();
+    cleanup();
+    const { gameActions } = open(settingsWith({ blackjackPayout: "6:5" }));
+    const custom = customTile();
+    expect(custom.tagName).toBe("DIV");
+    expect(custom.getAttribute("aria-current")).toBe("true");
+    expect(custom.querySelector("strong").textContent).toBe("Custom");
+    expect(custom.textContent).toContain("6 decks · Dealer hits soft 17 · 6:5 · Late surrender");
+    expect(custom.textContent).toContain(`about ${formatEdge(houseEdge({ ...RULE_PRESETS.Vegas, blackjackPayout: "6:5" }))} house edge`);
+    expect(custom.textContent).toContain("about 2.0% house edge");
+    expect(presetTiles()).toHaveLength(5);
+    expect(presetTiles().some((t) => t.getAttribute("aria-pressed") === "true")).toBe(false);
+    fireEvent.click(custom); // it is not a control
+    expect(screen.queryAllByRole("button", { name: /^Custom/ })).toHaveLength(0);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+  });
+
+  it("a pre-#91 table (the legacy rules) shows Custom", () => {
+    open(settingsWith({ ...LEGACY_RULES }));
+    expect(customTile()).toBeTruthy();
+    expect(customTile().textContent).toContain("2 decks · Dealer stands on soft 17");
+  });
+
+  it("clicking the tile that is already chosen does nothing, even during a round", () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const { gameActions } = open({ phase: GamePhases.PLAYER_TURN });
+    fireEvent.click(tile("Vegas"));
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("clicking the option that is already chosen does nothing, even during a round", () => {
+    const confirm = vi.spyOn(window, "confirm");
+    const { gameActions } = open({ phase: GamePhases.PLAYER_TURN });
+    for (const [group, label] of [["Deck size: 6", "6"], ["Soft 17", "Hits"], ["Surrender", "Late"], ["Second Card", "Dealer peeks for blackjack"], ["Insurance and Even Money", "On"]]) {
+      fireEvent.click(option(group, label));
+    }
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it("shows the estimate and how to read it: the note, and a live line for this table", () => {
+    open();
+    expect(screen.getByText(/estimate for a player who uses basic strategy/)).toBeTruthy();
+    expect(screen.getByText(/approximate/)).toBeTruthy();
+    expect(screen.getByText(/A plus sign means a worse deal for you/)).toBeTruthy();
+    expect(edgeLine()).toBe("This table: ≈ about 0.6% house edge (estimate)");
+  });
+
+  it("the live line follows the applied table", () => {
+    const { gameState, rerender } = open();
+    gameState.settings = { ...gameState.settings, blackjackPayout: "6:5" };
+    rerender(<Settings />);
+    expect(edgeLine()).toBe("This table: ≈ about 2.0% house edge (estimate)");
+  });
+
+  it("the notice is still the only status, and the house-edge line is announced politely instead", () => {
+    open();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(document.querySelector("[aria-live='polite']")).toBeTruthy();
+  });
+
+  it("Customize, House variations and Advanced are three separate collapsed groups", () => {
+    open();
+    const details = [...document.querySelectorAll("details")];
+    expect(details.map((d) => d.querySelector("summary").textContent)).toEqual(["Customize rules", "House variations", "Advanced"]);
+    for (const d of details) expect(d.open).toBe(false);
+    expect(within(details[0]).queryByRole("group", { name: "Surrender" })).toBeTruthy();
+    expect(within(details[1]).getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual(["tripleDown", "tripleDrawsOnBust", "doubleFaceDown"]);
+    expect(within(details[2]).getAllByRole("checkbox").map((c) => c.getAttribute("aria-label"))).toEqual([
+      "blackJackOnSplit", "dealerDrawsOnPlayerBlackjack", "blackjackPaysImmediately", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBust", "dealerHoleNoCheck"]);
+    expect(within(details[1]).getByText(/not casino rules/)).toBeTruthy();
+    expect(within(details[2]).getByText(/makes the table Custom/)).toBeTruthy();
+  });
+
+  it("a change in Advanced makes the table Custom, and putting it back brings the preset back", () => {
+    const { gameActions } = openLive();
+    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ blackJackOnSplit: true }]]);
+    expect(customTile()).toBeTruthy();
+    expect(customTile().textContent).toContain("about 0.6% house edge"); // not counted: the same estimate as Vegas
+    fireEvent.click(screen.getByLabelText("blackJackOnSplit"));
+    expect(customTile()).toBeNull();
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("a change in House variations does not change the table, and its edge is not counted", () => {
+    const { gameActions } = openLive();
+    for (const key of ["tripleDown", "doubleFaceDown"]) fireEvent.click(screen.getByLabelText(key));
+    expect(gameActions.changeSettings).toHaveBeenCalledTimes(2);
+    expect(customTile()).toBeNull();
+    expect(edgeLine()).toBe("This table: ≈ about 0.6% house edge (estimate)");
+  });
+
+  it("'Dealer doesn't check the hole card' writes the mode and the blackjack timing, makes the table Custom, and is undone by unticking", () => {
+    const { gameActions } = openLive();
+    const box = screen.getByLabelText("dealerHoleNoCheck");
+    expect(box.checked).toBe(false);
+    expect(screen.getByText("Dealer doesn't check the hole card")).toBeTruthy();
+    fireEvent.click(box);
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }]]);
+    expect(box.checked).toBe(true);
+    expect(customTile()).toBeTruthy();
+    expect(screen.getByRole("group", { name: NO_HOLE })).toBeTruthy(); // no peek: a dealer blackjack is found after the stakes
+    fireEvent.click(box);
+    expect(gameActions.changeSettings).toHaveBeenLastCalledWith({ dealerHoleBehaviour: "drawEarly_Check", blackjackPaysImmediately: true });
+    expect(box.checked).toBe(false);
+    expect(tile("Vegas").getAttribute("aria-pressed")).toBe("true"); // the pairing restores the preset's own values
+  });
+
+  it("is hidden in EU, where there is no hole card to check", () => {
+    open({ settings: { ...initialGameState.settings, ...RULE_PRESETS.Europe } });
+    expect(screen.queryByLabelText("dealerHoleNoCheck")).toBeNull();
+    expect(screen.getByLabelText("dealerDrawsOnceOn21")).toBeTruthy();
+  });
+
+  it("Second Card shows 'Dealer peeks' chosen for a US no-peek table, and clicking it does nothing", () => {
+    const { gameActions } = open(settingsWith({ dealerHoleBehaviour: "drawEarly_NoCheck", blackjackPaysImmediately: false }));
+    expect(pressed("Second Card")).toBe("Dealer peeks for blackjack");
+    expect(screen.getByLabelText("dealerHoleNoCheck").checked).toBe(true);
+    fireEvent.click(option("Second Card", "Dealer peeks for blackjack"));
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    fireEvent.click(option("Second Card", "Dealt after you play"));
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ dealerHoleBehaviour: "drawAfter", blackjackPaysImmediately: false }]]);
+  });
+
+  it("Second Card also sets when a blackjack pays, so hand-built Atlantic City rules equal the Atlantic City tile", () => {
+    const { gameActions } = openLive();
+    fireEvent.click(option("Second Card", "Dealt after you play"));
+    expect(customTile()).toBeTruthy();
+    fireEvent.click(option("Deck size: 6", "8"));
+    fireEvent.click(option("Soft 17", "Stands"));
+    expect(gameActions.changeSettings).toHaveBeenCalledTimes(3);
+    expect(customTile()).toBeNull();
+    expect(tile("Atlantic City").getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByLabelText("blackjackPaysImmediately").checked).toBe(false);
+  });
+
+  it("the Advanced checkboxes show the saved values, and disable only Always-draw (triple down off) and a forced blackjack payment", () => {
+    open(settingsWith({ ...RULE_PRESETS.Europe, dealerDrawsOnPlayerBlackjack: false }));
+    const forced = screen.getByLabelText("blackjackPaysImmediately");
+    expect([forced.checked, forced.disabled]).toEqual([true, true]);
+    expect(screen.getByLabelText("dealerDrawsOnPlayerBlackjack").disabled).toBe(false);
+    expect(screen.getByLabelText("tripleDrawsOnBust").disabled).toBe(true);
   });
 });
