@@ -3,11 +3,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
-import { DealerHoleLabels } from "../utils/constants/dealerHoleOptions";
 import { RESET_SETTINGS, SETTING_RANGES } from "../utils/gameReducer";
-import { isEU } from "../utils/blackjackLogic";
-import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../utils/rulePresets";
-import { visibleIn } from "../utils/ruleCatalog";
+import { changes, resetsTable } from "../utils/ruleCatalog";
+import RulesSection from "../components/RulesSection/RulesSection";
 import { validateField } from "../utils/validation";
 import { ALLOWED_CHIPS } from "../utils/constants/chips";
 import { parseChipValues, formatChipValues } from "../utils/chips";
@@ -25,35 +23,22 @@ const RESET_CONFIRM = "Changing this setting will reset the current game. Any be
 
 const TABS = [{ id: "player", label: "Player" }, { id: "game", label: "Game" }, { id: "dev", label: "Dev" }];
 
-// Game settings with a tab of their own; the rest are on the Game tab. The table rules come from utils/ruleCatalog.js.
+// Game settings with a tab of their own; the rest are on the Game tab. The table rules, House variations and Advanced toggles come
+// from utils/ruleCatalog.js and apply at once (components/RulesSection); the settings below keep their own Save button.
 const GAME_SETTINGS = [
   { key: "includeCutCard", label: () => "Include Cut Card", input: "checkbox" },
   { key: "resetInitialBet", label: () => "Reset Bet", input: "checkbox" },
   { key: "autoDeal", label: () => "Auto Deal", input: "checkbox", showWhen: (s) => s.resetInitialBet },
   { key: "autoDealDelay", label: (v) => `Auto Deal Delay: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.autoDealDelay, step: 100,
     showWhen: (s) => s.resetInitialBet && s.autoDeal },
-  { key: "dealerHoleBehaviour", label: () => "Dealer Second Card Behaviour", input: "select",
-    options: Object.entries(DealerHoleLabels).map(([value, label]) => ({ value, label })) },
-  { key: "blackJackOnSplit", label: () => "Blackjack on Split", input: "checkbox" },
-  { key: "dealerDrawsOnPlayerBlackjack", label: () => "EU: Dealer Draws 2nd Card on a Player Blackjack", input: "checkbox" },
-  // With no dealer card to compare against, a blackjack must pay at once.
-  { key: "blackjackPaysImmediately", label: () => "Blackjack Pays Immediately", input: "checkbox",
-    forcedOn: (s) => isEU(s) && !s.dealerDrawsOnPlayerBlackjack },
-  { key: "dealerDrawsOnceOn21", label: () => "EU: Dealer Draws Only Once Against a 21", input: "checkbox" },
-  { key: "dealerDrawsOnPlayerBust", label: () => "Dealer Draws 2nd Card After a Player Bust", input: "checkbox" },
   { key: "chipValues", label: () => "Chips to show", input: "chips" },
-  { key: "tripleDown", label: () => "Triple Down", input: "checkbox" },
-  { key: "tripleDrawsOnBust", label: () => "Always Draw the Second Triple Card, Even on a Bust", input: "checkbox",
-    disabledWhen: (s) => !s.tripleDown },
-  { key: "doubleFaceDown", label: () => "Double Down Card Face Down", input: "checkbox" },
   { key: "playTimeout", label: (v) => `Rate of Play: ${v / 1000} seconds`, input: "range", range: SETTING_RANGES.playTimeout, tab: "dev" },
   { key: "showCardCount", label: () => "Show Card Count", input: "checkbox", tab: "dev" },
 ];
 
-function SettingInput({ setting, value, forced, disabled, onChange }) {
+function SettingInput({ setting, value, onChange }) {
   if (setting.input === "checkbox") {
-    return <input type="checkbox" aria-label={setting.key} checked={(value && !disabled) || forced} disabled={forced || disabled}
-      onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
+    return <input type="checkbox" aria-label={setting.key} checked={value} onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
   }
   if (setting.input === "chips") {
     const chosen = parseChipValues(value);
@@ -66,14 +51,6 @@ function SettingInput({ setting, value, forced, disabled, onChange }) {
         ${chip.toLocaleString()}
       </label>
     ));
-  }
-  if (setting.input === "select") {
-    return (
-      <select aria-label={setting.key} value={value} className="field-input"
-        onChange={(e) => onChange(setting.options.find((o) => String(o.value) === e.target.value).value)}>
-        {setting.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-      </select>
-    );
   }
   return (
     <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} step={setting.step} value={value}
@@ -156,11 +133,12 @@ export default function Settings() {
   const remember = (saving) => saving.then(() => setNotice(null),
     () => failed("Couldn't save your settings to your account. They apply here until you reload."));
 
-  // A preset changes every rule at once, with one reset confirmation.
-  const applyPreset = (name) => {
-    if (midRound && !confirm(RESET_CONFIRM)) return;
-    setEdits({ ...edits, ...RULE_PRESETS[name] });
-    remember(changeSettings(RULE_PRESETS[name]));
+  // The rules section applies at once. A patch that changes nothing does nothing (it would still deal a new shoe); one that deals a
+  // new shoe asks first during a round. A preset is one patch, so it asks once.
+  const applyRules = (patch) => {
+    if (!changes(patch, settings)) return;
+    if (resetsTable(patch) && midRound && !confirm(RESET_CONFIRM)) return;
+    remember(changeSettings(patch));
   };
 
   return (
@@ -210,19 +188,10 @@ export default function Settings() {
           </button>
           </>}
 
-          {tab === "game" && (
-          <label>
-            Rules preset
-            <select aria-label="rulePreset" value={rulePresetOf(drafts)} onChange={(e) => applyPreset(e.target.value)} className="field-input">
-              {Object.keys(RULE_PRESETS).map((name) => <option key={name} value={name}>{name}</option>)}
-              <option value={CUSTOM} disabled>{CUSTOM}</option>
-            </select>
-          </label>
-          )}
+          {tab === "game" && <RulesSection settings={settings} onApply={applyRules} />}
 
-          {[...visibleIn(drafts), ...GAME_SETTINGS].filter((setting) => (setting.tab ?? "game") === tab && (setting.showWhen?.(drafts) ?? true)).map((setting) => {
+          {GAME_SETTINGS.filter((setting) => (setting.tab ?? "game") === tab && (setting.showWhen?.(drafts) ?? true)).map((setting) => {
             const changed = drafts[setting.key] !== settings[setting.key];
-            const hint = setting.options?.find((o) => o.value === drafts[setting.key])?.hint ?? setting.hint;
             return (
               <div key={setting.key}>
                 <hr className="divider" />
@@ -235,12 +204,10 @@ export default function Settings() {
                 ) : (
                   <label>
                     {setting.label(drafts[setting.key])}
-                    <SettingInput setting={setting} value={drafts[setting.key]} forced={setting.forcedOn?.(drafts) ?? false}
-                      disabled={setting.disabledWhen?.(drafts) ?? false}
+                    <SettingInput setting={setting} value={drafts[setting.key]}
                       onChange={(v) => setEdits({ ...edits, [setting.key]: v })} />
                   </label>
                 )}
-                {hint && <p className="chip-hint">{hint}</p>}
                 {changed && RESET_SETTINGS.includes(setting.key) && phase !== GamePhases.NONE && (
                   <div className="reset-warning">Changing this setting will reset the current game.</div>
                 )}

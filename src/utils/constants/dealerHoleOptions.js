@@ -4,10 +4,3 @@ export const DealerHoleOptions = {
   US_PEEK: "drawEarly_Check",
   EU: "drawAfter",
 };
-
-// What the Settings select shows for each mode.
-export const DealerHoleLabels = {
-  [DealerHoleOptions.US_NO_PEEK]: "Draw Early - No Check (US)",
-  [DealerHoleOptions.US_PEEK]: "Draw Early - Check (US)",
-  [DealerHoleOptions.EU]: "Draw After (EU)",
-};
