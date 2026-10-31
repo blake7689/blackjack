@@ -212,6 +212,7 @@ export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { blackJackO
   if (!blackJackOnSplit && hand2Evaluation.isBlackjack) { hand2Evaluation.isBlackjack = false; }
 
   // Split aces get one card each and stand, unless they may be hit, or may be split again when the card is another ace. //
+  // Not canHit (blackjackLogic.js): this decides from raw cards whether a NEW split-ace hand stands, and reads resplitAces; if the Hit rule changes, check this line too. //
   const splitAces = hand.cards[0].rank === "ace";
   const standsAfterOne = (cards) => splitAces && !hitSplitAces && !(resplitAces && cards[1].rank === "ace");
 
