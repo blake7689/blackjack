@@ -15,7 +15,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. CI has an `e2e` job in `ci.yml` that gates the deploy.
 
 ## Architecture
-- Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 3 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
+- Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
 - Settings has Player / Game / Dev tabs (`?tab=`; "Back to game" carries it so the header's Settings reopens it).
   A new game setting goes in `GAME_SETTINGS` (`tab: "dev"` for developer options; Game otherwise).
