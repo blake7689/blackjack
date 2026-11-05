@@ -272,6 +272,22 @@ describe("credits", () => {
     expect(report).toHaveBeenCalledWith(3, "confirmed");
   });
 
+  it("ignores a balance reload that answers after signing out", async () => {
+    const { ctx } = await signedIn();
+    const reload = deferred();
+    engine.placeBet.mockRejectedValueOnce(refusal(400, "refused"));
+    engine.getMe.mockReturnValueOnce(reload.promise);
+
+    act(() => ctx.applyCreditEvent({ seq: 4, kind: "bet", amount: 10, newRound: true, alreadyDeducted: false, handTag: null }, vi.fn()));
+    await settleQueue(); // the refusal started the reload, which waits for its answer
+    expect(engine.getMe).toHaveBeenCalledTimes(1);
+    act(() => { ctx.logout(); });
+    await act(async () => { reload.resolve({ ...player, credits: 5000 }); });
+    await settleQueue();
+    expect(ctx.player).toBeNull();
+    expect(ctx.getCredits()).toBe(0);
+  });
+
   it("shows the last change as a badge that fades, and none for a zero change", async () => {
     const { ctx } = await signedIn();
     engine.settleRound.mockResolvedValue({ credits: 1000, openStake: 0 });
