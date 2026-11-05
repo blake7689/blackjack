@@ -450,7 +450,7 @@ describe("BettingFooter", () => {
 
   it("publishes its height as a CSS variable and stops observing on unmount", () => {
     const observer = { observe: vi.fn(), disconnect: vi.fn() };
-    vi.stubGlobal("ResizeObserver", vi.fn(() => observer));
+    vi.stubGlobal("ResizeObserver", vi.fn(function ResizeObserver() { return observer; }));
     const { unmount } = renderUI(<BettingFooter />, { game: { phase: GamePhases.PRE_DEAL } });
     expect(document.documentElement.style.getPropertyValue("--bet-footer-space")).toBe("0px");
     expect(observer.observe).toHaveBeenCalled();
