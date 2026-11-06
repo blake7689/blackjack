@@ -12,7 +12,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. CI has an `e2e` job in `ci.yml` that gates the deploy.
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup at Pixel 7 size
+  (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
 
 ## Architecture
 - Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
