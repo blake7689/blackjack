@@ -16,7 +16,11 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   // E2E_CHANNEL=chrome uses the installed Google Chrome where Playwright's own download cannot run (e.g. blocked by security software).
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.E2E_CHANNEL } }],
+  // 'phone' re-runs the smoke and top-up tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.E2E_CHANNEL } },
+    { name: 'phone', testMatch: /(smoke|topup)\.spec\.js/, use: { ...devices['Pixel 7'], channel: process.env.E2E_CHANNEL } },
+  ],
   webServer: {
     // Port 4174, so a local production preview on 4173 (real API) is never picked up.
     command: 'npm run build:e2e && npm run preview -- --port 4174 --strictPort',

@@ -43,6 +43,8 @@ test('options stay hidden while cards move through a whole round (#72)', async (
   await (await settingsLoaded).finished(); // each settings load builds a shoe, so the shoe is settled before Start Game
   await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
+  expect(await noHScroll(), 'the game board must not scroll sideways').toBe(true); // matters at phone size (the phone project)
 
   // Count frames where the buttons are visible while a card is still moving; also record that both states were seen.
   await page.evaluate(() => {
