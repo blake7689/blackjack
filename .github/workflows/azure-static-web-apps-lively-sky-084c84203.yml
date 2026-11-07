@@ -154,7 +154,7 @@ jobs:
           cache: npm
       - run: npm ci
       # Chromium shell only, no browser cache (same as the e2e job in ci.yml).
-      - run: npx playwright install --with-deps --only-shell chromium
+      - run: bash scripts/install-playwright-browser.sh
         timeout-minutes: 4
       # The login secrets are set on this step only, so no other step can read them.
       - run: npx playwright test -c playwright.live.config.js
