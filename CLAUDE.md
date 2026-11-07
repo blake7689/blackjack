@@ -148,7 +148,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   real waits (`page.waitForTimeout` is a lint error): wait on conditions, and keep deliberate delays in the route handlers. If the page's use of
   `Math.random` changes (new shoe builds, router keys), the seed in the deal test needs re-picking; its card assertions fail first. A bug that
   slips past the jsdom tests (timers, layout, animation, network) gets an e2e test. The tests rely on the `.flight-layer`, `.fly-inner`,
-  `.options-wrap` and `.board.busy` hooks: rename one and the test changes with it.
+  `.options-wrap` and `.board.busy` hooks: rename one and the test changes with it. CI guards: `globalTimeout` 5 min in `playwright.config.js`, step
+  timeouts 4 min (browser install) and 6 min (tests) in `ci.yml`, all under the 10-min job limit; #123 was a slow apt mirror during
+  `playwright install --with-deps`, not a hang.
 - Hidden top-up (#90): 7 taps in 3 s on the balance open a code prompt. The call goes through `enqueue` with one `requestId` per submit; a 429
   (lockout, `Retry-After`) is a definite refusal, never retried. Keep `tapEnabled` in GameBoard (signed in, balance under 100, PRE_DEAL, no chips in
   the circle, nothing pending): the API counts a correct code refused by a guard as a wrong entry toward the per-player lockout (5 wrong, then 10 min).

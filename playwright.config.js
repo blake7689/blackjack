@@ -7,11 +7,12 @@ const ci = !!process.env.CI;
 export default defineConfig({
   testDir: 'e2e',
   timeout: 60_000, // the cold-start test holds sign-in and /player/me for 15 s + 11 s, ~28 s in all
+  globalTimeout: ci ? 5 * 60_000 : undefined, // a normal CI run is ~1m20s; ends before the step/job limits so Playwright fails with a report
   retries: ci ? 1 : 0,
   reporter: ci ? [['list'], ['html', { open: 'never' }], ['./e2e/flakyReporter.js']] : 'list',
   use: {
     baseURL: 'http://localhost:4174',
-    trace: 'on-first-retry',
+    trace: ci ? 'retain-on-failure' : 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
