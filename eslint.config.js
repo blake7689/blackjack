@@ -36,7 +36,7 @@ export default defineConfig([
   },
   {
     // Playwright specs, helpers and config run in Node; page.evaluate code runs in the browser.
-    files: ['e2e/**', 'playwright.config.js'],
+    files: ['e2e/**', 'e2e-live/**', 'playwright.config.js', 'playwright.live.config.js'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
     rules: {
       'react-hooks/rules-of-hooks': 'off',
