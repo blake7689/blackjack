@@ -37,7 +37,7 @@
 
 .tabs { display: flex; gap: 8px; }
 .tab-btn { padding: 8px; border-radius: 8px; background: #2b3a44; color: #fff; border: none; }
-.tab-btn.active { background: #2e7bff; }
+.tab-btn.active { background: #2563eb; }
 
 .stack-form { display: grid; gap: 10px; }
 .full-width { width: 100%; }
