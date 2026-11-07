@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, VEGAS } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -7,13 +7,7 @@ const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
 test('auto deal continues, rebets and deals the next round with no click (#88)', async ({ page }) => {
   const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, resetInitialBet: true, autoDeal: true, autoDealDelay: 300 } });
   await seedRandom(page, 183);
-  const settingsLoaded = page.waitForResponse('**/player/me/settings');
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Log in' }).click();
-  await page.getByPlaceholder('Username or Email').fill('tester');
-  await page.getByPlaceholder('Password').fill('not-a-real-password');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await (await settingsLoaded).finished();
+  await login(page);
   await page.getByRole('button', { name: 'Start Game' }).click();
 
   await expect(page.getByRole('button', { name: 'Pause auto deal' })).toBeVisible(); // the setting reached the table

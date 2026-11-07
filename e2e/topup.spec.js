@@ -1,18 +1,8 @@
-import { test, expect, stubApi } from './fixtures';
+import { test, expect, stubApi, openTable } from './fixtures';
 
 // Hidden credits top-up (#90). The real code is never written here: every test types this arbitrary stand-in.
 const CODE = 'dummy-code-123';
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-async function openTable(page) {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Log in' }).click();
-  await page.getByPlaceholder('Username or Email').fill('tester');
-  await page.getByPlaceholder('Password').fill('not-a-real-password');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await page.getByRole('button', { name: 'Start Game' }).click();
-  await expect(page.getByText('Place your bets!')).toBeVisible(); // idle, before the deal
-}
 
 // The whole balance block (the chip buttons also read '$100').
 const shown = (page) => page.getByText('Credits:').locator('..');

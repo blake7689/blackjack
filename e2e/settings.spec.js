@@ -1,14 +1,8 @@
-import { test, expect, stubApi } from './fixtures';
+import { test, expect, stubApi, login } from './fixtures';
 
 // Table rules on the Settings page (#91): the rules section applies a click at once, and a save writes version 4 with the whole key set.
 async function openGameSettings(page) {
-  const settingsLoaded = page.waitForResponse('**/player/me/settings');
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Log in' }).click();
-  await page.getByPlaceholder('Username or Email').fill('tester');
-  await page.getByPlaceholder('Password').fill('not-a-real-password');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await (await settingsLoaded).finished();
+  await login(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   // A save before the load is applied is refused (it would overwrite the stored table): wait until the loaded table shows (the fixture's Rate of Play).
   await page.getByRole('tab', { name: 'Dev' }).click();
