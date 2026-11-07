@@ -172,7 +172,7 @@
 }
 
 .deal { 
-  background:#28a745; color:#fff; padding:10px 14px; border-radius:10px; border:none; 
+  background:#1e7e34; color:#fff; padding:10px 14px; border-radius:10px; border:none; 
   cursor:pointer; flex: 0 0 auto; }
 .deal:disabled, .clear:disabled { opacity:0.5; cursor:not-allowed; }
 

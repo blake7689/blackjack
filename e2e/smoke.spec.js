@@ -1,14 +1,6 @@
-import { test, expect, stubApi, seedRandom, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-
-async function submitLogin(page) {
-  await page.goto('/');
-  await page.getByRole('link', { name: 'Log in' }).click();
-  await page.getByPlaceholder('Username or Email').fill('tester');
-  await page.getByPlaceholder('Password').fill('not-a-real-password');
-  await page.getByRole('button', { name: 'Log in', exact: true }).click();
-}
 
 test('cold-start sign-in waits out a slow API (#75)', async ({ page }) => {
   const api = await stubApi(page, { loginDelayMs: 15_000, meDelayMs: 11_000 }); // both past the old 10 s limit
@@ -38,9 +30,7 @@ test('cold-start session restore waits out a slow API (#75)', async ({ page }) =
 test('options stay hidden while cards move through a whole round (#72)', async ({ page }) => {
   const api = await stubApi(page);
   await seedRandom(page, 183);
-  const settingsLoaded = page.waitForResponse('**/player/me/settings');
-  await submitLogin(page);
-  await (await settingsLoaded).finished(); // each settings load builds a shoe, so the shoe is settled before Start Game
+  await login(page);
   await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
@@ -94,9 +84,7 @@ test('options stay hidden while cards move through a whole round (#72)', async (
 test('surrendering a hand returns half the bet, in one settle (#91)', async ({ page }) => {
   const api = await stubApi(page);
   await seedRandom(page, 183);
-  const settingsLoaded = page.waitForResponse('**/player/me/settings');
-  await submitLogin(page);
-  await (await settingsLoaded).finished();
+  await login(page);
   await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
@@ -123,9 +111,7 @@ test('surrendering a hand returns half the bet, in one settle (#91)', async ({ p
 async function dealAt(page, seed, settings) {
   const api = await stubApi(page, settings ? { settings } : {});
   await seedRandom(page, seed);
-  const settingsLoaded = page.waitForResponse('**/player/me/settings');
-  await submitLogin(page);
-  await (await settingsLoaded).finished();
+  await login(page);
   await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
