@@ -7,10 +7,13 @@ import process from 'node:process';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-const bashWithTimeout = spawnSync('bash', ['-c', 'command -v timeout']).status === 0;
-
 // Forward slashes so the unquoted, word-split command also works for Git Bash on Windows.
 const posix = (p) => p.replaceAll('\\', '/');
+const repoRoot = join(import.meta.dirname, '..');
+
+// Needs bash with `timeout` that resolves our temp paths (WSL bash cannot see C:/ paths: skip).
+const bashWithTimeout =
+  spawnSync('bash', ['-c', 'command -v timeout && test -d "$1"', '_', posix(tmpdir())]).status === 0;
 
 describe.skipIf(!bashWithTimeout)('install-playwright-browser.sh', () => {
   let dir;
@@ -32,7 +35,7 @@ describe.skipIf(!bashWithTimeout)('install-playwright-browser.sh', () => {
   const run = (cmd, limit = '5') => {
     const started = Date.now();
     const r = spawnSync('bash', ['scripts/install-playwright-browser.sh'], {
-      cwd: process.cwd(),
+      cwd: repoRoot,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
       env: {
