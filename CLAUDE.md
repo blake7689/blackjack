@@ -6,6 +6,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Install: `npm ci`
 - Run locally: `npm run dev` -> <http://localhost:5173> (API: run blackJackAPI, `https://localhost:7248`)
 - Test: `npm test -- --run`
+- Install-script retry check (#131): `scripts/install-playwright-browser.test.js` runs `scripts/install-playwright-browser.sh` through its `PW_*` env hooks (needs `bash` + `timeout`, else skipped; about 3.5 s); `npm test` and `npm run coverage` run it, so CI does. Single run: `npx vitest run scripts`.
 - Coverage: `npm run coverage` (v8, report in `coverage/`; `src/main.jsx` and tests excluded). CI runs this
   and fails below 100% lines, branches, functions or statements: every change ships its tests.
 - Lint: `npm run lint` (`.claude/**`, where app-made worktrees live, is ignored by lint and by the tests)
