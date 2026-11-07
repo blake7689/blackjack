@@ -37,7 +37,9 @@ jobs:
       - run: npm ci
       # Chromium shell only, no browser cache (Playwright's CI guide).
       - run: npx playwright install --with-deps --only-shell chromium
+        timeout-minutes: 4 # normally 15-40 s; #123 was a slow apt mirror (9 min)
       - run: npx playwright test
+        timeout-minutes: 6 # normally ~1m20s; fails the step before the 10-min job limit
         env:
           CI: true
       - uses: actions/upload-artifact@v4
