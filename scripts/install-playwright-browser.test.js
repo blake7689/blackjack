@@ -1,3 +1,4 @@
+// @vitest-environment node
 // Tests the retry loop of scripts/install-playwright-browser.sh (#131) through its PW_* env hooks.
 // Node-side test of a shell script, so it lives next to it, not in src/ (outside coverage).
 import { spawnSync } from 'node:child_process';

@@ -11,9 +11,11 @@ afterEach(() => {
 
 // jsdom has no Web Animations API: a stub that records each animation and lets a test finish it (`anim.onfinish()`).
 export const animations = [];
+if (typeof Element !== "undefined") { // node-environment tests (scripts/*.test.js) have no DOM
 Element.prototype.animate = function animate(frames, options) {
   const anim = { el: this, frames, options, onfinish: null, cancel() { this.cancelled = true; }, finish() {} };
   animations.push(anim);
   return anim;
 };
 Element.prototype.getAnimations = () => [];
+}
