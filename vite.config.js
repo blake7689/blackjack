@@ -16,7 +16,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['src/_tests_/setup.js'],
-    exclude: [...configDefaults.exclude, '.claude/**', 'e2e/**'],
+    exclude: [...configDefaults.exclude, '.claude/**', 'e2e/**', 'e2e-live/**'],
     coverage: {
       provider: 'v8',
       include: ['src/**'],

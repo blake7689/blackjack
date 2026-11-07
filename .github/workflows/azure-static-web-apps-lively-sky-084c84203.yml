@@ -133,3 +133,35 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_LIVELY_SKY_084C84203 }}
           github_id_token: ${{ steps.idtoken.outputs.result }}
           action: "close"
+
+  live_smoke:
+    name: Live smoke test (post-deploy alarm)
+    needs: build_and_deploy_job
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One run at a time: two pushes to main would race on the test account's balance.
+    concurrency:
+      group: live-smoke
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Chromium shell only, no browser cache (same as the e2e job in ci.yml).
+      - run: npx playwright install --with-deps --only-shell chromium
+        timeout-minutes: 4
+      # The login secrets are set on this step only, so no other step can read them.
+      - run: npx playwright test -c playwright.live.config.js
+        timeout-minutes: 6
+        env:
+          E2E_LIVE_USERNAME: ${{ secrets.E2E_LIVE_USERNAME }}
+          E2E_LIVE_PASSWORD: ${{ secrets.E2E_LIVE_PASSWORD }}
+          CI: true
+      - if: failure()
+        run: echo "::error::Post-deploy live smoke test failed - the deploy already happened; this is an alarm, not a rollback. See the test step log."

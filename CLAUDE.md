@@ -16,6 +16,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
+- Live smoke (#119): `npm run e2e:live` (`playwright.live.config.js`, `e2e-live/`) signs in on the real site with a test account and plays one hand, checking bet, settle and balance; no stubs, traces/video/screenshots off. Only CI runs it: the `live_smoke` job in the SWA workflow, after each deploy to `main` (push only), with secrets `E2E_LIVE_USERNAME` / `E2E_LIVE_PASSWORD` set on that step alone. A failure is an alarm, not a rollback. It writes play-money ledger rows to production; it never uses the hidden top-up (fails with a message if the balance is too low).
 ## Architecture
 - Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
