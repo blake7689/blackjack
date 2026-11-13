@@ -126,6 +126,7 @@
   const SUIT_FILE = { S: "spades", H: "hearts", D: "diamonds", C: "clubs" };
   const SUIT_NAME = SUIT_FILE;
   const RANK_NAME = { A: "ace", J: "jack", Q: "queen", K: "king" };
+  const cardAlt = (c) => `${CARD_FILE[c.r] || c.r} of ${SUIT_FILE[c.s]}`; // the app's alt text ("king of diamonds"): e2e finds cards by it
   const cardSrc = (c) => `/cards/${CARD_FILE[c.r] || c.r}_of_${SUIT_FILE[c.s]}.png`;
   const cardName = (c) => `${RANK_NAME[c.r] || c.r} of ${SUIT_NAME[c.s]}`;
   const icon = (n) => `<svg aria-hidden="true"><use href="#i-${n}"/></svg>`;
@@ -194,7 +195,7 @@
     const s = saved; const pay = `BLAKEJACK PAYS ${s.blackjackPayout === "6:5" ? "6 TO 5" : "3 TO 2"}`;
     const soft = s.dealerHitsSoft17 ? "DEALER HITS SOFT 17" : "DEALER STANDS ON ALL 17s"; const mode = MODE_PRINT[s.dealerHoleBehaviour];
     const ins = s.insurance ? "INSURANCE PAYS 2 TO 1" : "";
-    svg.setAttribute("aria-label", "Table rules: " + [pay, soft, ins, mode].filter(Boolean).join(", ").toLowerCase());
+    svg.setAttribute("aria-label", "Table rules"); // the name stays short: "Dealer hits soft 17" in it would also match a test looking for the Hit button; the sheet reads the rules out
     if (matchMedia("(max-height: 520px)").matches) {
       const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
       svg.innerHTML = `<defs><path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="12" letter-spacing="1.8" font-family="var(--f-disp)" font-weight="600" fill="var(--print)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${[pay, soft, ins, mode].filter(Boolean).join("  ·  ")}</textPath></text>`;
@@ -216,7 +217,7 @@
   function cardEl(c) {
     const el = document.createElement("div"); el.className = "card new" + (c.down ? " down" : "") + (c.side ? " side" : ""); el.dataset.id = c.id;
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("new"))); // a new card takes its place without sliding there
-    el.innerHTML = `<div class="cin"><div class="cf">${c.down ? "" : `<img src="${cardSrc(c)}" alt="" draggable="false">`}</div><div class="cb"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></div></div>`;
+    el.innerHTML = `<div class="cin"><div class="cf">${c.down ? "" : `<img src="${cardSrc(c)}" alt="${cardAlt(c)}" draggable="false">`}</div><div class="cb"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></div></div>`;
     return el;
   }
   // reconcile; returns the elements that are new (to fly in)
@@ -266,7 +267,7 @@
     return fresh;
   }
   function seatSkeleton(i) {
-    return `<div class="seat" data-seat="${i}"><div class="hand" role="img"></div>
+    return `<div class="seat" data-seat="${i}"><div class="hand" role="group"></div>
       <div class="spot-row"><div class="side-spot ins" hidden><div class="stack"></div><i>INS</i></div>
       <button class="spot" type="button" data-spot="${i}"><span class="bet-lbl">BET</span><div class="stack"></div></button>
       <div class="side-spot dbl" hidden><div class="stack"></div></div></div>
@@ -341,7 +342,7 @@
   }
 
   /* ---- dock ---- */
-  const key = (act, label, ic, cls = "", o = {}) => `<button type="button" class="key ${cls}" data-act="${act}"${o.off ? ' aria-disabled="true"' : ""}${o.aria ? ` aria-label="${o.aria}"` : ""}>${ic ? icon(ic) : ""}<span>${label}</span>${o.sub ? `<small>${o.sub}</small>` : ""}${o.kbd ? `<kbd>${o.kbd}</kbd>` : ""}${o.bar ? `<span class="bar"><i style="animation-duration:${o.bar}ms"></i></span>` : ""}</button>`;
+  const key = (act, label, ic, cls = "", o = {}) => `<button type="button" class="key ${cls}" data-act="${act}"${o.off ? ' aria-disabled="true"' : ""}${o.aria ? ` aria-label="${o.aria}"` : ""}>${ic ? icon(ic) : ""}<span>${label}</span>${o.sub ? `<small>${o.sub}</small>` : ""}${o.kbd ? `<kbd aria-hidden="true">${o.kbd}</kbd>` : ""}${o.bar ? `<span class="bar"><i style="animation-duration:${o.bar}ms"></i></span>` : ""}</button>`;
   const autoOn = () => saved.autoDeal && saved.rebet;
   const seatHands = (h) => T.seats.filter((x) => x.origin === h.origin).length; // the split limit counts the hands from one seat
   function seatCan(h) {
@@ -372,14 +373,14 @@
   function renderDock() {
     const p = T.phase; const one = oneRow(); let A = "", B = "";
     const chips = rackChips(); if (chips.length && !chips.includes(T.chip)) T.chip = chips.filter((v) => v <= T.chip).pop() ?? chips[0];
-    const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="${money(v)} chip">${chipSVG(v)}${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
+    const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="Add ${v}">${chipSVG(v)}${i < 9 ? `<kbd aria-hidden="true">${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
     if (p === "betting" || p === "shuffling") {
       const off = p === "shuffling"; const has = onTable() > 0; const auto = autoOn() && has && !off;
       A = chips.length || onTable() ? rack() : `<div class="dock-note">${icon("info")}<span>Out of credits. Your balance is ${money(T.balance)}.</span></div>`;
       B = key("undo", "Undo", "undo", "", { off: off || !has, kbd: "U" }) + key("clear", "Clear", "clear", "", { off: off || !has, kbd: "C" }) +
         key("rebet", "Rebet", "rebet", "", { off: off || has || !T.lastBets.some((b) => b && T.balance >= b), kbd: "B" }) + key("x2", "2x", "", "", { off: off || !has || T.balance < onTable(), kbd: "X", aria: "Double every bet" }) +
-        (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { off }) : "") +
-        key("deal", off ? "Shuffling" : "Deal", "", "primary big " + (autoOn() ? "wide" : "wider"), { off: off || !has, kbd: "Space", sub: auto && !T.paused ? "auto" : "", bar: auto && !T.paused ? saved.autoDelay : 0 });
+        (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { off, aria: T.paused ? "Resume auto deal" : "Pause auto deal" }) : "") +
+        key("deal", off ? "Shuffling" : "Deal", "", "primary big " + (autoOn() ? "wide" : "wider"), { aria: off ? "Shuffling" : "Deal", off: off || !has, kbd: "Space", sub: auto && !T.paused ? "auto" : "", bar: auto && !T.paused ? saved.autoDelay : 0 });
     } else if (p === "offers") {
       const o = offersOpen(); const s = T.seats.find((h) => h.offers?.surrender) || T.seats[0];
       A = (o.ins ? key("o-ins", `Insurance ${money(o.insCost)}`, "shield", "offer", { kbd: "I" }) : "") + (o.even ? key("o-even", "Even money", "money", "offer", { kbd: "E" }) : "") + (o.sur ? key("o-sur", "Surrender", "surrender", "offer", { sub: money(s.bet / 2) + " back", kbd: "R" }) : "");
@@ -387,12 +388,13 @@
     } else if (p === "results") {
       const net = T.lastNet;
       A = `<div class="summary"><div class="s-l"><small>${net > 0 ? "You won" : net < 0 ? "You lost" : "Even round"}</small><b class="num ${net > 0 ? "up" : net < 0 ? "down" : ""}">${signed(net)}</b></div><div class="s-r">Balance<b class="num">${money(T.balance)}</b></div></div>`;
-      B = (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause") : "") + key("next", "Next hand", "next", "primary big wider", { kbd: "Space", bar: autoOn() && !T.paused ? 1600 : 0 });
+      B = (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { aria: T.paused ? "Resume auto deal" : "Pause auto deal" }) : "") + key("next", "Next hand", "next", "primary big wider", { kbd: "Space", bar: autoOn() && !T.paused ? 1600 : 0 });
     } else {
       const playing = p === "playing"; const s = T.seats[T.active] || T.seats[0]; const can = playing ? seatCan(s) : {};
       A = key("double", "Double", "double", "", { off: !can.double, kbd: "D" }) + key("split", "Split", "split", "", { off: !can.split, kbd: "P" }) + key("surrender", "Surrender", "surrender", "", { off: !can.surrender, kbd: "R" }) + (saved.tripleDown ? key("triple", "Triple", "triple", "", { off: !can.triple, kbd: "T" }) : "");
       B = key("stay", "Stay", "stay", "solid big", { off: !playing, kbd: "S" }) + key("hit", "Hit", "hit", "primary big", { off: !playing || !can.hit, kbd: "H" });
     }
+    const di = $("#dockIn"); if (p === "offers") { di.setAttribute("role", "group"); di.setAttribute("aria-label", "Offers"); } else { di.removeAttribute("role"); di.removeAttribute("aria-label"); }
     $("#dockIn").innerHTML = one ? `<div class="dock-row dock-one">${A}${B}</div>` : `<div class="dock-row">${A}</div><div class="dock-row">${B}</div>`;
     fitRack();
   }
@@ -411,7 +413,7 @@
     if (faceUp) await flip(el);
   }
   async function flip(el, card) {
-    if (card) { const f = $(".cf", el); if (!f.firstChild) f.innerHTML = `<img src="${cardSrc(card)}" alt="" draggable="false">`; }
+    if (card) { const f = $(".cf", el); if (!f.firstChild) f.innerHTML = `<img src="${cardSrc(card)}" alt="${cardAlt(card)}" draggable="false">`; }
     el.classList.add("flipping"); el.classList.remove("down");
     await sleep(420); el.classList.remove("flipping");
   }
@@ -750,7 +752,7 @@
       `<h3>Felt</h3><div class="row2">${FELTS.map(([k, n]) => b("t:" + k, n, saved.felt === k)).join("")}</div>` +
       `<h3>Accent</h3><div class="row2">${ACCENTS.map(([k, n]) => b("a:" + k, n, saved.accent === k)).join("")}</div>` +
       `<h3>Mode</h3><div class="row2">${b("m:dark", "Dark", saved.mode === "dark")}${b("m:light", "Light", saved.mode === "light")}</div>` +
-      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home">Home</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login">Login</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/waking">Login waking</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/error">Login error</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/signup">Sign up</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#loading">Loading</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#error">Error</a>${b("rules", "Rules sheet")}<a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
+      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home">Home</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home/out">Home (signed out)</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login">Login</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/waking">Login waking</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/error">Login error</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/signup">Sign up</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#loading">Loading</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#error">Error</a>${b("rules", "Rules sheet")}<a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
   }
   const paintDemo = () => (demoBody.innerHTML = demoHTML());
   const setDemo = (open) => { demoBody.hidden = !open; demoToggle.setAttribute("aria-expanded", String(open)); if (open) paintDemo(); };
@@ -911,12 +913,12 @@
   /* ================= rules sheet (from the menu and the felt print) ================= */
   function openRules() {
     const s = saved, p = presetOf(s), hid = hiddenKeys(s);
-    const evenMoney = R.isPeek(s) || !R.bjPaysWithoutPeek(s); // offered unless your Blakejack already pays at once (offersAtDeal)
+    const evenMoney = s.insurance && (R.isPeek(s) || !R.bjPaysWithoutPeek(s)); // offered unless your Blakejack already pays at once (offersAtDeal)
     const mode = { peek: "The dealer peeks for blackjack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "The dealer takes the second card after you play" }[s.dealerHoleBehaviour];
     const grp = (t, items) => `<div class="sheet-grp"><h3>${t}</h3><ul>${items.filter(Boolean).map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
     $("#rulesDlg").innerHTML = `<div class="sheet-in"><div class="sheet-grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="rulesT">Table rules</h2><button class="icon-btn" type="button" data-close-rules aria-label="Close">${icon("close")}</button></div>
       <p class="sheet-meta"><span class="chiplet">${p}</span>House edge <b class="num">${fmtEdge(houseEdge(s))}</b> est.</p>` +
-      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance", evenMoney ? "Even money on your Blakejack against a dealer ace" : ""]) +
+      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance or even money", evenMoney ? "Even money on your Blakejack against a dealer ace" : ""]) +
       grp("Dealer", [`${s.deckCount} deck${s.deckCount === 1 ? "" : "s"} in the shoe`, s.dealerHitsSoft17 ? "The dealer hits soft 17" : "The dealer stands on all 17s", mode, !hid.has("noHoleCardLoss") && (s.noHoleCardLoss === "all" ? "A dealer blackjack takes everything you staked" : "A dealer blackjack takes only your first bet")]) +
       grp("Doubling", [`Double on ${s.doubleOn === "any" ? "any two cards" : s.doubleOn === "9-11" ? "a hard 9, 10 or 11" : "a hard 10 or 11"}`, s.doubleAfterSplit ? "Double after a split" : "No double after a split", s.tripleDown && "Triple down allowed", s.doubleFaceDown && "The double card is dealt face down"]) +
       grp("Splitting", [s.maxSplitHands === 0 ? "Split any number of hands" : `Split up to ${s.maxSplitHands} hands`, "Any two ten-value cards split", s.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each", !hid.has("resplitAces") && (s.resplitAces ? "Aces may be split again" : "Aces split once"), s.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it"]) +
@@ -925,7 +927,7 @@
     $("#rulesDlg").showModal();
   }
   $("#rulesDlg").addEventListener("click", (e) => { if (e.target === e.currentTarget || e.target.closest("[data-close-rules]")) $("#rulesDlg").close(); });
-  document.addEventListener("click", (e) => { if (e.target.closest("[data-open-rules]")) { closeMenu(); openRules(); } });
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-open-rules]")) { closeMenu(); openRules(); } const go = e.target.closest("[data-go]"); if (go) location.hash = go.dataset.go; }); // Settings is a button (as in the app), not a link
   $("#print").addEventListener("click", openRules);
   $("#print").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRules(); } });
 
@@ -935,7 +937,7 @@
   $("#balBox").addEventListener("click", () => { if (!tapEnabled()) { taps.length = 0; return; } const now = Date.now(); taps.push(now); while (taps.length && now - taps[0] > 3000) taps.shift(); if (taps.length >= 7) { taps.length = 0; openTopup(); } });
   function openTopup() {
     const d = document.createElement("dialog"); d.className = "dlg topup"; d.setAttribute("aria-labelledby", "topupT");
-    d.innerHTML = `<form method="dialog" novalidate><h2 id="topupT">Enter code</h2><label>Code<input type="text" name="code" autocomplete="off" spellcheck="false" aria-describedby="topupErr"></label><p class="ferr" id="topupErr" hidden></p>
+    d.innerHTML = `<form method="dialog" novalidate><h2 id="topupT">Enter code</h2><label>Code<input type="text" name="code" autocomplete="off" spellcheck="false" aria-describedby="topupErr"></label><p class="ferr" id="topupErr" role="alert" hidden></p>
       <div class="dlg-act"><button class="btn plain" type="button" data-cancel>Cancel</button><button class="btn primary" type="submit">Submit</button></div></form>`;
     document.body.appendChild(d); d.showModal();
     const gone = () => { d.close(); d.remove(); };
@@ -944,10 +946,11 @@
   }
 
   /* ================= Home, Login, loading, error ================= */
-  const hero = () => `<div class="hero" aria-hidden="true"><span class="hc" style="transform: translate(-78px, -54px)"><img src="/cards/ace_of_spades.png" alt=""></span><span class="hc" style="transform: translate(-32px, -54px)"><img src="/cards/king_of_hearts.png" alt=""></span><span class="hchip" style="transform: translate(36px, 10px)">${chipSVG(25)}</span></div>`;
+  const hero = () => `<div class="hero" aria-hidden="true"><span class="hc" style="transform: translate(-78px, -54px)"><img src="/cards/ace_of_spades.png" alt=""></span><span class="hc" style="transform: translate(-32px, -54px)"><img src="/cards/king_of_hearts.png" alt=""></span><span class="hchip" style="transform: translate(52px, 4px)">${chipSVG(25)}</span></div>`;
   const wmBig = `<svg class="wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>`;
   function buildPage(scr, sub) {
-    if (scr === "home") $("#home").innerHTML = `<main class="page"><h1 class="sr-only">Blakejack</h1>${wmBig}${hero()}<div class="btn-col"><a class="btn primary" href="#table">Play</a><button class="btn" type="button" data-open-rules>Rules</button><a class="btn" href="#settings">Settings</a></div><p class="signed">Signed in as ${saved.first} ${saved.last} · <a href="#login">Log out</a></p></main>`;
+    if (scr === "home" && sub === "out") $("#home").innerHTML = `<main class="page"><h1 class="sr-only">Blakejack</h1>${wmBig}${hero()}<p class="signed">Please log in to start playing.</p><div class="btn-col"><a class="btn primary" href="#login">Log in</a><a class="btn" href="#login/signup">Create an account</a><button class="btn" type="button" data-open-rules>Rules</button></div></main>`;
+    else if (scr === "home") $("#home").innerHTML = `<main class="page"><h1 class="sr-only">Blakejack</h1>${wmBig}${hero()}<div class="btn-col"><a class="btn primary" href="#table">Play</a><button class="btn" type="button" data-open-rules>Rules</button><a class="btn" href="#settings">Settings</a></div><p class="signed">Signed in as ${saved.first} ${saved.last} · <a href="#home/out">Log out</a></p></main>`;
     if (scr === "login" && sub === "signup") { // the app's five sign-up fields, its messages, shown once a field is typed in or left
       const F = [["userName", "Username", "text", "username"], ["email", "Email", "email", "email"], ["password", "Password", "password", "new-password"], ["firstName", "First name", "text", "given-name"], ["lastName", "Last name", "text", "family-name"]];
       $("#login").innerHTML = `<main class="page">${wmBig}<h1>Create an account</h1>

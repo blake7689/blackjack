@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070908">
-<title>Blakejack - UI mockup round 6 (#78)</title>
+<title>Blakejack - UI mockup round 7 (#78)</title>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap">
@@ -22,7 +22,7 @@
     <div class="bal" id="balBox"><span class="bal-top"><span class="bal-lbl">Balance</span><span id="delta" class="delta num" hidden></span></span><b id="bal" class="num">$1,250</b></div>
     <div class="top-r">
       <div id="count" class="count" title="Hi-Lo running count, and the true count (running count per deck left in the shoe)"><span><i>Count</i><b id="countVal" class="num">0</b></span><span><i>True</i><b id="trueVal" class="num">0</b></span></div>
-      <a class="icon-btn" href="#settings" aria-label="Settings"><svg aria-hidden="true"><use href="#i-settings"/></svg></a>
+      <button class="icon-btn" type="button" data-go="#settings" aria-label="Settings"><svg aria-hidden="true"><use href="#i-settings"/></svg></button>
     </div>
     <nav id="menu" class="menu" hidden aria-label="Menu">
       <a class="menu-i" href="#home"><svg aria-hidden="true"><use href="#i-back"/></svg>Home</a>
@@ -33,7 +33,7 @@
       <p class="menu-h" id="menuFelt">Felt</p>
       <div class="swatches" role="radiogroup" aria-labelledby="menuFelt" data-swatches="menu"></div>
       <hr>
-      <a class="menu-i" href="#login"><svg aria-hidden="true"><use href="#i-logout"/></svg>Log out</a>
+      <a class="menu-i" href="#home/out"><svg aria-hidden="true"><use href="#i-logout"/></svg>Log out</a>
     </nav>
   </div></header>
 
@@ -52,7 +52,7 @@
           <i class="mouth" id="mouth"></i>
         </div>
         <section class="dealer" aria-label="Dealer">
-          <div id="dHand" class="hand dealer-hand" role="img" aria-label="Dealer has no cards"></div>
+          <div id="dHand" class="hand dealer-hand" role="group" aria-label="Dealer has no cards"></div>
         </section>
         <!-- the felt print opens the Table rules sheet -->
         <svg id="print" class="print" role="button" tabindex="0" aria-label="Table rules"></svg>
@@ -107,25 +107,25 @@
 <dialog id="leaveDlg" class="dlg" aria-labelledby="leaveT">
   <h2 id="leaveT">Discard your changes?</h2>
   <p>You have changes in Settings that aren't saved.</p>
-  <div class="dlg-act"><button class="btn plain" type="button" id="leaveNo">Keep editing</button><button class="btn primary" type="button" id="leaveYes">Discard and leave</button></div>
+  <div class="dlg-act"><button class="btn plain" type="button" id="leaveNo" autofocus>Keep editing</button><button class="btn danger-o" type="button" id="leaveYes">Discard and leave</button></div>
 </dialog>
 
 <dialog id="quitDlg" class="dlg" aria-labelledby="quitT" aria-describedby="quitD">
   <h2 id="quitT">Leave game and return Home?</h2>
   <p id="quitD">Any bet in the circle will be lost.</p>
-  <div class="dlg-act"><button class="btn plain" type="button" id="quitNo">Keep playing</button><button class="btn primary" type="button" id="quitYes">Leave</button></div>
+  <div class="dlg-act"><button class="btn plain" type="button" id="quitNo" autofocus>Keep playing</button><button class="btn danger-o" type="button" id="quitYes">Leave</button></div>
 </dialog>
 
 <dialog id="resetDlg" class="dlg" aria-labelledby="resetT">
   <h2 id="resetT">Start a new shoe?</h2>
   <p>New table rules start with a fresh shoe. The hand in play ends and any bets on it are lost.</p>
-  <div class="dlg-act"><button class="btn plain" type="button" id="resetNo">Cancel</button><button class="btn primary" type="button" id="resetYes">Save and reset</button></div>
+  <div class="dlg-act"><button class="btn plain" type="button" id="resetNo" autofocus>Cancel</button><button class="btn danger-o" type="button" id="resetYes">Save and reset</button></div>
 </dialog>
 
 <dialog id="delDlg" class="dlg" aria-labelledby="delT">
   <h2 id="delT">Delete profile?</h2>
   <p>This removes your account, balance and history. It cannot be undone.</p>
-  <div class="dlg-act"><button class="btn plain" type="button" id="delNo">Keep my profile</button><button class="btn danger" type="button" id="delYes">Delete for good</button></div>
+  <div class="dlg-act"><button class="btn plain" type="button" id="delNo" autofocus>Keep my profile</button><button class="btn danger" type="button" id="delYes">Delete for good</button></div>
 </dialog>
 
 <script src="rules.js"></script>

@@ -275,8 +275,8 @@ svg { display: block; }
 }
 .seats.scroll { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 14px calc(50cqi - var(--sw) / 2) 0; margin-top: -14px; mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); --sw: calc(var(--cw) * 2.6); }
 .seats.scroll::-webkit-scrollbar { display: none; }
-.seats.turns .seat:not(.active) .hand { opacity: .62; }
-.seat .hand { transition: opacity 300ms var(--e-io); }
+.seats.turns .seat:not(.active) .hand { filter: brightness(.62) saturate(.85); } /* dimmed, still opaque: nothing shows through a card */
+.seat .hand { transition: filter 300ms var(--e-io); }
 .seat { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; align-items: center; scroll-snap-align: center; }
 .stage-in.multi .seat .hand { margin-top: 32px; }
 .spot-row { position: relative; width: 100%; height: var(--spot); margin-top: 12px; display: flex; justify-content: center; }

@@ -1,4 +1,4 @@
-# Blakejack design system (round 6)
+# Blakejack design system (round 7)
 
 Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
 
@@ -209,7 +209,7 @@ Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips
 - Safe areas on all four sides (`viewport-fit=cover`; top inset in the top row's height, bottom in the dock's, left/right in the top bar, felt and dock).
 - One column (`--col` 1240 px) for the top bar, the felt and the dock, so they line up at 1920x1080.
 - The tip line (#3) sits above the dock at 0 px while empty.
-- With several hands, the hands not in play dim to 62 %. The dealer is laid out after the seats (a seat count change resizes the cards).
+- With several hands, the hands not in play dim to 62 % brightness (`filter: brightness(.62)`, never opacity: a card is never see-through). The dealer is laid out after the seats (a seat count change resizes the cards).
 - **Side stacks (double, insurance), round 6:** never over the bet. Portrait with room: beside the circle (insurance left, double right). Narrow portrait seats (three on a phone): under the amount, in room the seats keep for them, so nothing moves when one appears. Wide screens: just above the circle, on the insurance line, side by side when both, "INS" beside its stack. Landscape phones (no room above: the print and the verdict are there): on the circle's outer side, the circle's column growing to hold them (one seat: both outer columns, so the hand stays centred; several: the fan closes up); three seats cap the card width so a sideways double and a side stack both fit. The layout check now fails any side stack touching the bet, a card, a label, the print or another side stack, at all seven sizes and 667x375.
 - **Hit areas:** the landscape print is a 44 px button around its 24 px line (same look and footprint); a bet circle is never under 44 px.
 - **Wide screens between rounds:** the dealer's card place is printed faintly (one card outline, 16 %) so the empty felt has a centre; it goes as soon as a card is dealt.
@@ -222,3 +222,47 @@ Starts at 0 on a fresh shoe; only cards that have landed face up count (the hole
 
 ### Build note (M7)
 The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the back) to WebP for the build, keeping a 500 px-wide source so a card is never upscaled (the largest card is 156 px at DPR 3 = 468 px).
+
+### Round 7 polish
+- **Destructive confirms** ("Discard and leave", "Leave", "Save and reset", "Delete for good"): the destructive button is the danger outline (`.btn.danger-o`; delete keeps the filled `.btn.danger`), never the accent; the safe button ("Keep editing", "Keep playing", "Cancel", "Keep my profile") is first and takes focus when the dialog opens.
+- **Rules sheet:** "Even money on your Blakejack against a dealer ace" only with insurance on and when the blackjack is not already paid at once (as `offersAtDeal`); with insurance off it reads "No insurance or even money".
+- **Home hero:** the chip sits clear of the king's corner.
+- **The felt print's name is just "Table rules"** (it used to read the rules out, and "Dealer hits soft 17" in a name also matches `getByRole('button', { name: 'Hit' })`, so the test would find two buttons). The sheet reads the rules.
+- **Signed-out Home** (`#home/out`, where Log out lands): the hero, "Please log in to start playing.", Log in / Create an account / Rules.
+
+## 9. Test names (e2e and the live smoke)
+**Rule:** keep the app's accessible name wherever the visible look stays the same (aria-label, alt text, role); rename only where the visible text changes. Every rename below is made in `e2e/` **and** `e2e-live/live.spec.js` **in the same PR** as the screen it tests (the live smoke runs only after deploy, so a missed rename fails in production CI). The CLAUDE.md hooks `.flight-layer`, `.fly-inner`, `.options-wrap` and `.board.busy` go on the equivalent new elements (FlyCard's layer and inner, the action keys' wrapper, the table while it is busy); they are classes, not design, so they stay.
+
+| e2e / live smoke uses | Where | The mockup | Action |
+|---|---|---|---|
+| link "Log in" | fixtures, live | Signed-out Home: "Log in" link | keep |
+| placeholder "Username or Email", "Password" | fixtures, live | Login: same placeholders (labels "Username or email", "Password") | keep |
+| button "Log in" (exact) | fixtures, live, a11y | Login button "Log in" | keep |
+| text "Please log in to start playing." | a11y | Signed-out Home, same text | keep |
+| role alert (login error) | a11y | Login error `role="alert"` | keep |
+| text /waking up/ | cold-start specs | "Waking up the table. The first log-in can take up to 30 seconds." | update: `/waking up/i` |
+| button "Start Game" | most specs, live | Home "Play" (a link) | update |
+| button "tester" (player name in the header) | smoke | no name in the top bar; Home "Signed in as …" | update |
+| button "Settings" (exact) | routing, settings, a11y | top bar icon button, `aria-label="Settings"` | keep |
+| button "Back to game" | routing | Settings back button "Table" | update |
+| tabs "Player", "Game", "Dev" (`selected`) | settings, routing, a11y | one page, section nav links (Rules, Gameplay, Chips, Appearance, Sound & haptics, Account, Danger zone); no Dev section designed yet | update |
+| label "playTimeout" | dev-setting spec | not in the mockup (Dev not designed) | update when designed |
+| button "Add 10", /^Add \d+$/, `Add ${chipValues[0]}` | most specs, live | rack chip `aria-label="Add 10"` (shows "10") | keep |
+| button "Deal" (exact) | most specs, live | Deal key `aria-label="Deal"` (the "auto" note and the Space hint are not in the name) | keep |
+| buttons "Hit", "Stay", "Surrender", "No thanks" | many, live | same labels; key hints are `aria-hidden` | keep |
+| group "Offers" with "Insurance $5", "No thanks" | a11y, offers, live | the dock is `role="group"` "Offers" at the offers; key "Insurance $5" | keep |
+| text "Insurance?" | offers | message line "Insurance?" | keep |
+| text "Insurance or surrender?" | offers | one question per offer ("Insurance?", "Even money?", "Surrender?") | update |
+| button "Pause auto deal" | autodeal | Pause key `aria-label="Pause auto deal"` ("Resume auto deal" when paused) | keep |
+| img "king of diamonds", "7 of clubs" … | deal, split, rules specs | card face `<img alt="king of diamonds">`; hands are `role="group"` so the faces stay in the tree | keep |
+| text "Click anywhere to continue..." | most specs, live | "Next hand" key (a click on the felt still continues) | update |
+| text "Place your bets!" | fixtures, live | "Place your bets" | update |
+| text "Credits:" | a11y top-up specs | top bar "Balance" | update |
+| `.stats-panel > div:nth-child(2)` (balance read) | live | `#bal` in the top bar | update |
+| dialog "Enter code", label "Code", "Submit", "Cancel", role alert | top-up specs | same names; the error is `role="alert"` | keep |
+| group names "Soft 17", "Blackjack Pays", "Double On", "Deck size: 6", "Max Hands After Splits: Unlimited", "If the Dealer Has Blackjack, You Lose", "Surrender", "Insurance and Even Money", "Resplit Aces"; options as buttons with `aria-pressed` | settings | sentence case, no value in the label ("Blakejack pays", "Double on", "Deck size", "Max hands after splits", "If the dealer has blackjack, you lose", "Insurance and even money", "Resplit aces"); options are `role="radio"` + `aria-checked` | update |
+| checkbox "Blackjack on Split" | settings | switch "Blakejack on split" (`role="switch"`) | update |
+| preset tile button /^Vegas/ `pressed` | settings | preset `role="radio"` "Vegas" `aria-checked` | update |
+| rule hint text (/insure for half your bet…/, /Give up half your bet…/ …) | settings | no paragraphs in Settings; plain-English lines in the Table rules sheet | update |
+| `.hand-total … .hand-result.Win` / `.Surrendered` | rules specs | result tag `.tag.win` / `.tag.surrender` (several hands), verdict line (one) | update |
+| `.page-bg`, `details[open]`, `.rule-tile, .seg-btn, .rules-section summary, .toggle-row` | settings, a11y | `.settings-screen`; no collapsed groups; `[data-rule]`, `[data-preset]`, `.sw` | update |
