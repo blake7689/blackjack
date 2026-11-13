@@ -102,6 +102,9 @@
     const insPay = h.ins > 0 && d.bj ? h.ins * 3 : 0;
     return { result, payout: payout + insPay, insPay };
   }
+  // revealHiddenCards: a face-down double's card joins the hand at REVEAL_HIDDEN (after the dealer, before settling); until then
+  // the total, a bust and the result ignore it, so the dealer plays as if the hand were still alive
+  function reveal(h, s) { if (!h.hidden || !h.hidden.length) return; h.cards.push(...h.hidden); h.hidden = []; afterCard(h, s); }
   // what the table shows for a settled hand
   const kindOf = (h, r) => (r === WIN ? (h.even ? "even" : h.natural ? "bj" : "win") : r === LOSE ? (h.busted ? "bust" : "lose") : r === PUSH ? "push" : "surrender");
 
@@ -144,7 +147,9 @@
         if (a === "stand") h.done = true;
         else if (a === "hit" && canHit(h, s)) { h.cards.push(draw()); afterCard(h, s); }
         else if ((a === "double" || a === "triple") && canDouble(h, s) && (a === "double" || s.tripleDown)) {
-          h.dbl = a === "double" ? h.bet : h.bet * 2; h.cards.push(draw());
+          h.dbl = a === "double" ? h.bet : h.bet * 2;
+          if (a === "double" && s.doubleFaceDown) { h.hidden = [draw()]; h.done = true; continue; } // playerDouble faceDown
+          h.cards.push(draw());
           if (a === "triple" && (s.tripleDrawsOnBust || best(h.cards) <= 21)) h.cards.push(draw());
           afterCard(h, s); h.done = true;
         } else if (a === "surrender" && canSurrender(h, D[0], s)) { h.sur = true; h.done = true; h.surWait = surrenderWaits(D[0], s); if (!h.surWait) h.result = SURRENDER; }
@@ -160,6 +165,7 @@
     // the dealer's turn
     const t = dealerTurn(dStatus, hands, s);
     if (t.status !== "done") { while (dealerWantsCard(D, t)) { D.push(draw()); dealerAfterStep(D, t, s); } if (t.status !== "done") dealerAfterStep(D, t, s); }
+    for (const h of hands) reveal(h, s); // REVEAL_HIDDEN
     const d = { cards: D, total: best(D), bj: twentyOne(D), busted: best(D) > 21 };
     const settled = hands.map((h) => settle(h, d, s));
     return { hands, dealer: D, results: settled.map((x) => x.result), payout: settled.reduce((a, x) => a + x.payout, 0), staked: hands.reduce((a, h) => a + stake(h), 0), insurance: hands.reduce((a, h) => a + (h.ins || 0), 0), cardsUsed: k };
@@ -167,5 +173,5 @@
 
   root.BJRules = { WIN, LOSE, PUSH, SURRENDER, val, cents, totals, best, soft, stake, isPeek, isEU, isSplitAces, twentyOne, canSplit, canHit, canDouble, earlyOffer, canSurrender,
     insuranceStake, bjPaysWithoutPeek, offersAtDeal, surrenderWaits, initialEval, afterCard, standsAfterOne, stuck, initialDealerStatus, dealerStands,
-    needsToPlay, onlyChecksBJ, showsSecond, dealerTurn, dealerWantsCard, dealerAfterStep, settle, kindOf, simulateRound };
+    needsToPlay, onlyChecksBJ, showsSecond, dealerTurn, dealerWantsCard, dealerAfterStep, reveal, settle, kindOf, simulateRound };
 })(typeof window !== "undefined" ? window : globalThis);

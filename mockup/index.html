@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070908">
-<title>Blakejack - UI mockup round 2 (#78)</title>
+<title>Blakejack - UI mockup round 5 (#78)</title>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap">
@@ -15,27 +15,27 @@
 
 <!-- ===================== TABLE ===================== -->
 <div id="table" class="screen table-screen">
-  <header class="top">
+  <header class="top"><div class="top-in">
     <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
     <svg class="wm top-wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>
     <!-- the balance sits at a fixed place after the wordmark; what is on the right never moves it. The hidden top-up listens on this box: no role, tabindex or aria on it (#90) -->
     <div class="bal" id="balBox"><span class="bal-top"><span class="bal-lbl">Balance</span><span id="delta" class="delta num" hidden></span></span><b id="bal" class="num">$1,250</b></div>
     <div class="top-r">
-      <div id="count" class="count" title="Hi-Lo running count, and the true count (running count per deck left in the shoe)"><span><i>Count</i><b id="countVal" class="num">+3</b></span><span><i>True</i><b id="trueVal" class="num">+0.5</b></span></div>
-      <span class="tip-slot" aria-hidden="true"></span>
+      <div id="count" class="count" title="Hi-Lo running count, and the true count (running count per deck left in the shoe)"><span><i>Count</i><b id="countVal" class="num">0</b></span><span><i>True</i><b id="trueVal" class="num">0</b></span></div>
       <a class="icon-btn" href="#settings" aria-label="Settings"><svg aria-hidden="true"><use href="#i-settings"/></svg></a>
     </div>
     <nav id="menu" class="menu" hidden aria-label="Menu">
-      <a class="menu-i" href="#settings/sec-rules"><svg aria-hidden="true"><use href="#i-rules"/></svg>Table rules</a>
+      <a class="menu-i" href="#home"><svg aria-hidden="true"><use href="#i-back"/></svg>Home</a>
+      <button class="menu-i" type="button" data-open-rules><svg aria-hidden="true"><use href="#i-rules"/></svg>Table rules</button>
       <button class="menu-i" type="button" data-toast="Analytics arrives with #15"><svg aria-hidden="true"><use href="#i-chart"/></svg>Analytics <small>Soon</small></button>
       <a class="menu-i" href="#settings"><svg aria-hidden="true"><use href="#i-settings"/></svg>Settings</a>
       <hr>
       <p class="menu-h" id="menuFelt">Felt</p>
       <div class="swatches" role="radiogroup" aria-labelledby="menuFelt" data-swatches="menu"></div>
       <hr>
-      <button class="menu-i" type="button" data-toast="Log out is not wired in the mockup"><svg aria-hidden="true"><use href="#i-logout"/></svg>Log out</button>
+      <a class="menu-i" href="#login"><svg aria-hidden="true"><use href="#i-logout"/></svg>Log out</a>
     </nav>
-  </header>
+  </div></header>
 
   <main class="room">
     <div class="felt" id="felt">
@@ -54,7 +54,8 @@
         <section class="dealer" aria-label="Dealer">
           <div id="dHand" class="hand dealer-hand" role="img" aria-label="Dealer has no cards"></div>
         </section>
-        <svg id="print" class="print" role="img" aria-label="Table rules printed on the felt"></svg>
+        <!-- the felt print opens the Table rules sheet -->
+        <svg id="print" class="print" role="button" tabindex="0" aria-label="Table rules"></svg>
         <div class="mid"><p id="msg" class="msg" role="status" aria-live="polite"></p></div>
         <section id="seats" class="seats" aria-label="Your seats"></section>
         </div>
@@ -62,8 +63,16 @@
     </div>
   </main>
 
+  <!-- the tip line (#3): reserved above the dock, collapsed (0 px) while it has nothing to say -->
+  <div class="tip-line" id="tipLine" aria-live="polite"></div>
   <footer id="dock" class="dock" aria-label="Controls"><div class="dock-in" id="dockIn"></div></footer>
 </div>
+
+<!-- ===================== HOME, LOGIN, LOADING, ERROR ===================== -->
+<div id="home" class="screen page-screen" hidden></div>
+<div id="login" class="screen page-screen" hidden></div>
+<div id="loading" class="screen page-screen" hidden></div>
+<div id="error" class="screen page-screen" hidden></div>
 
 <!-- ===================== SETTINGS ===================== -->
 <div id="settings" class="screen settings-screen" hidden>
@@ -80,7 +89,7 @@
   </div>
 </div>
 
-<!-- ===================== BRAND (round 1 options) ===================== -->
+<!-- ===================== BRAND (mockup only) ===================== -->
 <div id="brand" class="screen brand-screen" hidden></div>
 
 <!-- ===================== DEMO (mockup only, not part of the product) ===================== -->
@@ -91,6 +100,21 @@
 
 <div id="fx" class="fx" aria-hidden="true"></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<!-- Table rules sheet: a bottom sheet on phones, a panel on wide screens -->
+<dialog id="rulesDlg" class="sheet" aria-labelledby="rulesT"></dialog>
+
+<dialog id="leaveDlg" class="dlg" aria-labelledby="leaveT">
+  <h2 id="leaveT">Discard your changes?</h2>
+  <p>You have changes in Settings that aren't saved.</p>
+  <div class="dlg-act"><button class="btn plain" type="button" id="leaveNo">Keep editing</button><button class="btn primary" type="button" id="leaveYes">Discard and leave</button></div>
+</dialog>
+
+<dialog id="resetDlg" class="dlg" aria-labelledby="resetT">
+  <h2 id="resetT">Start a new shoe?</h2>
+  <p>New table rules start with a fresh shoe. The hand in play ends and its bets come back to you.</p>
+  <div class="dlg-act"><button class="btn plain" type="button" id="resetNo">Cancel</button><button class="btn primary" type="button" id="resetYes">Save and reset</button></div>
+</dialog>
 
 <dialog id="delDlg" class="dlg" aria-labelledby="delT">
   <h2 id="delT">Delete profile?</h2>

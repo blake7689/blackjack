@@ -1,6 +1,26 @@
-# Blakejack design system (round 4)
+# Blakejack design system (round 5)
 
-Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. `HANDOFF.md` and `SHADES.md` describe the rejected first mockup.
+Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
+
+## 0. Authority, and where this overrides the approved spec
+**This file is the design authority for the build PRs #79-#87.** Where the approved spec (`01-Projects/Blackjack/Specs/UI revamp.md`) and this file differ, this file wins; the spec will be amended to match.
+
+| Topic | The spec says | This mockup decides | Why |
+|---|---|---|---|
+| Look | Brass, leather and serif "luxury" | Modern dark premium: near-black UI, one accent, real objects on a lit felt | Blake rejected the first look (round 1) |
+| Fonts | One self-hosted display font + system UI | Clash Display (display) + Satoshi (UI), both from Fontshare; self-host one woff2 each | Round 1 direction; licence to be checked |
+| Rules presets | Preset tiles with summaries | One compact preset selector; Custom is a state, not a choice | Blake, round 1 feedback |
+| Rules layout | Collapsed Customize / House variations / Advanced groups | Flat sections (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced), hidden rules not shown | Blake, round 1 |
+| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice: Peeks / No peek / No hole card (= dealerHoleBehaviour) | Planner I7 |
+| Shoe | A shoe in the top strip | Only the corner of the top card, at the felt's top-right; the shoe is off the table | Blake, round 1 |
+| Card width | 44-120 px | 40-156 px, whole pixels, from `--cwr` (section 4) | Readable cards on large screens (round 2) |
+| Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 (compact stacks that build the right way) |
+| Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; past that it scrolls by whole chips, no chip cut at rest | Blake: chips never clip |
+| Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blakejack!" | Blake rounds 1-3 |
+| Brand strings | "Blakejack on Split", "Blakejack Pays" … (Title Case) | Sentence case: "Blakejack on split", "Blakejack pays" … | Planner I12 |
+| Tip slot (#3) | Reserved line above the action bar | Kept: `.tip-line` above the dock, 0 px while empty | — |
+| Split dealing | Not in the spec | **New rule key `splitDeal`** ("Deal split hands": One at a time / Both at once), default "one" for new players. **Needs its own issue:** `LEGACY_RULES.splitDeal = "both"`, a `SETTINGS_VERSION` bump and its `RULE_SINCE` entry, so saved settings keep today's "Both at once" | Blake, round 2 + B1 decision |
+| Doubles | The double card lands sideways (shipped); #66 face-down double | Both designed (section 5): sideways double card; a face-down double lands sideways and face down and turns over at REVEAL_HIDDEN | Blake, B4 decision |
 
 ## 1. Direction in one paragraph
 Modern dark premium. A near-black room, flat dark UI with one bold accent (emerald by default), and a table that is a real object seen from above: real card faces at real proportions, small printed **ceramic** chips, the corner of the top card peeking out of a shoe that sits off the table, all lit by **one overhead lamp**. The UI never imitates materials; the table never looks flat. Signature moves: the lamp follows the hand in play and the light *is* the result (bloom on a win, a flash on Blakejack, dim on a loss); one verdict line on the felt; the **Blakejack wordmark** (no monogram anywhere) in the top bar and across every card back.
@@ -64,7 +84,7 @@ Also `--accent-rgb` (glows) and `--back-hi` (the card back's light line). The ac
 `--win #3fe397`, `--lose #ff6b5e`, `--push #c5cfd8`, `--even #6fe3d2`, `--surr #f0b77d`, rail `#17191a` > `#050606`, `--paper #f6f4ee`, cut card `#f7d55a` > `#e9b81f`.
 
 Ceramic chips (`assets/build.mjs`, `CHIPS`): body / print (edge blocks, rings, hatch) / ink (numeral) / side.
-`1` `#ebe8e1` `#27458f` `#1f3473` · `5` `#a5222b` `#f1ebe0` · `10` `#1f4a96` `#f1ebe0` · `25` `#1e6a45` `#f1ebe0` · `50` `#c8682a` `#1d2b4d` · `100` `#1c1c21` `#e9e2d2` · `1K` `#d6a92c` `#22201a` · `5K` `#5e3a24` `#ead8b2`.
+`1` `#ebe8e1` `#27458f` `#1f3473` · `5` `#a5222b` `#f1ebe0` · `10` `#1f4a96` `#f1ebe0` · `25` `#1e6a45` `#f1ebe0` · `50` `#c8682a` `#1d2b4d` · `100` `#1c1c21` `#e9e2d2` · `1K` `#d6a92c` `#22201a` · `5K` `#5e3a24` `#ead8b2` · `10K` pink `#d4709a` `#fbeef3` · `20K` light blue `#7fb6dc` `#0f2c44` · `50K` purple `#5b3a8f` `#efe6fb` · `100K` grey `#8d9296` `#16191b` (spec colours; "100K" is set at 27.5 units with tighter spacing so it stays 12 px on a 44 px chip).
 
 ### Type
 | Role | Face | Weight | Size |
@@ -149,3 +169,50 @@ One column; the dealer is always above the player; everything centres on the fel
 
 ## 7. Assets
 `node mockup/assets/build.mjs` regenerates `assets/sprite.svg` (chips, chip sides, card back, wordmark, icons; about 140 KB) and `assets/brand/wordmark*.svg` (pure paths). The sprite is inlined at boot so CSS variables reach inside it; the app can import the same symbols as components.
+
+## 8. Round 5 additions
+
+### Contrast (planner I1)
+The felt print and the message line are near-white (`--print` 96 %, `--print-strong` 100 %), every print line is weight 600, the lamp is `.11` and the lit felt tones are slightly darker (green `#0f593a`, blue `#174a7a`, red `#771d2a`). Measured on rendered pixels (each glyph against the 95th-percentile felt behind it, print hidden), every felt x dark/light at 390x844, 1440x900 and 844x390: **worst 4.95:1** (green, desktop insurance line); AA for 12 px text is 4.5.
+
+### Print (I2, Blake round 4)
+One centred arc between the dealer and the player at every size. A landscape phone sets it as one 12 px line ("BLAKEJACK PAYS 3 TO 2 · DEALER HITS SOFT 17 · INSURANCE PAYS 2 TO 1 · DEALER PEEKS"). The print is a button: it opens the Table rules sheet.
+
+### Doubles (B4)
+- **Double:** the card lands **sideways** (rotated 90 deg) across the end of the hand, as at a casino. Its visual box is a card's height wide; the hand reserves that width. The card height is forced to the same parity as its width, so a card turned 90 deg keeps its corners on whole pixels (crisp).
+- **Face-down double (`doubleFaceDown`):** the card lands sideways and **face down**; it is not in the hand's cards (`hand.hiddenCards` in the app), has no face image in the DOM, and the total, a bust and the count ignore it. After the dealer, at **REVEAL_HIDDEN**, it turns over in place ("The double card" on the message line), then the hand is worked out again and settled. The dealer plays as if the hand were alive (`dealerNeedsToPlay`).
+
+### Chips and rack (B3, M3, M5)
+Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips the balance covers (with $1,250 that is seven). When they fit they are evenly spaced; when they do not, the rack holds exactly k whole chips, scrolls by whole chips (snap), hides anything in its padding and shows a chevron on a side with more chips, so no chip is ever cut at rest. Outside betting the rack dims and takes no taps. A half dollar is not drawn as a chip; the amount label is exact.
+
+### Settings (B2, B5, I3, I7, I12)
+- Hidden rules (one list, `hiddenKeys`): EU-only rules (`dealerDrawsOnPlayerBlackjack`, `dealerDrawsOnPlayerBust`, `dealerDrawsOnceOn21`) hide in US modes; "Blakejack pays immediately" hides under a peek; "If the dealer has Blakejack" hides under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
+- **Leaving with unsaved changes** (Back, the menu, Home, Log out) asks "Discard your changes?" (Keep editing / Discard and leave); a page unload uses the browser's own prompt.
+- **Saving a rule that resets the table** (`RESET_SETTINGS`) mid-round asks "Start a new shoe?" (Cancel / Save and reset): the hand ends, its stakes come back, a new shoe is dealt. Between rounds it deals the new shoe without asking.
+- **Profile fields:** an empty first or last name shows "Enter your first name." under the field (`aria-invalid`, `aria-describedby`), and Save is blocked ("Fix 1 field to save").
+- Sound and vibration are **off by default**; there is one "Sound" switch (no separate card sounds), Volume is disabled while Sound is off, Auto deal delay while Auto deal is off.
+- Labels are sentence case and never repeat the chosen value ("Max hands after splits", "Deck size").
+
+### Screens (I8)
+- **Table rules sheet:** a bottom sheet on phones, a centred panel from 720 px, opened from the menu, Home's Rules and the felt print. Preset name, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English, hidden rules left out; Close and Change rules.
+- **Home:** the wordmark, a felt hero (two cards and a chip), Play / Rules / Settings, "Signed in as … · Log out".
+- **Login:** labelled fields that keep their placeholders; **waking** state (spinner, "Waking up the table. The first sign-in can take up to 30 seconds.", the button reads "Signing in..."); **error** state (one alert, both fields `aria-invalid`).
+- **Loading:** three card backs dealt in a loop, "Shuffling up...". **Error:** "Can't reach the table", Try again, Home.
+- **Message line notices:** "Reconnecting..." with a pulsing dot (dock busy); a refused bet in a soft coral. "Last hand before the shuffle" shows once the cut card is drawn.
+- **Out of credits:** with nothing affordable the rack becomes a note ("Out of credits. Your balance is $0."), the message line says so, and the keys are off.
+- **Hidden top-up (#90):** 7 taps in 3 s on the balance (only while the balance is under $100, betting, nothing on the table) create a dialog: "Enter code", a labelled field, Submit / Cancel. Nothing about it exists in the DOM before the 7th tap, and every refusal shows the same "That didn't work." It is removed from the DOM on close.
+
+### Layout (I5, I6, I9, M2, M6)
+- Safe areas on all four sides (`viewport-fit=cover`; top inset in the top row's height, bottom in the dock's, left/right in the top bar, felt and dock).
+- One column (`--col` 1240 px) for the top bar, the felt and the dock, so they line up at 1920x1080.
+- The tip line (#3) sits above the dock at 0 px while empty.
+- With several hands, the hands not in play dim to 62 %. The dealer is laid out after the seats (a seat count change resizes the cards).
+
+### Keys (I10)
+H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 pick a chip (desktop shows the digit on each rack chip); U undo, C clear, B rebet, X 2x.
+
+### Count (M1)
+Starts at 0 on a fresh shoe; only cards that have landed face up count (the hole card and a face-down double when they turn).
+
+### Build note (M7)
+The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the back) to WebP for the build, keeping a 500 px-wide source so a card is never upscaled (the largest card is 156 px at DPR 3 = 468 px).

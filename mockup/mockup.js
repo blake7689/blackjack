@@ -26,7 +26,7 @@
     Singapore: { dealerHoleBehaviour: "eu", deckCount: 6, dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: "original", surrender: "earlyNoAce", insurance: true, ...adv(false) },
   };
   const RULE_KEYS = Object.keys(PRESETS.Vegas);
-  const presetOf = (s) => Object.keys(PRESETS).find((n) => RULE_KEYS.every((k) => s[k] === PRESETS[n][k])) || "Custom";
+  const presetOf = (s) => { const hid = hiddenKeys(s); return Object.keys(PRESETS).find((n) => RULE_KEYS.every((k) => hid.has(k) || s[k] === PRESETS[n][k])) || "Custom"; };
   const DECK_FX = [[1, -0.48], [2, -0.19], [4, -0.06], [5, -0.03], [6, -0.02], [8, 0]];
   const deckEffect = (c) => { const n = clamp(c, 1, 8); const i = DECK_FX.findIndex(([d]) => d >= n); const [hd, h] = DECK_FX[i]; if (hd === n) return h; const [ld, l] = DECK_FX[i - 1]; return l + ((h - l) * (n - ld)) / (hd - ld); };
   function houseEdge(s) {
@@ -41,38 +41,40 @@
   const edgeDelta = (s, patch) => houseEdge({ ...s, ...patch }) - houseEdge(s);
   const modePatch = (mode, s) => ({ dealerHoleBehaviour: mode, ...(s.blackjackPaysImmediately === (s.dealerHoleBehaviour === "peek") && { blackjackPaysImmediately: mode === "peek" }) });
   const ON_OFF = [{ v: true, l: "On" }, { v: false, l: "Off" }];
-  // wording verbatim from ruleCatalog.js
+  // Wording: sentence case, the brand name for the game's natural (spec Brand list). The build moves it into ruleCatalog.js.
   const CATALOG = [
-    { key: "deckCount", group: "Shoe", label: (v) => `Deck size: ${v}`, opts: [1, 2, 4, 6, 8].map((n) => ({ v: n, l: String(n) })) },
-    { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Second Card", get: (s) => (s.dealerHoleBehaviour === "nopeek" ? "peek" : s.dealerHoleBehaviour), patch: (v, s) => modePatch(v, s),
-      opts: [{ v: "peek", l: "Dealer peeks for blackjack", h: "The dealer checks for blackjack before you play." }, { v: "eu", l: "Dealt after you play", h: "The dealer takes the second card after you play." }] },
-    { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", opts: [{ v: false, l: "Stands" }, { v: true, l: "Hits" }], hint: "Hits: the dealer draws on a hand like ace-6. Stands: the dealer stands on every 17." },
-    { key: "noHoleCardLoss", group: "Dealer", label: () => "If the Dealer Has Blackjack, You Lose", show: (s) => s.dealerHoleBehaviour !== "peek",
-      opts: [{ v: "all", l: "Everything you staked", h: "The dealer's blackjack takes doubles and splits too." }, { v: "original", l: "Only your first bet", h: "Doubles and splits are given back (a hand that busted is not)." }] },
-    { key: "blackjackPayout", group: "Payouts", label: () => "Blackjack Pays", opts: [{ v: "3:2", l: "3:2", h: "A $10 blackjack wins $15." }, { v: "6:5", l: "6:5", h: "A $10 blackjack wins only $12, which is worse for you." }] },
-    { key: "insurance", group: "Payouts", label: () => "Insurance and Even Money", opts: ON_OFF, hint: "When the dealer shows an ace you may insure for half your bet; it pays 2:1 if the dealer has blackjack. With your own blackjack you may take even money (1:1) at once." },
-    { key: "doubleOn", group: "Doubling", label: () => "Double On", opts: [{ v: "any", l: "Any two cards", h: "You may double on any first two cards." }, { v: "9-11", l: "Hard 9 to 11", h: "You may double only on a hard total of 9, 10 or 11 (no ace counted as 11)." }, { v: "10-11", l: "Hard 10 to 11", h: "You may double only on a hard total of 10 or 11 (no ace counted as 11)." }] },
-    { key: "doubleAfterSplit", group: "Doubling", label: () => "Double After a Split", opts: ON_OFF, hint: "Allows doubling on a hand made by splitting." },
-    { key: "maxSplitHands", group: "Splitting", label: (v) => `Max Hands After Splits: ${v === 0 ? "Unlimited" : v}`, opts: [{ v: 2, l: "2" }, { v: 3, l: "3" }, { v: 4, l: "4" }, { v: 0, l: "Unlimited" }] },
-    { key: "resplitAces", group: "Splitting", label: () => "Resplit Aces", show: (s) => s.maxSplitHands !== 2, opts: ON_OFF, hint: "Allows splitting again when a split ace gets another ace." },
-    { key: "splitDeal", group: "Splitting", label: () => "Deal split hands", opts: [{ v: "one", l: "One at a time", h: "The next hand gets its second card when you reach it." }, { v: "both", l: "Both at once", h: "Each split hand gets its second card straight away." }] },
-    { key: "hitSplitAces", group: "Splitting", label: () => "Hit Split Aces", opts: ON_OFF, hint: "Off: each split ace gets one card and stands." },
-    { key: "surrender", group: "Surrender", label: () => "Surrender", opts: [{ v: "none", l: "None", h: "You can't give up a hand." }, { v: "late", l: "Late", h: "Give up half your bet on your first two cards. If the dealer has blackjack, you lose the whole bet." }, { v: "early", l: "Early", h: "Give up half your bet before the dealer checks for blackjack. You keep the half even if the dealer has one." }, { v: "earlyNoAce", l: "Early (not against an ace)", h: "Like Early, but not offered when the dealer shows an ace." }] },
+    { key: "deckCount", group: "Shoe", label: () => "Deck size", opts: [1, 2, 4, 6, 8].map((n) => ({ v: n, l: String(n) })) },
+    { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", patch: (v, s) => modePatch(v, s),
+      opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for Blakejack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No hole card", h: "The dealer takes the second card after you play." }] },
+    { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", opts: [{ v: false, l: "Stands" }, { v: true, l: "Hits" }] },
+    { key: "noHoleCardLoss", group: "Dealer", label: () => "If the dealer has Blakejack, you lose", show: (s) => s.dealerHoleBehaviour !== "peek",
+      opts: [{ v: "all", l: "Everything you staked" }, { v: "original", l: "Only your first bet" }] },
+    { key: "blackjackPayout", group: "Payouts", label: () => "Blakejack pays", opts: [{ v: "3:2", l: "3:2" }, { v: "6:5", l: "6:5" }] },
+    { key: "insurance", group: "Payouts", label: () => "Insurance and even money", opts: ON_OFF },
+    { key: "doubleOn", group: "Doubling", label: () => "Double on", opts: [{ v: "any", l: "Any two cards" }, { v: "9-11", l: "Hard 9 to 11" }, { v: "10-11", l: "Hard 10 to 11" }] },
+    { key: "doubleAfterSplit", group: "Doubling", label: () => "Double after a split", opts: ON_OFF },
+    { key: "maxSplitHands", group: "Splitting", label: () => "Max hands after splits", opts: [{ v: 2, l: "2" }, { v: 3, l: "3" }, { v: 4, l: "4" }, { v: 0, l: "Unlimited" }] },
+    { key: "resplitAces", group: "Splitting", label: () => "Resplit aces", show: (s) => s.maxSplitHands !== 2, opts: ON_OFF },
+    { key: "splitDeal", group: "Splitting", label: () => "Deal split hands", opts: [{ v: "one", l: "One at a time" }, { v: "both", l: "Both at once" }] },
+    { key: "hitSplitAces", group: "Splitting", label: () => "Hit split aces", opts: ON_OFF },
+    { key: "surrender", group: "Surrender", label: () => "Surrender", opts: [{ v: "none", l: "None" }, { v: "late", l: "Late" }, { v: "early", l: "Early" }, { v: "earlyNoAce", l: "Early, not against an ace" }] },
   ];
   const GROUPS = ["Shoe", "Dealer", "Payouts", "Doubling", "Splitting", "Surrender"];
   const VARIATIONS = [
-    { key: "tripleDown", label: "Triple Down" },
-    { key: "tripleDrawsOnBust", label: "Always Draw the Second Triple Card, Even on a Bust", disabled: (s) => !s.tripleDown },
-    { key: "doubleFaceDown", label: "Double Down Card Face Down" },
+    { key: "tripleDown", label: "Triple down" },
+    { key: "tripleDrawsOnBust", label: "Always draw the second triple card, even on a bust", disabled: (s) => !s.tripleDown },
+    { key: "doubleFaceDown", label: "Double down card face down" },
   ];
+  // the spec's showWhen: EU-only rules hide in US modes; "pays immediately" hides under a peek (the peek already pays at once)
   const ADVANCED = [
-    { key: "blackJackOnSplit", label: "Blackjack on Split" },
-    { key: "dealerDrawsOnPlayerBlackjack", label: "EU: Dealer Draws 2nd Card on a Player Blackjack" },
-    { key: "blackjackPaysImmediately", label: "Blackjack Pays Immediately", forced: (s) => s.dealerHoleBehaviour === "eu" && !s.dealerDrawsOnPlayerBlackjack },
-    { key: "dealerDrawsOnceOn21", label: "EU: Dealer Draws Only Once Against a 21" },
-    { key: "dealerDrawsOnPlayerBust", label: "Dealer Draws 2nd Card After a Player Bust" },
-    { key: "_noCheck", label: "Dealer doesn't check the hole card", show: (s) => s.dealerHoleBehaviour !== "eu", get: (s) => s.dealerHoleBehaviour === "nopeek", patch: (v, s) => modePatch(v ? "nopeek" : "peek", s) },
+    { key: "blackJackOnSplit", label: "Blakejack on split" },
+    { key: "dealerDrawsOnPlayerBlackjack", label: "EU: dealer draws 2nd card on a player Blakejack", show: (s) => s.dealerHoleBehaviour === "eu" },
+    { key: "blackjackPaysImmediately", label: "Blakejack pays immediately", show: (s) => s.dealerHoleBehaviour !== "peek", forced: (s) => s.dealerHoleBehaviour === "eu" && !s.dealerDrawsOnPlayerBlackjack },
+    { key: "dealerDrawsOnceOn21", label: "EU: dealer draws only once against a 21", show: (s) => s.dealerHoleBehaviour === "eu" },
+    { key: "dealerDrawsOnPlayerBust", label: "Dealer draws 2nd card after a player bust", show: (s) => s.dealerHoleBehaviour === "eu" },
   ];
+  // the rules a mode hides: they have no effect there, so a preset match ignores them (one list, read by Settings, presetOf and the sheet)
+  const hiddenKeys = (s) => new Set([...CATALOG, ...ADVANCED].filter((r) => r.show && !r.show(s)).map((r) => r.key));
   const SURR_TXT = { none: "No surrender", late: "Late surrender", early: "Early surrender", earlyNoAce: "Early surrender (not against an ace)" };
   function summary(s) {
     const l1 = [`${s.deckCount} deck${s.deckCount === 1 ? "" : "s"}`, s.dealerHitsSoft17 ? "Dealer hits soft 17" : "Dealer stands on soft 17", s.blackjackPayout, SURR_TXT[s.surrender]];
@@ -82,14 +84,14 @@
     return [...l1, ...l2];
   }
   const EDGE_NOTE = "House edge is an estimate for a player who uses basic strategy and declines insurance: published rule-by-rule figures added together, so it is approximate. A plus sign means a worse deal for you. Insurance, House variations and Advanced options are not counted.";
-  const MODE_PRINT = { peek: "DEALER PEEKS", nopeek: "NO PEEK", eu: "EUROPEAN NO HOLE CARD" };
+  const MODE_PRINT = { peek: "DEALER PEEKS", nopeek: "NO PEEK", eu: "NO HOLE CARD" };
 
   /* ================= saved settings and theme ================= */
-  const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000];
+  const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]; // ALLOWED_CHIPS
   const DEFAULTS = { ...PRESETS.Vegas, tripleDown: false, tripleDrawsOnBust: false, doubleFaceDown: false,
     splitDeal: "one", speed: 1000, rebet: false, count: true, autoDeal: false, autoDelay: 3000, chips: [...CHIP_VALUES],
-    felt: "green", accent: "emerald", mode: "dark", sfx: true, cardSfx: true, haptics: true, volume: 70, first: "Alex", last: "Morgan" };
-  const STORE = "blakejack-mockup-r1";
+    felt: "green", accent: "emerald", mode: "dark", sfx: false, haptics: false, volume: 70, first: "Alex", last: "Morgan" };
+  const STORE = "blakejack-mockup-r5";
   let saved = clone(DEFAULTS);
   try { Object.assign(saved, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch { /* storage blocked */ }
   let draft = clone(saved);
@@ -107,7 +109,6 @@
   function greedy(amount) {
     const out = []; let left = Math.round(amount * 100) / 100;
     for (const v of [...CHIP_VALUES].reverse()) while (left >= v - 1e-9) { out.push(v); left = Math.round((left - v) * 100) / 100; }
-    if (left > 0) out.push(1); // half-dollar change rides on a $1 chip
     return out;
   }
   // a stack seen from above: biggest chip at the bottom, its face centred on the spot; each chip above is lifted up the screen by
@@ -115,7 +116,7 @@
   // --k tells CSS where the bottom chip's centre is, in 1/100 of the width, so the stack is anchored there.
   const CHIP_T = 6;
   function stackSVG(amount, chipPx) {
-    let list = greedy(amount); if (list.length > 10) list = list.slice(0, 10);
+    let list = greedy(amount); if (!list.length) return ""; if (list.length > 10) list = list.slice(0, 10);
     const n = list.length, H = 100 + (n - 1) * CHIP_T;
     const body = list.map((v, i) => { const y = (n - 1 - i) * CHIP_T; const top = i === n - 1; return `${i ? `<use href="#side-${v}" y="${y + CHIP_T}" width="100" height="100"/>` : `<use href="#side-${v}" y="${y + CHIP_T * 0.6}" width="100" height="100"/>`}<use href="#chip-${v}${top && chipPx >= 44 ? "" : "-p"}" y="${y}" width="100" height="100"/>`; }).join("");
     return `<svg viewBox="0 0 100 ${H + CHIP_T}" style="--k:${(n - 1) * CHIP_T + 50}" aria-hidden="true">${body}</svg>`;
@@ -146,7 +147,7 @@
     for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
     T.shoe = out; T.cutAt = Math.floor(out.length * 0.25); T.cutDrawn = false;
   }
-  const draw = () => { if (T.shoe.length <= T.cutAt && !T.cutDrawn) { T.cutDrawn = true; $("#shoeBox").classList.add("cut-out"); } if (!T.shoe.length) buildShoe(); return mk(T.shoe.pop()); };
+  const draw = () => { if (T.shoe.length <= T.cutAt && !T.cutDrawn) { T.cutDrawn = true; T.cutSaid = false; $("#shoeBox").classList.add("cut-out"); } if (!T.shoe.length) buildShoe(); return mk(T.shoe.pop()); };
   const onTable = () => T.seats.reduce((a, s) => a + s.bet, 0);
   const stepMs = () => clamp(saved.speed * 0.45, 200, 900);
   const flightMs = () => clamp(saved.speed * 0.52, 300, 760);
@@ -172,15 +173,17 @@
     $("#trueVal").textContent = (tc > 0 ? "+" : "") + tc;
     $("#count").classList.toggle("dealing", T.phase === "dealing");
   }
-  function setMsg(m) { T.msg = m; T.verdict = null; renderMid(); }
+  function setMsg(m, cls = "") { T.msg = m; T.msgCls = cls; T.verdict = null; renderMid(); }
   const VERDICT = { win: "WIN", lose: "LOSE", push: "PUSH", bust: "BUST", surrender: "SURRENDER", even: "EVEN MONEY", bj: "BLAKEJACK!" };
   function renderMid() {
     const m = $("#msg");
-    if (T.verdict) { const v = T.verdict; m.innerHTML = `<span class="verdict ${v.kind}"><b>${v.word}</b>${v.amt != null ? `<span class="num">${v.amt}</span>` : ""}</span>`; }
+    m.className = "msg " + (T.verdict ? "" : T.msgCls || "");
+    if (T.verdict) { const v = T.verdict; m.innerHTML = `<span class="verdict ${v.kind}"><b>${v.word}</b>${v.amt != null ? `<span class="num">${v.amt}</span>` : ""}${v.extra ? `<em>${v.extra}</em>` : ""}</span>`; }
     else m.textContent = T.msg;
   }
   // the card width as whole pixels (a fractional width makes the faces resample soft)
-  function fixCw() { const si = $("#stageIn"); const w = Math.max(40, Math.floor($("#cwProbe").getBoundingClientRect().width || 70)); si.style.setProperty("--cw", w + "px"); si.style.setProperty("--ch", Math.round(w * 1.452) + "px"); return w; }
+  function fixCw() { const si = $("#stageIn"); const w = Math.max(40, Math.floor($("#cwProbe").getBoundingClientRect().width || 70)); si.style.setProperty("--cw", w + "px"); let h = Math.round(w * 1.452); if ((h - w) % 2) h += 1; si.style.setProperty("--ch", h + "px"); return w; }
+  const chH = () => parseFloat($("#stageIn").style.getPropertyValue("--ch")) || Math.round(cw() * 1.452);
   const cw = () => parseFloat($("#stageIn").style.getPropertyValue("--cw")) || fixCw();
 
   // print: the rules, drawn 1:1 in CSS pixels so no word can fall under 12 px
@@ -190,13 +193,11 @@
     const s = saved; const pay = `BLAKEJACK PAYS ${s.blackjackPayout === "6:5" ? "6 TO 5" : "3 TO 2"}`;
     const soft = s.dealerHitsSoft17 ? "DEALER HITS SOFT 17" : "DEALER STANDS ON ALL 17s"; const mode = MODE_PRINT[s.dealerHoleBehaviour];
     const ins = s.insurance ? "INSURANCE PAYS 2 TO 1" : "";
-    svg.setAttribute("aria-label", [pay, soft, ins, mode].filter(Boolean).join(". ").toLowerCase());
-    const t = (x, y, txt, fs, anchor, w, ls) => `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="${anchor}" letter-spacing="${ls ?? fs * 0.16}" font-family="var(--f-disp)" font-weight="${w}" fill="var(--print)">${txt}</text>`;
+    svg.setAttribute("aria-label", "Table rules: " + [pay, soft, ins, mode].filter(Boolean).join(", ").toLowerCase());
     if (matchMedia("(max-height: 520px)").matches) {
-      const c = cw(); const left = c * 0.95 + 12; const f1 = clamp(Math.round(c * 0.115), 13, 20), fs = clamp(Math.round(c * 0.09), 12, 15), gap = Math.round(fs * 1.7);
-      svg.innerHTML = t(left, H * 0.36, pay, f1, "start", 600) + t(left, H * 0.36 + gap, soft, fs, "start", 500) +
-        t(W - 8, H * 0.72, ins, fs, "end", 500) + t(W - 8, H * 0.72 + gap, mode, fs, "end", 500);
-      fitPrint(svg, W * 0.3); return;
+      const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
+      svg.innerHTML = `<defs><path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="12" letter-spacing="1.8" font-family="var(--f-disp)" font-weight="600" fill="var(--print)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${[pay, soft, ins, mode].filter(Boolean).join("  ·  ")}</textPath></text>`;
+      fitPrint(svg, W * 0.96); return;
     }
     const R = W * 3.2; const cx = W / 2;
     const arc = (y, half) => { const yc = y - R; const dx = Math.min(half, W / 2 - 2); const dy = Math.sqrt(R * R - dx * dx); return `M${cx - dx} ${yc + dy}A${R} ${R} 0 0 0 ${cx + dx} ${yc + dy}`; };
@@ -204,7 +205,7 @@
     const y1 = f1 + 2, y2 = y1 + f2 + 9, yt = y2 + 9, yText = yt + f3 + 4, yb = yText + 6;
     let out = `<defs><path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(yText, W)}"/></defs>`;
     const tp = (id, txt, fs, w, ls = 0.2) => `<text font-size="${fs}" letter-spacing="${fs * ls}" font-family="var(--f-disp)" font-weight="${w}" fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
-    out += tp("pa1", pay, f1, 600, 0.24) + tp("pa2", `${soft}   ·   ${mode}`, f2, 500, 0.16);
+    out += tp("pa1", pay, f1, 600, 0.24) + tp("pa2", `${soft}   ·   ${mode}`, f2, 600, 0.16);
     if (ins) out += `<path d="${arc(yt, W * 0.44)}" fill="none" stroke="var(--print)" stroke-width="1" opacity=".5"/><path d="${arc(yb, W * 0.44)}" fill="none" stroke="var(--print)" stroke-width="1" opacity=".5"/>` + tp("pa3", ins, f3, 600, 0.22);
     svg.innerHTML = out; fitPrint(svg, W * 0.94);
   }
@@ -212,7 +213,7 @@
 
   /* ---- hands: keyed card elements; a card is created once and only moves or flips ---- */
   function cardEl(c) {
-    const el = document.createElement("div"); el.className = "card new" + (c.down ? " down" : ""); el.dataset.id = c.id;
+    const el = document.createElement("div"); el.className = "card new" + (c.down ? " down" : "") + (c.side ? " side" : ""); el.dataset.id = c.id;
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("new"))); // a new card takes its place without sliding there
     el.innerHTML = `<div class="cin"><div class="cf">${c.down ? "" : `<img src="${cardSrc(c)}" alt="" draggable="false">`}</div><div class="cb"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></div></div>`;
     return el;
@@ -226,27 +227,28 @@
   }
   // step: at most .62 of a card (a dealer's spread), never under .27 (the rank and suit corner is 20 % of the card)
   function layoutHand(box, cards, maxW, pillMode) {
-    const w = cw(), n = cards.length; const step = n > 1 ? Math.round(Math.min(w * 0.62, Math.max(w * 0.27, (maxW - w) / (n - 1)))) : 0;
-    const bw = n ? w + step * (n - 1) : w; const was = box.getBoundingClientRect().left;
+    const w = cw(), h = chH(), n = cards.length; const extra = n && cards[n - 1].side ? h - w : 0; // a sideways card is as wide as a card is tall
+    const step = n > 1 ? Math.round(Math.min(w * 0.62, Math.max(w * 0.27, (maxW - w - extra) / (n - 1)))) : 0;
+    const bw = n ? w + step * (n - 1) + extra : w; const was = box.getBoundingClientRect().left;
     box.style.width = bw + "px"; box.style.setProperty("--fx", "0px"); box.style.setProperty("--fy", "0px");
     const r = box.getBoundingClientRect(); const fx = r.left - Math.round(r.left), fy = r.top - Math.round(r.top); // whole-pixel card edges
     if (Math.abs(fx) > 0.01) box.style.setProperty("--fx", -fx + "px"); if (Math.abs(fy) > 0.01) box.style.setProperty("--fy", -fy + "px");
     const dx = Math.round(was - box.getBoundingClientRect().left); // the hand re-centres as it grows: the cards already down glide, never jump
     cards.forEach((c, i) => {
-      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = i * step;
+      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = i * step + (c.side ? (h - w) / 2 : 0); // turned about its centre: shift so it starts one step on
       if (dx && !el.classList.contains("new")) { const old = parseFloat(el.style.getPropertyValue("--x")) || 0; el.style.transition = "none"; el.style.setProperty("--x", old + dx + "px"); void el.offsetWidth; el.style.transition = ""; }
       el.style.setProperty("--x", x + "px"); el.style.zIndex = i + 1; el.dataset.z = i + 1; // each card lies on the one before it, as dealt
     });
     const pill = box.querySelector(".pill"); if (!pill) return;
     const pw = pill.offsetWidth || 34;
     if (pillMode === "above") { pill.style.left = Math.round((bw - pw) / 2) + "px"; pill.style.top = -pill.offsetHeight - 6 + "px"; }
-    else { pill.style.left = bw + 8 + "px"; pill.style.top = Math.round((w * 1.452 - (pill.offsetHeight || 26)) / 2) + "px"; }
+    else { pill.style.left = bw + 8 + "px"; pill.style.top = Math.round((h - (pill.offsetHeight || 26)) / 2) + "px"; }
   }
   // a total counts only cards that have landed and turned over
   function pillHTML(all, cls = "") {
     const cards = all.filter((c) => c.land !== false); const vis = cards.filter((c) => !c.down); if (!vis.length) return { html: "", cls: "pill hidden" };
     const { t, soft } = total(cards); const bj = cards.length === 2 && all.length === 2 && t === 21 && !cards.some((c) => c.down);
-    return { html: soft && t < 21 && !bj ? `${t - 10}<small>/</small>${t}` : String(t), cls: "pill num " + (t > 21 ? "bust" : bj ? "bj" : soft ? "soft" : "") + " " + cls };
+    return { html: bj ? "Blakejack!" : soft && t < 21 ? `${t - 10}<small>/</small>${t}` : String(t), cls: "pill num " + (t > 21 ? "bust" : bj ? "bj" : soft ? "soft" : "") + " " + cls };
   }
   function setPill(box, cards, on) { let p = box.querySelector(".pill"); if (!p) { p = document.createElement("span"); box.appendChild(p); } const { html, cls } = pillHTML(cards, on ? "on" : ""); p.className = cls; p.innerHTML = html; }
 
@@ -294,15 +296,16 @@
       el.animate([{ translate: `${dx}px ${dy}px` }, { translate: "0 0" }], { id: "glide", duration: 360, easing: "cubic-bezier(.33,0,.15,1)" });
     });
   }
+  const handCards = (s) => (s.hidden && s.hidden.length ? s.cards.concat(s.hidden) : s.cards);
   function renderSeatsInner() {
     const wrap = $("#seats"); const n = T.seats.length;
-    wrap.style.setProperty("--n", n); $("#stageIn").classList.toggle("multi", n > 1); wrap.classList.toggle("scroll", n > (matchMedia("(max-height: 520px)").matches ? 3 : 4)); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
+    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); wrap.classList.toggle("scroll", n > (matchMedia("(max-height: 520px)").matches ? 3 : 4)); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
     const fresh = [];
     T.seats.forEach((s, i) => {
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
       seat.classList.toggle("active", act || (T.phase === "betting" && n === 1)); seat.classList.toggle("nocards", !s.cards.length);
-      fresh.push(...syncHand(hand, s.cards)); setPill(hand, s.cards, act);
-      hand.setAttribute("aria-label", s.cards.length ? `Hand ${i + 1}: ` + s.cards.map(cardName).join(", ") + `, ${total(s.cards).t}` : `Hand ${i + 1}: no cards`);
+      const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act);
+      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + `, ${total(shown).t}` : `Hand ${i + 1}: no cards`);
       const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); spot.classList.toggle("open", T.phase === "betting" && !s.bet);
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
       spot.disabled = T.phase !== "betting";
@@ -321,7 +324,8 @@
   }
   function layoutSeats() {
     fixCw(); const wrap = $("#seats"); const n = T.seats.length;
-    T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 64 : ($(".spot", seat).offsetWidth + 10) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, s.cards, seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
+    T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 64 : ($(".spot", seat).offsetWidth + 10) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
+    const dh = $("#dHand"); if (dh.children.length) layoutHand(dh, T.dealer, dealerMaxW(), "side"); // after the seats: a seat count change resizes the cards
     if (wrap.classList.contains("scroll")) { const a = wrap.children[Math.max(0, T.active)]; if (a) wrap.scrollTo({ left: a.offsetLeft - wrap.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); }
     moveLamp();
   }
@@ -346,19 +350,35 @@
     const hs = T.seats.filter((h) => h.offers); const ins = hs.filter((h) => h.offers.insurance);
     return { ins: ins.length > 0, insCost: ins.reduce((a, h) => a + R.insuranceStake(h.bet), 0), even: hs.some((h) => h.offers.evenMoney), sur: hs.some((h) => h.offers.surrender) };
   }
+  // visibleChips (src/utils/chips.js): the enabled chips the balance covers; none fit but there is a dollar: the largest allowed chip that does
+  function rackChips() { const aff = saved.chips.filter((v) => v <= T.balance); if (aff.length || T.balance < 1) return aff; const a = CHIP_VALUES.filter((v) => v <= T.balance); return a.length ? [a[a.length - 1]] : []; }
+  // A rack too long for the dock scrolls by whole chips: its width holds k chips exactly, the fades sit in the padding, so a chip at rest is never cut.
+  function fitRack() {
+    const wrap = $(".rack-wrap"), rack = $("#rack"); if (!wrap || !rack || !rack.children.length) return;
+    wrap.classList.remove("scroll"); const n = rack.children.length, rc = rack.children[0].offsetWidth, W = wrap.clientWidth;
+    const g0 = Math.max(2, parseFloat(getComputedStyle(rack).columnGap) || 0); void W;
+    if (n * rc + (n - 1) * g0 <= rack.clientWidth) return; // fits with the rack's own gap
+    wrap.classList.add("scroll"); const W2 = wrap.clientWidth; // the scrolling rack may take a different width: measure again
+    const gap = 8, k = Math.max(1, Math.floor((W2 - 28 + gap) / (rc + gap)));
+    wrap.style.setProperty("--rgap", gap + "px"); wrap.style.setProperty("--rpad", Math.floor((W2 - (k * (rc + gap) - gap)) / 2) + "px");
+    const sel = $(".rc[aria-pressed='true']", rack); if (sel) rack.scrollLeft = Math.max(0, [...rack.children].indexOf(sel) - k + 1) * (rc + gap);
+    const more = () => { wrap.classList.toggle("more-l", rack.scrollLeft > 2); wrap.classList.toggle("more-r", rack.scrollLeft < rack.scrollWidth - rack.clientWidth - 2); };
+    more(); rack.addEventListener("scroll", more, { passive: true });
+  }
   function renderDock() {
     const p = T.phase; const one = oneRow(); let A = "", B = "";
-    const rack = () => `<div class="rack-wrap"><div class="rack" id="rack" role="group" aria-label="Chips">${saved.chips.map((v) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="${money(v)} chip"${T.balance < v && p === "betting" ? ' aria-disabled="true"' : ""}>${chipSVG(v)}</button>`).join("")}</div></div>`;
+    const chips = rackChips(); if (chips.length && !chips.includes(T.chip)) T.chip = chips.filter((v) => v <= T.chip).pop() ?? chips[0];
+    const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="${money(v)} chip">${chipSVG(v)}${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
     if (p === "betting" || p === "shuffling") {
       const off = p === "shuffling"; const has = onTable() > 0; const auto = autoOn() && has && !off;
-      A = rack();
+      A = chips.length || onTable() ? rack() : `<div class="dock-note">${icon("money")}<span>Out of credits. Your balance is ${money(T.balance)}.</span></div>`;
       B = key("undo", "Undo", "undo", "", { off: off || !has, kbd: "U" }) + key("clear", "Clear", "clear", "", { off: off || !has, kbd: "C" }) +
         key("rebet", "Rebet", "rebet", "", { off: off || has || !T.lastBets.length, kbd: "B" }) + key("x2", "2x", "", "", { off: off || !has || T.balance < onTable(), kbd: "X", aria: "Double every bet" }) +
         (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { off }) : "") +
         key("deal", off ? "Shuffling" : "Deal", "", "primary big " + (autoOn() ? "wide" : "wider"), { off: off || !has, kbd: "Space", sub: auto && !T.paused ? "auto" : "", bar: auto && !T.paused ? saved.autoDelay : 0 });
     } else if (p === "offers") {
       const o = offersOpen(); const s = T.seats.find((h) => h.offers?.surrender) || T.seats[0];
-      A = (o.ins ? key("o-ins", `Insurance ${money(o.insCost)}`, "shield", "offer") : "") + (o.even ? key("o-even", "Even money", "money", "offer") : "") + (o.sur ? key("o-sur", "Surrender", "surrender", "offer", { sub: money(s.bet / 2) + " back" }) : "");
+      A = (o.ins ? key("o-ins", `Insurance ${money(o.insCost)}`, "shield", "offer", { kbd: "I" }) : "") + (o.even ? key("o-even", "Even money", "money", "offer", { kbd: "E" }) : "") + (o.sur ? key("o-sur", "Surrender", "surrender", "offer", { sub: money(s.bet / 2) + " back", kbd: "R" }) : "");
       B = key("o-no", "No thanks", "", "solid big", { kbd: "N" });
     } else if (p === "results") {
       const net = T.lastNet;
@@ -370,10 +390,9 @@
       B = key("stay", "Stay", "stay", "solid big", { off: !playing, kbd: "S" }) + key("hit", "Hit", "hit", "primary big", { off: !playing || !can.hit, kbd: "H" });
     }
     $("#dockIn").innerHTML = one ? `<div class="dock-row dock-one">${A}${B}</div>` : `<div class="dock-row">${A}</div><div class="dock-row">${B}</div>`;
-    const rk = $("#rack"); const sel = rk && $(`.rc[aria-pressed="true"]`, rk);
-    if (sel) rk.scrollLeft = sel.offsetLeft - rk.clientWidth / 2 + sel.offsetWidth / 2;
+    fitRack();
   }
-  function render() { renderBalance(); renderDelta(); renderCount(); renderMid(); renderDealer(); renderSeats(); renderDock(); renderPrint();  }
+  function render() { renderBalance(); renderDelta(); renderCount(); renderMid(); renderSeats(); renderDealer(); renderDock(); renderPrint(); }
 
   /* ================= motion ================= */
   const fx = () => $("#fx");
@@ -410,7 +429,7 @@
     s.bet += T.chip; s.hist.push(T.chip); T.balance -= T.chip; T.autoDealT0 = Date.now(); chipFromRack(T.chip, i);
     setTimeout(() => { renderSeats(); }, reduced ? 0 : 300); renderBalance(true); betMsg(); renderDock();
   }
-  const betMsg = () => setMsg(onTable() ? (autoOn() && !T.paused ? "Dealing soon" : "Tap Deal") : "Place your bets");
+  const betMsg = () => setMsg(onTable() ? (autoOn() && !T.paused ? "Dealing soon" : "Tap Deal") : rackChips().length ? "Place your bets" : "Out of credits");
   const bettingAct = {
     undo() { const s = [...T.seats].reverse().find((x) => x.hist.length); if (!s) return; const v = s.hist.pop(); s.bet -= v; T.balance += v; flyBack(T.seats.indexOf(s), v); },
     clear() { T.seats.forEach((s, i) => { if (s.bet) flyBack(i, s.bet); T.balance += s.bet; s.bet = 0; s.hist = []; }); },
@@ -423,9 +442,9 @@
   const live = (my) => my === T.run;
   // Deals one card. Returns after the pacing step; c.landed resolves when it has landed (and turned over), and only then do the
   // total and the count change.
-  async function dealCard(target, down = false) {
-    const c = draw(); c.down = down; c.land = false;
-    if (target === "d") T.dealer.push(c); else T.seats[target].cards.push(c);
+  async function dealCard(target, down = false, o = {}) {
+    const c = draw(); c.down = down; c.land = false; c.side = !!o.side;
+    if (target === "d") T.dealer.push(c); else if (o.hidden) (T.seats[target].hidden = [c]); else T.seats[target].cards.push(c);
     const fresh = target === "d" ? renderDealer() : renderSeats(); if (target !== "d") renderDealer();
     const el = fresh[0];
     c.landed = (el ? flyIn(el, !down) : Promise.resolve()).then(() => { c.land = true; if (!c.down) T.count += hiLo(c); renderCount(); renderDealer(); renderSeats(); });
@@ -487,7 +506,7 @@
       R.afterCard(h, saved); if (R.standsAfterOne(h, saved)) h.done = true; finishStuck();
       if (h.done) { await sleep(reduced ? 0 : 260); return startPlay(my); }
     }
-    T.phase = "playing"; setMsg("Your move"); renderSeats(); renderDock();
+    T.phase = "playing"; setMsg(T.cutDrawn && !T.cutSaid ? ((T.cutSaid = true), "Last hand before the shuffle") : "Your move"); renderSeats(); renderDock();
   }
   async function playerAct(a) {
     if (T.phase !== "playing") return; const my = T.run; const i = T.active; const h = T.seats[i]; if (!h || h.done) return; const can = seatCan(h);
@@ -496,7 +515,9 @@
     else if ((a === "double" && can.double) || (a === "triple" && can.triple)) {
       const add = a === "double" ? h.bet : h.bet * 2; T.balance -= add; h.dbl = add; T.phase = "busy"; renderBalance(true); renderDock();
       const sp = $(".spot", $("#seats").children[i]); const r = sp.getBoundingClientRect(); const w = cw() * 0.6; glide(ghost(stackSVG(add, w), r.left + r.width / 2, r.bottom, w), dockPt(r.left + r.width / 2), [r.right + w * 0.6, r.top + r.height / 2], w, { dur: 360 });
-      await sleep(320); renderSeats(); let c = await dealCard(i); await c.landed;
+      await sleep(320); renderSeats();
+      if (a === "double" && saved.doubleFaceDown) { const c = await dealCard(i, true, { side: true, hidden: true }); await c.landed; if (!live(my)) return; h.done = true; await sleep(reduced ? 0 : 220); return startPlay(my); } // playerDouble faceDown: it waits for the reveal
+      let c = await dealCard(i, false, { side: a === "double" }); await c.landed;
       if (a === "triple" && (saved.tripleDrawsOnBust || R.best(h.cards) <= 21)) { c = await dealCard(i); await c.landed; } // playerTripleDown
       if (!live(my)) return; R.afterCard(h, saved); h.done = true;
     } else if (a === "split" && can.split) return split(my, i);
@@ -530,6 +551,12 @@
   }
   async function settle(my) {
     T.phase = "settling"; renderDock();
+    for (const [i, h] of T.seats.entries()) {
+      if (!h.hidden || !h.hidden.length) continue;
+      const c = h.hidden[0]; const el = $(`#seats .seat:nth-child(${i + 1}) .card[data-id="${c.id}"]`); setMsg("The double card");
+      c.land = false; c.down = false; if (el) await flip(el, c); c.land = true; T.count += hiLo(c); R.reveal(h, saved); renderCount(); renderSeats();
+      await sleep(reduced ? 0 : 380); if (!live(my)) return;
+    }
     const d = { total: R.best(T.dealer), bj: R.twentyOne(T.dealer), busted: R.best(T.dealer) > 21 };
     let net = 0, paid = 0;
     T.seats.forEach((h) => { const r = R.settle(h, d, saved); h.result = r.result; h.kind = R.kindOf(h, r.result); h.insPay = r.insPay; h.payout = R.cents(r.payout - r.insPay); paid += r.payout; net += r.payout - R.stake(h) - (h.ins || 0); });
@@ -537,7 +564,7 @@
     // the round's verdict: one hand names its result; several hands show the net
     const only = T.seats.length === 1; const kind = only ? T.seats[0].kind : net > 0 ? "win" : net < 0 ? "lose" : "push";
     T.verdict = { kind, word: only ? VERDICT[kind] : net > 0 ? "WIN" : net < 0 ? "LOSE" : "PUSH", amt: net ? signed(net) : null };
-    if (only && T.seats[0].insPay) T.verdict = { kind: "even", word: "INSURANCE PAYS", amt: net ? signed(net) : null };
+    if (only && T.seats[0].ins) T.verdict.extra = T.seats[0].insPay ? `Insurance pays ${money(T.seats[0].insPay)}` : "Insurance lost"; // M4: both results, plainly
     renderMid(); renderSeats();
     $("#felt").className = "felt " + ({ win: "r-win", bj: "r-bj", even: "r-win", lose: "r-lose", bust: "r-lose", push: "r-push", surrender: "r-lose" }[kind] || "");
     await sleep(reduced ? 0 : 520);
@@ -625,11 +652,19 @@
   }
   function setup(seatCards, bets, dealer, o = {}) {
     base(bets); T.seats.forEach((s, i) => { s.cards = C(seatCards[i] ?? seatCards[0]); s.base = s.bet; s.origin = i; s.natural = R.twentyOne(s.cards); s.busted = R.best(s.cards) > 21; if (s.busted) s.result = R.LOSE; });
-    T.dealer = C(dealer); if (o.hole) T.dealer[1].down = true; T.count = o.count ?? 2; T.delta = null;
+    T.dealer = C(dealer); if (o.hole) T.dealer[1].down = true; T.delta = null;
+    T.count = [...T.seats.flatMap((x) => x.cards), ...T.dealer].filter((c) => !c.down).reduce((a, c) => a + hiLo(c), 0); // the cards on show, from a fresh shoe
   }
   const SCENES = {
-    betting() { base([25, 10, 15]); Object.assign(T, { count: 3, delta: null, chip: 25 }); betMsg(); render(); },
-    empty() { base([0]); Object.assign(T, { count: 3, delta: null, chip: 25 }); betMsg(); render(); },
+    betting() { base([25, 10, 15]); Object.assign(T, { count: 0, delta: null, chip: 25 }); betMsg(); render(); },
+    empty() { base([0]); Object.assign(T, { count: 0, delta: null, chip: 25 }); betMsg(); render(); },
+    highroller() { base([0]); Object.assign(T, { count: 0, delta: null, chip: 1000, balance: 500000 }); balShown = T.balance; betMsg(); render(); },
+    broke() { base([0]); Object.assign(T, { count: 0, delta: null, balance: 0 }); balShown = 0; betMsg(); render(); },
+    topup() { SCENES.broke(); openTopup(); },
+    reconnecting() { SCENES.playing(); T.phase = "busy"; setMsg("Reconnecting...", "reconnect"); renderDock(); },
+    notice() { base([0]); Object.assign(T, { count: 0, delta: null }); setMsg("Bet refused: not enough credit", "notice"); render(); setMsg("Bet refused: not enough credit", "notice"); },
+    sideways() { setup(["5C 6H 9D", "8S 7D", "9C 2D"], [25, 20, 15], "6S KD", { hole: true }); T.seats[0].cards[2].side = true; T.seats[0].dbl = 25; T.balance -= 25; balShown = T.balance; T.seats[0].done = true; T.phase = "dealer"; T.active = -1; setMsg("Dealer plays"); render(); },
+    facedown() { setup(["5C 6H", "8S 7D", "9C 2D"], [25, 20, 15], "6S KD", { hole: true }); const c = mk("9D"); c.down = true; c.side = true; T.seats[0].hidden = [c]; T.seats[0].dbl = 25; T.balance -= 25; balShown = T.balance; T.seats[0].done = true; T.phase = "dealer"; T.active = -1; setMsg("Dealer plays"); render(); },
     auto() { saved.rebet = saved.autoDeal = true; SCENES.betting(); setMsg("Dealing soon"); renderDock(); setTimeout(() => { saved.rebet = draft.rebet; saved.autoDeal = draft.autoDeal; }, 0); },
     playing() { setup(["10S 6D", "5C 6H", "9C 2D"], [25, 20, 15], "9H KD", { hole: true, count: 1 }); T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     tens() { setup(["KS 10D", "5C 6H", "9C 2D"], [25, 20, 15], "6H 9D", { hole: true, count: -1 }); T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
@@ -639,8 +674,8 @@
     offers() { setup(["10C 6H", "AS KD", "9C 7S"], [50, 20, 15], "AH 6C", { hole: true, count: -2 }); T.seats.forEach((h) => { h.offers = R.offersAtDeal(h.cards, T.dealer[0], saved, h.bet, T.balance); }); T.deferPeek = R.isPeek(saved); T.phase = "offers"; offerMsg(); render(); },
     insurance() { setup(["9S 7D", "10C 6H", "8C 8D"], [50, 20, 15], "AH 6C", { hole: true, count: -1 }); T.seats.forEach((s) => { s.ins = s.bet / 2; T.balance -= s.ins; }); balShown = T.balance; T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     peek() { setup(["9S 7D", "10C 5H", "8C 8D"], [25, 20, 15], "KS 6D", { hole: true, count: -1 }); render(); const my = T.run; peekCheck(my).then(() => { if (live(my)) startPlay(my); }); },
-    shuffle() { base([0]); T.count = 0; T.phase = "shuffling"; setMsg("Shuffling"); render(); const my = T.run; shuffleFx().then(() => { if (live(my)) { T.phase = "betting"; betMsg(); renderDock(); } }); },
-    cut() { base([25, 10, 15]); Object.assign(T, { count: 5, delta: null }); setMsg("Last hand before the shuffle"); render(); requestAnimationFrame(() => { $("#shoeBox").classList.add("cut-out"); T.cutDrawn = true; }); },
+    shuffle() { base([0]); T.count = 0; T.cutSaid = false; T.phase = "shuffling"; setMsg("Shuffling"); render(); const my = T.run; shuffleFx().then(() => { if (live(my)) { T.phase = "betting"; betMsg(); renderDock(); } }); },
+    cut() { base([25, 10, 15]); Object.assign(T, { count: 0, delta: null }); setMsg("Last hand before the shuffle"); render(); requestAnimationFrame(() => { $("#shoeBox").classList.add("cut-out"); T.cutDrawn = true; }); },
     split() { SCENES.pair(); const my = T.run; setTimeout(() => { if (live(my)) playerAct("split"); }, 450); },
     many() { demo.seats = 6; setup(["8S 3D", "5C 6H", "9C 2D", "10S 4H", "7S 7D", "KD 5C"], [25, 25, 10, 10, 15, 15], "6S KD", { hole: true, count: 2 }); T.phase = "playing"; T.active = 3; setMsg("Your move"); render(); },
   };
@@ -681,7 +716,8 @@
   document.addEventListener("keydown", (e) => {
     if (document.body.dataset.screen !== "table" || e.target.closest("input, textarea, dialog") || e.metaKey || e.ctrlKey) return;
     const k = e.key.toLowerCase();
-    const map = { h: "hit", s: "stay", d: "double", p: "split", r: "surrender", t: "triple", u: "undo", c: "clear", b: "rebet", x: "x2", n: "o-no" };
+    if (/^[1-9]$/.test(k) && T.phase === "betting") { const b = $$("#rack .rc")[+k - 1]; if (b) b.click(); return; }
+    const map = T.phase === "offers" ? { i: "o-ins", e: "o-even", r: "o-sur", n: "o-no" } : { h: "hit", s: "stay", d: "double", p: "split", r: "surrender", t: "triple", u: "undo", c: "clear", b: "rebet", x: "x2" };
     if (k === " " || k === "enter") { if (e.target.closest("button, a")) return; e.preventDefault(); act(T.phase === "results" ? "next" : "deal"); return; }
     const a = map[k]; if (!a) return; const btn = $(`#dock [data-act="${a}"]`); if (btn && btn.getAttribute("aria-disabled") !== "true") act(a);
   });
@@ -703,14 +739,14 @@
     const b = (id, l, on) => `<button class="d${on ? " on" : ""}" type="button" data-demo="${id}">${l}</button>`;
     return `<div class="dh"><b>Demo (not in the product)</b><button class="icon-btn" type="button" data-demo="close" aria-label="Close demo">${icon("close")}</button></div>` +
       `<h3>Seats (demo only)</h3><div class="row2">${[1, 2, 3].map((n) => b("s:" + n, String(n), demo.seats === n)).join("")}${b("many", "6 (scroll)", demo.seats === 6)}</div>` +
-      `<h3>Dock states</h3><div class="row2">${b("betting", "Betting")}${b("empty", "Empty table")}${b("auto", "Auto deal")}${b("playing", "Playing")}${b("three", "Three cards")}${b("pair", "Pair (split)")}${b("tens", "K + 10")}${b("double", "After a double")}${b("offers", "Offers")}</div>` +
+      `<h3>Dock states</h3><div class="row2">${b("betting", "Betting")}${b("empty", "Empty table")}${b("auto", "Auto deal")}${b("playing", "Playing")}${b("three", "Three cards")}${b("pair", "Pair (split)")}${b("tens", "K + 10")}${b("sideways", "Double (sideways)")}${b("facedown", "Face-down double")}${b("highroller", "12 chips")}${b("double", "After a double")}${b("offers", "Offers")}</div>` +
       `<h3>Results</h3><div class="row2">${Object.keys(RESULT_SCENES).map((k) => b("r:" + k, k.charAt(0) + k.slice(1).toLowerCase())).join("")}</div>` +
-      `<h3>Effects</h3><div class="row2">${b("shuffle", "Shuffle")}${b("cut", "Cut card")}${b("peek", "Peek check")}${b("insurance", "Insurance stake")}${b("split", "Split")}</div>` +
+      `<h3>Effects</h3><div class="row2">${b("shuffle", "Shuffle")}${b("cut", "Cut card")}${b("peek", "Peek check")}${b("insurance", "Insurance stake")}${b("split", "Split")}${b("reconnecting", "Reconnecting")}${b("notice", "Notice")}${b("broke", "Out of credits")}${b("topup", "Top-up prompt")}</div>` +
       `<h3>Felt print</h3><div class="row2">${b("k:blackjackPayout", "Pays " + saved.blackjackPayout)}${b("k:dealerHitsSoft17", saved.dealerHitsSoft17 ? "Hits soft 17" : "Stands on 17s")}${b("k:insurance", "Insurance " + (saved.insurance ? "on" : "off"))}${b("k:dealerHoleBehaviour", MODE_PRINT[saved.dealerHoleBehaviour].toLowerCase())}</div>` +
       `<h3>Felt</h3><div class="row2">${FELTS.map(([k, n]) => b("t:" + k, n, saved.felt === k)).join("")}</div>` +
       `<h3>Accent</h3><div class="row2">${ACCENTS.map(([k, n]) => b("a:" + k, n, saved.accent === k)).join("")}</div>` +
       `<h3>Mode</h3><div class="row2">${b("m:dark", "Dark", saved.mode === "dark")}${b("m:light", "Light", saved.mode === "light")}</div>` +
-      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
+      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home">Home</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login">Login</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/waking">Login waking</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/error">Login error</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#loading">Loading</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#error">Error</a>${b("rules", "Rules sheet")}<a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
   }
   const paintDemo = () => (demoBody.innerHTML = demoHTML());
   const setDemo = (open) => { demoBody.hidden = !open; demoToggle.setAttribute("aria-expanded", String(open)); if (open) paintDemo(); };
@@ -722,6 +758,7 @@
     else if (/^(t|a|m):/.test(id)) { const k = { t: "felt", a: "accent", m: "mode" }[id[0]]; saved[k] = draft[k] = id.slice(2); applyTheme(saved); persist(); paintSwatches(); requestAnimationFrame(() => { renderPrint(); layoutSeats(); }); }
     else if (id.startsWith("k:")) { const k = id.slice(2); const next = { blackjackPayout: saved.blackjackPayout === "3:2" ? "6:5" : "3:2", dealerHitsSoft17: !saved.dealerHitsSoft17, insurance: !saved.insurance, dealerHoleBehaviour: { peek: "nopeek", nopeek: "eu", eu: "peek" }[saved.dealerHoleBehaviour] }[k]; saved[k] = draft[k] = next; persist(); renderPrint(); }
     else if (id === "clean") document.body.dataset.clean = "";
+    else if (id === "rules") openRules();
     else { if (id !== "many" && demo.seats > 3) demo.seats = 1; SCENES[id](); }
   }
   demoBody.addEventListener("click", (e) => { const b = e.target.closest("[data-demo]"); if (!b) return; if (b.dataset.demo === "close") return setDemo(false); runDemo(b.dataset.demo); if (innerWidth < 1400 || b.dataset.demo === "clean") setDemo(false); else paintDemo(); });
@@ -734,7 +771,7 @@
   const nearestStop = (v) => SPEED_STOPS.reduce((a, s) => (Math.abs(s[0] - v) < Math.abs(a[0] - v) ? s : a));
   const SECTIONS = [["sec-rules", "Rules"], ["sec-play", "Gameplay"], ["sec-chips", "Chips"], ["sec-look", "Appearance"], ["sec-sound", "Sound & haptics"], ["sec-account", "Account"], ["sec-danger", "Danger zone"]];
   const sw = (k, label, sub, extra = "") => `<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false" ${extra}><span class="tx"><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
-  const slider = (k, label, min, max, step, stops, tail) => `<div class="slider"><div class="top-l"><label for="in-${k}">${label}</label><output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}" type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
+  const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}">${label}</label><output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}" type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
   const sec = (id, title, inner, cls = "") => `<section class="sec ${cls}" id="${id}" aria-labelledby="${id}-h"><h2 id="${id}-h">${title}</h2>${inner}</section>`;
   const grp = (title, inner) => `<div class="grp"><h3>${title}</h3>${inner}</div>`;
   const navHTML = () => SECTIONS.map(([id, t]) => `<a href="#settings/${id}" data-sec="${id}">${t.replace("&", "&amp;")}</a>`).join("");
@@ -743,11 +780,11 @@
     if (!$(".s-index")) $("#sBody").insertAdjacentHTML("beforebegin", `<nav class="s-index" aria-label="Settings sections">${navHTML()}</nav>`);
     $("#sBody").innerHTML =
       sec("sec-rules", "Rules", `<div class="presets-row"><div class="presets" id="presets" role="radiogroup" aria-label="House rules"></div><p class="edge" id="edge"></p></div><div id="ruleGroups"></div>`) +
-      sec("sec-play", "Gameplay", slider("speed", "Game speed", 0, 1000, 1, SPEED_STOPS, "5 s") + sw("rebet", "Rebet automatically") + sw("count", "Show the count", "Running and true count") + sw("autoDeal", "Auto deal", "Needs Rebet") + slider("autoDelay", "Auto deal delay", 0, 10000, 500)) +
+      sec("sec-play", "Gameplay", slider("speed", "Game speed", 0, 1000, 1, SPEED_STOPS, "5 s") + sw("rebet", "Rebet automatically") + sw("count", "Show the count", "Running and true count") + sw("autoDeal", "Auto deal", "Needs Rebet") + slider("autoDelay", "Auto deal delay", 0, 10000, 500, null, null, "autoDeal")) +
       sec("sec-chips", "Chips", `<div class="chip-pick" id="chipPick">${CHIP_VALUES.map((v) => `<button type="button" class="cp" data-chipk="${v}" aria-pressed="true" aria-label="${money(v)} chip">${chipSVG(v)}</button>`).join("")}</div>`) +
       sec("sec-look", "Appearance", `<div class="look"><span class="ll">Felt</span><div class="felts" role="radiogroup" aria-label="Felt" id="feltPick"></div></div><div class="look"><span class="ll">Accent</span><div class="accents" role="radiogroup" aria-label="Accent" id="accentPick"></div></div><div class="look"><span class="ll">Mode</span><div class="seg" role="radiogroup" aria-label="Mode" id="modePick"></div></div>`) +
-      sec("sec-sound", "Sound &amp; haptics", sw("sfx", "Sound effects") + sw("cardSfx", "Card sounds") + sw("haptics", "Haptics") + slider("volume", "Volume", 0, 100, 5)) +
-      sec("sec-account", "Account", `<div class="inputs"><label>First name<input type="text" data-k="first" autocomplete="given-name" maxlength="24"></label><label>Last name<input type="text" data-k="last" autocomplete="family-name" maxlength="24"></label></div><div class="btn-row"><button class="btn" type="button" data-toast="Change password is not wired in the mockup">Change password</button><button class="btn" type="button" data-toast="Log out is not wired in the mockup">Log out</button></div>`) +
+      sec("sec-sound", "Sound &amp; haptics", sw("sfx", "Sound") + slider("volume", "Volume", 0, 100, 5, null, null, "sfx") + sw("haptics", "Vibration")) +
+      sec("sec-account", "Account", `<div class="inputs"><label>First name<input type="text" data-k="first" autocomplete="given-name" maxlength="24" aria-describedby="err-first"><span class="ferr" id="err-first" hidden></span></label><label>Last name<input type="text" data-k="last" autocomplete="family-name" maxlength="24" aria-describedby="err-last"><span class="ferr" id="err-last" hidden></span></label></div><div class="btn-row"><button class="btn" type="button" data-toast="Change password is not wired in the mockup">Change password</button><button class="btn" type="button" data-toast="Log out is not wired in the mockup">Log out</button></div>`) +
       sec("sec-danger", "Danger zone", `<div class="row"><span class="rl"><b>Delete profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete</button></div>`, "danger");
     renderRules(); syncControls(); watchSections();
   }
@@ -783,6 +820,8 @@
         if (k === "autoDeal") el.setAttribute("aria-disabled", String(!s.rebet));
       }
     });
+    $$("#settings .slider[data-dep]").forEach((el) => { const off = !s[el.dataset.dep]; el.classList.toggle("off", off); $("input", el).disabled = off; });
+    const errs = fieldErrors(s); for (const f of ["first", "last"]) { const inp = $(`#settings [data-k="${f}"]`), e = $("#err-" + f); if (!inp) continue; inp.setAttribute("aria-invalid", String(!!errs[f])); e.hidden = !errs[f]; e.textContent = errs[f] || ""; }
     $$("[data-chipk]").forEach((b) => b.setAttribute("aria-pressed", String(s.chips.includes(+b.dataset.chipk))));
     $("#feltPick").innerHTML = feltBtns(s.felt);
     $("#accentPick").innerHTML = ACCENTS.map(([k, n, c]) => `<button type="button" class="ac" role="radio" aria-checked="${s.accent === k}" data-pick-accent="${k}" aria-label="${n}" title="${n}"><i style="background:${c}"></i></button>`).join("");
@@ -790,7 +829,11 @@
     updateDirty();
   }
   const diffKeys = () => Object.keys(draft).filter((k) => JSON.stringify(draft[k]) !== JSON.stringify(saved[k]));
-  function updateDirty() { const d = diffKeys(); const n = d.filter((k) => !RULE_KEYS.includes(k)).length + (d.some((k) => RULE_KEYS.includes(k)) ? 1 : 0); $("#dirty").hidden = !n; $("#dirtyTxt").textContent = `${n} unsaved change${n === 1 ? "" : "s"}`; }
+  const fieldErrors = (d) => ({ ...(!String(d.first).trim() && { first: "Enter your first name." }), ...(!String(d.last).trim() && { last: "Enter your last name." }) });
+  function updateDirty() {
+    const d = diffKeys(); const n = d.filter((k) => !RULE_KEYS.includes(k)).length + (d.some((k) => RULE_KEYS.includes(k)) ? 1 : 0); const bad = Object.keys(fieldErrors(draft)).length;
+    $("#dirty").hidden = !n; $("#dirtyTxt").textContent = bad ? `Fix ${bad} field${bad === 1 ? "" : "s"} to save` : `${n} unsaved change${n === 1 ? "" : "s"}`; $("#saveBtn").setAttribute("aria-disabled", String(!!bad));
+  }
   function setDraft(patch) { Object.assign(draft, patch); if (patch.felt || patch.accent || patch.mode) applyTheme(draft); }
   const sBody = $("#sBody");
   sBody.addEventListener("click", (e) => {
@@ -815,7 +858,26 @@
     if (t.closest("#delBtn")) $("#delDlg").showModal();
   });
   sBody.addEventListener("input", (e) => { const el = e.target; if (!el.dataset.k) return; if (el.dataset.k === "speed") { setDraft({ speed: posToMs(+el.value) }); return syncControls(); } setDraft({ [el.dataset.k]: el.type === "range" ? +el.value : el.value }); syncControls(); });
-  $("#saveBtn").addEventListener("click", () => { saved = clone(draft); persist(); applyTheme(saved); if (!saved.chips.includes(T.chip)) T.chip = saved.chips.includes(25) ? 25 : saved.chips[0]; updateDirty(); toast("Saved. The table is updated."); syncControls(); });
+  // RESET_SETTINGS (gameReducer.js): saving any of these deals a new shoe and resets the table
+  const RESET_KEYS = ["deckCount", "dealerHoleBehaviour", "blackJackOnSplit", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
+  const midRound = () => !["betting", "results", "shuffling"].includes(T.phase);
+  function doSave(reset) {
+    saved = clone(draft); persist(); applyTheme(saved);
+    if (reset) { // stakes on the table come back; a fresh shoe; the round starts over
+      T.balance = R.cents(T.balance + T.seats.reduce((a, h) => a + h.bet + (h.dbl || 0) + (h.ins || 0), 0)); balShown = T.balance; T.run++; fx().innerHTML = "";
+      buildShoe(); T.count = 0; T.cutSaid = false; $("#shoeBox").classList.remove("cut-out");
+      Object.assign(T, { phase: "betting", seats: Array.from({ length: demo.seats }, newSeat), dealer: [], active: -1, verdict: null }); $("#felt").className = "felt"; betMsg();
+    }
+    updateDirty(); renderPrint(); toast(reset ? "Saved. New shoe dealt." : "Saved. The table is updated."); syncControls();
+  }
+  $("#saveBtn").addEventListener("click", () => {
+    if (Object.keys(fieldErrors(draft)).length) return;
+    const resets = diffKeys().some((k) => RESET_KEYS.includes(k));
+    if (resets && midRound()) return $("#resetDlg").showModal();
+    doSave(resets);
+  });
+  $("#resetNo").addEventListener("click", () => $("#resetDlg").close());
+  $("#resetYes").addEventListener("click", () => { $("#resetDlg").close(); doSave(true); });
   $("#discardBtn").addEventListener("click", () => { draft = clone(saved); applyTheme(saved); renderRules(); toast("Changes discarded"); });
   $("#delNo").addEventListener("click", () => $("#delDlg").close());
   $("#delYes").addEventListener("click", () => { $("#delDlg").close(); toast("Profile deletion is not wired in the mockup"); });
@@ -837,13 +899,66 @@
       </div>`;
   }
 
+  /* ================= rules sheet (from the menu and the felt print) ================= */
+  function openRules() {
+    const s = saved, p = presetOf(s), hid = hiddenKeys(s);
+    const mode = { peek: "The dealer peeks for Blakejack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "The dealer takes the second card after you play" }[s.dealerHoleBehaviour];
+    const grp = (t, items) => `<div class="sheet-grp"><h3>${t}</h3><ul>${items.filter(Boolean).map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
+    $("#rulesDlg").innerHTML = `<div class="sheet-in"><div class="sheet-grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="rulesT">Table rules</h2><button class="icon-btn" type="button" data-close-rules aria-label="Close">${icon("close")}</button></div>
+      <p class="sheet-meta"><span class="chiplet">${p}</span>House edge <b class="num">${fmtEdge(houseEdge(s))}</b> est.</p>` +
+      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace; even money on your Blakejack" : "No insurance or even money"]) +
+      grp("Dealer", [`${s.deckCount} deck${s.deckCount === 1 ? "" : "s"} in the shoe`, s.dealerHitsSoft17 ? "The dealer hits soft 17" : "The dealer stands on all 17s", mode, !hid.has("noHoleCardLoss") && (s.noHoleCardLoss === "all" ? "A dealer blackjack takes everything you staked" : "A dealer blackjack takes only your first bet")]) +
+      grp("Doubling", [`Double on ${s.doubleOn === "any" ? "any two cards" : s.doubleOn === "9-11" ? "a hard 9, 10 or 11" : "a hard 10 or 11"}`, s.doubleAfterSplit ? "Double after a split" : "No double after a split", s.tripleDown && "Triple down allowed", s.doubleFaceDown && "The double card is dealt face down"]) +
+      grp("Splitting", [s.maxSplitHands === 0 ? "Split any number of hands" : `Split up to ${s.maxSplitHands} hands`, "Any two ten-value cards split", s.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each", !hid.has("resplitAces") && (s.resplitAces ? "Aces may be split again" : "Aces split once"), s.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it"]) +
+      grp("Surrender", [SURR_TXT[s.surrender]]) +
+      `<div class="sheet-act"><button class="btn plain" type="button" data-close-rules>Close</button><a class="btn primary" href="#settings/sec-rules" data-close-rules>Change rules</a></div></div>`;
+    $("#rulesDlg").showModal();
+  }
+  $("#rulesDlg").addEventListener("click", (e) => { if (e.target === e.currentTarget || e.target.closest("[data-close-rules]")) $("#rulesDlg").close(); });
+  document.addEventListener("click", (e) => { if (e.target.closest("[data-open-rules]")) { closeMenu(); openRules(); } });
+  $("#print").addEventListener("click", openRules);
+  $("#print").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openRules(); } });
+
+  /* ================= hidden top-up (#90): 7 taps in 3 s on the balance open a code prompt; nothing is in the DOM before ================= */
+  const taps = [];
+  const tapEnabled = () => document.body.dataset.screen === "table" && T.balance < 100 && T.phase === "betting" && !onTable();
+  $("#balBox").addEventListener("click", () => { if (!tapEnabled()) { taps.length = 0; return; } const now = Date.now(); taps.push(now); while (taps.length && now - taps[0] > 3000) taps.shift(); if (taps.length >= 7) { taps.length = 0; openTopup(); } });
+  function openTopup() {
+    const d = document.createElement("dialog"); d.className = "dlg topup"; d.setAttribute("aria-labelledby", "topupT");
+    d.innerHTML = `<form method="dialog" novalidate><h2 id="topupT">Enter code</h2><label>Code<input type="text" name="code" autocomplete="off" spellcheck="false" aria-describedby="topupErr"></label><p class="ferr" id="topupErr" hidden></p>
+      <div class="dlg-act"><button class="btn plain" type="button" data-cancel>Cancel</button><button class="btn primary" type="submit">Submit</button></div></form>`;
+    document.body.appendChild(d); d.showModal();
+    const gone = () => { d.close(); d.remove(); };
+    d.querySelector("[data-cancel]").addEventListener("click", gone); d.addEventListener("cancel", () => setTimeout(() => d.remove(), 0));
+    d.querySelector("form").addEventListener("submit", (e) => { e.preventDefault(); const err = d.querySelector("#topupErr"); err.hidden = false; err.textContent = "That didn't work."; d.querySelector("input").setAttribute("aria-invalid", "true"); }); // one generic refusal for every case
+  }
+
+  /* ================= Home, Login, loading, error ================= */
+  const hero = () => `<div class="hero" aria-hidden="true"><span class="hc" style="transform: translate(-46px, 6px) rotate(-8deg)"><img src="/cards/ace_of_spades.png" alt=""></span><span class="hc" style="transform: translate(18px, -2px) rotate(6deg)"><img src="/cards/king_of_hearts.png" alt=""></span><span class="hchip" style="transform: translate(82px, 46px)">${chipSVG(25)}</span></div>`;
+  const wmBig = `<svg class="wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>`;
+  function buildPage(scr, sub) {
+    if (scr === "home") $("#home").innerHTML = `<main class="page"><h1 class="sr-only">Blakejack</h1>${wmBig}${hero()}<div class="btn-col"><a class="btn primary" href="#table">Play</a><button class="btn" type="button" data-open-rules>Rules</button><a class="btn" href="#settings">Settings</a></div><p class="signed">Signed in as ${saved.first} ${saved.last} · <a href="#login">Log out</a></p></main>`;
+    if (scr === "login") {
+      $("#login").innerHTML = `<main class="page">${wmBig}<h1>Sign in</h1>
+        ${sub === "error" ? '<p class="alert" role="alert">That didn\'t work. Check your username and password and try again.</p>' : ""}
+        ${sub === "waking" ? '<div class="waking" role="status"><span class="spin" aria-hidden="true"></span><span>Waking up the table. The first sign-in can take up to 30 seconds.</span></div>' : ""}
+        <form class="form" id="loginForm" novalidate><label>Username<input name="username" autocomplete="username" placeholder="Username"${sub === "error" ? ' aria-invalid="true"' : ""}></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password"${sub === "error" ? ' aria-invalid="true"' : ""}></label>
+        <button class="btn primary" type="submit"${sub === "waking" ? ' aria-disabled="true"' : ""}>${sub === "waking" ? "Signing in..." : "Sign in"}</button></form><p class="signed"><a href="#login">Create an account</a></p></main>`;
+      $("#loginForm").addEventListener("submit", (e) => { e.preventDefault(); location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#home"; }, 1800); });
+    }
+    if (scr === "loading") $("#loading").innerHTML = `<main class="page" role="status">${wmBig}<div class="deal-load" aria-hidden="true">${[0, 1, 2].map((n) => `<i style="--n:${n}"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></i>`).join("")}</div><p>Shuffling up...</p></main>`;
+    if (scr === "error") $("#error").innerHTML = `<main class="page">${wmBig}<h1>Can't reach the table</h1><p>Check your connection and try again. Your balance is safe.</p><div class="btn-col"><a class="btn primary" href="#loading">Try again</a><a class="btn" href="#home">Home</a></div></main>`;
+  }
+
   /* ================= routing ================= */
   function route() {
     const [screen, anchor] = location.hash.replace("#", "").split("/");
-    const scr = screen === "settings" ? "settings" : screen === "brand" ? "brand" : "table";
+    const scr = ["settings", "brand", "home", "login", "loading", "error"].includes(screen) ? screen : "table";
+    if (["home", "login", "loading", "error"].includes(scr)) buildPage(scr, anchor);
+    if (scr === "loading") setTimeout(() => { if (location.hash === "#loading") location.hash = "#table"; }, 2600);
     if (scr === "settings" && !$("#sBody").children.length) buildSettings();
     if (scr === "brand") buildBrand();
-    $("#table").hidden = scr !== "table"; $("#settings").hidden = scr !== "settings"; $("#brand").hidden = scr !== "brand"; document.body.dataset.screen = scr;
+    for (const id of ["table", "settings", "brand", "home", "login", "loading", "error"]) $("#" + id).hidden = scr !== id; document.body.dataset.screen = scr;
     if (scr === "settings") { draft = clone(saved); applyTheme(saved); renderRules(); window.scrollTo(0, 0); if (anchor) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: "start" })); }
     else if (scr === "table") { draft = clone(saved); applyTheme(saved); T.chip = saved.chips.includes(T.chip) ? T.chip : saved.chips[0]; render(); }
     else window.scrollTo(0, 0);
@@ -855,7 +970,15 @@
     applyTheme(saved); buildShoe(); paintSwatches();
     if (new URLSearchParams(location.search).has("clean")) document.body.dataset.clean = "";
     SCENES.betting(); route();
-    window.addEventListener("hashchange", route);
+    let leaveTo = null;
+    window.addEventListener("hashchange", (e) => {
+      const from = new URL(e.oldURL).hash, to = location.hash; const scr = (h) => h.replace("#", "").split("/")[0];
+      if (scr(from) === "settings" && scr(to) !== "settings" && diffKeys().length && !T.leaving) { leaveTo = to; history.replaceState(null, "", from); $("#leaveDlg").showModal(); return; }
+      T.leaving = false; route();
+    });
+    $("#leaveNo").addEventListener("click", () => $("#leaveDlg").close());
+    $("#leaveYes").addEventListener("click", () => { $("#leaveDlg").close(); draft = clone(saved); applyTheme(saved); updateDirty(); T.leaving = true; location.hash = leaveTo || "#table"; });
+    window.addEventListener("beforeunload", (e) => { if (document.body.dataset.screen === "settings" && diffKeys().length) { e.preventDefault(); e.returnValue = ""; } });
     const relayout = () => { if (document.body.dataset.screen !== "table") return; renderPrint(); renderDealer(); layoutSeats(); };
     if (window.ResizeObserver) new ResizeObserver(relayout).observe($("#stage"));
     let wasOne = oneRow(); window.addEventListener("resize", () => { if (oneRow() !== wasOne) { wasOne = oneRow(); renderDock(); } });

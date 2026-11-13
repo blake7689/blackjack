@@ -49,6 +49,11 @@ export const CHIPS = {
   100: { body: "#1c1c21", print: "#e9e2d2", mid: "#232329", ink: "#f2ecdf", side: "#0b0b0d", label: "100" },
   1000: { body: "#d6a92c", print: "#22201a", mid: "#cfa128", ink: "#2a2414", side: "#a8831a", label: "1K" },
   5000: { body: "#5e3a24", print: "#ead8b2", mid: "#56351f", ink: "#f4e6c8", side: "#3e2615", label: "5K" },
+  // the spec's colours for the four high chips: 10K pink, 20K light blue, 50K purple, 100K grey
+  10000: { body: "#d4709a", print: "#fbeef3", mid: "#cc6892", ink: "#3a0f22", side: "#a24f73", label: "10K" },
+  20000: { body: "#7fb6dc", print: "#0f2c44", mid: "#77aed4", ink: "#0c2538", side: "#5a8cb0", label: "20K" },
+  50000: { body: "#5b3a8f", print: "#efe6fb", mid: "#543585", ink: "#f6f0ff", side: "#3e2766", label: "50K" },
+  100000: { body: "#8d9296", print: "#16191b", mid: "#868b8f", ink: "#121517", side: "#6a6f73", label: "100K" },
 };
 const BLOCKS = [0, 45, 90, 135, 180, 225, 270, 315];
 function chipFace(v, numeral) {
@@ -59,9 +64,10 @@ function chipFace(v, numeral) {
   }).join("");
   const dots = BLOCKS.map((a) => { const [x, y] = pt(45.4, a + 22.5); return `<circle cx="${x}" cy="${y}" r="1.25"/>`; }).join("");
   const hatch = Array.from({ length: 96 }, (_, i) => { const a = i * 3.75; const [x1, y1] = pt(31.2, a), [x2, y2] = pt(38.6, a); return `M${x1} ${y1}L${x2} ${y2}`; }).join("");
-  const size = c.label.length >= 3 ? 28 : 32; // 12 px or more on a 44 px chip
+  const size = c.label.length >= 4 ? 27.5 : c.label.length >= 3 ? 28 : 32; // 12 px or more on a 44 px chip
+  const ls = c.label.length >= 4 ? -1.8 : -0.8; // "100K" sits inside the centre ring
   const centre = numeral
-    ? `<text x="50" y="50" dy=".35em" text-anchor="middle" font-family="'Clash Display','Satoshi',system-ui,sans-serif" font-weight="600" font-size="${size}" letter-spacing="-.8" fill="${c.ink}">${c.label}</text>`
+    ? `<text x="50" y="50" dy=".35em" text-anchor="middle" font-family="'Clash Display','Satoshi',system-ui,sans-serif" font-weight="600" font-size="${size}" letter-spacing="${ls}" fill="${c.ink}">${c.label}</text>`
     : `<path d="M50 44.5l5.5 5.5-5.5 5.5-5.5-5.5z" fill="${c.ink}" opacity=".9"/>`;
   return `<symbol id="chip-${v}${numeral ? "" : "-p"}" viewBox="0 0 100 100">
   <circle cx="50" cy="50" r="49.6" fill="${c.body}"/>
