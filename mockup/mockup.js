@@ -13,6 +13,7 @@
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const ctr = (r) => [r.left + r.width / 2, r.top + r.height / 2];
   const oneRow = () => matchMedia("(min-width: 900px), (max-height: 520px)").matches;
+  const landscape = () => matchMedia("(max-height: 520px)").matches;
   const compact = () => matchMedia("(max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4)").matches; // the bet circle sits beside the hand
   const NS = "http://www.w3.org/2000/svg";
 
@@ -45,9 +46,9 @@
   const CATALOG = [
     { key: "deckCount", group: "Shoe", label: () => "Deck size", opts: [1, 2, 4, 6, 8].map((n) => ({ v: n, l: String(n) })) },
     { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", patch: (v, s) => modePatch(v, s),
-      opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for Blakejack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No hole card", h: "The dealer takes the second card after you play." }] },
+      opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for blackjack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No hole card", h: "The dealer takes the second card after you play." }] },
     { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", opts: [{ v: false, l: "Stands" }, { v: true, l: "Hits" }] },
-    { key: "noHoleCardLoss", group: "Dealer", label: () => "If the dealer has Blakejack, you lose", show: (s) => s.dealerHoleBehaviour !== "peek",
+    { key: "noHoleCardLoss", group: "Dealer", label: () => "If the dealer has blackjack, you lose", show: (s) => s.dealerHoleBehaviour !== "peek",
       opts: [{ v: "all", l: "Everything you staked" }, { v: "original", l: "Only your first bet" }] },
     { key: "blackjackPayout", group: "Payouts", label: () => "Blakejack pays", opts: [{ v: "3:2", l: "3:2" }, { v: "6:5", l: "6:5" }] },
     { key: "insurance", group: "Payouts", label: () => "Insurance and even money", opts: ON_OFF },
@@ -299,22 +300,23 @@
   const handCards = (s) => (s.hidden && s.hidden.length ? s.cards.concat(s.hidden) : s.cards);
   function renderSeatsInner() {
     const wrap = $("#seats"); const n = T.seats.length;
-    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); wrap.classList.toggle("scroll", n > (matchMedia("(max-height: 520px)").matches ? 3 : 4)); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
+    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); $("#stageIn").style.setProperty("--n", n); wrap.classList.toggle("scroll", n > (matchMedia("(max-height: 520px)").matches ? 3 : 4)); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
     const fresh = [];
     T.seats.forEach((s, i) => {
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
-      seat.classList.toggle("active", act || (T.phase === "betting" && n === 1)); seat.classList.toggle("nocards", !s.cards.length);
+      seat.classList.toggle("active", act || (T.phase === "betting" && n === 1 && rackChips().length > 0)); seat.classList.toggle("nocards", !s.cards.length);
       const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act);
       hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + `, ${total(shown).t}` : `Hand ${i + 1}: no cards`);
-      const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); spot.classList.toggle("open", T.phase === "betting" && !s.bet);
+      const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); const canBet = T.phase === "betting" && rackChips().length > 0; spot.classList.toggle("open", canBet && !s.bet); // out of credits: the circle stays idle
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
-      spot.disabled = T.phase !== "betting";
+      spot.disabled = !canBet;
       $$(".stack", seat).forEach((x) => (x.style.visibility = "")); // payoutFx hides them while the ghosts fly
       const chipPx = cw() * 0.6;
       $(".stack", spot).innerHTML = s.bet ? stackSVG(s.bet, chipPx) : "";
       const dbl = $(".side-spot.dbl", seat), ins = $(".side-spot.ins", seat);
       dbl.hidden = !s.dbl; $(".stack", dbl).innerHTML = s.dbl ? stackSVG(s.dbl, chipPx) : "";
       ins.hidden = !s.ins; $(".stack", ins).innerHTML = s.ins ? stackSVG(s.ins, chipPx) : "";
+      seat.classList.toggle("sides", !!(s.dbl || s.ins));
       const amt = $(".amt", seat);
       if (s.kind && n > 1) amt.innerHTML = `<span class="tag ${s.kind}">${VERDICT[s.kind].replace("!", "")}</span>`;
       else amt.innerHTML = s.bet ? `<span class="num">${money(s.bet + s.dbl)}</span>` : "";
@@ -324,7 +326,9 @@
   }
   function layoutSeats() {
     fixCw(); const wrap = $("#seats"); const n = T.seats.length;
-    T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 64 : ($(".spot", seat).offsetWidth + 10) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
+    const s0 = wrap.children[0]; if (s0) { const sp = $(".spot", s0).offsetWidth, chip = $(".spot .stack", s0).offsetWidth; wrap.classList.toggle("tight", !compact() && s0.clientWidth < sp + 2 * (chip * 1.12 + 6)); }
+    T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const sw = landscape() && (s.dbl || s.ins) ? $(".spot .stack", seat).offsetWidth * 1.12 + 6 : 0; // room the side stacks take beside the circle
+      const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 64 + sw : ($(".spot", seat).offsetWidth + 10 + sw) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
     const dh = $("#dHand"); if (dh.children.length) layoutHand(dh, T.dealer, dealerMaxW(), "side"); // after the seats: a seat count change resizes the cards
     if (wrap.classList.contains("scroll")) { const a = wrap.children[Math.max(0, T.active)]; if (a) wrap.scrollTo({ left: a.offsetLeft - wrap.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); }
     moveLamp();
@@ -371,9 +375,9 @@
     const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="${money(v)} chip">${chipSVG(v)}${i < 9 ? `<kbd>${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
     if (p === "betting" || p === "shuffling") {
       const off = p === "shuffling"; const has = onTable() > 0; const auto = autoOn() && has && !off;
-      A = chips.length || onTable() ? rack() : `<div class="dock-note">${icon("money")}<span>Out of credits. Your balance is ${money(T.balance)}.</span></div>`;
+      A = chips.length || onTable() ? rack() : `<div class="dock-note">${icon("info")}<span>Out of credits. Your balance is ${money(T.balance)}.</span></div>`;
       B = key("undo", "Undo", "undo", "", { off: off || !has, kbd: "U" }) + key("clear", "Clear", "clear", "", { off: off || !has, kbd: "C" }) +
-        key("rebet", "Rebet", "rebet", "", { off: off || has || !T.lastBets.length, kbd: "B" }) + key("x2", "2x", "", "", { off: off || !has || T.balance < onTable(), kbd: "X", aria: "Double every bet" }) +
+        key("rebet", "Rebet", "rebet", "", { off: off || has || !T.lastBets.some((b) => b && T.balance >= b), kbd: "B" }) + key("x2", "2x", "", "", { off: off || !has || T.balance < onTable(), kbd: "X", aria: "Double every bet" }) +
         (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { off }) : "") +
         key("deal", off ? "Shuffling" : "Deal", "", "primary big " + (autoOn() ? "wide" : "wider"), { off: off || !has, kbd: "Space", sub: auto && !T.paused ? "auto" : "", bar: auto && !T.paused ? saved.autoDelay : 0 });
     } else if (p === "offers") {
@@ -718,8 +722,8 @@
     const k = e.key.toLowerCase();
     if (/^[1-9]$/.test(k) && T.phase === "betting") { const b = $$("#rack .rc")[+k - 1]; if (b) b.click(); return; }
     const map = T.phase === "offers" ? { i: "o-ins", e: "o-even", r: "o-sur", n: "o-no" } : { h: "hit", s: "stay", d: "double", p: "split", r: "surrender", t: "triple", u: "undo", c: "clear", b: "rebet", x: "x2" };
-    if (k === " " || k === "enter") { if (e.target.closest("button, a")) return; e.preventDefault(); act(T.phase === "results" ? "next" : "deal"); return; }
-    const a = map[k]; if (!a) return; const btn = $(`#dock [data-act="${a}"]`); if (btn && btn.getAttribute("aria-disabled") !== "true") act(a);
+    if (k === " " || k === "enter") { if (e.target.closest("button, a")) return; e.preventDefault(); }
+    const a = k === " " || k === "enter" ? (T.phase === "results" ? "next" : "deal") : map[k]; if (!a) return; const btn = $(`#dock [data-act="${a}"]`); if (btn && btn.getAttribute("aria-disabled") !== "true") act(a);
   });
   // menu
   const menu = $("#menu"), menuBtn = $("#menuBtn");
@@ -746,7 +750,7 @@
       `<h3>Felt</h3><div class="row2">${FELTS.map(([k, n]) => b("t:" + k, n, saved.felt === k)).join("")}</div>` +
       `<h3>Accent</h3><div class="row2">${ACCENTS.map(([k, n]) => b("a:" + k, n, saved.accent === k)).join("")}</div>` +
       `<h3>Mode</h3><div class="row2">${b("m:dark", "Dark", saved.mode === "dark")}${b("m:light", "Light", saved.mode === "light")}</div>` +
-      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home">Home</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login">Login</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/waking">Login waking</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/error">Login error</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#loading">Loading</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#error">Error</a>${b("rules", "Rules sheet")}<a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
+      `<h3>Screens</h3><div class="row2"><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#brand">Wordmark</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#home">Home</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login">Login</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/waking">Login waking</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/error">Login error</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#login/signup">Sign up</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#loading">Loading</a><a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#error">Error</a>${b("rules", "Rules sheet")}<a class="d" style="display:inline-flex;align-items:center;text-decoration:none" href="#settings">Settings</a>${b("clean", "Hide demo tab")}</div>`;
   }
   const paintDemo = () => (demoBody.innerHTML = demoHTML());
   const setDemo = (open) => { demoBody.hidden = !open; demoToggle.setAttribute("aria-expanded", String(open)); if (open) paintDemo(); };
@@ -777,6 +781,8 @@
   const navHTML = () => SECTIONS.map(([id, t]) => `<a href="#settings/${id}" data-sec="${id}">${t.replace("&", "&amp;")}</a>`).join("");
   function buildSettings() {
     $("#sNav").innerHTML = navHTML();
+    const nav = $("#sNav"); const edges = () => { nav.classList.toggle("fade-l", nav.scrollLeft > 1); nav.classList.toggle("fade-r", nav.scrollLeft < nav.scrollWidth - nav.clientWidth - 1); };
+    nav.addEventListener("scroll", edges, { passive: true }); new ResizeObserver(edges).observe(nav); edges(); // fade only the edge that has more tabs past it
     if (!$(".s-index")) $("#sBody").insertAdjacentHTML("beforebegin", `<nav class="s-index" aria-label="Settings sections">${navHTML()}</nav>`);
     $("#sBody").innerHTML =
       sec("sec-rules", "Rules", `<div class="presets-row"><div class="presets" id="presets" role="radiogroup" aria-label="House rules"></div><p class="edge" id="edge"></p></div><div id="ruleGroups"></div>`) +
@@ -832,7 +838,7 @@
   const fieldErrors = (d) => ({ ...(!String(d.first).trim() && { first: "Enter your first name." }), ...(!String(d.last).trim() && { last: "Enter your last name." }) });
   function updateDirty() {
     const d = diffKeys(); const n = d.filter((k) => !RULE_KEYS.includes(k)).length + (d.some((k) => RULE_KEYS.includes(k)) ? 1 : 0); const bad = Object.keys(fieldErrors(draft)).length;
-    $("#dirty").hidden = !n; $("#dirtyTxt").textContent = bad ? `Fix ${bad} field${bad === 1 ? "" : "s"} to save` : `${n} unsaved change${n === 1 ? "" : "s"}`; $("#saveBtn").setAttribute("aria-disabled", String(!!bad));
+    $("#dirty").hidden = !n; $("#dirtyTxt").textContent = `${n} unsaved change${n === 1 ? "" : "s"}`; $("#saveBtn").setAttribute("aria-disabled", String(n === bad)); // only invalid profile fields left: nothing to save
   }
   function setDraft(patch) { Object.assign(draft, patch); if (patch.felt || patch.accent || patch.mode) applyTheme(draft); }
   const sBody = $("#sBody");
@@ -861,17 +867,20 @@
   // RESET_SETTINGS (gameReducer.js): saving any of these deals a new shoe and resets the table
   const RESET_KEYS = ["deckCount", "dealerHoleBehaviour", "blackJackOnSplit", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
   const midRound = () => !["betting", "results", "shuffling"].includes(T.phase);
+  function resetTable(newShoe) { // as the app's resetTable: only an undealt circle bet comes back; bets on a dealt hand are lost
+    if (T.phase === "betting") T.balance = R.cents(T.balance + T.seats.reduce((a, h) => a + h.bet, 0));
+    balShown = T.balance; T.run++; fx().innerHTML = "";
+    if (newShoe) { buildShoe(); T.count = 0; T.cutSaid = false; $("#shoeBox").classList.remove("cut-out"); }
+    Object.assign(T, { phase: "betting", seats: Array.from({ length: demo.seats }, newSeat), dealer: [], active: -1, verdict: null }); $("#felt").className = "felt"; betMsg();
+  }
   function doSave(reset) {
-    saved = clone(draft); persist(); applyTheme(saved);
-    if (reset) { // stakes on the table come back; a fresh shoe; the round starts over
-      T.balance = R.cents(T.balance + T.seats.reduce((a, h) => a + h.bet + (h.dbl || 0) + (h.ins || 0), 0)); balShown = T.balance; T.run++; fx().innerHTML = "";
-      buildShoe(); T.count = 0; T.cutSaid = false; $("#shoeBox").classList.remove("cut-out");
-      Object.assign(T, { phase: "betting", seats: Array.from({ length: demo.seats }, newSeat), dealer: [], active: -1, verdict: null }); $("#felt").className = "felt"; betMsg();
-    }
-    updateDirty(); renderPrint(); toast(reset ? "Saved. New shoe dealt." : "Saved. The table is updated."); syncControls();
+    const errs = fieldErrors(draft); const kept = Object.fromEntries(Object.keys(errs).map((k) => [k, saved[k]]));
+    saved = { ...clone(draft), ...kept }; persist(); applyTheme(saved); // an invalid profile field stays unsaved with its error; the settings save regardless
+    if (reset) resetTable(true);
+    updateDirty(); renderPrint(); toast((reset ? "Saved. New shoe dealt." : "Saved. The table is updated.") + (Object.keys(errs).length ? " Your name isn't saved yet." : "")); syncControls();
   }
   $("#saveBtn").addEventListener("click", () => {
-    if (Object.keys(fieldErrors(draft)).length) return;
+    if ($("#saveBtn").getAttribute("aria-disabled") === "true") return;
     const resets = diffKeys().some((k) => RESET_KEYS.includes(k));
     if (resets && midRound()) return $("#resetDlg").showModal();
     doSave(resets);
@@ -884,7 +893,7 @@
   let secObs;
   function watchSections() {
     secObs?.disconnect(); if (!window.IntersectionObserver) return;
-    secObs = new IntersectionObserver((ents) => { ents.forEach((en) => { if (en.isIntersecting) $$("[data-sec]").forEach((a) => a.setAttribute("aria-current", String(a.dataset.sec === en.target.id))); }); }, { rootMargin: "-120px 0px -60% 0px" });
+    secObs = new IntersectionObserver((ents) => { ents.forEach((en) => { if (en.isIntersecting) $$("[data-sec]").forEach((a) => { a.setAttribute("aria-current", String(a.dataset.sec === en.target.id)); if (a.dataset.sec === en.target.id && a.closest("#sNav")) { const n = $("#sNav"); n.scrollTo({ left: a.offsetLeft - n.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); } }); }); }, { rootMargin: "-120px 0px -60% 0px" });
     $$(".sec").forEach((s) => secObs.observe(s));
   }
 
@@ -902,11 +911,12 @@
   /* ================= rules sheet (from the menu and the felt print) ================= */
   function openRules() {
     const s = saved, p = presetOf(s), hid = hiddenKeys(s);
-    const mode = { peek: "The dealer peeks for Blakejack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "The dealer takes the second card after you play" }[s.dealerHoleBehaviour];
+    const evenMoney = R.isPeek(s) || !R.bjPaysWithoutPeek(s); // offered unless your Blakejack already pays at once (offersAtDeal)
+    const mode = { peek: "The dealer peeks for blackjack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "The dealer takes the second card after you play" }[s.dealerHoleBehaviour];
     const grp = (t, items) => `<div class="sheet-grp"><h3>${t}</h3><ul>${items.filter(Boolean).map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
     $("#rulesDlg").innerHTML = `<div class="sheet-in"><div class="sheet-grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="rulesT">Table rules</h2><button class="icon-btn" type="button" data-close-rules aria-label="Close">${icon("close")}</button></div>
       <p class="sheet-meta"><span class="chiplet">${p}</span>House edge <b class="num">${fmtEdge(houseEdge(s))}</b> est.</p>` +
-      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace; even money on your Blakejack" : "No insurance or even money"]) +
+      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance", evenMoney ? "Even money on your Blakejack against a dealer ace" : ""]) +
       grp("Dealer", [`${s.deckCount} deck${s.deckCount === 1 ? "" : "s"} in the shoe`, s.dealerHitsSoft17 ? "The dealer hits soft 17" : "The dealer stands on all 17s", mode, !hid.has("noHoleCardLoss") && (s.noHoleCardLoss === "all" ? "A dealer blackjack takes everything you staked" : "A dealer blackjack takes only your first bet")]) +
       grp("Doubling", [`Double on ${s.doubleOn === "any" ? "any two cards" : s.doubleOn === "9-11" ? "a hard 9, 10 or 11" : "a hard 10 or 11"}`, s.doubleAfterSplit ? "Double after a split" : "No double after a split", s.tripleDown && "Triple down allowed", s.doubleFaceDown && "The double card is dealt face down"]) +
       grp("Splitting", [s.maxSplitHands === 0 ? "Split any number of hands" : `Split up to ${s.maxSplitHands} hands`, "Any two ten-value cards split", s.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each", !hid.has("resplitAces") && (s.resplitAces ? "Aces may be split again" : "Aces split once"), s.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it"]) +
@@ -934,16 +944,27 @@
   }
 
   /* ================= Home, Login, loading, error ================= */
-  const hero = () => `<div class="hero" aria-hidden="true"><span class="hc" style="transform: translate(-46px, 6px) rotate(-8deg)"><img src="/cards/ace_of_spades.png" alt=""></span><span class="hc" style="transform: translate(18px, -2px) rotate(6deg)"><img src="/cards/king_of_hearts.png" alt=""></span><span class="hchip" style="transform: translate(82px, 46px)">${chipSVG(25)}</span></div>`;
+  const hero = () => `<div class="hero" aria-hidden="true"><span class="hc" style="transform: translate(-78px, -54px)"><img src="/cards/ace_of_spades.png" alt=""></span><span class="hc" style="transform: translate(-32px, -54px)"><img src="/cards/king_of_hearts.png" alt=""></span><span class="hchip" style="transform: translate(36px, 10px)">${chipSVG(25)}</span></div>`;
   const wmBig = `<svg class="wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>`;
   function buildPage(scr, sub) {
     if (scr === "home") $("#home").innerHTML = `<main class="page"><h1 class="sr-only">Blakejack</h1>${wmBig}${hero()}<div class="btn-col"><a class="btn primary" href="#table">Play</a><button class="btn" type="button" data-open-rules>Rules</button><a class="btn" href="#settings">Settings</a></div><p class="signed">Signed in as ${saved.first} ${saved.last} · <a href="#login">Log out</a></p></main>`;
-    if (scr === "login") {
-      $("#login").innerHTML = `<main class="page">${wmBig}<h1>Sign in</h1>
-        ${sub === "error" ? '<p class="alert" role="alert">That didn\'t work. Check your username and password and try again.</p>' : ""}
-        ${sub === "waking" ? '<div class="waking" role="status"><span class="spin" aria-hidden="true"></span><span>Waking up the table. The first sign-in can take up to 30 seconds.</span></div>' : ""}
-        <form class="form" id="loginForm" novalidate><label>Username<input name="username" autocomplete="username" placeholder="Username"${sub === "error" ? ' aria-invalid="true"' : ""}></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password"${sub === "error" ? ' aria-invalid="true"' : ""}></label>
-        <button class="btn primary" type="submit"${sub === "waking" ? ' aria-disabled="true"' : ""}>${sub === "waking" ? "Signing in..." : "Sign in"}</button></form><p class="signed"><a href="#login">Create an account</a></p></main>`;
+    if (scr === "login" && sub === "signup") { // the app's five sign-up fields, its messages, shown once a field is typed in or left
+      const F = [["userName", "Username", "text", "username"], ["email", "Email", "email", "email"], ["password", "Password", "password", "new-password"], ["firstName", "First name", "text", "given-name"], ["lastName", "Last name", "text", "family-name"]];
+      $("#login").innerHTML = `<main class="page">${wmBig}<h1>Create an account</h1>
+        <form class="form" id="signupForm" novalidate>${F.map(([n, l, t, ac]) => `<label>${l}<input name="${n}" type="${t}" autocomplete="${ac}" placeholder="${l}" aria-describedby="su-${n}"><span class="ferr" id="su-${n}" hidden></span></label>`).join("")}
+        <button class="btn primary" type="submit" aria-disabled="true">Create account</button></form><p class="signed">Have an account? <a href="#login">Log in</a></p></main>`;
+      const f = $("#signupForm"); const touched = new Set();
+      const err = (n, v) => n === "userName" ? (!v.trim() ? "Username is required." : v.length < 3 ? "Username must be at least 3 characters." : "") : n === "email" ? (!v.trim() ? "Email is required." : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? "Invalid email format." : "") : n === "password" ? (!v ? "Password is required." : v.length < 6 ? "Password must be at least 6 characters." : "") : !v.trim() ? `${n === "firstName" ? "First" : "Last"} name is required.` : "";
+      const check = () => { let bad = 0; F.forEach(([n]) => { const inp = f.elements[n], e = err(n, inp.value), show = touched.has(n) && !!e; if (e) bad++; inp.setAttribute("aria-invalid", String(show)); $("#su-" + n).hidden = !show; $("#su-" + n).textContent = e; }); f.querySelector("[type=submit]").setAttribute("aria-disabled", String(!!bad)); return !bad; };
+      f.addEventListener("input", (e) => { touched.add(e.target.name); check(); });
+      f.addEventListener("focusout", (e) => { if (e.target.name) { touched.add(e.target.name); check(); } });
+      f.addEventListener("submit", (e) => { e.preventDefault(); F.forEach(([n]) => touched.add(n)); if (check()) { location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#home"; }, 1800); } });
+    } else if (scr === "login") {
+      $("#login").innerHTML = `<main class="page">${wmBig}<h1>Log in</h1>
+        ${sub === "error" ? '<p class="alert" role="alert">That didn&rsquo;t work. Check your username and password and try again.</p>' : ""}
+        ${sub === "waking" ? '<div class="waking" role="status"><span class="spin" aria-hidden="true"></span><span>Waking up the table. The first log-in can take up to 30 seconds.</span></div>' : ""}
+        <form class="form" id="loginForm" novalidate><label>Username or email<input name="usernameOrEmail" autocomplete="username" placeholder="Username or Email"${sub === "error" ? ' aria-invalid="true"' : ""}></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password"${sub === "error" ? ' aria-invalid="true"' : ""}></label>
+        <button class="btn primary" type="submit"${sub === "waking" ? ' aria-disabled="true"' : ""}>${sub === "waking" ? "Logging in..." : "Log in"}</button></form><p class="signed"><a href="#login/signup">Create an account</a></p></main>`;
       $("#loginForm").addEventListener("submit", (e) => { e.preventDefault(); location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#home"; }, 1800); });
     }
     if (scr === "loading") $("#loading").innerHTML = `<main class="page" role="status">${wmBig}<div class="deal-load" aria-hidden="true">${[0, 1, 2].map((n) => `<i style="--n:${n}"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></i>`).join("")}</div><p>Shuffling up...</p></main>`;
@@ -972,11 +993,15 @@
     SCENES.betting(); route();
     let leaveTo = null;
     window.addEventListener("hashchange", (e) => {
-      const from = new URL(e.oldURL).hash, to = location.hash; const scr = (h) => h.replace("#", "").split("/")[0];
+      const from = new URL(e.oldURL).hash, to = location.hash; const scr = (h) => h.replace("#", "").split("/")[0] || "table"; // no hash is the table
       if (scr(from) === "settings" && scr(to) !== "settings" && diffKeys().length && !T.leaving) { leaveTo = to; history.replaceState(null, "", from); $("#leaveDlg").showModal(); return; }
+      // as the app's Home button: leaving the table once cards are out asks first (a bet already dealt is lost)
+      if (scr(from) === "table" && scr(to) === "home" && !["betting", "shuffling"].includes(T.phase) && !T.leaving) { leaveTo = to; history.replaceState(null, "", from || location.pathname + location.search); $("#quitDlg").showModal(); return; }
       T.leaving = false; route();
     });
     $("#leaveNo").addEventListener("click", () => $("#leaveDlg").close());
+    $("#quitNo").addEventListener("click", () => $("#quitDlg").close());
+    $("#quitYes").addEventListener("click", () => { $("#quitDlg").close(); resetTable(false); render(); T.leaving = true; location.hash = leaveTo || "#home"; });
     $("#leaveYes").addEventListener("click", () => { $("#leaveDlg").close(); draft = clone(saved); applyTheme(saved); updateDirty(); T.leaving = true; location.hash = leaveTo || "#table"; });
     window.addEventListener("beforeunload", (e) => { if (document.body.dataset.screen === "settings" && diffKeys().length) { e.preventDefault(); e.returnValue = ""; } });
     const relayout = () => { if (document.body.dataset.screen !== "table") return; renderPrint(); renderDealer(); layoutSeats(); };

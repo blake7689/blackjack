@@ -185,12 +185,17 @@ svg { display: block; }
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 10px 0 8px;
 }
 .stage-in.multi { --fixed: 194px; --cwi: 17cqi; }
+.stage-in.multi:has(.seats.tight) { --fixed: 216px; --rows: 5.254; } /* the room kept under narrow seats for side stacks */
 @media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); padding: 8px 0 6px; } }
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 156px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); padding: 14px 0 12px; } .stage-in.multi { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px), 124px); } /* room for a sideways double in each of three hands */ .stage-in.multi.many { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px), 110px); } }
 .cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; }
 
 .dealer { position: relative; z-index: 3; width: 100%; height: var(--ch); display: flex; justify-content: center; flex: none; }
+/* wide screens between rounds: the dealer's card place printed faintly, so a big empty felt still has a centre (planner M8) */
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  #dHand:not(:has(.card))::before { content: ""; position: absolute; inset: 0; border: 1.5px solid var(--print); border-radius: calc(var(--cw) * .07); opacity: .16; }
+}
 .print { flex: none; width: min(calc(100cqi - 32px), calc(var(--cw) * 5.4)); height: var(--ph); margin-top: auto; overflow: visible; cursor: pointer; border-radius: var(--r2); }
 .print:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
 .mid { flex: none; height: 48px; width: 100%; display: grid; place-items: center; margin-bottom: auto; position: relative; z-index: 4; }
@@ -202,7 +207,7 @@ svg { display: block; }
   .seat::after { content: ""; width: var(--spot); }
   .mid { height: 30px; margin: 4px 0; }
 }
-@media (max-height: 520px) { .stage-in, .stage-in.multi { --fixed: 84px; } .print { position: relative; top: auto; left: auto; width: calc(100% - 32px); height: 24px; margin: 4px 0 0; } .mid { margin: 0 0 4px; } }
+@media (max-height: 520px) { .stage-in, .stage-in.multi { --fixed: 84px; } .print { position: relative; top: auto; left: auto; width: calc(100% - 32px); height: 44px; padding: 10px 0; box-sizing: border-box; margin: -6px 0 -10px; } /* a 44 px hit area, the same 24 px line and footprint */ .mid { margin: 0 0 4px; } }
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) { .print { position: relative; top: auto; left: auto; width: min(calc(100cqi - 32px), calc(var(--cw) * 5.4)); height: var(--ph); margin: auto 0 0; } .mid { height: 56px; margin: 0 0 auto; } .pill { height: 32px; min-width: 40px; padding: 0 12px; border-radius: 16px; font-size: 17px; } .amt { font-size: 15px; } }
 
 /* ================= table objects ================= */
@@ -287,6 +292,11 @@ svg { display: block; }
 
 .side-spot.dbl { left: min(calc(50% + var(--spot) * .5 + 4px), calc(100% - var(--chip) * 1.12)); }
 .side-spot.ins { right: min(calc(50% + var(--spot) * .5 + 4px), calc(100% - var(--chip) * 1.12)); }
+/* narrow portrait seats (three on a phone): no room beside the circle, so the side stacks sit under the amount, in room kept for them */
+.seats.tight .seat { padding-bottom: calc(var(--chip) * 1.66 + 22px); }
+.seats.tight .side-spot { left: 50%; right: auto; top: calc(100% + 32px + var(--chip) * .54); transform: translateX(-50%); } /* bottoms on one line; a 10-chip stack (.54 chip of lift) still clears the amount */
+.seats.tight .spot-row:has(.ins:not([hidden])) .dbl:not([hidden]) { transform: translateX(3px); }
+.seats.tight .spot-row:has(.dbl:not([hidden])) .ins:not([hidden]) { transform: translateX(calc(-100% - 3px)); }
 .side-spot i { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px; font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--print); white-space: nowrap; }
 .amt { height: 22px; margin-top: 4px; font-size: 13px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
 .amt span { padding: 1px 8px; border-radius: 99px; background: rgb(0 0 0 / .32); }
@@ -299,7 +309,7 @@ svg { display: block; }
 .tag.even { background: var(--even); }
 /* landscape phones and wide desktops: the bet circle beside the hand */
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
-  .seats { --spot: min(calc(var(--cw) * 1.0), calc(var(--sw) * .36)); --sw: min(calc(var(--cw) * 4.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n))); }
+  .seats { --spot: max(44px, min(calc(var(--cw) * 1.0), calc(var(--sw) * .36))); /* never under a 44 px target */ --sw: min(calc(var(--cw) * 4.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n))); }
   .stage-in.multi .seat .hand { margin-top: 0; }
   .seat { display: grid; grid-template-columns: var(--spot) auto var(--spot); grid-template-rows: auto auto; column-gap: 10px; align-content: center; justify-content: center; }
   .seat .hand { margin-top: 0; grid-column: 2; grid-row: 1 / span 2; align-self: center; }
@@ -311,8 +321,25 @@ svg { display: block; }
   .seats { margin-top: 6px; }
   .spot-row { grid-column: 1; grid-row: 1; width: var(--spot); height: var(--spot); margin-top: 0; align-self: end; }
   .seat > .amt { grid-column: 1; grid-row: 2; justify-content: center; align-self: start; }
-  .side-spot.dbl { left: auto; right: -8%; top: -8%; transform: none; }
-  .side-spot.ins { right: auto; left: -8%; top: -8%; transform: none; }
+  /* side stacks (double, insurance) sit just above the circle, on the insurance line, never over the bet; side by side when both;
+     the INS label beside its stack (there is no room under it) */
+  .side-spot.dbl, .side-spot.ins { left: 50%; right: auto; top: auto; bottom: calc(100% + 4px); transform: translateX(-50%); }
+  .spot-row:has(.ins:not([hidden])) .dbl:not([hidden]) { transform: translateX(3px); }
+  .spot-row:has(.dbl:not([hidden])) .ins:not([hidden]) { transform: translateX(calc(-100% - 3px)); }
+  .side-spot i { left: auto; right: 100%; top: 50%; transform: translateY(-50%); margin: 0 4px 0 0; }
+}
+/* landscape phones: no room above the circle (the print and the verdict are there), so the side stacks go on its outer side;
+   the circle's column grows to hold them (one seat: both outer columns, so the hand stays centred; several: the fan closes up) */
+@media (max-height: 520px) {
+  /* three seats: cards small enough that a sideways double and a side stack both fit each seat (3.664 card widths + 70 px) */
+  .stage-in.multi { --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px, ((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n) - 70px) / 3.664), 104px); }
+  .seat.sides { grid-template-columns: calc(var(--spot) + var(--chip) * 1.12 + 6px) auto calc(var(--spot) + var(--chip) * 1.12 + 6px); }
+  .stage-in.multi .seat.sides { grid-template-columns: calc(var(--spot) + var(--chip) * 1.12 + 6px) auto 44px; }
+  .seat.sides .spot-row, .seat.sides > .amt { justify-self: end; width: var(--spot); }
+  .side-spot.dbl, .side-spot.ins { left: auto; right: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
+  .spot-row:has(.ins:not([hidden])) .dbl:not([hidden]) { transform: translateY(-100%); }
+  .spot-row:has(.dbl:not([hidden])) .ins:not([hidden]) { transform: none; }
+  .side-spot i { left: 50%; right: auto; top: 100%; transform: translateX(-50%); margin: 2px 0 0; }
 }
 
 /* verdict: one line on the felt between dealer and player, never over a card */
@@ -427,7 +454,8 @@ svg { display: block; }
 .s-title { margin: 0; font-family: var(--f-disp); font-weight: 600; font-size: 20px; letter-spacing: .02em; }
 .s-nav { grid-column: 1 / -1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 2px 12px 0; }
 .s-nav::-webkit-scrollbar { display: none; }
-.s-nav { mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); }
+.s-nav { --fl: 0px; --fr: 0px; mask-image: linear-gradient(90deg, transparent, #000 var(--fl), #000 calc(100% - var(--fr)), transparent); }
+.s-nav.fade-l { --fl: 48px; } .s-nav.fade-r { --fr: 48px; } /* a tab cut by the edge fades out: more tabs that way */
 .s-nav a { flex: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 10px; font-size: 14px; font-weight: 500; color: var(--tx-2); text-decoration: none; border-bottom: 2px solid transparent; white-space: nowrap; }
 .s-nav a[aria-current="true"] { color: var(--tx); border-bottom-color: var(--accent); }
 .s-body { max-width: 680px; margin: 0 auto; padding: 0 16px; }
@@ -468,6 +496,9 @@ svg { display: block; }
 .slider { padding: 12px 0 8px; border-bottom: 1px solid var(--line); }
 .slider.off { opacity: .45; }
 .slider.off output { color: var(--tx-3); }
+.slider.off input::-webkit-slider-runnable-track { background: linear-gradient(90deg, var(--tx-3) var(--pct), var(--surf-3) var(--pct)); } /* off: grey, never the accent */
+.slider.off input::-moz-range-track { background: linear-gradient(90deg, var(--tx-3) var(--pct), var(--surf-3) var(--pct)); }
+.slider.off input::-webkit-slider-thumb { box-shadow: 0 2px 8px rgb(0 0 0 / .4); }
 .slider .top-l { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
 .slider label { font-size: 15px; font-weight: 500; }
 .slider output { font-size: 14px; font-weight: 700; color: var(--accent-tx); font-variant-numeric: tabular-nums; }
@@ -531,6 +562,7 @@ svg { display: block; }
 .ferr { color: #ff8f84; font-size: 13px; font-weight: 600; }
 [data-mode="light"] .ferr { color: #b3261e; }
 #saveBtn[aria-disabled="true"] { opacity: .45; pointer-events: none; }
+.form .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; } /* still focusable and submittable: submit shows every field's error */
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 .sec.danger h2 { color: var(--lose); }
 /* save bar */
@@ -635,6 +667,7 @@ body[data-clean] .demo-tab { display: none; }
 .hero .hc { position: absolute; width: 74px; border-radius: 5px; overflow: hidden; background: #fff; box-shadow: 2px 8px 12px rgb(0 0 0 / .45); }
 .hero .hc img { display: block; width: 94%; margin: 2.2% 3%; }
 .hero .hc svg { display: block; width: 100%; }
+.hero .hc, .hero .hchip { left: round(down, 50%, 1px); top: round(down, 50%, 1px); } /* flat, on whole pixels: a dealt hand, no tilt */
 .hero .hchip { position: absolute; width: 50px; filter: drop-shadow(1px 4px 3px rgb(0 0 0 / .5)); }
 .signed { font-size: 13px; color: var(--tx-3); }
 .signed a { color: var(--tx-2); }

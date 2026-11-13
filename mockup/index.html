@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#070908">
-<title>Blakejack - UI mockup round 5 (#78)</title>
+<title>Blakejack - UI mockup round 6 (#78)</title>
 <link rel="preconnect" href="https://api.fontshare.com">
 <link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
 <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap">
@@ -110,9 +110,15 @@
   <div class="dlg-act"><button class="btn plain" type="button" id="leaveNo">Keep editing</button><button class="btn primary" type="button" id="leaveYes">Discard and leave</button></div>
 </dialog>
 
+<dialog id="quitDlg" class="dlg" aria-labelledby="quitT" aria-describedby="quitD">
+  <h2 id="quitT">Leave game and return Home?</h2>
+  <p id="quitD">Any bet in the circle will be lost.</p>
+  <div class="dlg-act"><button class="btn plain" type="button" id="quitNo">Keep playing</button><button class="btn primary" type="button" id="quitYes">Leave</button></div>
+</dialog>
+
 <dialog id="resetDlg" class="dlg" aria-labelledby="resetT">
   <h2 id="resetT">Start a new shoe?</h2>
-  <p>New table rules start with a fresh shoe. The hand in play ends and its bets come back to you.</p>
+  <p>New table rules start with a fresh shoe. The hand in play ends and any bets on it are lost.</p>
   <div class="dlg-act"><button class="btn plain" type="button" id="resetNo">Cancel</button><button class="btn primary" type="button" id="resetYes">Save and reset</button></div>
 </dialog>
 

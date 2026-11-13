@@ -1,4 +1,4 @@
-# Blakejack design system (round 5)
+# Blakejack design system (round 6)
 
 Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
 
@@ -153,7 +153,7 @@ One column; the dealer is always above the player; everything centres on the fel
 | Card back | `#cardback` | Graphite ground, white border, lattice, wave lines and a guilloche rosette in the accent, the wordmark on a pill-shaped plate across the centre |
 | Chip | `#chip-<v>` (numeral) / `#chip-<v>-p` (diamond) / `#side-<v>` | Ceramic: flat printed face; eight edge blocks with five fine lines each, dots between, a ring, a hatched band, a centre disc with the numeral; a light diagonal gloss and a thin rim |
 | Chip stack | `stackSVG()`, `.stack` | One SVG. Biggest chip at the bottom, its face centred on the circle (`--k` anchors it); each chip above is lifted up the screen by its thickness, so the lower edges show and the top chip is whole. Up to 10 chips drawn |
-| Bet circle | `.spot`, `.side-spot.dbl/.ins`, `.amt` | Printed double ring, "BET" when empty (breathing), accent ring when active. Double and insurance stacks sit beside it at table chip size |
+| Bet circle | `.spot`, `.side-spot.dbl/.ins`, `.amt` | Printed double ring, "BET" when empty (breathing), accent ring when active. Double and insurance stacks at table chip size, never over the bet (where they go per layout: section 8, Layout) |
 | Total | `.pill` (`.soft`, `.bust`, `.bj`, `.on`) | Dark glass; soft totals "7/17" |
 | Felt print | `renderPrint()` | "BLAKEJACK PAYS 3 TO 2" / "6 TO 5"; "DEALER HITS SOFT 17" or "DEALER STANDS ON ALL 17s" · mode; the insurance band (hidden when insurance is off) |
 | Verdict | `.verdict.<kind>` | One word on the felt, never over a card; several hands show the net plus a tag under each bet. The message line says "Your move" for every hand (no "hand 1 of 2": the lit circle and the lamp show which) |
@@ -186,20 +186,23 @@ One centred arc between the dealer and the player at every size. A landscape pho
 Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips the balance covers (with $1,250 that is seven). When they fit they are evenly spaced; when they do not, the rack holds exactly k whole chips, scrolls by whole chips (snap), hides anything in its padding and shows a chevron on a side with more chips, so no chip is ever cut at rest. Outside betting the rack dims and takes no taps. A half dollar is not drawn as a chip; the amount label is exact.
 
 ### Settings (B2, B5, I3, I7, I12)
-- Hidden rules (one list, `hiddenKeys`): EU-only rules (`dealerDrawsOnPlayerBlackjack`, `dealerDrawsOnPlayerBust`, `dealerDrawsOnceOn21`) hide in US modes; "Blakejack pays immediately" hides under a peek; "If the dealer has Blakejack" hides under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
+- Hidden rules (one list, `hiddenKeys`): EU-only rules (`dealerDrawsOnPlayerBlackjack`, `dealerDrawsOnPlayerBust`, `dealerDrawsOnceOn21`) hide in US modes; "Blakejack pays immediately" hides under a peek; "If the dealer has blackjack" hides under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
 - **Leaving with unsaved changes** (Back, the menu, Home, Log out) asks "Discard your changes?" (Keep editing / Discard and leave); a page unload uses the browser's own prompt.
-- **Saving a rule that resets the table** (`RESET_SETTINGS`) mid-round asks "Start a new shoe?" (Cancel / Save and reset): the hand ends, its stakes come back, a new shoe is dealt. Between rounds it deals the new shoe without asking.
-- **Profile fields:** an empty first or last name shows "Enter your first name." under the field (`aria-invalid`, `aria-describedby`), and Save is blocked ("Fix 1 field to save").
-- Sound and vibration are **off by default**; there is one "Sound" switch (no separate card sounds), Volume is disabled while Sound is off, Auto deal delay while Auto deal is off.
+- **Saving a rule that resets the table** (`RESET_SETTINGS`) mid-round asks "Start a new shoe?" (Cancel / Save and reset): the hand in play ends and any bets on it are lost (as `resetTable`: only an undealt circle bet comes back), a new shoe is dealt. Between rounds it deals the new shoe without asking.
+- **Profile fields:** an empty first or last name shows "Enter your first name." under the field (`aria-invalid`, `aria-describedby`), and stays unsaved with its error, but never blocks the settings: Save saves everything else and the bar then reads "1 unsaved change" (the field). With only the invalid field changed, Save is disabled.
+- Sound and vibration are **off by default**; there is one "Sound" switch (no separate card sounds), Volume is disabled while Sound is off, Auto deal delay while Auto deal is off. A disabled slider is grey (track fill and thumb ring), never the accent.
+- The section nav (phones) scrolls sideways: the edge with more tabs past it fades over 48 px, and the current section's tab scrolls into view.
 - Labels are sentence case and never repeat the chosen value ("Max hands after splits", "Deck size").
 
 ### Screens (I8)
-- **Table rules sheet:** a bottom sheet on phones, a centred panel from 720 px, opened from the menu, Home's Rules and the felt print. Preset name, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English, hidden rules left out; Close and Change rules.
-- **Home:** the wordmark, a felt hero (two cards and a chip), Play / Rules / Settings, "Signed in as … · Log out".
-- **Login:** labelled fields that keep their placeholders; **waking** state (spinner, "Waking up the table. The first sign-in can take up to 30 seconds.", the button reads "Signing in..."); **error** state (one alert, both fields `aria-invalid`).
+- **Table rules sheet:** a bottom sheet on phones, a centred panel from 720 px, opened from the menu, Home's Rules and the felt print. Preset name, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English, hidden rules left out; Close and Change rules. Even money is listed only when the mode offers it (`offersAtDeal`: not when your blackjack already pays at once). "Blakejack" names only the player's natural; the dealer's is "blackjack" everywhere.
+- **Home:** the wordmark, a felt hero (two cards lying flat, as dealt, on whole pixels, and a chip), Play / Rules / Settings, "Signed in as … · Log out".
+- **Login:** "Log in" (heading and button: the e2e and live smoke click the button by that name); labelled fields that keep the app's placeholders: label "Username or email", placeholder **"Username or Email"** (e2e `fixtures.js` and the live smoke fill it by placeholder; never change it), "Password". **Waking** state (spinner, "Waking up the table. The first log-in can take up to 30 seconds.", the button reads "Logging in..."); **error** state (one alert, both fields `aria-invalid`).
+- **Create an account** (`#login/signup`, from "Create an account" under the form): the app's five fields in its order, each labelled, with its placeholder: Username, Email, Password, First name, Last name. Errors show under a field once it is typed in or left, in the app's words ("Username must be at least 3 characters.", "Invalid email format.", "Password is required." …, `aria-invalid` + `aria-describedby`); "Create account" stays disabled until all five are valid; "Have an account? Log in" goes back.
 - **Loading:** three card backs dealt in a loop, "Shuffling up...". **Error:** "Can't reach the table", Try again, Home.
 - **Message line notices:** "Reconnecting..." with a pulsing dot (dock busy); a refused bet in a soft coral. "Last hand before the shuffle" shows once the cut card is drawn.
-- **Out of credits:** with nothing affordable the rack becomes a note ("Out of credits. Your balance is $0."), the message line says so, and the keys are off.
+- **Out of credits:** with nothing affordable the rack becomes a note with an info icon ("Out of credits. Your balance is $0."), the message line says so, and nothing that bets is live: Rebet is off unless a last bet is affordable (as 2x), the bet circle is idle (no glow, no breathing, disabled) and the keys follow the dock (Space, B, X, 1-9 do nothing). The balance taps for the hidden top-up still work.
+- **Leaving the table mid-round** (menu Home, once cards are out: any phase but betting and shuffling, as the app's Home button) asks "Leave game and return Home?" / "Any bet in the circle will be lost." (Keep playing / Leave); Leave ends the round as `resetTable` does.
 - **Hidden top-up (#90):** 7 taps in 3 s on the balance (only while the balance is under $100, betting, nothing on the table) create a dialog: "Enter code", a labelled field, Submit / Cancel. Nothing about it exists in the DOM before the 7th tap, and every refusal shows the same "That didn't work." It is removed from the DOM on close.
 
 ### Layout (I5, I6, I9, M2, M6)
@@ -207,6 +210,9 @@ Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips
 - One column (`--col` 1240 px) for the top bar, the felt and the dock, so they line up at 1920x1080.
 - The tip line (#3) sits above the dock at 0 px while empty.
 - With several hands, the hands not in play dim to 62 %. The dealer is laid out after the seats (a seat count change resizes the cards).
+- **Side stacks (double, insurance), round 6:** never over the bet. Portrait with room: beside the circle (insurance left, double right). Narrow portrait seats (three on a phone): under the amount, in room the seats keep for them, so nothing moves when one appears. Wide screens: just above the circle, on the insurance line, side by side when both, "INS" beside its stack. Landscape phones (no room above: the print and the verdict are there): on the circle's outer side, the circle's column growing to hold them (one seat: both outer columns, so the hand stays centred; several: the fan closes up); three seats cap the card width so a sideways double and a side stack both fit. The layout check now fails any side stack touching the bet, a card, a label, the print or another side stack, at all seven sizes and 667x375.
+- **Hit areas:** the landscape print is a 44 px button around its 24 px line (same look and footprint); a bet circle is never under 44 px.
+- **Wide screens between rounds:** the dealer's card place is printed faintly (one card outline, 16 %) so the empty felt has a centre; it goes as soon as a card is dealt.
 
 ### Keys (I10)
 H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 pick a chip (desktop shows the digit on each rack chip); U undo, C clear, B rebet, X 2x.
