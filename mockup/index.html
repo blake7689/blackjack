@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en" data-felt="green" data-accent="emerald" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#070908">
+<title>Blakejack - UI mockup round 2 (#78)</title>
+<link rel="preconnect" href="https://api.fontshare.com">
+<link rel="preconnect" href="https://cdn.fontshare.com" crossorigin>
+<link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=clash-display@500,600,700&f[]=satoshi@400,500,700,900&display=swap">
+<link rel="stylesheet" href="mockup.css">
+</head>
+<body data-screen="table">
+<div id="spriteHost" hidden></div>
+
+<!-- ===================== TABLE ===================== -->
+<div id="table" class="screen table-screen">
+  <header class="top">
+    <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
+    <svg class="wm top-wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>
+    <!-- the balance sits at a fixed place after the wordmark; what is on the right never moves it. The hidden top-up listens on this box: no role, tabindex or aria on it (#90) -->
+    <div class="bal" id="balBox"><span class="bal-top"><span class="bal-lbl">Balance</span><span id="delta" class="delta num" hidden></span></span><b id="bal" class="num">$1,250</b></div>
+    <div class="top-r">
+      <div id="count" class="count" title="Hi-Lo running count, and the true count (running count per deck left in the shoe)"><span><i>Count</i><b id="countVal" class="num">+3</b></span><span><i>True</i><b id="trueVal" class="num">+0.5</b></span></div>
+      <span class="tip-slot" aria-hidden="true"></span>
+      <a class="icon-btn" href="#settings" aria-label="Settings"><svg aria-hidden="true"><use href="#i-settings"/></svg></a>
+    </div>
+    <nav id="menu" class="menu" hidden aria-label="Menu">
+      <a class="menu-i" href="#settings/sec-rules"><svg aria-hidden="true"><use href="#i-rules"/></svg>Table rules</a>
+      <button class="menu-i" type="button" data-toast="Analytics arrives with #15"><svg aria-hidden="true"><use href="#i-chart"/></svg>Analytics <small>Soon</small></button>
+      <a class="menu-i" href="#settings"><svg aria-hidden="true"><use href="#i-settings"/></svg>Settings</a>
+      <hr>
+      <p class="menu-h" id="menuFelt">Felt</p>
+      <div class="swatches" role="radiogroup" aria-labelledby="menuFelt" data-swatches="menu"></div>
+      <hr>
+      <button class="menu-i" type="button" data-toast="Log out is not wired in the mockup"><svg aria-hidden="true"><use href="#i-logout"/></svg>Log out</button>
+    </nav>
+  </header>
+
+  <main class="room">
+    <div class="felt" id="felt">
+      <div class="felt-light" aria-hidden="true"></div>
+      <div class="mood" aria-hidden="true"></div>
+      <div class="rail" aria-hidden="true"></div>
+      <div class="stage" id="stage">
+        <div class="stage-in" id="stageIn">
+        <i class="cw-probe" id="cwProbe" aria-hidden="true"></i>
+        <!-- the shoe is off the table: only the corner of its top card shows (and the cut card, once drawn) -->
+        <div class="shoe" id="shoeBox" aria-hidden="true">
+          <div class="cut-card"></div>
+          <svg class="shoe-card" viewBox="0 0 250 363"><use href="#cardback"/></svg>
+          <i class="mouth" id="mouth"></i>
+        </div>
+        <section class="dealer" aria-label="Dealer">
+          <div id="dHand" class="hand dealer-hand" role="img" aria-label="Dealer has no cards"></div>
+        </section>
+        <svg id="print" class="print" role="img" aria-label="Table rules printed on the felt"></svg>
+        <div class="mid"><p id="msg" class="msg" role="status" aria-live="polite"></p></div>
+        <section id="seats" class="seats" aria-label="Your seats"></section>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer id="dock" class="dock" aria-label="Controls"><div class="dock-in" id="dockIn"></div></footer>
+</div>
+
+<!-- ===================== SETTINGS ===================== -->
+<div id="settings" class="screen settings-screen" hidden>
+  <header class="s-head">
+    <a class="back" href="#table"><svg aria-hidden="true"><use href="#i-back"/></svg><span>Table</span></a>
+    <h1 class="s-title">Settings</h1>
+    <nav class="s-nav" id="sNav" aria-label="Settings sections"></nav>
+  </header>
+  <div class="s-body" id="sBody"></div>
+  <div id="dirty" class="dirty" hidden role="region" aria-label="Unsaved changes">
+    <span id="dirtyTxt" class="dirty-txt" aria-live="polite"></span>
+    <button class="btn plain" type="button" id="discardBtn">Discard</button>
+    <button class="btn primary" type="button" id="saveBtn">Save changes</button>
+  </div>
+</div>
+
+<!-- ===================== BRAND (round 1 options) ===================== -->
+<div id="brand" class="screen brand-screen" hidden></div>
+
+<!-- ===================== DEMO (mockup only, not part of the product) ===================== -->
+<aside id="demo" class="demo" aria-label="Demo controls">
+  <button id="demoToggle" class="demo-tab" type="button" aria-expanded="false" aria-controls="demoBody">Demo</button>
+  <div id="demoBody" class="demo-body" hidden></div>
+</aside>
+
+<div id="fx" class="fx" aria-hidden="true"></div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<dialog id="delDlg" class="dlg" aria-labelledby="delT">
+  <h2 id="delT">Delete profile?</h2>
+  <p>This removes your account, balance and history. It cannot be undone.</p>
+  <div class="dlg-act"><button class="btn plain" type="button" id="delNo">Keep my profile</button><button class="btn danger" type="button" id="delYes">Delete for good</button></div>
+</dialog>
+
+<script src="rules.js"></script>
+<script src="mockup.js"></script>
+</body>
+</html>

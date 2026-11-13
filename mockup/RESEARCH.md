@@ -1,0 +1,34 @@
+# Blakejack round 1: what the best card apps do, and what we take
+
+Survey for blackjack#78 round 1 (2026-11-12). Sources: the web pages listed at the end, plus the well-known public look of each product (store screenshots, trailers). The web search turned up mostly affiliate review pages, so anything below that is not in a listed source is a description of the product's public look, not a quoted fact.
+
+## The field
+
+| Product | What it does best | What Blakejack takes |
+|---|---|---|
+| **Evolution live blackjack** (Infinite, Lightning, classic tables) | The table *is* the screen: a real dealer and a real felt filmed from above, with a thin UI layer floating over it. Chips sit in one arc at the bottom, with Undo / Double / Repeat next to them. Hand totals are small dark badges stuck to the cards. Decisions are a few large round buttons. Reviews praise its predictable chip and bet-spot layout and its drag-free betting. | Real objects under real light, UI as a thin flat layer on top. Total badges ride the corner of the hand (never a separate row). Chip choice and bet controls live together at the bottom. Undo / Clear / Rebet / 2x as one row. |
+| **Lightning / game-show live tables** | One special moment per round (the lightning strike, the multiplier reveal) staged with light, not with extra UI. | **Light as the result.** Our felt's lamp brightens and blooms toward the player on a win and drops on a loss: the round's outcome is read before any word. |
+| **Stake Originals blackjack** (and similar crypto-casino tables) | Brutally simple: dark flat UI, two huge Hit / Stand buttons, fast animation, win/loss highlighting on each hand once settled. Feels like a tool, not a casino. | The dark, flat, fast UI and the big two-button decision row (Stay / Hit at the bottom, Hit in the accent). Per-hand result tags once a round settles. |
+| **Fanatics / DraftKings live tables** (US apps, App Store 4.6-4.7) | Mobile-first live blackjack in portrait: video on top, controls in thumb reach, an obvious primary action, the balance always visible. | Phone portrait first; the balance always in the top strip; one primary action per state, always in the same place. |
+| **Top App Store blackjack games** (MobilityWare *Blackjack*, OutOfTheBit *Blackjack*, 4.5-4.7 across 40K-140K ratings) | Big readable cards, the bet spot on the felt, rules printed on the felt, quick rebet. Also what not to do: glossy gold buttons, stock casino fonts, banner ads over the table. | Rules printed on the felt (pays 3 to 2, soft 17, insurance band) as the only "decoration". We reject their gold-and-gloss chrome. |
+| **Balatro** | Strong art direction with almost no buttons; every scoring event stacks feedback (card bounce, numbers rolling up, colour coding, sound). Cards lift on hover, tilt a few degrees for an organic feel; the score counts up instead of jumping. | Counting numbers (balance counts up and down), slight random card rotation (+/- 0.8 deg here, it is a real table), a verdict that pops with a spring. Colour as a label: win green, lose coral, push grey, accent for Blakejack. |
+| **Card Thief** (German Developer Award best game design 2017) and **polished solitaire** apps | Cards treated as physical objects with weight; a dark, quiet table; the interface disappears while you play. | Weighty card motion (slide out of the shoe, settle, then turn over), a quiet room around the table, chrome that stays out of the way. |
+
+## What none of them do: the Blakejack signature
+
+1. **One lamp, one light model.** Everything on the table (cards, chips, shoe, tray) is drawn lit from one overhead lamp: highlights top-left, shade bottom-right, and cast shadows that fall *away from the lamp*, computed from each object's position. The lamp follows the hand in play. Results change the light: a win blooms in the accent from the player's edge, Blakejack also sweeps a sheen across the cloth, a loss dims the room. No live app does this without a video feed; no RNG app lights its table at all.
+2. **The table is a real object, the UI is not.** Real card faces at real proportions, small printed ceramic chips with a thin edge, and only the corner of the top card peeking out of a shoe that sits off the table (round 2: no shoe box, no dealer tray). Every control around it is flat, dark and modern. The contrast is the point: the money looks real, the software looks like software.
+3. **The verdict line.** The result is one word on the felt, between dealer and player, in the display face ("WIN +$25", "BLAKEJACK!"), never a box over the cards. With several hands it shows the net and each hand gets a small tag under its bet.
+4. **The wordmark on the card back.** The card back is ours: a graphite back with a guilloche rosette in the accent colour and the drawn "Blakejack" wordmark across the centre, so every face-down card carries the brand and changes with the accent theme.
+5. **Felt print that is the rule sheet.** "BLAKEJACK PAYS 3 TO 2", "DEALER HITS SOFT 17 · DEALER PEEKS" and the insurance band are drawn from the live rule settings, so the table always tells the truth about the game you chose.
+
+## Sources
+- [Balatro: juicy feedback in a poker roguelike (Blake Crosley design guide)](https://blakecrosley.com/guides/design/balatro): layered feedback, card lift and tilt, rolling numbers, colour as label.
+- [Balatro's 'Cursed' Design Problem (GMTK)](https://gmtk.substack.com/p/balatros-cursed-design-problem)
+- [FanDuel: Live Dealer Infinite Blackjack review](https://www.fanduel.com/research/theduel/live-dealer-infinite-blackjack-fanduel-casino-review-01fvd85jn2f9): simple layout, easy chip handling, menu bar for settings.
+- [Live dealer blackjack overview (DeucesCracked)](https://www.deucescracked.com/casino/blackjack/live-dealer-blackjack) and [live-dealer mobile trends 2026](https://www.deucescracked.com/blog/live-dealer-mobile-casino-trends-2026-streaming-ai): mobile share of live play, thumb-reach controls.
+- [Lightning Blackjack (casinos.com)](https://www.casinos.com/games/lightning-blackjack), [Easy Blackjack (casinos.com)](https://www.casinos.com/games/easy-blackjack): chip value, repeat, double and undo controls.
+- [Escapist: best blackjack apps 2026](https://www.escapistmagazine.com/guides/best-blackjack-apps/), [VegasInsider: blackjack apps](https://www.vegasinsider.com/casinos/blackjack/apps/): Fanatics and DraftKings ratings.
+- [AppFollow: Blackjack (iOS)](https://apps.appfollow.io/ios/blackjack/289523017?country=us): store ratings of the casual blackjack games.
+- [SlotCatalog: Blackjack (Stake Originals)](https://slotcatalog.com/en/slots/Blackjack-Stake-Originals), [TheSpike: Stake Originals](https://www.thespike.gg/reviews/stake-com/originals): dark minimal UI, per-hand win/loss highlighting.
+- [Pocket Gamer: Card Thief](https://www.pocketgamer.com/card-thief/) and [Card Thief hub](https://www.pocketgamer.fr/games/026999/card-thief): awards.
