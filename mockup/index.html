@@ -16,9 +16,11 @@
 <!-- ===================== TABLE ===================== -->
 <div id="table" class="screen table-screen">
   <header class="top"><div class="top-in">
-    <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
-    <svg class="wm top-wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>
-    <!-- the balance sits at a fixed place after the wordmark; what is on the right never moves it. The hidden top-up listens on this box: no role, tabindex or aria on it (#90) -->
+    <div class="top-l">
+      <button id="menuBtn" class="icon-btn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg aria-hidden="true"><use href="#i-menu"/></svg></button>
+      <svg class="wm top-wm" viewBox="-2 -2 276 64" role="img" aria-label="Blakejack"><use href="#wordmark"/></svg>
+    </div>
+    <!-- the balance is centred on the bar (equal side columns: nothing at either side moves it). The hidden top-up listens on this box: no role, tabindex or aria on it (#90) -->
     <div class="bal" id="balBox"><span class="bal-top"><span class="bal-lbl">Balance</span><span id="delta" class="delta num" hidden></span></span><b id="bal" class="num">$1,250</b></div>
     <div class="top-r">
       <div id="count" class="count" title="Hi-Lo running count, and the true count (running count per deck left in the shoe)"><span><i>Count</i><b id="countVal" class="num">0</b></span><span><i>True</i><b id="trueVal" class="num">0</b></span></div>
@@ -79,7 +81,6 @@
   <header class="s-head">
     <a class="back" href="#table"><svg aria-hidden="true"><use href="#i-back"/></svg><span>Table</span></a>
     <h1 class="s-title">Settings</h1>
-    <nav class="s-nav" id="sNav" aria-label="Settings sections"></nav>
   </header>
   <div class="s-body" id="sBody"></div>
   <div id="dirty" class="dirty" hidden role="region" aria-label="Unsaved changes">

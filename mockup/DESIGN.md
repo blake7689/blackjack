@@ -1,4 +1,4 @@
-# Blakejack design system (round 7)
+# Blakejack design system (round 8)
 
 Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
 
@@ -9,15 +9,18 @@ Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.c
 |---|---|---|---|
 | Look | Brass, leather and serif "luxury" | Modern dark premium: near-black UI, one accent, real objects on a lit felt | Blake rejected the first look (round 1) |
 | Fonts | One self-hosted display font + system UI | Clash Display (display) + Satoshi (UI), both from Fontshare; self-host one woff2 each | Round 1 direction; licence to be checked |
-| Rules presets | Preset tiles with summaries | One compact preset selector; Custom is a state, not a choice | Blake, round 1 feedback |
-| Rules layout | Collapsed Customize / House variations / Advanced groups | Flat sections (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced), hidden rules not shown | Blake, round 1 |
-| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice: Peeks / No peek / No hole card (= dealerHoleBehaviour) | Planner I7 |
+| Rules presets | Preset tiles with summaries | A compact dropdown (button + listbox) showing the preset and its house edge; "Custom" when any rule is changed (a state, not a choice) | Blake, rounds 1 and 7 |
+| Rules layout | Collapsed Customize / House variations / Advanced groups | Every Settings section is collapsible and **collapsed by default**, its header naming it and summing up its values; inside Table rules, flat groups (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced), hidden rules not shown | Blake, rounds 1 and 7 |
+| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice "Dealer's second card": Peeks / No peek / **No second card** (= dealerHoleBehaviour) | Planner I7, Blake round 7 |
 | Shoe | A shoe in the top strip | Only the corner of the top card, at the felt's top-right; the shoe is off the table | Blake, round 1 |
 | Card width | 44-120 px | 40-156 px, whole pixels, from `--cwr` (section 4) | Readable cards on large screens (round 2) |
 | Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 (compact stacks that build the right way) |
 | Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; past that it scrolls by whole chips, no chip cut at rest | Blake: chips never clip |
 | Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blakejack!" | Blake rounds 1-3 |
-| Brand strings | "Blakejack on Split", "Blakejack Pays" … (Title Case) | Sentence case: "Blakejack on split", "Blakejack pays" … | Planner I12 |
+| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **In Settings the hand is "blackjack"** ("Blackjack pays", "Blackjack on split", "If the dealer has blackjack", "Blackjack pays immediately"): Blakejack is only the app's name. The felt print ("BLAKEJACK PAYS 3 TO 2"), the player's natural badge ("Blakejack!") and the Table rules sheet keep the brand word until Blake says otherwise. Sentence case everywhere | Blake round 7 (overrides the spec's Brand list for Settings) |
+| Hand totals | Always shown | A display setting **Show hand totals** (`showTotals`, on by default): off hides every total pill, the player's and the dealer's, in every phase (visibility, so nothing moves) and drops the total from the hands' accessible names. Not a rule key: no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets | Blake round 7 |
+| Dealer's cards | Overlapped as dealt | The up card **stands alone**: a clear gap (14 % of a card, at least 8 px) after it; the hole card and later cards fan after the gap | Blake round 7 |
+| Top bar | Balance after the wordmark | **Balance centred** on the bar (equal outer columns, so nothing beside it moves it), a sleeker bar (44-52 px, no boxes): menu and wordmark left, count and Settings right | Blake round 7 |
 | Tip slot (#3) | Reserved line above the action bar | Kept: `.tip-line` above the dock, 0 px while empty | — |
 | Split dealing | Not in the spec | **New rule key `splitDeal`** ("Deal split hands": One at a time / Both at once), default "one" for new players. **Needs its own issue:** `LEGACY_RULES.splitDeal = "both"`, a `SETTINGS_VERSION` bump and its `RULE_SINCE` entry, so saved settings keep today's "Both at once" | Blake, round 2 + B1 decision |
 | Doubles | The double card lands sideways (shipped); #66 face-down double | Both designed (section 5): sideways double card; a face-down double lands sideways and face down and turns over at REVEAL_HIDDEN | Blake, B4 decision |
@@ -144,7 +147,7 @@ One column; the dealer is always above the player; everything centres on the fel
 ## 5. Components
 | Component | Code | Notes |
 |---|---|---|
-| Top bar | `.top` | Menu button, wordmark, then the balance at a fixed place right after the wordmark (left-anchored: the count box or anything on the right never moves it; plain text, the hidden top-up listens here: no role/tabindex/aria) with its change badge beside the label; on the right the count box, the reserved empty tip slot (`.tip-slot`), Settings |
+| Top bar | `.top` | One quiet row, no boxes, three columns with equal outer ones: menu + wordmark left; the **balance centred** on the bar (label "Balance" over the number on phones, one line on wide screens and landscape; plain text, the hidden top-up listens here: no role/tabindex/aria); count (plain text) + Settings right. The change badge takes the label's place for 2.6 s on phones and sits after the number on wide screens, absolutely placed: the balance never moves. Height 48 px (44 on short phones, 52 desktop, 46 short desktop, 40 landscape) |
 | Count | `#count` | As the app: Hi-Lo over cards seen (the hole card when it is turned), reset on a new shoe; true count = `round(running / max(1, cards left / 52))`, an integer. Values hidden while the opening cards are dealt. Two short lines on phones ("Count +3", "True +1"), one pill on wide screens; hidden when the count is off |
 | Menu | `.menu` | Table rules, Analytics (Soon, #15), Settings, felt swatches, Log out. The wordmark screen is reached from the Demo panel only |
 | Felt + rail | `.felt`, `.rail` | A thin matte rail along the dealer's edge. No chip tray: the dealer's float is off screen above it |
@@ -159,8 +162,8 @@ One column; the dealer is always above the player; everything centres on the fel
 | Verdict | `.verdict.<kind>` | One word on the felt, never over a card; several hands show the net plus a tag under each bet. The message line says "Your move" for every hand (no "hand 1 of 2": the lit circle and the lamp show which) |
 | Dock | `renderDock()`, `.key` | Same height in every state. Betting: rack + Undo, Clear, Rebet, 2x, (Pause/Resume), Deal. Playing: Double, Split, Surrender, (Triple) + Stay, Hit. Offers: Insurance $x / Even money / Surrender + No thanks. Results: net, balance, Next hand |
 | Chip rack | `.rack-wrap .rack .rc` | Every enabled chip on show, evenly spaced, no scrolling and nothing cropped (eight 44 px chips fit in 355 px). The chosen chip lifts 3 px with an accent ring inside its own edge |
-| Settings | `buildSettings()` | One calm page: Rules, Gameplay, Chips, Appearance, Sound & haptics, Account, Danger zone; a sticky section nav (phone) or a quiet index (>= 1100 px); sticky Save/Discard bar |
-| Rules | `renderRules()` | A compact preset selector (Vegas, Atlantic City, Europe, Australia, Singapore, Custom; 3 x 2 on phones, one row from 720 px) and the house edge as one small figure. Below, one group per section: Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced. A preset sets every rule; any hand change makes the selector read Custom (Custom is a state, not a choice). Each rule is a label and a segmented control; the other choices carry their house-edge change as a small grey figure. No paragraphs; the presets' full rule list is their tooltip |
+| Settings | `buildSettings()` | One calm page of disclosure sections, **all collapsed on arrival**: Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account. Each header is a button (`aria-expanded`, `aria-controls`; Enter/Space) in an h2, showing the name, a one-line summary of the current values ("Vegas · 0.6% house edge", "Normal speed · totals on · count on", "12 of 12 chips", "Green felt · Emerald · Dark", "Sound off · vibration off", the player's name) and a dot when that section has unsaved changes; the body is a region. No section nav (the headers are the index). A deep link (`#settings/sec-rules`) opens its section; Save with an invalid name opens Account. The delete action sits apart at the bottom in a thin coral frame, with no title. Sticky Save/Discard bar |
+| Rules | `renderRules()` | A **preset dropdown**: label "Preset", a button showing the preset name and its house edge ("Vegas · 0.6% house edge"); it opens a listbox of the five presets, each with its own edge and a tick on the current one ("Custom" heads the list, not choosable, while rules are edited). Keys: Down/Up/Enter/Space open; arrows, Home/End and a first letter move; Enter/Space choose; Escape closes and returns focus; Tab closes. Below, one group per section: Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations (Blackjack on split, Triple down, …, face-down double), Advanced. A preset sets every rule; any hand change makes it read Custom |
 | Appearance | `.felts`, `.accents`, mode segments | Felt swatches, four accent dots, Dark / Light / Device |
 | Wordmark | `#wordmark`, `assets/brand/*.svg` | "Blakejack" drawn as a monoline geometric logotype: capital B, single-storey a's, an open c, short-armed k's; the j's tittle is a diamond in the accent |
 
@@ -191,7 +194,7 @@ Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips
 - **Saving a rule that resets the table** (`RESET_SETTINGS`) mid-round asks "Start a new shoe?" (Cancel / Save and reset): the hand in play ends and any bets on it are lost (as `resetTable`: only an undealt circle bet comes back), a new shoe is dealt. Between rounds it deals the new shoe without asking.
 - **Profile fields:** an empty first or last name shows "Enter your first name." under the field (`aria-invalid`, `aria-describedby`), and stays unsaved with its error, but never blocks the settings: Save saves everything else and the bar then reads "1 unsaved change" (the field). With only the invalid field changed, Save is disabled.
 - Sound and vibration are **off by default**; there is one "Sound" switch (no separate card sounds), Volume is disabled while Sound is off, Auto deal delay while Auto deal is off. A disabled slider is grey (track fill and thumb ring), never the accent.
-- The section nav (phones) scrolls sideways: the edge with more tabs past it fades over 48 px, and the current section's tab scrolls into view.
+- (Round 6 section-nav fades: superseded in round 8, the nav is gone.)
 - Labels are sentence case and never repeat the chosen value ("Max hands after splits", "Deck size").
 
 ### Screens (I8)
@@ -245,7 +248,7 @@ The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the 
 | button "tester" (player name in the header) | smoke | no name in the top bar; Home "Signed in as …" | update |
 | button "Settings" (exact) | routing, settings, a11y | top bar icon button, `aria-label="Settings"` | keep |
 | button "Back to game" | routing | Settings back button "Table" | update |
-| tabs "Player", "Game", "Dev" (`selected`) | settings, routing, a11y | one page, section nav links (Rules, Gameplay, Chips, Appearance, Sound & haptics, Account, Danger zone); no Dev section designed yet | update |
+| tabs "Player", "Game", "Dev" (`selected`) | settings, routing, a11y | one page of collapsed sections, each a button with `aria-expanded` (Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account): open a section with `getByRole('button', { name: /^Table rules/ })`; no Dev section designed yet | update |
 | label "playTimeout" | dev-setting spec | not in the mockup (Dev not designed) | update when designed |
 | button "Add 10", /^Add \d+$/, `Add ${chipValues[0]}` | most specs, live | rack chip `aria-label="Add 10"` (shows "10") | keep |
 | button "Deal" (exact) | most specs, live | Deal key `aria-label="Deal"` (the "auto" note and the Space hint are not in the name) | keep |
@@ -260,9 +263,16 @@ The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the 
 | text "Credits:" | a11y top-up specs | top bar "Balance" | update |
 | `.stats-panel > div:nth-child(2)` (balance read) | live | `#bal` in the top bar | update |
 | dialog "Enter code", label "Code", "Submit", "Cancel", role alert | top-up specs | same names; the error is `role="alert"` | keep |
-| group names "Soft 17", "Blackjack Pays", "Double On", "Deck size: 6", "Max Hands After Splits: Unlimited", "If the Dealer Has Blackjack, You Lose", "Surrender", "Insurance and Even Money", "Resplit Aces"; options as buttons with `aria-pressed` | settings | sentence case, no value in the label ("Blakejack pays", "Double on", "Deck size", "Max hands after splits", "If the dealer has blackjack, you lose", "Insurance and even money", "Resplit aces"); options are `role="radio"` + `aria-checked` | update |
-| checkbox "Blackjack on Split" | settings | switch "Blakejack on split" (`role="switch"`) | update |
-| preset tile button /^Vegas/ `pressed` | settings | preset `role="radio"` "Vegas" `aria-checked` | update |
+| group names "Soft 17", "Blackjack Pays", "Double On", "Deck size: 6", "Max Hands After Splits: Unlimited", "If the Dealer Has Blackjack, You Lose", "Surrender", "Insurance and Even Money", "Resplit Aces"; options as buttons with `aria-pressed` | settings | open "Table rules" first; sentence case, no value in the label ("Soft 17", "Blackjack pays", "Double on", "Deck size", "Max hands after splits", "If the dealer has blackjack, you lose", "Surrender", "Insurance and even money", "Resplit aces"); options are `role="radio"` + `aria-checked` | update |
+| checkbox "Blackjack on Split" | settings | switch "Blackjack on split" (`role="switch"`), now under House variations | update (role and case) |
+| preset tile button /^Vegas/ `pressed` | settings | the "Preset" dropdown: button named "Preset Vegas 0.6% house edge"; options `role="option"` "Vegas 0.6%" with `aria-selected` (`getByRole('option', { name: /^Vegas/ })` after opening) | update |
 | rule hint text (/insure for half your bet…/, /Give up half your bet…/ …) | settings | no paragraphs in Settings; plain-English lines in the Table rules sheet | update |
 | `.hand-total … .hand-result.Win` / `.Surrendered` | rules specs | result tag `.tag.win` / `.tag.surrender` (several hands), verdict line (one) | update |
 | `.page-bg`, `details[open]`, `.rule-tile, .seg-btn, .rules-section summary, .toggle-row` | settings, a11y | `.settings-screen`; no collapsed groups; `[data-rule]`, `[data-preset]`, `.sw` | update |
+| (new) switch "Show hand totals" | — | Gameplay: `role="switch"` "Show hand totals" | add tests with the setting |
+
+## 10. Round 8 (Blake's round 7 notes)
+- **Dealer's up card alone:** `layoutHand` puts the dealer's first card at 0, then a gap of max(8 px, 14 % of a card); the hole card and every later card fan after it at the usual step. The flights land on those places; the layout check covers every scene.
+- **Show hand totals** (Gameplay, default on): `<html class="no-totals">` hides every `#stageIn .pill` with `visibility` (no layout change, so a mid-round toggle moves nothing); the hands' accessible names drop the total too. Saved like any setting (`showTotals`, a flat boolean).
+- **Preset dropdown, sections, "No second card", Blackjack on split in House variations, "blackjack" in Settings, delete with no title, the centred balance:** see sections 0 and 5.
+- The section nav and the wide-screen index are gone: with every section collapsed the page is one screen of headers.

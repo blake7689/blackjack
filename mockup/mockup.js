@@ -42,15 +42,15 @@
   const edgeDelta = (s, patch) => houseEdge({ ...s, ...patch }) - houseEdge(s);
   const modePatch = (mode, s) => ({ dealerHoleBehaviour: mode, ...(s.blackjackPaysImmediately === (s.dealerHoleBehaviour === "peek") && { blackjackPaysImmediately: mode === "peek" }) });
   const ON_OFF = [{ v: true, l: "On" }, { v: false, l: "Off" }];
-  // Wording: sentence case, the brand name for the game's natural (spec Brand list). The build moves it into ruleCatalog.js.
+  // Wording: sentence case; in Settings the hand is "blackjack" (Blakejack is only the app's name: Blake, round 7). The build moves it into ruleCatalog.js.
   const CATALOG = [
     { key: "deckCount", group: "Shoe", label: () => "Deck size", opts: [1, 2, 4, 6, 8].map((n) => ({ v: n, l: String(n) })) },
     { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", patch: (v, s) => modePatch(v, s),
-      opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for blackjack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No hole card", h: "The dealer takes the second card after you play." }] },
+      opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for blackjack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No second card", h: "The dealer takes the second card after you play." }] },
     { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", opts: [{ v: false, l: "Stands" }, { v: true, l: "Hits" }] },
     { key: "noHoleCardLoss", group: "Dealer", label: () => "If the dealer has blackjack, you lose", show: (s) => s.dealerHoleBehaviour !== "peek",
       opts: [{ v: "all", l: "Everything you staked" }, { v: "original", l: "Only your first bet" }] },
-    { key: "blackjackPayout", group: "Payouts", label: () => "Blakejack pays", opts: [{ v: "3:2", l: "3:2" }, { v: "6:5", l: "6:5" }] },
+    { key: "blackjackPayout", group: "Payouts", label: () => "Blackjack pays", opts: [{ v: "3:2", l: "3:2" }, { v: "6:5", l: "6:5" }] },
     { key: "insurance", group: "Payouts", label: () => "Insurance and even money", opts: ON_OFF },
     { key: "doubleOn", group: "Doubling", label: () => "Double on", opts: [{ v: "any", l: "Any two cards" }, { v: "9-11", l: "Hard 9 to 11" }, { v: "10-11", l: "Hard 10 to 11" }] },
     { key: "doubleAfterSplit", group: "Doubling", label: () => "Double after a split", opts: ON_OFF },
@@ -62,15 +62,15 @@
   ];
   const GROUPS = ["Shoe", "Dealer", "Payouts", "Doubling", "Splitting", "Surrender"];
   const VARIATIONS = [
+    { key: "blackJackOnSplit", label: "Blackjack on split" },
     { key: "tripleDown", label: "Triple down" },
     { key: "tripleDrawsOnBust", label: "Always draw the second triple card, even on a bust", disabled: (s) => !s.tripleDown },
     { key: "doubleFaceDown", label: "Double down card face down" },
   ];
   // the spec's showWhen: EU-only rules hide in US modes; "pays immediately" hides under a peek (the peek already pays at once)
   const ADVANCED = [
-    { key: "blackJackOnSplit", label: "Blakejack on split" },
-    { key: "dealerDrawsOnPlayerBlackjack", label: "EU: dealer draws 2nd card on a player Blakejack", show: (s) => s.dealerHoleBehaviour === "eu" },
-    { key: "blackjackPaysImmediately", label: "Blakejack pays immediately", show: (s) => s.dealerHoleBehaviour !== "peek", forced: (s) => s.dealerHoleBehaviour === "eu" && !s.dealerDrawsOnPlayerBlackjack },
+    { key: "dealerDrawsOnPlayerBlackjack", label: "EU: dealer draws 2nd card on a player blackjack", show: (s) => s.dealerHoleBehaviour === "eu" },
+    { key: "blackjackPaysImmediately", label: "Blackjack pays immediately", show: (s) => s.dealerHoleBehaviour !== "peek", forced: (s) => s.dealerHoleBehaviour === "eu" && !s.dealerDrawsOnPlayerBlackjack },
     { key: "dealerDrawsOnceOn21", label: "EU: dealer draws only once against a 21", show: (s) => s.dealerHoleBehaviour === "eu" },
     { key: "dealerDrawsOnPlayerBust", label: "Dealer draws 2nd card after a player bust", show: (s) => s.dealerHoleBehaviour === "eu" },
   ];
@@ -90,15 +90,15 @@
   /* ================= saved settings and theme ================= */
   const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]; // ALLOWED_CHIPS
   const DEFAULTS = { ...PRESETS.Vegas, tripleDown: false, tripleDrawsOnBust: false, doubleFaceDown: false,
-    splitDeal: "one", speed: 1000, rebet: false, count: true, autoDeal: false, autoDelay: 3000, chips: [...CHIP_VALUES],
+    splitDeal: "one", speed: 1000, rebet: false, count: true, showTotals: true, autoDeal: false, autoDelay: 3000, chips: [...CHIP_VALUES],
     felt: "green", accent: "emerald", mode: "dark", sfx: false, haptics: false, volume: 70, first: "Alex", last: "Morgan" };
-  const STORE = "blakejack-mockup-r5";
+  const STORE = "blakejack-mockup-r8";
   let saved = clone(DEFAULTS);
   try { Object.assign(saved, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch { /* storage blocked */ }
   let draft = clone(saved);
   const persist = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch { /* ignore */ } };
   const applyTheme = (s) => {
-    const h = document.documentElement; h.dataset.felt = s.felt; h.dataset.accent = s.accent;
+    const h = document.documentElement; h.dataset.felt = s.felt; h.dataset.accent = s.accent; h.classList.toggle("no-totals", s.showTotals === false); // every total pill hides, the layout stays
     h.dataset.mode = s.mode === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark") : s.mode;
     $('meta[name="theme-color"]').content = getComputedStyle(h).getPropertyValue("--bg").trim();
   };
@@ -230,14 +230,18 @@
   // step: at most .62 of a card (a dealer's spread), never under .27 (the rank and suit corner is 20 % of the card)
   function layoutHand(box, cards, maxW, pillMode) {
     const w = cw(), h = chH(), n = cards.length; const extra = n && cards[n - 1].side ? h - w : 0; // a sideways card is as wide as a card is tall
-    const step = n > 1 ? Math.round(Math.min(w * 0.62, Math.max(w * 0.27, (maxW - w - extra) / (n - 1)))) : 0;
-    const bw = n ? w + step * (n - 1) + extra : w; const was = box.getBoundingClientRect().left;
+    const dealer = box.id === "dHand" && n > 1; const fan = dealer ? n - 1 : n; // the dealer's up card stands alone; the cards after it overlap
+    const minStep = w * (dealer ? 0.22 : 0.27); // a step never hides the corner index (20 % of the width)
+    const gap = dealer ? Math.max(0, Math.min(Math.max(8, Math.round(w * 0.14)), Math.floor(maxW - 2 * w - extra - minStep * (fan - 1)))) : 0; // a clear gap; only a very long hand narrows it, never below touching
+    const lead = dealer ? w + gap : 0;
+    const step = fan > 1 ? Math.round(Math.min(w * 0.62, Math.max(minStep, (maxW - lead - w - extra) / (fan - 1)))) : 0;
+    const bw = n ? lead + w + step * (fan - 1) + extra : w; const was = box.getBoundingClientRect().left;
     box.style.width = bw + "px"; box.style.setProperty("--fx", "0px"); box.style.setProperty("--fy", "0px");
     const r = box.getBoundingClientRect(); const fx = r.left - Math.round(r.left), fy = r.top - Math.round(r.top); // whole-pixel card edges
     if (Math.abs(fx) > 0.01) box.style.setProperty("--fx", -fx + "px"); if (Math.abs(fy) > 0.01) box.style.setProperty("--fy", -fy + "px");
     const dx = Math.round(was - box.getBoundingClientRect().left); // the hand re-centres as it grows: the cards already down glide, never jump
     cards.forEach((c, i) => {
-      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = i * step + (c.side ? (h - w) / 2 : 0); // turned about its centre: shift so it starts one step on
+      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = (lead ? (i ? lead + (i - 1) * step : 0) : i * step) + (c.side ? (h - w) / 2 : 0); // turned about its centre: shift so it starts one step on
       if (dx && !el.classList.contains("new")) { const old = parseFloat(el.style.getPropertyValue("--x")) || 0; el.style.transition = "none"; el.style.setProperty("--x", old + dx + "px"); void el.offsetWidth; el.style.transition = ""; }
       el.style.setProperty("--x", x + "px"); el.style.zIndex = i + 1; el.dataset.z = i + 1; // each card lies on the one before it, as dealt
     });
@@ -259,11 +263,15 @@
     const lx = f.left + f.width * (parseFloat(getComputedStyle($("#felt")).getPropertyValue("--lx")) / 100 || 0.5), ly = f.top + f.height * 0.48;
     el.style.setProperty("--shx", (((x - lx) / f.width) * 10).toFixed(1) + "px"); el.style.setProperty("--shy", (3 + ((y - ly) / f.height) * 8).toFixed(1) + "px");
   }
-  function dealerMaxW() { fixCw(); const st = $("#stageIn").clientWidth; return Math.max(cw() * 1.6, Math.min(st - 2 * (cw() * 0.55 + 14), st - 2 * 58)); } // clear of the shoe corner and room for the total
+  function dealerMaxW() { // clear of the shoe (measured: its corner card reaches into the felt) and room for the total
+    fixCw(); const si = $("#stageIn"), st = si.clientWidth; const sh = $("#shoeBox .shoe-card")?.getBoundingClientRect(), r = si.getBoundingClientRect();
+    const shoeRoom = sh && sh.width ? 2 * (sh.left + 8 - (r.left + st / 2)) - 4 : Infinity; // the hand is centred: half of it may reach the shoe's left edge
+    return Math.max(cw() * 1.6, Math.min(st - 2 * (cw() * 0.55 + 14), st - 2 * 58, shoeRoom));
+  }
   function renderDealer() {
     const box = $("#dHand"); const fresh = syncHand(box, T.dealer); setPill(box, T.dealer, false);
     layoutHand(box, T.dealer, dealerMaxW(), "side"); shadowFor(box);
-    box.setAttribute("aria-label", T.dealer.length ? "Dealer: " + T.dealer.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + (T.dealer.some((c) => !c.down) ? `, showing ${total(T.dealer).t}` : "") : "Dealer has no cards");
+    box.setAttribute("aria-label", T.dealer.length ? "Dealer: " + T.dealer.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + (T.dealer.some((c) => !c.down) && saved.showTotals ? `, showing ${total(T.dealer).t}` : "") : "Dealer has no cards");
     return fresh;
   }
   function seatSkeleton(i) {
@@ -307,7 +315,7 @@
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
       seat.classList.toggle("active", act || (T.phase === "betting" && n === 1 && rackChips().length > 0)); seat.classList.toggle("nocards", !s.cards.length);
       const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act);
-      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + `, ${total(shown).t}` : `Hand ${i + 1}: no cards`);
+      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + (saved.showTotals ? `, ${total(shown).t}` : "") : `Hand ${i + 1}: no cards`);
       const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); const canBet = T.phase === "betting" && rackChips().length > 0; spot.classList.toggle("open", canBet && !s.bet); // out of credits: the circle stays idle
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
       spot.disabled = !canBet;
@@ -775,26 +783,23 @@
   const posToMs = (p) => { const near = SPEED_STOPS.find((s) => Math.abs(s[2] - p) <= 14); if (near) return near[0]; for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (p <= p1) { const q = i === 4 ? 100 : 25; return Math.round((m0 + ((m1 - m0) * (p - p0)) / (p1 - p0)) / q) * q; } } return 5000; };
   const msToPos = (ms) => { for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (ms <= m1) return p0 + ((p1 - p0) * (ms - m0)) / (m1 - m0); } return 1000; };
   const nearestStop = (v) => SPEED_STOPS.reduce((a, s) => (Math.abs(s[0] - v) < Math.abs(a[0] - v) ? s : a));
-  const SECTIONS = [["sec-rules", "Rules"], ["sec-play", "Gameplay"], ["sec-chips", "Chips"], ["sec-look", "Appearance"], ["sec-sound", "Sound & haptics"], ["sec-account", "Account"], ["sec-danger", "Danger zone"]];
+  const SEC_OF = (k) => (["first", "last"].includes(k) ? "sec-account" : k === "chips" ? "sec-chips" : ["felt", "accent", "mode"].includes(k) ? "sec-look" : ["sfx", "volume", "haptics"].includes(k) ? "sec-sound" : ["speed", "rebet", "count", "showTotals", "autoDeal", "autoDelay"].includes(k) ? "sec-play" : "sec-rules");
   const sw = (k, label, sub, extra = "") => `<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false" ${extra}><span class="tx"><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
   const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}">${label}</label><output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}" type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
-  const sec = (id, title, inner, cls = "") => `<section class="sec ${cls}" id="${id}" aria-labelledby="${id}-h"><h2 id="${id}-h">${title}</h2>${inner}</section>`;
+  // a section is a disclosure: its header (a button inside the h2) names it and sums up its values; the body is hidden until opened
+  const sec = (id, title, inner) => `<section class="sec" id="${id}"><h2 class="sec-t"><button type="button" class="sec-h" id="${id}-h" aria-expanded="false" aria-controls="${id}-b"><span class="sec-n">${title}<span class="sec-dot" hidden><span class="sr-only">, unsaved changes</span></span></span><span class="sec-s" id="${id}-s"></span><svg class="chev" aria-hidden="true"><use href="#i-chevron"/></svg></button></h2><div class="sec-b" id="${id}-b" role="region" aria-labelledby="${id}-h" hidden>${inner}</div></section>`;
+  function openSec(id, open = true) { const h = document.getElementById(id + "-h"); if (!h) return; h.setAttribute("aria-expanded", String(open)); document.getElementById(id + "-b").hidden = !open; }
   const grp = (title, inner) => `<div class="grp"><h3>${title}</h3>${inner}</div>`;
-  const navHTML = () => SECTIONS.map(([id, t]) => `<a href="#settings/${id}" data-sec="${id}">${t.replace("&", "&amp;")}</a>`).join("");
   function buildSettings() {
-    $("#sNav").innerHTML = navHTML();
-    const nav = $("#sNav"); const edges = () => { nav.classList.toggle("fade-l", nav.scrollLeft > 1); nav.classList.toggle("fade-r", nav.scrollLeft < nav.scrollWidth - nav.clientWidth - 1); };
-    nav.addEventListener("scroll", edges, { passive: true }); new ResizeObserver(edges).observe(nav); edges(); // fade only the edge that has more tabs past it
-    if (!$(".s-index")) $("#sBody").insertAdjacentHTML("beforebegin", `<nav class="s-index" aria-label="Settings sections">${navHTML()}</nav>`);
     $("#sBody").innerHTML =
-      sec("sec-rules", "Rules", `<div class="presets-row"><div class="presets" id="presets" role="radiogroup" aria-label="House rules"></div><p class="edge" id="edge"></p></div><div id="ruleGroups"></div>`) +
-      sec("sec-play", "Gameplay", slider("speed", "Game speed", 0, 1000, 1, SPEED_STOPS, "5 s") + sw("rebet", "Rebet automatically") + sw("count", "Show the count", "Running and true count") + sw("autoDeal", "Auto deal", "Needs Rebet") + slider("autoDelay", "Auto deal delay", 0, 10000, 500, null, null, "autoDeal")) +
+      sec("sec-rules", "Table rules", `<div class="pdd"><span class="pdd-l" id="pddL">Preset</span><button type="button" class="pdd-b" id="presetBtn" aria-haspopup="listbox" aria-expanded="false" aria-controls="presetList" aria-labelledby="pddL presetBtn"></button><ul class="pdd-list" id="presetList" role="listbox" aria-labelledby="pddL" tabindex="-1" hidden></ul></div><div id="ruleGroups"></div>`) +
+      sec("sec-play", "Gameplay", slider("speed", "Game speed", 0, 1000, 1, SPEED_STOPS, "5 s") + sw("rebet", "Rebet automatically") + sw("showTotals", "Show hand totals", "Yours and the dealer's") + sw("count", "Show the count", "Running and true count") + sw("autoDeal", "Auto deal", "Needs Rebet") + slider("autoDelay", "Auto deal delay", 0, 10000, 500, null, null, "autoDeal")) +
       sec("sec-chips", "Chips", `<div class="chip-pick" id="chipPick">${CHIP_VALUES.map((v) => `<button type="button" class="cp" data-chipk="${v}" aria-pressed="true" aria-label="${money(v)} chip">${chipSVG(v)}</button>`).join("")}</div>`) +
       sec("sec-look", "Appearance", `<div class="look"><span class="ll">Felt</span><div class="felts" role="radiogroup" aria-label="Felt" id="feltPick"></div></div><div class="look"><span class="ll">Accent</span><div class="accents" role="radiogroup" aria-label="Accent" id="accentPick"></div></div><div class="look"><span class="ll">Mode</span><div class="seg" role="radiogroup" aria-label="Mode" id="modePick"></div></div>`) +
       sec("sec-sound", "Sound &amp; haptics", sw("sfx", "Sound") + slider("volume", "Volume", 0, 100, 5, null, null, "sfx") + sw("haptics", "Vibration")) +
       sec("sec-account", "Account", `<div class="inputs"><label>First name<input type="text" data-k="first" autocomplete="given-name" maxlength="24" aria-describedby="err-first"><span class="ferr" id="err-first" hidden></span></label><label>Last name<input type="text" data-k="last" autocomplete="family-name" maxlength="24" aria-describedby="err-last"><span class="ferr" id="err-last" hidden></span></label></div><div class="btn-row"><button class="btn" type="button" data-toast="Change password is not wired in the mockup">Change password</button><button class="btn" type="button" data-toast="Log out is not wired in the mockup">Log out</button></div>`) +
-      sec("sec-danger", "Danger zone", `<div class="row"><span class="rl"><b>Delete profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete</button></div>`, "danger");
-    renderRules(); syncControls(); watchSections();
+      `<div class="danger-zone"><div class="row"><span class="rl"><b>Delete profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete</button></div></div>`;
+    renderRules(); syncControls(); wirePresetMenu();
   }
   // one rule: its label and a compact segmented control; each other choice shows how far it moves the house edge (small, quiet)
   function segHTML(rule, s) {
@@ -805,12 +810,12 @@
   }
   function renderRules() {
     const focus = document.activeElement?.dataset?.f; const s = draft; const p = presetOf(s);
-    $("#presets").innerHTML = [...Object.keys(PRESETS), "Custom"].map((n) => `<button type="button" role="radio" class="${n === "Custom" ? "custom" : ""}" aria-checked="${p === n}" data-preset="${n}" data-f="p-${n}"${n !== "Custom" ? ` title="${summary({ ...s, ...PRESETS[n] }).join(" · ")}"` : ""}${n === "Custom" && p !== "Custom" ? ' aria-disabled="true" title="Change any rule below"' : ""}>${n}</button>`).join("");
-    $("#edge").innerHTML = `House edge <b>${fmtEdge(houseEdge(s))}</b> est.`;
+    $("#presetBtn").innerHTML = `<span class="pdd-n">${p}</span><span class="pdd-e"><b class="num">${fmtEdge(houseEdge(s))}</b> house edge</span><svg class="chev" aria-hidden="true"><use href="#i-chevron"/></svg>`;
+    $("#presetList").innerHTML = (p === "Custom" ? [["Custom", s]] : []).concat(Object.keys(PRESETS).map((n) => [n, { ...s, ...PRESETS[n] }])).map(([n, x]) =>
+      `<li role="option" id="po-${n.replace(/ /g, "-")}" aria-selected="${p === n}"${n === "Custom" ? ' aria-disabled="true" class="custom"' : ` data-preset="${n}"`} title="${summary(x).join(" · ")}"><span class="po-n">${n}</span><span class="po-e num">${fmtEdge(houseEdge(x))}</span><svg class="tick" aria-hidden="true"><use href="#i-check"/></svg></li>`).join("");
     $("#ruleGroups").innerHTML = GROUPS.map((g) => grp(g, CATALOG.filter((r) => r.group === g && (r.show?.(s) ?? true)).map((r) => segHTML(r, s)).join(""))).join("") +
       grp("House variations", VARIATIONS.map((v) => sw(v.key, v.label, "", v.disabled?.(s) ? 'aria-disabled="true"' : "")).join("")) +
       grp("Advanced", ADVANCED.filter((a) => a.show?.(s) ?? true).map((a) => sw(a.key, a.label, "", a.forced?.(s) ? 'aria-disabled="true"' : "")).join(""));
-    const sel = $('#presets [aria-checked="true"]'); if (sel) { const box = $("#presets"); if (sel.offsetLeft < box.scrollLeft || sel.offsetLeft + sel.offsetWidth > box.scrollLeft + box.clientWidth) box.scrollLeft = sel.offsetLeft - 8; }
     syncControls(); if (focus) $(`[data-f="${focus}"]`)?.focus({ preventScroll: true });
   }
   function syncControls() {
@@ -833,6 +838,10 @@
     $$("[data-chipk]").forEach((b) => b.setAttribute("aria-pressed", String(s.chips.includes(+b.dataset.chipk))));
     $("#feltPick").innerHTML = feltBtns(s.felt);
     $("#accentPick").innerHTML = ACCENTS.map(([k, n, c]) => `<button type="button" class="ac" role="radio" aria-checked="${s.accent === k}" data-pick-accent="${k}" aria-label="${n}" title="${n}"><i style="background:${c}"></i></button>`).join("");
+    const on = (v) => (v ? "on" : "off"); const sum = { "sec-rules": `${presetOf(s)} · ${fmtEdge(houseEdge(s))} house edge`, "sec-play": `${nearestStop(s.speed)[1]} speed · totals ${on(s.showTotals)} · count ${on(s.count)}${s.autoDeal ? " · auto deal" : ""}`,
+      "sec-chips": `${s.chips.length} of ${CHIP_VALUES.length} chips`, "sec-look": `${FELTS.find((f) => f[0] === s.felt)[1]} felt · ${ACCENTS.find((a) => a[0] === s.accent)[1]} · ${{ dark: "Dark", light: "Light", system: "Device" }[s.mode]}`,
+      "sec-sound": `Sound ${on(s.sfx)} · vibration ${on(s.haptics)}`, "sec-account": `${s.first} ${s.last}`.trim() || "No name" };
+    for (const [id, t] of Object.entries(sum)) { const el = document.getElementById(id + "-s"); if (el) el.textContent = t; }
     $("#modePick").innerHTML = [["dark", "Dark"], ["light", "Light"], ["system", "Device"]].map(([k, n]) => `<button type="button" role="radio" aria-checked="${s.mode === k}" data-pick-mode="${k}"><span>${n}</span></button>`).join("");
     updateDirty();
   }
@@ -840,14 +849,16 @@
   const fieldErrors = (d) => ({ ...(!String(d.first).trim() && { first: "Enter your first name." }), ...(!String(d.last).trim() && { last: "Enter your last name." }) });
   function updateDirty() {
     const d = diffKeys(); const n = d.filter((k) => !RULE_KEYS.includes(k)).length + (d.some((k) => RULE_KEYS.includes(k)) ? 1 : 0); const bad = Object.keys(fieldErrors(draft)).length;
+    $$(".sec").forEach((x) => { const dot = $(".sec-dot", x); if (dot) dot.hidden = !d.some((k) => SEC_OF(k) === x.id); });
     $("#dirty").hidden = !n; $("#dirtyTxt").textContent = `${n} unsaved change${n === 1 ? "" : "s"}`; $("#saveBtn").setAttribute("aria-disabled", String(n === bad)); // only invalid profile fields left: nothing to save
   }
   function setDraft(patch) { Object.assign(draft, patch); if (patch.felt || patch.accent || patch.mode) applyTheme(draft); }
   const sBody = $("#sBody");
   sBody.addEventListener("click", (e) => {
     const t = e.target;
+    const sh = t.closest(".sec-h"); if (sh) return openSec(sh.closest(".sec").id, sh.getAttribute("aria-expanded") !== "true");
     const preset = t.closest("[data-preset]");
-    if (preset) { const n = preset.dataset.preset; if (n === "Custom") return; if (presetOf(draft) !== n) setDraft(PRESETS[n]); return renderRules(); } // Custom is what a hand change reads as; it is not a choice
+    if (preset) { const n = preset.dataset.preset; closePresets(true); if (presetOf(draft) !== n) setDraft(PRESETS[n]); return renderRules(); } // Custom is what a hand change reads as; it is not a choice
     const rb = t.closest("[data-rule]");
     if (rb) { const rule = CATALOG.find((r) => r.key === rb.dataset.rule); const v = JSON.parse(rb.dataset.v); const cur = rule.get ? rule.get(draft) : draft[rule.key]; if (v === cur) return; setDraft(rule.patch ? rule.patch(v, draft) : { [rule.key]: v }); return renderRules(); }
     const swb = t.closest(".sw");
@@ -877,7 +888,7 @@
   }
   function doSave(reset) {
     const errs = fieldErrors(draft); const kept = Object.fromEntries(Object.keys(errs).map((k) => [k, saved[k]]));
-    saved = { ...clone(draft), ...kept }; persist(); applyTheme(saved); // an invalid profile field stays unsaved with its error; the settings save regardless
+    saved = { ...clone(draft), ...kept }; persist(); applyTheme(saved); if (Object.keys(errs).length) openSec("sec-account"); // an invalid profile field stays unsaved with its error; the settings save regardless
     if (reset) resetTable(true);
     updateDirty(); renderPrint(); toast((reset ? "Saved. New shoe dealt." : "Saved. The table is updated.") + (Object.keys(errs).length ? " Your name isn't saved yet." : "")); syncControls();
   }
@@ -892,11 +903,24 @@
   $("#discardBtn").addEventListener("click", () => { draft = clone(saved); applyTheme(saved); renderRules(); toast("Changes discarded"); });
   $("#delNo").addEventListener("click", () => $("#delDlg").close());
   $("#delYes").addEventListener("click", () => { $("#delDlg").close(); toast("Profile deletion is not wired in the mockup"); });
-  let secObs;
-  function watchSections() {
-    secObs?.disconnect(); if (!window.IntersectionObserver) return;
-    secObs = new IntersectionObserver((ents) => { ents.forEach((en) => { if (en.isIntersecting) $$("[data-sec]").forEach((a) => { a.setAttribute("aria-current", String(a.dataset.sec === en.target.id)); if (a.dataset.sec === en.target.id && a.closest("#sNav")) { const n = $("#sNav"); n.scrollTo({ left: a.offsetLeft - n.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); } }); }); }, { rootMargin: "-120px 0px -60% 0px" });
-    $$(".sec").forEach((s) => secObs.observe(s));
+  // the preset dropdown: a button and a listbox (WAI-ARIA select-only combobox pattern, simplified): arrows, Home/End, Enter/Space, Escape, a first letter
+  function closePresets(focus) { const b = $("#presetBtn"), l = $("#presetList"); if (!b || l.hidden) return; l.hidden = true; b.setAttribute("aria-expanded", "false"); l.removeAttribute("aria-activedescendant"); if (focus) b.focus(); }
+  function openPresets() { const b = $("#presetBtn"), l = $("#presetList"); l.hidden = false; b.setAttribute("aria-expanded", "true"); const opts = $$('[role="option"]', l); setActive(opts.find((o) => o.getAttribute("aria-selected") === "true") || opts[0]); l.focus(); }
+  function setActive(o) { const l = $("#presetList"); $$('[role="option"]', l).forEach((x) => x.classList.toggle("active", x === o)); if (o) { l.setAttribute("aria-activedescendant", o.id); o.scrollIntoView({ block: "nearest" }); } }
+  function wirePresetMenu() {
+    const b = $("#presetBtn"), l = $("#presetList");
+    b.addEventListener("click", () => (l.hidden ? openPresets() : closePresets(true)));
+    b.addEventListener("keydown", (e) => { if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); openPresets(); } });
+    l.addEventListener("keydown", (e) => {
+      const opts = $$('[role="option"]', l).filter((o) => o.getAttribute("aria-disabled") !== "true"); const cur = $(".active", l); let k = opts.indexOf(cur);
+      if (e.key === "ArrowDown") k = Math.min(opts.length - 1, k + 1); else if (e.key === "ArrowUp") k = Math.max(0, k - 1); else if (e.key === "Home") k = 0; else if (e.key === "End") k = opts.length - 1;
+      else if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (cur?.dataset.preset) cur.click(); else closePresets(true); return; }
+      else if (e.key === "Escape") { e.preventDefault(); return closePresets(true); } else if (e.key === "Tab") return closePresets();
+      else if (/^[a-z]$/i.test(e.key)) { const m = opts.find((o) => o.textContent.trim().toLowerCase().startsWith(e.key.toLowerCase())); if (m) k = opts.indexOf(m); } else return;
+      e.preventDefault(); setActive(opts[Math.max(0, k)]);
+    });
+    l.addEventListener("mousemove", (e) => { const o = e.target.closest('[role="option"][data-preset]'); if (o && !o.classList.contains("active")) setActive(o); });
+    document.addEventListener("click", (e) => { if (!e.target.closest(".pdd")) closePresets(); });
   }
 
   /* ================= brand screen ================= */
@@ -983,7 +1007,7 @@
     if (scr === "settings" && !$("#sBody").children.length) buildSettings();
     if (scr === "brand") buildBrand();
     for (const id of ["table", "settings", "brand", "home", "login", "loading", "error"]) $("#" + id).hidden = scr !== id; document.body.dataset.screen = scr;
-    if (scr === "settings") { draft = clone(saved); applyTheme(saved); renderRules(); window.scrollTo(0, 0); if (anchor) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: "start" })); }
+    if (scr === "settings") { draft = clone(saved); applyTheme(saved); renderRules(); closePresets(); $$(".sec").forEach((x) => openSec(x.id, false)); window.scrollTo(0, 0); if (anchor) { openSec(anchor); requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ block: "start" })); } }
     else if (scr === "table") { draft = clone(saved); applyTheme(saved); T.chip = saved.chips.includes(T.chip) ? T.chip : saved.chips[0]; render(); }
     else window.scrollTo(0, 0);
   }

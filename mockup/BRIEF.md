@@ -63,6 +63,18 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
 - **Add the split option as a setting** (Splitting section): "Deal split hands" = **One at a time** (the next hand gets its second card when play reaches it) or **Both at once** (today's app behaviour). The mockup plays both.
 - **Felt print matches on every size:** desktop uses the same single centred arc as the phone (between dealer and player), not text split into the top corners.
 
+## Round 7 feedback (Blake, 2026-11-14)
+- **Dealer's first card always stands alone**: never overlapped by the hole card or later cards (a clear gap after the up card; the rest fan as dealt after it).
+- **New setting: show hand totals** (on/off, default on) for the player and dealer total pills. A display setting, not a rule key (no LEGACY_RULES / RULE_SINCE; not in RESET_SETTINGS or presets). Off hides every total pill, including during play.
+- **Settings:**
+  - Rule presets as a cool, compact **dropdown** (custom-styled select/listbox in the design system, showing the preset name and its small house-edge figure; "Custom" when edited).
+  - Dealer's second card: rename "No hole card" to **"No second card"** (Peeks / No peek / No second card).
+  - **Sections collapsible, collapsed by default** (each section header shows its name and a short current-value summary; keyboard and screen-reader friendly).
+  - Move **"Blackjack on split"** into **House variations**.
+  - In Settings, the hand is **"blackjack"** (e.g. "Blackjack pays", "Blackjack on split", "If the dealer has blackjack"). "Blakejack" is only the app name. This overrides the spec's Brand list for Settings labels; the felt print and the player's natural badge on the table keep "Blakejack" unless told otherwise. Record it in DESIGN.md §0.
+  - **"Danger zone" has no title**: just the delete action, set apart at the bottom.
+- **Top bar:** the balance is **centred** at the top of the screen (fixed, never shifting), and the bar is **sleeker** (less height and chrome; menu, wordmark, balance, count and settings balanced).
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).
