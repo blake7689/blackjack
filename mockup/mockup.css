@@ -682,7 +682,7 @@ body[data-clean] .demo-tab { display: none; }
 .hero .hc, .hero .hchip { left: round(down, 50%, 1px); top: round(down, 50%, 1px); } /* flat, on whole pixels: a dealt hand, no tilt */
 .hero .hchip { position: absolute; width: 50px; filter: drop-shadow(1px 4px 3px rgb(0 0 0 / .5)); }
 .signed { font-size: 13px; color: var(--tx-3); }
-.signed a { color: var(--tx-2); }
+.signed a { color: var(--tx-2); display: inline-block; padding: 12px 8px; margin: -12px -8px; } /* a 44 px tap area; the negative margin keeps the line and the look unchanged */
 .form { width: 100%; display: grid; gap: 14px; text-align: left; }
 .form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--tx-2); }
 .form input { min-height: 50px; padding: 0 14px; border-radius: var(--r2); border: 1px solid var(--line-2); background: var(--surf); color: var(--tx); font-size: 16px; }
