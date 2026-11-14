@@ -1,4 +1,4 @@
-# Blakejack design system (round 8)
+# Blakejack design system (round 9)
 
 Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
 
@@ -11,13 +11,13 @@ Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.c
 | Fonts | One self-hosted display font + system UI | Clash Display (display) + Satoshi (UI), both from Fontshare; self-host one woff2 each | Round 1 direction; licence to be checked |
 | Rules presets | Preset tiles with summaries | A compact dropdown (button + listbox) showing the preset and its house edge; "Custom" when any rule is changed (a state, not a choice) | Blake, rounds 1 and 7 |
 | Rules layout | Collapsed Customize / House variations / Advanced groups | Every Settings section is collapsible and **collapsed by default**, its header naming it and summing up its values; inside Table rules, flat groups (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced), hidden rules not shown | Blake, rounds 1 and 7 |
-| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice "Dealer's second card": Peeks / No peek / **No second card** (= dealerHoleBehaviour) | Planner I7, Blake round 7 |
+| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice "Dealer's second card": Peeks / No peek / **No second card** (= dealerHoleBehaviour). The same words everywhere the mode shows: the felt print's mode line "DEALER PEEKS" / "NO PEEK" / **"NO SECOND CARD"** (portrait arc and landscape line alike) and the rules sheet ("No second card: the dealer takes it after you play") | Planner I7, Blake rounds 7 and 9 |
 | Shoe | A shoe in the top strip | Only the corner of the top card, at the felt's top-right; the shoe is off the table | Blake, round 1 |
 | Card width | 44-120 px | 40-156 px, whole pixels, from `--cwr` (section 4) | Readable cards on large screens (round 2) |
 | Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 (compact stacks that build the right way) |
 | Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; past that it scrolls by whole chips, no chip cut at rest | Blake: chips never clip |
 | Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blakejack!" | Blake rounds 1-3 |
-| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **In Settings the hand is "blackjack"** ("Blackjack pays", "Blackjack on split", "If the dealer has blackjack", "Blackjack pays immediately"): Blakejack is only the app's name. The felt print ("BLAKEJACK PAYS 3 TO 2"), the player's natural badge ("Blakejack!") and the Table rules sheet keep the brand word until Blake says otherwise. Sentence case everywhere | Blake round 7 (overrides the spec's Brand list for Settings) |
+| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **In Settings the hand is "blackjack"** ("Blackjack pays", "Blackjack on split", "If the dealer has blackjack", "Blackjack pays immediately"): Blakejack is only the app's name. The **Table rules sheet uses "blackjack" too** ("Blackjack pays 3 to 2", "Even money on your blackjack"). "Blakejack" stays only on the felt print's payout line ("BLAKEJACK PAYS 3 TO 2") and the player's natural badge ("Blakejack!") (Blake, round 9). Sentence case everywhere | Blake round 7 (overrides the spec's Brand list for Settings) |
 | Hand totals | Always shown | A display setting **Show hand totals** (`showTotals`, on by default): off hides every total pill, the player's and the dealer's, in every phase (visibility, so nothing moves) and drops the total from the hands' accessible names. Not a rule key: no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets | Blake round 7 |
 | Dealer's cards | Overlapped as dealt | The up card **stands alone**: a clear gap (14 % of a card, at least 8 px) after it; the hole card and later cards fan after the gap | Blake round 7 |
 | Top bar | Balance after the wordmark | **Balance centred** on the bar (equal outer columns, so nothing beside it moves it), a sleeker bar (44-52 px, no boxes): menu and wordmark left, count and Settings right | Blake round 7 |
@@ -61,15 +61,20 @@ The felt and the table objects do not change with the mode; only the UI around t
 | `--tx` | `#eef2ef` | `#0d110f` | Primary text; the selected segment's fill; the Stay key |
 | `--tx-2` | `#a6b0aa` | `#48514c` | Secondary text |
 | `--tx-3` | `#85908a` | `#59625d` | Labels, group titles, edge deltas (AA on `--bg-2` and `--surf`) |
+| `--win-tx` / `--lose-tx` | `#3fe397` / `#ff6b5e` | `#07703f` / `#b42318` | Win and loss as **text on the UI** (balance badge, dock summary, danger buttons). On `--bg` light: 4.97:1 / 5.29:1. The felt keeps `--win` / `--lose` (tags, verdict, bust pill), which sit on the felt in both modes |
+| `--lose-line` | coral 50 % | `#b42318` 45 % | The danger outline button's border |
+| Field errors (`.ferr`), alerts | `#ff8f84`, `#ffd2cc` | `#b3261e`, `#8c1d14` | Inline errors, the login alert |
 | `--groove-1/2` | `#040505` / `#0f1211` | `#d9dcd5` / `#eceee9` | Chip rack and chip-picker groove |
 
 ### Accent (fill, ink on the fill, accent as text)
 | Accent | Dark fill | Ink | Text on dark | Light-mode fill (white ink) | Light-mode text |
 |---|---|---|---|---|---|
-| Emerald (default) | `#1ed18a` | `#02160d` | `#3fe39f` | `#0b9d63` | `#087a4c` |
-| Sapphire | `#6b95ff` | `#040c22` | `#8eaeff` | `#2f61e3` | `#2552c4` |
-| Ember | `#ff7b3f` | `#1e0a01` | `#ff9566` | `#d4521a` | `#b04110` |
-| Orchid | `#c28dff` | `#15062a` | `#d2a9ff` | `#8a4ad8` | `#7438bf` |
+| Emerald (default) | `#1ed18a` | `#02160d` | `#3fe39f` | `#077f4f` (white 5.05:1) | `#066b43` (5.29:1 on `--bg`) |
+| Sapphire | `#6b95ff` | `#040c22` | `#8eaeff` | `#2f61e3` (white 5.33:1) | `#2552c4` (5.48:1) |
+| Ember | `#ff7b3f` | `#1e0a01` | `#ff9566` | `#b8450f` (white 5.39:1) | `#b04110` (4.68:1) |
+| Orchid | `#c28dff` | `#15062a` | `#d2a9ff` | `#8a4ad8` (white 5.18:1) | `#7438bf` (5.52:1) |
+**Contrast, round 9 (measured):** axe `color-contrast` over every screen and state (table: betting, playing, offers, a win, a loss, out of credits, auto deal; the rules sheet; the leave, delete and reset dialogs; Settings with every section open, the preset list, a field error; Home signed in and out; Login, its error and waking states; sign-up with errors; loading; error) for every accent x felt x dark/light at 390x844 and 1440x900: no failures. A disabled control (a slider whose switch is off) is exempt as inactive. Text on the felt is a gradient that axe cannot judge; `contrast.mjs` measures it on rendered pixels (worst 5.00:1). The primary key's small "auto" line and its key hint (Space, desktop) are full ink (they were 72 % and 45 %); other keys' hints are `--tx-2`.
+
 Also `--accent-rgb` (glows) and `--back-hi` (the card back's light line). The accent appears on: the primary key (Deal, Hit, Next hand, Save), the selected rack chip's ring, the active bet circle, the active total's ring, the wordmark's diamond, the card back's guilloche, focus rings, toggles, sliders, and the win light. Nowhere else.
 
 ### Felt (per `data-felt`)
@@ -158,7 +163,7 @@ One column; the dealer is always above the player; everything centres on the fel
 | Chip stack | `stackSVG()`, `.stack` | One SVG. Biggest chip at the bottom, its face centred on the circle (`--k` anchors it); each chip above is lifted up the screen by its thickness, so the lower edges show and the top chip is whole. Up to 10 chips drawn |
 | Bet circle | `.spot`, `.side-spot.dbl/.ins`, `.amt` | Printed double ring, "BET" when empty (breathing), accent ring when active. Double and insurance stacks at table chip size, never over the bet (where they go per layout: section 8, Layout) |
 | Total | `.pill` (`.soft`, `.bust`, `.bj`, `.on`) | Dark glass; soft totals "7/17" |
-| Felt print | `renderPrint()` | "BLAKEJACK PAYS 3 TO 2" / "6 TO 5"; "DEALER HITS SOFT 17" or "DEALER STANDS ON ALL 17s" · mode; the insurance band (hidden when insurance is off) |
+| Felt print | `renderPrint()` | "BLAKEJACK PAYS 3 TO 2" / "6 TO 5"; "DEALER HITS SOFT 17" or "DEALER STANDS ON ALL 17s" · the mode ("DEALER PEEKS", "NO PEEK" or "NO SECOND CARD"); the insurance band (hidden when insurance is off) |
 | Verdict | `.verdict.<kind>` | One word on the felt, never over a card; several hands show the net plus a tag under each bet. The message line says "Your move" for every hand (no "hand 1 of 2": the lit circle and the lamp show which) |
 | Dock | `renderDock()`, `.key` | Same height in every state. Betting: rack + Undo, Clear, Rebet, 2x, (Pause/Resume), Deal. Playing: Double, Split, Surrender, (Triple) + Stay, Hit. Offers: Insurance $x / Even money / Surrender + No thanks. Results: net, balance, Next hand |
 | Chip rack | `.rack-wrap .rack .rc` | Every enabled chip on show, evenly spaced, no scrolling and nothing cropped (eight 44 px chips fit in 355 px). The chosen chip lifts 3 px with an accent ring inside its own edge |
@@ -276,3 +281,10 @@ The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the 
 - **Show hand totals** (Gameplay, default on): `<html class="no-totals">` hides every `#stageIn .pill` with `visibility` (no layout change, so a mid-round toggle moves nothing); the hands' accessible names drop the total too. Saved like any setting (`showTotals`, a flat boolean).
 - **Preset dropdown, sections, "No second card", Blackjack on split in House variations, "blackjack" in Settings, delete with no title, the centred balance:** see sections 0 and 5.
 - The section nav and the wide-screen index are gone: with every section collapsed the page is one screen of headers.
+
+## 11. Round 9 (planner check of round 8)
+- **Light mode passes AA** with the colours in section 3 (accent fills darkened for emerald and ember; light win/loss/danger text tokens).
+- **A group with nothing to show has no heading** (Advanced under a peek: every Advanced rule is hidden there).
+- **Long dealer hands:** the fan never drops under 0.27 of a card (section 2). A long hand gives up the up card's gap first (down to touching); a hand still longer than its room (6-7 cards on a phone) slides left so it stays clear of the shoe instead of tightening the fan.
+- **Wording (Blake):** the EU mode reads "No second card" in Settings, on the felt print ("NO SECOND CARD") and in the rules sheet; the rules sheet says "blackjack" for the hand (section 0).
+- **The delete button reads "Delete profile"** (the row is "Your profile · Balance and history, for good.").

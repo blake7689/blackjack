@@ -85,7 +85,7 @@
     return [...l1, ...l2];
   }
   const EDGE_NOTE = "House edge is an estimate for a player who uses basic strategy and declines insurance: published rule-by-rule figures added together, so it is approximate. A plus sign means a worse deal for you. Insurance, House variations and Advanced options are not counted.";
-  const MODE_PRINT = { peek: "DEALER PEEKS", nopeek: "NO PEEK", eu: "NO HOLE CARD" };
+  const MODE_PRINT = { peek: "DEALER PEEKS", nopeek: "NO PEEK", eu: "NO SECOND CARD" }; // the same words as Settings' "Dealer's second card" choice (Blake, round 9)
 
   /* ================= saved settings and theme ================= */
   const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]; // ALLOWED_CHIPS
@@ -231,12 +231,13 @@
   function layoutHand(box, cards, maxW, pillMode) {
     const w = cw(), h = chH(), n = cards.length; const extra = n && cards[n - 1].side ? h - w : 0; // a sideways card is as wide as a card is tall
     const dealer = box.id === "dHand" && n > 1; const fan = dealer ? n - 1 : n; // the dealer's up card stands alone; the cards after it overlap
-    const minStep = w * (dealer ? 0.22 : 0.27); // a step never hides the corner index (20 % of the width)
-    const gap = dealer ? Math.max(0, Math.min(Math.max(8, Math.round(w * 0.14)), Math.floor(maxW - 2 * w - extra - minStep * (fan - 1)))) : 0; // a clear gap; only a very long hand narrows it, never below touching
+    const minStep = w * 0.27; // the overlap floor (section 2): the corner index always shows
+    const gap = dealer ? Math.max(0, Math.min(Math.max(8, Math.round(w * 0.14)), Math.floor(maxW - 2 * w - extra - minStep * (fan - 1)))) : 0; // a clear gap; a long hand gives it up first (never below touching), so the floor holds
     const lead = dealer ? w + gap : 0;
     const step = fan > 1 ? Math.round(Math.min(w * 0.62, Math.max(minStep, (maxW - lead - w - extra) / (fan - 1)))) : 0;
     const bw = n ? lead + w + step * (fan - 1) + extra : w; const was = box.getBoundingClientRect().left;
-    box.style.width = bw + "px"; box.style.setProperty("--fx", "0px"); box.style.setProperty("--fy", "0px");
+    box.style.width = bw + "px"; if (box.id === "dHand") box.style.marginRight = Math.max(0, Math.round(bw - maxW)) + "px"; // a hand longer than its room (6-7 cards on a phone) slides left, clear of the shoe
+    box.style.setProperty("--fx", "0px"); box.style.setProperty("--fy", "0px");
     const r = box.getBoundingClientRect(); const fx = r.left - Math.round(r.left), fy = r.top - Math.round(r.top); // whole-pixel card edges
     if (Math.abs(fx) > 0.01) box.style.setProperty("--fx", -fx + "px"); if (Math.abs(fy) > 0.01) box.style.setProperty("--fy", -fy + "px");
     const dx = Math.round(was - box.getBoundingClientRect().left); // the hand re-centres as it grows: the cards already down glide, never jump
@@ -798,7 +799,7 @@
       sec("sec-look", "Appearance", `<div class="look"><span class="ll">Felt</span><div class="felts" role="radiogroup" aria-label="Felt" id="feltPick"></div></div><div class="look"><span class="ll">Accent</span><div class="accents" role="radiogroup" aria-label="Accent" id="accentPick"></div></div><div class="look"><span class="ll">Mode</span><div class="seg" role="radiogroup" aria-label="Mode" id="modePick"></div></div>`) +
       sec("sec-sound", "Sound &amp; haptics", sw("sfx", "Sound") + slider("volume", "Volume", 0, 100, 5, null, null, "sfx") + sw("haptics", "Vibration")) +
       sec("sec-account", "Account", `<div class="inputs"><label>First name<input type="text" data-k="first" autocomplete="given-name" maxlength="24" aria-describedby="err-first"><span class="ferr" id="err-first" hidden></span></label><label>Last name<input type="text" data-k="last" autocomplete="family-name" maxlength="24" aria-describedby="err-last"><span class="ferr" id="err-last" hidden></span></label></div><div class="btn-row"><button class="btn" type="button" data-toast="Change password is not wired in the mockup">Change password</button><button class="btn" type="button" data-toast="Log out is not wired in the mockup">Log out</button></div>`) +
-      `<div class="danger-zone"><div class="row"><span class="rl"><b>Delete profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete</button></div></div>`;
+      `<div class="danger-zone"><div class="row"><span class="rl"><b>Your profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete profile</button></div></div>`;
     renderRules(); syncControls(); wirePresetMenu();
   }
   // one rule: its label and a compact segmented control; each other choice shows how far it moves the house edge (small, quiet)
@@ -813,9 +814,10 @@
     $("#presetBtn").innerHTML = `<span class="pdd-n">${p}</span><span class="pdd-e"><b class="num">${fmtEdge(houseEdge(s))}</b> house edge</span><svg class="chev" aria-hidden="true"><use href="#i-chevron"/></svg>`;
     $("#presetList").innerHTML = (p === "Custom" ? [["Custom", s]] : []).concat(Object.keys(PRESETS).map((n) => [n, { ...s, ...PRESETS[n] }])).map(([n, x]) =>
       `<li role="option" id="po-${n.replace(/ /g, "-")}" aria-selected="${p === n}"${n === "Custom" ? ' aria-disabled="true" class="custom"' : ` data-preset="${n}"`} title="${summary(x).join(" · ")}"><span class="po-n">${n}</span><span class="po-e num">${fmtEdge(houseEdge(x))}</span><svg class="tick" aria-hidden="true"><use href="#i-check"/></svg></li>`).join("");
-    $("#ruleGroups").innerHTML = GROUPS.map((g) => grp(g, CATALOG.filter((r) => r.group === g && (r.show?.(s) ?? true)).map((r) => segHTML(r, s)).join(""))).join("") +
-      grp("House variations", VARIATIONS.map((v) => sw(v.key, v.label, "", v.disabled?.(s) ? 'aria-disabled="true"' : "")).join("")) +
-      grp("Advanced", ADVANCED.filter((a) => a.show?.(s) ?? true).map((a) => sw(a.key, a.label, "", a.forced?.(s) ? 'aria-disabled="true"' : "")).join(""));
+    const grpIf = (t, html) => (html ? grp(t, html) : ""); // a group with nothing to show (Advanced under a peek) has no heading
+    $("#ruleGroups").innerHTML = GROUPS.map((g) => grpIf(g, CATALOG.filter((r) => r.group === g && (r.show?.(s) ?? true)).map((r) => segHTML(r, s)).join(""))).join("") +
+      grpIf("House variations", VARIATIONS.map((v) => sw(v.key, v.label, "", v.disabled?.(s) ? 'aria-disabled="true"' : "")).join("")) +
+      grpIf("Advanced", ADVANCED.filter((a) => a.show?.(s) ?? true).map((a) => sw(a.key, a.label, "", a.forced?.(s) ? 'aria-disabled="true"' : "")).join(""));
     syncControls(); if (focus) $(`[data-f="${focus}"]`)?.focus({ preventScroll: true });
   }
   function syncControls() {
@@ -937,12 +939,12 @@
   /* ================= rules sheet (from the menu and the felt print) ================= */
   function openRules() {
     const s = saved, p = presetOf(s), hid = hiddenKeys(s);
-    const evenMoney = s.insurance && (R.isPeek(s) || !R.bjPaysWithoutPeek(s)); // offered unless your Blakejack already pays at once (offersAtDeal)
-    const mode = { peek: "The dealer peeks for blackjack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "The dealer takes the second card after you play" }[s.dealerHoleBehaviour];
+    const evenMoney = s.insurance && (R.isPeek(s) || !R.bjPaysWithoutPeek(s)); // offered unless your blackjack already pays at once (offersAtDeal)
+    const mode = { peek: "The dealer peeks for blackjack before you play", nopeek: "The dealer has a hole card but doesn't check it", eu: "No second card: the dealer takes it after you play" }[s.dealerHoleBehaviour];
     const grp = (t, items) => `<div class="sheet-grp"><h3>${t}</h3><ul>${items.filter(Boolean).map((x) => `<li>${x}</li>`).join("")}</ul></div>`;
     $("#rulesDlg").innerHTML = `<div class="sheet-in"><div class="sheet-grab" aria-hidden="true"></div><div class="sheet-h"><h2 id="rulesT">Table rules</h2><button class="icon-btn" type="button" data-close-rules aria-label="Close">${icon("close")}</button></div>
       <p class="sheet-meta"><span class="chiplet">${p}</span>House edge <b class="num">${fmtEdge(houseEdge(s))}</b> est.</p>` +
-      grp("Payouts", [`Blakejack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance or even money", evenMoney ? "Even money on your Blakejack against a dealer ace" : ""]) +
+      grp("Payouts", [`Blackjack pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`, "Other wins pay 1 to 1", s.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance or even money", evenMoney ? "Even money on your blackjack against a dealer ace" : ""]) +
       grp("Dealer", [`${s.deckCount} deck${s.deckCount === 1 ? "" : "s"} in the shoe`, s.dealerHitsSoft17 ? "The dealer hits soft 17" : "The dealer stands on all 17s", mode, !hid.has("noHoleCardLoss") && (s.noHoleCardLoss === "all" ? "A dealer blackjack takes everything you staked" : "A dealer blackjack takes only your first bet")]) +
       grp("Doubling", [`Double on ${s.doubleOn === "any" ? "any two cards" : s.doubleOn === "9-11" ? "a hard 9, 10 or 11" : "a hard 10 or 11"}`, s.doubleAfterSplit ? "Double after a split" : "No double after a split", s.tripleDown && "Triple down allowed", s.doubleFaceDown && "The double card is dealt face down"]) +
       grp("Splitting", [s.maxSplitHands === 0 ? "Split any number of hands" : `Split up to ${s.maxSplitHands} hands`, "Any two ten-value cards split", s.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each", !hid.has("resplitAces") && (s.resplitAces ? "Aces may be split again" : "Aces split once"), s.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it"]) +

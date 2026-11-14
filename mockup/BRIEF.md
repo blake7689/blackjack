@@ -75,6 +75,10 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
   - **"Danger zone" has no title**: just the delete action, set apart at the bottom.
 - **Top bar:** the balance is **centred** at the top of the screen (fixed, never shifting), and the bar is **sleeker** (less height and chrome; menu, wordmark, balance, count and settings balanced).
 
+## Round 8 decisions (Blake, 2026-11-14)
+- Settings keeps "No second card", and the felt print's mode line says "NO SECOND CARD" to match.
+- The Table rules sheet says "blackjack" for the hand, like Settings; "Blakejack" stays only on the felt payout line and the natural badge.
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).
