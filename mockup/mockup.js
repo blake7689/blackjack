@@ -137,10 +137,11 @@
   const mk = (code) => { const r = code.slice(0, -1), s = code.slice(-1); return { r, s, id: "c" + ++uid }; };
   const R = window.BJRules; // every rule decision: rules.js mirrors the app's engine (audited against it)
   const val = R.val;
+  const seen = (c) => !c.down && c.land !== false; // face up and landed: only then may its name or value show
   function total(cards) { const t = R.totals(cards.filter((c) => !c.down)); return { t: t.total, soft: t.totals.length > 1 }; }
   const hiLo = (c) => (["2", "3", "4", "5", "6"].includes(c.r) ? 1 : ["10", "J", "Q", "K", "A"].includes(c.r) ? -1 : 0);
   const newSeat = () => ({ base: 0, origin: 0, natural: false, busted: false, bet: 0, hist: [], cards: [], dbl: 0, ins: 0, done: false, result: null, kind: null, payout: 0, sur: false, even: false, split: false, tag: "h" + ++uid });
-  const T = { phase: "betting", seats: [newSeat()], dealer: [], active: -1, balance: BANK, lastBets: [25], count: 3, chip: 25, delta: 40, msg: "", verdict: null,
+  const T = { phase: "betting", seats: [newSeat()], dealer: [], active: -1, balance: BANK, lastBets: [25], count: 3, chip: 25, delta: null, msg: "", verdict: null,
     run: 0, shoe: [], cutAt: 0, cutDrawn: false, paused: false, discard: 0 };
   const demo = { seats: 1 };
   function buildShoe() {
@@ -163,6 +164,7 @@
     requestAnimationFrame(tick);
   }
   let deltaT;
+  const bump = (d) => { d = R.cents(d); if (!d) return; T.delta = d; renderDelta(true); }; // the badge says what the balance just did: a bet taken, a payout; a loss changes nothing
   function renderDelta(pop) {
     const d = $("#delta");
     if (pop) { T.deltaUntil = Date.now() + 2600; clearTimeout(deltaT); deltaT = setTimeout(() => { d.classList.add("out"); deltaT = setTimeout(() => (d.hidden = true), 400); }, reduced ? 2600 : 2600); }
@@ -192,34 +194,36 @@
   function renderPrint() {
     const svg = $("#print"); const W = Math.round(svg.clientWidth), H = Math.round(svg.clientHeight); if (!W || !H) return;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const s = saved; const pay = `BLACKJACK PAYS ${s.blackjackPayout === "6:5" ? "6 TO 5" : "3 TO 2"}`;
+    const s = saved; const pay = `Blackjack Pays ${s.blackjackPayout === "6:5" ? "6 to 5" : "3 to 2"}`; // Cinzel: capitals and small capitals (its lowercase), like a printed felt
     const soft = s.dealerHitsSoft17 ? "Dealer hits soft 17" : "Dealer stands on all 17s"; const mode = MODE_PRINT[s.dealerHoleBehaviour];
     const ins = s.insurance ? "Insurance pays 2 to 1" : "";
-    const caps = (txt) => txt.split(" ").map((wd) => (/^[A-Z]/.test(wd) ? `${wd[0]}<tspan style="font-size:max(12px,.78em)">${wd.slice(1)}</tspan>` : `<tspan style="font-size:max(12px,.78em)">${wd}</tspan>`)).join(" "); // small caps: the initials full size, the rest smaller (never under 12 px)
-    const LIGHT = 'fill-opacity=".84" font-weight="500"';
+    const CAPS = "'Cinzel', var(--f-disp)", BOOK = "'Cormorant Garamond', Georgia, serif";
+    // ink on cloth: a touch of the weave (displacement) and a soft edge; one filter for every line
+    const INK = `<filter id="ink" x="-2%" y="-20%" width="104%" height="140%"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="7"/><feDisplacementMap in="SourceGraphic" scale="1.1" xChannelSelector="R" yChannelSelector="G"/><feGaussianBlur stdDeviation=".28"/></filter>`;
     svg.setAttribute("aria-label", "Table rules"); // the name stays short: "Dealer hits soft 17" in it would also match a test looking for the Hit button; the sheet reads the rules out
     if (matchMedia("(max-height: 520px)").matches) {
       const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
-      svg.innerHTML = `<defs><path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="1.2" font-family="var(--f-disp)" font-weight="600" fill="var(--print)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${caps(pay)}<tspan ${LIGHT} style="font-size:12px;font-family:var(--f-ui)">   ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</tspan></textPath></text>`;
+      svg.innerHTML = `<defs>${INK}<path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="0.9" font-family="${CAPS}" font-weight="700" fill="var(--print)" filter="url(#ink)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${pay}  ·  ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</textPath></text>`;
       fitPrint(svg, W * 0.96); return;
     }
-    const R = W * 3.2; const cx = W / 2;
+    const R = W * 1.45; const cx = W / 2; // a stronger curve, like the printed arc on a casino felt
     const arc = (y, half) => { const yc = y - R; const dx = Math.min(half, W / 2 - 2); const dy = Math.sqrt(R * R - dx * dx); return `M${cx - dx} ${yc + dy}A${R} ${R} 0 0 0 ${cx + dx} ${yc + dy}`; };
-    const f1 = clamp(Math.round(Math.min(W / 18, H - 34)), 15, 24), f2 = clamp(Math.round(f1 * 0.62), 12, 14);
-    const y1 = f1 + 2, y2 = y1 + f2 + 8, y3 = y2 + f2 + 6;
-    let out = `<defs><path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(y3, W)}"/></defs>`;
-    const tp = (id, txt, fs, attrs, ls, font = "var(--f-disp)") => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(1)}" font-family="${font}" ${attrs} fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
-    out += tp("pa1", caps(pay), f1, 'font-weight="600"', 0.06) + tp("pa2", `${soft}  ·  ${mode}`, f2, LIGHT, 0.02, "var(--f-ui)"); // no ruled lines, no box
-    if (ins) out += tp("pa3", ins, f2, LIGHT, 0.02, "var(--f-ui)");
-    svg.innerHTML = out; fitPrint(svg, W * 0.94);
+    const f1 = clamp(Math.round(Math.min(W / 17, H - 36)), 16, 26), f2 = clamp(Math.round(f1 * 0.66), 14, 17), f3 = clamp(Math.round(f1 * 0.5), 12, 13);
+    const y1 = f1 + 2, y2 = y1 + f2 + 6, yt = y2 + 8, y3 = yt + f3 + 5, yb = y3 + 6;
+    let out = `<defs>${INK}<path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(y3, W)}"/></defs><g filter="url(#ink)">`;
+    const tp = (id, txt, fs, font, w, ls) => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(2)}" font-family="${font}" font-weight="${w}" fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
+    out += tp("pa1", pay, f1, CAPS, 700, 0.05) + tp("pa2", `${soft}  ·  ${mode}`, f2, BOOK, 700, 0.02);
+    if (ins) out += `<path d="${arc(yt, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/><path d="${arc(yb, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/>` + tp("pa3", ins, f3, CAPS, 700, 0.08); // the ruled insurance band
+    svg.innerHTML = out + "</g>"; fitPrint(svg, W * 0.94);
   }
-  function fitPrint(svg, maxW) { $$("text", svg).forEach((el) => { let fs = +el.getAttribute("font-size"); let guard = 8; while (guard-- && fs > 12 && el.getComputedTextLength() > maxW) { fs = Math.max(12, fs - 1); el.setAttribute("font-size", fs); el.setAttribute("letter-spacing", fs * 0.14); } }); }
+  function fitPrint(svg, maxW) { $$("text", svg).forEach((el) => { let fs = +el.getAttribute("font-size"); const k = (+el.getAttribute("letter-spacing") || 0) / fs; let guard = 10; while (guard-- && fs > 12 && el.getComputedTextLength() > maxW) { fs = Math.max(12, fs - 1); el.setAttribute("font-size", fs); el.setAttribute("letter-spacing", (fs * k).toFixed(2)); } }); } // each line keeps its own tracking
 
   /* ---- hands: keyed card elements; a card is created once and only moves or flips ---- */
   function cardEl(c) {
-    const el = document.createElement("div"); el.className = "card new" + (c.down ? " down" : "") + (c.side ? " side" : ""); el.dataset.id = c.id;
+    const hidden = c.down || c.land === false; // a card still in flight is face down too: its face arrives with the turn (flip)
+    const el = document.createElement("div"); el.className = "card new" + (hidden ? " down" : "") + (c.side ? " side" : ""); el.dataset.id = c.id;
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove("new"))); // a new card takes its place without sliding there
-    el.innerHTML = `<div class="cin"><div class="cf">${c.down ? "" : `<img src="${cardSrc(c)}" alt="${cardAlt(c)}" draggable="false">`}</div><div class="cb"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></div></div>`;
+    el.innerHTML = `<div class="cin"><div class="cf">${hidden ? "" : `<img src="${cardSrc(c)}" alt="${cardAlt(c)}" draggable="false">`}</div><div class="cb"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></div></div>`;
     return el;
   }
   // reconcile; returns the elements that are new (to fly in)
@@ -271,7 +275,7 @@
   function renderDealer() {
     const box = $("#dHand"); const fresh = syncHand(box, T.dealer); setPill(box, T.dealer, false);
     layoutHand(box, T.dealer, dealerMaxW(), "side"); shadowFor(box);
-    box.setAttribute("aria-label", T.dealer.length ? "Dealer: " + T.dealer.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + (T.dealer.some((c) => !c.down) && saved.showTotals ? `, showing ${total(T.dealer).t}` : "") : "Dealer has no cards");
+    box.setAttribute("aria-label", T.dealer.length ? "Dealer: " + T.dealer.map((c) => (seen(c) ? cardName(c) : "face-down card")).join(", ") + (T.dealer.some(seen) && saved.showTotals ? `, showing ${total(T.dealer.filter(seen)).t}` : "") : "Dealer has no cards");
     return fresh;
   }
   function seatSkeleton(i) {
@@ -309,13 +313,13 @@
   const handCards = (s) => (s.hidden && s.hidden.length ? s.cards.concat(s.hidden) : s.cards);
   function renderSeatsInner() {
     const wrap = $("#seats"); const n = T.seats.length;
-    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); $("#stageIn").style.setProperty("--n", n); wrap.classList.toggle("scroll", n > (matchMedia("(max-height: 520px)").matches ? 3 : 4)); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
+    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); $("#stageIn").style.setProperty("--n", n); wrap.classList.toggle("scroll", n > 4); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
     const fresh = [];
     T.seats.forEach((s, i) => {
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
       seat.classList.toggle("active", act || (T.phase === "betting" && n === 1 && rackChips().length > 0)); seat.classList.toggle("nocards", !s.cards.length);
       const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act);
-      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (c.down ? "face-down card" : cardName(c))).join(", ") + (saved.showTotals ? `, ${total(shown).t}` : "") : `Hand ${i + 1}: no cards`);
+      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (seen(c) ? cardName(c) : "face-down card")).join(", ") + (saved.showTotals && shown.some(seen) ? `, ${total(shown.filter(seen)).t}` : "") : `Hand ${i + 1}: no cards`);
       const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); const canBet = T.phase === "betting" && rackChips().length > 0; spot.classList.toggle("open", canBet && !s.bet); // out of credits: the circle stays idle
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
       spot.disabled = !canBet;
@@ -331,13 +335,16 @@
       else amt.innerHTML = s.bet ? `<span class="num">${money(s.bet + s.dbl)}</span>` : "";
     });
     layoutSeats();
+    if (n > 1 && !wrap.classList.contains("scroll")) { // a row that does not fit (four hands on a small landscape phone) scrolls, one hand at a time, instead of spilling
+      const wr = wrap.getBoundingClientRect(); if ([...wrap.querySelectorAll(".spot-row, .hand, .hand .pill")].some((e) => { const r = e.getBoundingClientRect(); return r.width && (r.left < wr.left - 1 || r.right > wr.right + 1); })) { wrap.classList.add("scroll"); layoutSeats(); }
+    }
     renderSeatsInner.fresh = fresh;
   }
   function layoutSeats() {
     fixCw(); const wrap = $("#seats"); const n = T.seats.length;
     const s0 = wrap.children[0]; if (s0) { const sp = $(".spot", s0).offsetWidth, chip = $(".spot .stack", s0).offsetWidth; wrap.classList.toggle("tight", !compact() && s0.clientWidth < sp + 2 * (chip * 1.12 + 6)); }
     T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const sw = landscape() && (s.dbl || s.ins) ? $(".spot .stack", seat).offsetWidth * 1.12 + 6 : 0; // room the side stacks take beside the circle
-      const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 64 + sw : ($(".spot", seat).offsetWidth + 10 + sw) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
+      const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 76 + sw : ($(".spot", seat).offsetWidth + 10 + sw) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
     const dh = $("#dHand"); if (dh.children.length) layoutHand(dh, T.dealer, dealerMaxW(), "side"); // after the seats: a seat count change resizes the cards
     if (wrap.classList.contains("scroll")) { const a = wrap.children[Math.max(0, T.active)]; if (a) wrap.scrollTo({ left: a.offsetLeft - wrap.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); }
     moveLamp();
@@ -403,6 +410,7 @@
       B = key("stay", "Stay", "stay", "solid big", { off: !playing, kbd: "S" }) + key("hit", "Hit", "hit", "primary big", { off: !playing || !can.hit, kbd: "H" });
     }
     const di = $("#dockIn"); if (p === "offers") { di.setAttribute("role", "group"); di.setAttribute("aria-label", "Offers"); } else { di.removeAttribute("role"); di.removeAttribute("aria-label"); }
+    $("#dockIn").dataset.phase = p;
     $("#dockIn").innerHTML = one ? `<div class="dock-row dock-one">${A}${B}</div>` : `<div class="dock-row">${A}</div><div class="dock-row">${B}</div>`;
     fitRack();
   }
@@ -416,7 +424,8 @@
     return Promise.all(els.map((el, i) => { const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, side = el.classList.contains("side");
       const g = el.cloneNode(true); g.removeAttribute("data-id"); g.className = "card sweep" + (el.classList.contains("down") ? " down" : ""); g.querySelectorAll("img").forEach((x) => (x.alt = ""));
       Object.assign(g.style, { position: "absolute", left: cx - w / 2 - o.left + "px", top: cy - h / 2 - o.top + "px", width: w + "px", height: h + "px", transform: "none", zIndex: 40 + i }); g.setAttribute("aria-hidden", "true"); box.appendChild(g);
-      return g.animate([{ translate: "0 0", rotate: side ? "90deg" : "0deg" }, { translate: `${m.left - cx}px ${m.top - cy}px`, rotate: "36deg", scale: ".92" }], { duration: 560, delay: i * 45, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" }).finished.catch(() => {}).then(() => g.remove());
+      if (!g.classList.contains("down")) setTimeout(() => g.classList.add("flipping", "down"), i * 45); // the same edge-on turn, face down, as it leaves
+      return g.animate([{ translate: "0 0", rotate: side ? "90deg" : "0deg" }, { translate: `${m.left - cx}px ${m.top - cy}px`, rotate: "0deg" }], { duration: 620, delay: i * 45, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" }).finished.catch(() => {}).then(() => g.remove());
     })).then(done);
   }
   function cutFly() { // the cut card comes out of the shoe and lies at the felt's left edge until the shuffle
@@ -427,12 +436,12 @@
   /* ================= motion ================= */
   const fx = () => $("#fx");
   // a new card starts in the shoe's mouth, slides out face down under the shoe, settles, then turns over
-  async function flyIn(el, faceUp) {
-    if (reduced) { if (faceUp) el.classList.remove("down"); return; }
+  async function flyIn(el, card) { // card: the card to turn face up as it lands (none for the hole card or a face-down double)
+    if (reduced) { if (card) await flip(el, card); return; }
     const m = $("#mouth").getBoundingClientRect(); const r = el.getBoundingClientRect();
     const dx = m.left - (r.left + r.width / 2), dy = m.top - (r.top + r.height / 2);
     el.style.zIndex = 50; const d = flightMs();
-    const turn = faceUp ? sleep(d * 0.8).then(() => flip(el)) : null; // it turns over as it lands, not after
+    const turn = card ? sleep(d * 0.8).then(() => flip(el, card)) : null; // it turns over as it lands, not after
     await el.animate([{ translate: `${dx}px ${dy}px`, rotate: "-36deg" }, { translate: `${dx * 0.45}px ${dy * 0.45}px`, rotate: "-12deg", offset: 0.45 }, { translate: `${dx * 0.08}px ${dy * 0.08}px`, rotate: "-5deg", offset: 0.84 }, { translate: "0 0", rotate: "0deg" }], { id: "fly", duration: d, easing: "cubic-bezier(.33,0,.15,1)" }).finished.catch(() => {});
     el.style.zIndex = el.dataset.z || ""; el.classList.remove("new");
     if (turn) await turn;
@@ -440,7 +449,7 @@
   async function flip(el, card) {
     if (card) { const f = $(".cf", el); if (!f.firstChild) f.innerHTML = `<img src="${cardSrc(card)}" alt="${cardAlt(card)}" draggable="false">`; }
     el.classList.add("flipping"); el.classList.remove("down");
-    await sleep(420); el.classList.remove("flipping");
+    await sleep(reduced ? 0 : 420); el.classList.remove("flipping");
   }
   function ghost(html, x, y, w, cls = "") { const g = document.createElement("div"); g.className = "ghost " + cls; g.style.width = w + "px"; g.style.setProperty("--chip", w + "px"); g.innerHTML = html; g.style.transform = `translate(${x - w / 2}px, ${y - w / 2}px)`; fx().appendChild(g); return g; }
   function glide(g, from, to, w, o = {}) {
@@ -457,7 +466,7 @@
   /* ================= betting ================= */
   function placeChip(i) {
     if (T.phase !== "betting") return; const s = T.seats[i]; if (!s || T.balance < T.chip) return toast("Not enough credit for that chip");
-    s.bet += T.chip; s.hist.push(T.chip); T.balance -= T.chip; T.autoDealT0 = Date.now(); chipFromRack(T.chip, i);
+    s.bet += T.chip; s.hist.push(T.chip); T.balance -= T.chip; T.autoDealT0 = Date.now(); chipFromRack(T.chip, i); bump(-T.chip);
     setTimeout(() => { renderSeats(); }, reduced ? 0 : 300); renderBalance(true); betMsg(); renderDock();
   }
   const betMsg = () => setMsg(onTable() ? (autoOn() && !T.paused ? "Dealing soon" : "Tap Deal") : rackChips().length ? "Place your bets" : "Out of credits");
@@ -478,7 +487,7 @@
     if (target === "d") T.dealer.push(c); else if (o.hidden) (T.seats[target].hidden = [c]); else T.seats[target].cards.push(c);
     const fresh = target === "d" ? renderDealer() : renderSeats(); if (target !== "d") renderDealer();
     const el = fresh[0];
-    c.landed = (el ? flyIn(el, !down) : Promise.resolve()).then(() => { c.land = true; if (!c.down) T.count += hiLo(c); renderCount(); renderDealer(); renderSeats(); });
+    c.landed = (el ? flyIn(el, down ? null : c) : Promise.resolve()).then(() => { c.land = true; if (!c.down) T.count += hiLo(c); renderCount(); renderDealer(); renderSeats(); });
     await sleep(stepMs());
     return c;
   }
@@ -544,7 +553,7 @@
     if (a === "hit" && can.hit) { T.phase = "busy"; renderDock(); const c = await dealCard(i); await c.landed; if (!live(my)) return; R.afterCard(h, saved); }
     else if (a === "stay") h.done = true;
     else if ((a === "double" && can.double) || (a === "triple" && can.triple)) {
-      const add = a === "double" ? h.bet : h.bet * 2; T.balance -= add; h.dbl = add; T.phase = "busy"; renderBalance(true); renderDock();
+      const add = a === "double" ? h.bet : h.bet * 2; T.balance -= add; h.dbl = add; T.phase = "busy"; renderBalance(true); bump(-add); renderDock();
       const sp = $(".spot", $("#seats").children[i]); const r = sp.getBoundingClientRect(); const w = cw() * 0.6; glide(ghost(stackSVG(add, w), r.left + r.width / 2, r.bottom, w), dockPt(r.left + r.width / 2), [r.right + w * 0.6, r.top + r.height / 2], w, { dur: 360 });
       await sleep(320); renderSeats();
       if (a === "double" && saved.doubleFaceDown) { const c = await dealCard(i, true, { side: true, hidden: true }); await c.landed; if (!live(my)) return; h.done = true; await sleep(reduced ? 0 : 220); return startPlay(my); } // playerDouble faceDown: it waits for the reveal
@@ -561,7 +570,7 @@
   // does today) or when play reaches it ("One at a time").
   async function split(my, i) {
     const h = T.seats[i]; T.phase = "busy"; renderDock();
-    const n = { ...newSeat(), bet: h.bet, hist: [h.bet], cards: [h.cards.pop()], split: true, base: 0, origin: h.origin }; h.split = true; T.balance -= h.bet; renderBalance(true);
+    const n = { ...newSeat(), bet: h.bet, hist: [h.bet], cards: [h.cards.pop()], split: true, base: 0, origin: h.origin }; h.split = true; T.balance -= h.bet; renderBalance(true); bump(-h.bet);
     T.seats.splice(i + 1, 0, n); renderSeats(); await sleep(reduced ? 0 : 380); if (!live(my)) return;
     let c = await dealCard(i); await c.landed; if (!live(my)) return; R.afterCard(h, saved); if (R.standsAfterOne(h, saved)) h.done = true;
     if (saved.splitDeal === "both") { c = await dealCard(i + 1); await c.landed; if (!live(my)) return; R.afterCard(n, saved); if (R.standsAfterOne(n, saved)) n.done = true; }
@@ -601,30 +610,34 @@
     await sleep(reduced ? 0 : 520);
     await Promise.all(T.seats.map((h, i) => payoutFx(i, h, i * 90)));
     if (!live(my)) return;
-    T.balance = R.cents(T.balance + paid); T.delta = net; T.lastNet = net;
-    T.seats.forEach((h) => { h.bet = 0; h.dbl = 0; h.ins = 0; }); renderSeats(); renderBalance(true); renderDelta(true);
+    T.balance = R.cents(T.balance + paid); T.lastNet = net;
+    T.seats.forEach((h) => { h.bet = 0; h.dbl = 0; h.ins = 0; }); renderSeats(); renderBalance(true); if (paid > 0) bump(paid); else { T.delta = null; renderDelta(); }
     T.phase = "results"; renderDock();
     if (autoOn() && !T.paused) { const r = T.run; setTimeout(() => { if (T.run === r && T.phase === "results" && !T.paused) nextHand(); }, reduced ? 0 : 1600); }
   }
+  // a stack leaves its spot as an exact copy, in the same frame the original hides: the chip never blinks out before it moves
+  function lift(st) { const sv = st && st.querySelector("svg"); if (!sv || st.closest("[hidden]")) return null; const r = sv.getBoundingClientRect(); const g = document.createElement("div"); g.className = "ghost lifted"; g.style.width = r.width + "px"; g.innerHTML = sv.outerHTML; g.style.transform = `translate(${r.left}px, ${r.top}px)`; fx().appendChild(g); st.style.visibility = "hidden"; return { g, r }; }
+  function send(hd, to, o = {}) { if (!hd) return Promise.resolve(); const { g, r } = hd; const dx = to[0] - (r.left + r.width / 2), dy = to[1] - (r.top + r.height / 2);
+    return g.animate([{ transform: `translate(${r.left}px, ${r.top}px) scale(1)`, opacity: 1 }, { transform: `translate(${r.left + dx}px, ${r.top + dy}px) scale(${o.s1 ?? 1})`, opacity: o.o1 ?? 1 }], { duration: o.dur ?? 420, delay: o.delay ?? 0, easing: o.ease ?? "cubic-bezier(.33,0,.15,1)", fill: "both" }).finished.then(() => g.remove()).catch(() => g.remove()); }
   async function payoutFx(i, s, delay) {
     if (reduced) return;
     await sleep(delay); const seat = $("#seats").children[i]; if (!seat) return;
     const sp = $(".spot", seat); const r = sp.getBoundingClientRect(); const w = cw() * 0.6; const c = ctr(r); const stake = s.bet + s.dbl; const down = dockPt(c[0]);
-    $$(".stack", seat).forEach((st) => (st.style.visibility = "hidden"));
+    const main = lift($(".spot .stack", seat)), dbl = lift($(".side-spot.dbl .stack", seat)), ins = lift($(".side-spot.ins .stack", seat)); // all in this one frame
     const jobs = [];
-    if (s.ins) { const ir = $(".side-spot.ins", seat).getBoundingClientRect(); const ic = ctr(ir); const g = ghost(stackSVG(s.ins, w), ...ic, w); jobs.push(s.insPay ? glide(g, ic, dockPt(ic[0]), w, { dur: 700, delay: 300, o1: 0 }) : glide(g, ic, trayPt(), w, { dur: 700, s1: 0.6, o1: 0 })); }
-    if (!stake) return Promise.all(jobs);
+    if (ins) jobs.push(s.insPay ? send(ins, dockPt(ins.r.left + ins.r.width / 2), { dur: 700, delay: 300, o1: 0 }) : send(ins, trayPt(), { dur: 700, s1: 0.6, o1: 0 }));
+    if (!stake) { [main, dbl].forEach((x) => x?.g.remove()); return Promise.all(jobs); }
     const win = s.payout - stake;
     if (win > 0) {
       const beside = [c[0] + w * 1.15, c[1]]; const g2 = ghost(stackSVG(win, w), ...trayPt(), w);
       await glide(g2, trayPt(), beside, w, { dur: 560, keep: true }); await sleep(240);
-      const g1 = ghost(stackSVG(stake, w), ...c, w);
-      jobs.push(glide(g1, c, down, w, { dur: 720, o1: 0, ease: "cubic-bezier(.5,0,.75,0)" }), glide(g2, beside, [down[0] + w * 1.15, down[1]], w, { dur: 720, delay: 60, o1: 0, ease: "cubic-bezier(.5,0,.75,0)" }));
+      const fall = { dur: 720, o1: 0, ease: "cubic-bezier(.5,0,.75,0)" };
+      jobs.push(send(main, down, fall), send(dbl, [down[0] + w * 0.6, down[1]], fall), glide(g2, beside, [down[0] + w * 1.15, down[1]], w, { ...fall, delay: 60 }));
     } else if (s.payout === 0) {
-      await sleep(260); jobs.push(glide(ghost(stackSVG(stake, w), ...c, w), c, trayPt(), w, { dur: 700, s1: 0.45, o1: 0 }));
-    } else if (s.payout < stake) {
-      await sleep(260); jobs.push(glide(ghost(stackSVG(stake / 2, w), ...c, w), c, trayPt(), w, { dur: 700, s1: 0.45, o1: 0 }), glide(ghost(stackSVG(stake / 2, w), ...c, w), c, down, w, { dur: 700, o1: 0 }));
-    } else { await sleep(320); jobs.push(glide(ghost(stackSVG(stake, w), ...c, w), c, down, w, { dur: 680, o1: 0 })); }
+      await sleep(260); jobs.push(send(main, trayPt(), { dur: 700, s1: 0.45, o1: 0 }), send(dbl, trayPt(), { dur: 700, s1: 0.45, o1: 0 }));
+    } else if (s.payout < stake) { // surrender: half goes up to the dealer, half comes back
+      await sleep(260); const back = ghost(stackSVG(stake / 2, w), ...c, w); jobs.push(send(main, trayPt(), { dur: 700, s1: 0.45, o1: 0 }), glide(back, c, down, w, { dur: 700, o1: 0 }));
+    } else { await sleep(320); jobs.push(send(main, down, { dur: 680, o1: 0 }), send(dbl, down, { dur: 680, o1: 0 })); }
     return Promise.all(jobs);
   }
   function offer(a) {
@@ -647,31 +660,23 @@
     }
     if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto();
   }
-  // the top card withdraws into the shoe while the dealer shuffles off screen, then comes back
+  // the shuffle, in order: the shoe (and the emptied discard pile) slide away, the deck comes down into the centre, riffles,
+  // goes back up, and only then the shoe slides back. The deck is in view the whole time it is on the felt: it moves, never fades.
   async function shuffleFx() {
-    const shoe = $("#shoeBox"); shoe.classList.add("shuffling"); shoe.classList.remove("cut-out"); T.discard = 0; renderDiscard();
-    if (!reduced) {
-      const box = document.createElement("div"); box.className = "riffle"; box.style.top = Math.round(($("#stageIn").clientHeight - chH()) / 2) + "px"; $("#stageIn").appendChild(box); // the centre of the felt
-      const w = cw(), N = 7, back = `<svg viewBox="0 0 250 363"><use href="#cardback"/></svg>`, D = 2600;
-      const m = $("#mouth").getBoundingClientRect(), b = box.getBoundingClientRect(); const mx = Math.round(m.left - (b.left + b.width / 2)), my = Math.round(m.top - (b.top + b.height / 2));
-      const dm = $("#dmouth").getBoundingClientRect(); const dx0 = Math.round(dm.left - (b.left + b.width / 2)), dy0 = Math.round(dm.top - (b.top + b.height / 2));
-      const runs = [];
-      for (let i = 0; i < 2 * N; i++) {
-        const left = i < N, j = left ? i : i - N, k = 2 * j + (left ? 0 : 1), side = left ? -1 : 1, sx = Math.round(side * w * 0.66), tk = 0.24 + k * 0.03;
-        const el = document.createElement("div"); el.className = "rcard"; el.innerHTML = back; el.style.zIndex = k; box.appendChild(el);
-        runs.push(el.animate([
-          { transform: left ? `translate(${dx0}px, ${dy0}px) rotate(36deg)` : `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 0 }, // half from the discard pile, half from the shoe
-          { transform: `translate(0px, ${-i * 0.6}px)`, opacity: 1, offset: 0.1 },
-          { transform: `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`, opacity: 1, offset: 0.2 },
-          { transform: `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`, opacity: 1, offset: tk },
-          { transform: `translate(0px, ${-k * 0.6}px) rotate(0deg)`, opacity: 1, offset: tk + 0.06 },
-          { transform: `translate(0px, ${-k * 0.6}px) rotate(0deg)`, opacity: 1, offset: 0.82 },
-          { transform: `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 1 }, // the whole deck back into the shoe
-        ], { duration: D, easing: "cubic-bezier(.45,0,.25,1)", fill: "both" }).finished);
-      }
-      await Promise.all(runs).catch(() => {}); box.remove();
-    }
-    shoe.classList.remove("shuffling");
+    const shoe = $("#shoeBox"), pile = $("#discard");
+    shoe.classList.add("shuffling"); shoe.classList.remove("cut-out"); pile.classList.add("away"); T.shuffleStep = "shoe away";
+    if (reduced) { T.discard = 0; renderDiscard(); pile.classList.remove("away"); shoe.classList.remove("shuffling"); T.shuffleStep = ""; return; }
+    await sleep(800); T.discard = 0; renderDiscard();
+    const box = document.createElement("div"); box.className = "riffle"; box.style.top = Math.round(($("#stageIn").clientHeight - chH()) / 2) + "px"; $("#stageIn").appendChild(box);
+    const w = cw(), N = 7, back = `<svg viewBox="0 0 250 363"><use href="#cardback"/></svg>`;
+    const up = -(box.offsetTop + chH() + 30); // just above the felt's top edge
+    const cards = []; for (let k = 0; k < 2 * N; k++) { const el = document.createElement("div"); el.className = "rcard"; el.innerHTML = back; el.style.zIndex = k; el.style.transform = `translate(0px, ${-k * 0.6}px)`; box.appendChild(el); cards.push(el); }
+    T.shuffleStep = "deck down"; await box.animate([{ transform: `translateY(${up}px)` }, { transform: "translateY(0)" }], { duration: 620, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" }).finished.catch(() => {});
+    T.shuffleStep = "riffle"; const D = 1700;
+    await Promise.all(cards.map((el, k) => { const left = k % 2 === 0, j = k >> 1, side = left ? -1 : 1, sx = Math.round(side * w * 0.66), tk = 0.34 + j * 0.06, stack = `translate(0px, ${-k * 0.6}px)`, half = `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`;
+      return el.animate([{ transform: stack, offset: 0 }, { transform: half, offset: 0.24 }, { transform: half, offset: Math.min(0.9, tk) }, { transform: stack, offset: Math.min(0.97, tk + 0.07) }, { transform: stack, offset: 1 }], { duration: D, easing: "cubic-bezier(.45,0,.25,1)", fill: "both" }).finished; })).catch(() => {});
+    T.shuffleStep = "deck up"; await box.animate([{ transform: "translateY(0)" }, { transform: `translateY(${up}px)` }], { duration: 560, easing: "cubic-bezier(.6,0,.8,.3)", fill: "both" }).finished.catch(() => {}); box.remove();
+    T.shuffleStep = "shoe back"; shoe.classList.remove("shuffling"); pile.classList.remove("away"); await sleep(800); T.shuffleStep = "";
   }
   function armAuto() { if (!(autoOn() && !T.paused && onTable())) return; const r = T.run; setTimeout(() => { if (T.run === r && T.phase === "betting" && !T.paused && onTable()) deal(); }, reduced ? 0 : saved.autoDelay); }
 
@@ -738,7 +743,7 @@
     const b = e.target.closest("[data-act]"); if (!b || b.getAttribute("aria-disabled") === "true") return; act(b.dataset.act);
   });
   function act(a) {
-    if (bettingAct[a]) { if (T.phase !== "betting") return; bettingAct[a](); betMsg(); renderBalance(true); setTimeout(renderSeats, reduced ? 0 : 300); renderDock(); armAuto(); return; }
+    if (bettingAct[a]) { if (T.phase !== "betting") return; const b0 = T.balance; bettingAct[a](); bump(T.balance - b0); betMsg(); renderBalance(true); setTimeout(renderSeats, reduced ? 0 : 300); renderDock(); armAuto(); return; }
     if (a === "pause") { T.paused = !T.paused; if (T.phase === "betting") { betMsg(); armAuto(); } if (T.phase === "results" && !T.paused) setTimeout(() => T.phase === "results" && nextHand(), 1200); renderDock(); return; }
     if (a === "deal") return deal();
     if (a.startsWith("o-")) return offer(a);

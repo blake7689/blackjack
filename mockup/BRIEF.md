@@ -95,6 +95,15 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
   - **Felt print in the recording's style:** two lines on a gentle arc, "BLACKJACK PAYS 3 TO 2" in small caps and a smaller, lighter line below ("Dealer hits soft 17 · Dealer peeks" / "No second card"); no ruled lines or insurance band box; insurance as a third small line when on. AA contrast still required.
   - Results: keep our verdict line (no change).
 
+## Round 10 feedback (Blake, 2026-11-15)
+- **Felt lettering looks wrong:** fix the letter spacing and pick a better font so it reads like **real printed lettering on the felt itself** (ink on cloth: slightly soft, follows the weave, not UI text). **Curve it more.** Bring back the **ruled arc lines** he liked. **Cards may overlap the lettering** (it is printed on the cloth, under the cards). AA contrast still applies to the text where it isn't covered.
+- **The player's bet chip disappears for a moment before its animation:** no gap; the chip stays visible until the moving copy takes over (same frame).
+- **Peek check:** the dealer lifts the **opposite (far) edge** of the hole card, as a dealer checking it would, not the near edge.
+- **Shuffle sequence:** the shoe slides away first, then the shuffle comes down into the centre, riffles, the shuffled deck goes back up, and only then the shoe slides back into place (mirrored in and out). No moment where the stack vanishes.
+- **Top-bar balance badge shows only when the balance actually changes** (e.g. "−$25" when the bet is placed, "+$50" when a win pays). A lost hand changes nothing, so no badge. The middle verdict and the dock's win/lose amounts stay as they are.
+- **Cards turn face down as they are swept to the discard pile** (a flip at the start of the sweep; the pile is all backs).
+- **Discard pile is a straight stack** (square to the screen, like the recording), partly off the top-left edge, not angled into the corner.
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).
