@@ -79,6 +79,22 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
 - Settings keeps "No second card", and the felt print's mode line says "NO SECOND CARD" to match.
 - The Table rules sheet says "blackjack" for the hand, like Settings; "Blakejack" stays only on the felt payout line and the natural badge.
 
+## Round 9 feedback (Blake, 2026-11-15)
+- **Felt print says "BLACKJACK PAYS 3 TO 2"** (not Blakejack). "Blakejack" stays as the app name and the natural badge.
+- **Settings needs more contrast between sections:** section headers, section bodies and groups blend together. Make headers clearly distinct from bodies (surface, weight, dividers, spacing) in dark and light mode, keeping AA.
+- **Dealer's first card goes back to the normal overlap** (as before round 8: the dealer's cards fan like the player's, laid as dealt, the hole card face down). Drop the up-card gap.
+- A phone screen recording of another blackjack app was offered as inspiration for **minor** tweaks only (card animations, flips, cut card, shoe and discard placement, felt writing, card overlaps). Nothing from it is changed until Blake approves each tweak.
+- **Approved tweaks from the recording (Blake, 2026-11-15)**, all minor, layout unchanged:
+  - **Tighter overlap:** earlier cards show only their corner strip (rank + suit fully readable), the newest card whole; hands stay compact. Dealer and player alike.
+  - **Cards fly face down from the shoe with a slight angle and turn over as they land** (the hole card stays down).
+  - **3D edge-on flips** for every turn (landing, hole card, face-down double reveal).
+  - **End of round: cards sweep off to the discard pile** (instead of fading).
+  - **Discard pile at the top-left corner**, partly off the felt, mirroring the shoe at the top-right; it grows through the shoe and empties at the shuffle.
+  - **Cut card, once drawn, rests at the left edge of the felt**, partly off it, until the shuffle.
+  - **Shuffle plays in the centre of the felt**, then the deck slides back into the shoe.
+  - **Felt print in the recording's style:** two lines on a gentle arc, "BLACKJACK PAYS 3 TO 2" in small caps and a smaller, lighter line below ("Dealer hits soft 17 · Dealer peeks" / "No second card"); no ruled lines or insurance band box; insurance as a third small line when on. AA contrast still required.
+  - Results: keep our verdict line (no change).
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).

@@ -34,6 +34,7 @@
   --tx: #eef2ef; --tx-2: #a6b0aa; --tx-3: #85908a;
   --groove-1: #040505; --groove-2: #0f1211;
   --scrim: rgba(3, 4, 4, .72);
+  --sec-body: #0a0d0c; /* a Settings section's inset body, under the --surf header */
 }
 [data-mode="light"] {
   --bg: #e6e7e2; --bg-2: #f8f8f5; --surf: #ffffff; --surf-2: #eef0eb; --surf-3: #e2e5df;
@@ -41,6 +42,7 @@
   --tx: #0d110f; --tx-2: #48514c; --tx-3: #59625d;
   --groove-1: #d9dcd5; --groove-2: #eceee9;
   --scrim: rgba(20, 24, 22, .4);
+  --sec-body: #eaece6;
   --win-tx: #07703f; --lose-tx: #b42318; --lose-line: rgb(180 35 24 / .45); /* on --bg 4.97:1 and 5.29:1 (the felt keeps --win/--lose) */
 }
 /* accent: fill, ink on the fill, accent as text on --bg, glow */
@@ -220,12 +222,21 @@ svg { display: block; }
 .shoe-card, .cut-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; right: calc(var(--cw) * -.42); top: calc(var(--cw) * -.94); transform: rotate(-36deg); transition: transform 780ms var(--e-weight); }
 .shoe-card { filter: drop-shadow(-2px 4px 3px rgb(0 0 0 / .45)); }
 .cut-card { border-radius: calc(var(--cw) * .06); background: linear-gradient(135deg, #f7d55a, #e9b81f); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18), -2px 4px 4px rgb(0 0 0 / .35); transform: rotate(-36deg) translate(30%, -40%); opacity: 0; }
-.shoe.cut-out .cut-card { opacity: 1; transform: rotate(-24deg) translate(-12%, 6%); }
 .shoe.shuffling .shoe-card { transform: rotate(-36deg) translate(40%, -60%); }
 .riffle { position: absolute; z-index: 6; left: 50%; top: 0; width: var(--cw); height: var(--ch); margin-left: calc(var(--cw) / -2); pointer-events: none; }
 .riffle .rcard { position: absolute; inset: 0; border-radius: calc(var(--cw) * .06); overflow: hidden; box-shadow: 0 1px 1px rgb(0 0 0 / .4), 1px 3px 4px rgb(0 0 0 / .25); }
 .riffle .rcard svg { width: 100%; height: 100%; display: block; }
 .shoe .mouth { position: absolute; left: 30%; top: 44%; width: 1px; height: 1px; }
+/* the discard pile: the shoe's mirror at the top-left corner, partly off the felt; it thickens as the shoe runs down */
+.discard { position: absolute; z-index: 5; left: 0; top: calc(var(--rail) * -1); width: calc(var(--cw) * 1.1); height: calc(var(--cw) * .9); pointer-events: none; }
+.discard-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; left: calc(var(--cw) * -.42); top: calc(var(--cw) * -.94); transform: rotate(36deg); filter: drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); transition: opacity var(--t-ui); }
+.discard[data-lv="2"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); }
+.discard[data-lv="3"] .discard-card, .discard[data-lv="4"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(1px 2px 0 rgb(0 0 0 / .4)) drop-shadow(2px 5px 4px rgb(0 0 0 / .45)); }
+.discard.empty .discard-card { opacity: 0; }
+.discard .mouth { position: absolute; left: 30%; top: 30%; width: 1px; height: 1px; }
+/* the cut card, once drawn, lies at the felt's left edge, half off it, level with the dealer's cards, until the shuffle */
+.cut-rest { position: absolute; z-index: 4; left: calc(var(--cw) * -.52); top: calc(var(--ch) * .12 + 10px); width: var(--cw); aspect-ratio: 250 / 363; border-radius: calc(var(--cw) * .06); background: linear-gradient(135deg, #f7d55a, #e9b81f); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18), 2px 4px 5px rgb(0 0 0 / .35); opacity: 0; pointer-events: none; transition: opacity var(--t-ui); }
+#shoeBox.cut-out ~ .cut-rest { opacity: 1; }
 
 /* card: one element; .cin turns for the flip, the shadow stays on the table */
 .hand { position: relative; height: var(--ch); flex: none; }
@@ -233,7 +244,9 @@ svg { display: block; }
 .card { position: absolute; top: 0; left: 0; width: var(--cw); height: var(--ch); transform: translateX(var(--x, 0px)); transition: transform var(--t-state) var(--e-weight); }
 .card.new { transition: none; }
 .card.side { transform: translateX(var(--x, 0px)) rotate(90deg); } /* the double card, sideways; --x keeps its corners on whole pixels */
-.card.down, .card.flipping { perspective: 900px; }
+.card.down, .card.flipping { perspective: 520px; } /* close enough that a turning card is seen edge-on mid-turn */
+.card.flipping { animation: flipLift var(--t-flip) var(--e-io); }
+@keyframes flipLift { 50% { scale: 1.07; } }
 .card::before { content: ""; position: absolute; inset: 0; border-radius: calc(var(--cw) * .07); box-shadow: var(--shx, 2px) var(--shy, 5px) 7px rgb(var(--shadow-c) / .55), 0 1px 2px rgb(0 0 0 / .45); transition: box-shadow var(--t-flip) var(--e-io); }
 .cin { position: absolute; inset: 0; transition: transform var(--t-flip) var(--e-io); }
 .card.down .cin, .card.flipping .cin { transform-style: preserve-3d; }
@@ -459,16 +472,20 @@ svg { display: block; }
 .s-title { margin: 0; font-family: var(--f-disp); font-weight: 600; font-size: 20px; letter-spacing: .02em; }
 .s-body { max-width: 680px; margin: 0 auto; padding: 0 16px; }
 /* a section is a disclosure, closed by default: name, a one-line summary of its values, a chevron */
-.sec { border-bottom: 1px solid var(--line); scroll-margin-top: 72px; }
+/* sections are cards: a raised header (surface, display weight), an inset body a step darker (lighter in light mode) under a divider */
+.sec { margin-top: 12px; border: 1px solid var(--line-2); border-radius: var(--r3); background: var(--surf); scroll-margin-top: 72px; }
+.s-body > .sec:first-child { margin-top: 16px; }
 .sec-t { margin: 0; }
-.sec-h { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n c" "s c"; align-items: center; column-gap: 12px; min-height: 64px; padding: 12px 0; border: 0; background: none; color: var(--tx); text-align: left; cursor: pointer; }
+.sec-h { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "n c" "s c"; align-items: center; column-gap: 12px; min-height: 68px; padding: 14px 16px; border: 0; border-radius: calc(var(--r3) - 1px); background: var(--surf); color: var(--tx); text-align: left; cursor: pointer; }
 .sec-n { grid-area: n; font-family: var(--f-disp); font-weight: 600; font-size: 19px; letter-spacing: .01em; display: flex; align-items: center; gap: 8px; }
 .sec-s { grid-area: s; font-size: 13px; color: var(--tx-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .sec-h .chev { grid-area: c; width: 20px; height: 20px; color: var(--tx-3); transition: transform var(--t-ui); } /* the icon points down: closed */
 .sec-h[aria-expanded="true"] .chev { transform: rotate(180deg); }
-.sec-h:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r1); }
+.sec-h:hover { background: var(--surf-2); }
+.sec-h[aria-expanded="true"] { border-radius: calc(var(--r3) - 1px) calc(var(--r3) - 1px) 0 0; border-bottom: 1px solid var(--line-2); }
+.sec-h:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .sec-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; } /* this section has unsaved changes */
-.sec-b { padding: 0 0 20px; }
+.sec-b { padding: 2px 16px 18px; background: var(--sec-body); border-radius: 0 0 calc(var(--r3) - 1px) calc(var(--r3) - 1px); }
 .sec-b > .grp:first-child, #ruleGroups > .grp:first-child { margin-top: 8px; }
 /* delete: no title, set apart at the bottom */
 .danger-zone { margin-top: 40px; padding: 4px 16px; border: 1px solid rgb(255 107 94 / .28); border-radius: var(--r3); }
@@ -492,7 +509,7 @@ svg { display: block; }
 .po-e { margin-left: auto; font-size: 13px; font-weight: 500; color: var(--tx-2); }
 .pdd-list .tick { width: 16px; height: 16px; color: var(--accent-tx); visibility: hidden; }
 .pdd-list [aria-selected="true"] .tick { visibility: visible; }
-.grp { margin-top: 18px; }
+.grp { margin-top: 22px; }
 .grp h3 { margin: 0 0 2px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--tx-3); }
 .rrow { display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; border-bottom: 1px solid var(--line); }
 .rrow .seg { flex-wrap: nowrap; }

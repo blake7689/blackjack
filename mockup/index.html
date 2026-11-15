@@ -53,6 +53,9 @@
           <svg class="shoe-card" viewBox="0 0 250 363"><use href="#cardback"/></svg>
           <i class="mouth" id="mouth"></i>
         </div>
+        <!-- the discard pile mirrors the shoe at the top-left corner; the cut card, once drawn, rests at the felt's left edge -->
+        <div class="discard empty" id="discard" aria-hidden="true"><svg class="discard-card" viewBox="0 0 250 363"><use href="#cardback"/></svg><i class="mouth" id="dmouth"></i></div>
+        <div class="cut-rest" id="cutRest" aria-hidden="true"></div>
         <section class="dealer" aria-label="Dealer">
           <div id="dHand" class="hand dealer-hand" role="group" aria-label="Dealer has no cards"></div>
         </section>

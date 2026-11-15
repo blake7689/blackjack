@@ -85,7 +85,7 @@
     return [...l1, ...l2];
   }
   const EDGE_NOTE = "House edge is an estimate for a player who uses basic strategy and declines insurance: published rule-by-rule figures added together, so it is approximate. A plus sign means a worse deal for you. Insurance, House variations and Advanced options are not counted.";
-  const MODE_PRINT = { peek: "DEALER PEEKS", nopeek: "NO PEEK", eu: "NO SECOND CARD" }; // the same words as Settings' "Dealer's second card" choice (Blake, round 9)
+  const MODE_PRINT = { peek: "Dealer peeks", nopeek: "No peek", eu: "No second card" }; // the same words as Settings' "Dealer's second card" choice (Blake, round 9)
 
   /* ================= saved settings and theme ================= */
   const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]; // ALLOWED_CHIPS
@@ -141,7 +141,7 @@
   const hiLo = (c) => (["2", "3", "4", "5", "6"].includes(c.r) ? 1 : ["10", "J", "Q", "K", "A"].includes(c.r) ? -1 : 0);
   const newSeat = () => ({ base: 0, origin: 0, natural: false, busted: false, bet: 0, hist: [], cards: [], dbl: 0, ins: 0, done: false, result: null, kind: null, payout: 0, sur: false, even: false, split: false, tag: "h" + ++uid });
   const T = { phase: "betting", seats: [newSeat()], dealer: [], active: -1, balance: BANK, lastBets: [25], count: 3, chip: 25, delta: 40, msg: "", verdict: null,
-    run: 0, shoe: [], cutAt: 0, cutDrawn: false, paused: false, discard: 6 };
+    run: 0, shoe: [], cutAt: 0, cutDrawn: false, paused: false, discard: 0 };
   const demo = { seats: 1 };
   function buildShoe() {
     const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"], suits = ["S", "H", "D", "C"]; const out = [];
@@ -149,7 +149,7 @@
     for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
     T.shoe = out; T.cutAt = Math.floor(out.length * 0.25); T.cutDrawn = false;
   }
-  const draw = () => { if (T.shoe.length <= T.cutAt && !T.cutDrawn) { T.cutDrawn = true; T.cutSaid = false; $("#shoeBox").classList.add("cut-out"); } if (!T.shoe.length) buildShoe(); return mk(T.shoe.pop()); };
+  const draw = () => { if (T.shoe.length <= T.cutAt && !T.cutDrawn) { T.cutDrawn = true; T.cutSaid = false; $("#shoeBox").classList.add("cut-out"); cutFly(); } if (!T.shoe.length) buildShoe(); return mk(T.shoe.pop()); };
   const onTable = () => T.seats.reduce((a, s) => a + s.bet, 0);
   const stepMs = () => clamp(saved.speed * 0.45, 200, 900);
   const flightMs = () => clamp(saved.speed * 0.52, 300, 760);
@@ -192,23 +192,25 @@
   function renderPrint() {
     const svg = $("#print"); const W = Math.round(svg.clientWidth), H = Math.round(svg.clientHeight); if (!W || !H) return;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-    const s = saved; const pay = `BLAKEJACK PAYS ${s.blackjackPayout === "6:5" ? "6 TO 5" : "3 TO 2"}`;
-    const soft = s.dealerHitsSoft17 ? "DEALER HITS SOFT 17" : "DEALER STANDS ON ALL 17s"; const mode = MODE_PRINT[s.dealerHoleBehaviour];
-    const ins = s.insurance ? "INSURANCE PAYS 2 TO 1" : "";
+    const s = saved; const pay = `BLACKJACK PAYS ${s.blackjackPayout === "6:5" ? "6 TO 5" : "3 TO 2"}`;
+    const soft = s.dealerHitsSoft17 ? "Dealer hits soft 17" : "Dealer stands on all 17s"; const mode = MODE_PRINT[s.dealerHoleBehaviour];
+    const ins = s.insurance ? "Insurance pays 2 to 1" : "";
+    const caps = (txt) => txt.split(" ").map((wd) => (/^[A-Z]/.test(wd) ? `${wd[0]}<tspan style="font-size:max(12px,.78em)">${wd.slice(1)}</tspan>` : `<tspan style="font-size:max(12px,.78em)">${wd}</tspan>`)).join(" "); // small caps: the initials full size, the rest smaller (never under 12 px)
+    const LIGHT = 'fill-opacity=".84" font-weight="500"';
     svg.setAttribute("aria-label", "Table rules"); // the name stays short: "Dealer hits soft 17" in it would also match a test looking for the Hit button; the sheet reads the rules out
     if (matchMedia("(max-height: 520px)").matches) {
       const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
-      svg.innerHTML = `<defs><path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="12" letter-spacing="1.8" font-family="var(--f-disp)" font-weight="600" fill="var(--print)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${[pay, soft, ins, mode].filter(Boolean).join("  ·  ")}</textPath></text>`;
+      svg.innerHTML = `<defs><path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="1.2" font-family="var(--f-disp)" font-weight="600" fill="var(--print)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${caps(pay)}<tspan ${LIGHT} style="font-size:12px;font-family:var(--f-ui)">   ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</tspan></textPath></text>`;
       fitPrint(svg, W * 0.96); return;
     }
     const R = W * 3.2; const cx = W / 2;
     const arc = (y, half) => { const yc = y - R; const dx = Math.min(half, W / 2 - 2); const dy = Math.sqrt(R * R - dx * dx); return `M${cx - dx} ${yc + dy}A${R} ${R} 0 0 0 ${cx + dx} ${yc + dy}`; };
-    const f1 = clamp(Math.round(Math.min(W / 26, H - 56)), 12, 18), f2 = 12, f3 = 12;
-    const y1 = f1 + 2, y2 = y1 + f2 + 9, yt = y2 + 9, yText = yt + f3 + 4, yb = yText + 6;
-    let out = `<defs><path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(yText, W)}"/></defs>`;
-    const tp = (id, txt, fs, w, ls = 0.2) => `<text font-size="${fs}" letter-spacing="${fs * ls}" font-family="var(--f-disp)" font-weight="${w}" fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
-    out += tp("pa1", pay, f1, 600, 0.24) + tp("pa2", `${soft}   ·   ${mode}`, f2, 600, 0.16);
-    if (ins) out += `<path d="${arc(yt, W * 0.44)}" fill="none" stroke="var(--print)" stroke-width="1" opacity=".5"/><path d="${arc(yb, W * 0.44)}" fill="none" stroke="var(--print)" stroke-width="1" opacity=".5"/>` + tp("pa3", ins, f3, 600, 0.22);
+    const f1 = clamp(Math.round(Math.min(W / 18, H - 34)), 15, 24), f2 = clamp(Math.round(f1 * 0.62), 12, 14);
+    const y1 = f1 + 2, y2 = y1 + f2 + 8, y3 = y2 + f2 + 6;
+    let out = `<defs><path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(y3, W)}"/></defs>`;
+    const tp = (id, txt, fs, attrs, ls, font = "var(--f-disp)") => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(1)}" font-family="${font}" ${attrs} fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
+    out += tp("pa1", caps(pay), f1, 'font-weight="600"', 0.06) + tp("pa2", `${soft}  ·  ${mode}`, f2, LIGHT, 0.02, "var(--f-ui)"); // no ruled lines, no box
+    if (ins) out += tp("pa3", ins, f2, LIGHT, 0.02, "var(--f-ui)");
     svg.innerHTML = out; fitPrint(svg, W * 0.94);
   }
   function fitPrint(svg, maxW) { $$("text", svg).forEach((el) => { let fs = +el.getAttribute("font-size"); let guard = 8; while (guard-- && fs > 12 && el.getComputedTextLength() > maxW) { fs = Math.max(12, fs - 1); el.setAttribute("font-size", fs); el.setAttribute("letter-spacing", fs * 0.14); } }); }
@@ -230,19 +232,16 @@
   // step: at most .62 of a card (a dealer's spread), never under .27 (the rank and suit corner is 20 % of the card)
   function layoutHand(box, cards, maxW, pillMode) {
     const w = cw(), h = chH(), n = cards.length; const extra = n && cards[n - 1].side ? h - w : 0; // a sideways card is as wide as a card is tall
-    const dealer = box.id === "dHand" && n > 1; const fan = dealer ? n - 1 : n; // the dealer's up card stands alone; the cards after it overlap
     const minStep = w * 0.27; // the overlap floor (section 2): the corner index always shows
-    const gap = dealer ? Math.max(0, Math.min(Math.max(8, Math.round(w * 0.14)), Math.floor(maxW - 2 * w - extra - minStep * (fan - 1)))) : 0; // a clear gap; a long hand gives it up first (never below touching), so the floor holds
-    const lead = dealer ? w + gap : 0;
-    const step = fan > 1 ? Math.round(Math.min(w * 0.62, Math.max(minStep, (maxW - lead - w - extra) / (fan - 1)))) : 0;
-    const bw = n ? lead + w + step * (fan - 1) + extra : w; const was = box.getBoundingClientRect().left;
+    const step = n > 1 ? Math.round(minStep) : 0; // every hand shows earlier cards by their corner strip (rank and suit whole) and the newest card whole (Blake, round 10)
+    const bw = n ? w + step * (n - 1) + extra : w; const was = box.getBoundingClientRect().left;
     box.style.width = bw + "px"; if (box.id === "dHand") box.style.marginRight = Math.max(0, Math.round(bw - maxW)) + "px"; // a hand longer than its room (6-7 cards on a phone) slides left, clear of the shoe
     box.style.setProperty("--fx", "0px"); box.style.setProperty("--fy", "0px");
     const r = box.getBoundingClientRect(); const fx = r.left - Math.round(r.left), fy = r.top - Math.round(r.top); // whole-pixel card edges
     if (Math.abs(fx) > 0.01) box.style.setProperty("--fx", -fx + "px"); if (Math.abs(fy) > 0.01) box.style.setProperty("--fy", -fy + "px");
     const dx = Math.round(was - box.getBoundingClientRect().left); // the hand re-centres as it grows: the cards already down glide, never jump
     cards.forEach((c, i) => {
-      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = (lead ? (i ? lead + (i - 1) * step : 0) : i * step) + (c.side ? (h - w) / 2 : 0); // turned about its centre: shift so it starts one step on
+      const el = box.querySelector(`.card[data-id="${c.id}"]`); if (!el) return; const x = i * step + (c.side ? (h - w) / 2 : 0); // turned about its centre: shift so it starts one step on
       if (dx && !el.classList.contains("new")) { const old = parseFloat(el.style.getPropertyValue("--x")) || 0; el.style.transition = "none"; el.style.setProperty("--x", old + dx + "px"); void el.offsetWidth; el.style.transition = ""; }
       el.style.setProperty("--x", x + "px"); el.style.zIndex = i + 1; el.dataset.z = i + 1; // each card lies on the one before it, as dealt
     });
@@ -407,7 +406,23 @@
     $("#dockIn").innerHTML = one ? `<div class="dock-row dock-one">${A}${B}</div>` : `<div class="dock-row">${A}</div><div class="dock-row">${B}</div>`;
     fitRack();
   }
-  function render() { renderBalance(); renderDelta(); renderCount(); renderMid(); renderSeats(); renderDealer(); renderDock(); renderPrint(); }
+  function renderDiscard() { const d = $("#discard"); d.classList.toggle("empty", !T.discard); d.dataset.lv = Math.min(4, Math.ceil(T.discard / 12)); } // the pile thickens as the shoe runs down
+  function render() { renderBalance(); renderDelta(); renderCount(); renderMid(); renderSeats(); renderDealer(); renderDock(); renderPrint(); renderDiscard(); }
+  // end of round: every card on the table sweeps off to the discard pile at the top-left corner
+  function sweepFx() {
+    const els = [...$$("#dHand .card"), ...$$("#seats .card")]; if (!els.length) return Promise.resolve(); const done = () => { T.discard += els.length; renderDiscard(); }; // the pile grows when they arrive
+    if (reduced) { done(); return Promise.resolve(); }
+    const m = $("#dmouth").getBoundingClientRect(), w = cw(), h = chH(), box = $("#stageIn"), o = box.getBoundingClientRect(); // swept inside the felt: the pile's corner and the cards clip at its edge, never over the top bar
+    return Promise.all(els.map((el, i) => { const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, side = el.classList.contains("side");
+      const g = el.cloneNode(true); g.removeAttribute("data-id"); g.className = "card sweep" + (el.classList.contains("down") ? " down" : ""); g.querySelectorAll("img").forEach((x) => (x.alt = ""));
+      Object.assign(g.style, { position: "absolute", left: cx - w / 2 - o.left + "px", top: cy - h / 2 - o.top + "px", width: w + "px", height: h + "px", transform: "none", zIndex: 40 + i }); g.setAttribute("aria-hidden", "true"); box.appendChild(g);
+      return g.animate([{ translate: "0 0", rotate: side ? "90deg" : "0deg" }, { translate: `${m.left - cx}px ${m.top - cy}px`, rotate: "36deg", scale: ".92" }], { duration: 560, delay: i * 45, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" }).finished.catch(() => {}).then(() => g.remove());
+    })).then(done);
+  }
+  function cutFly() { // the cut card comes out of the shoe and lies at the felt's left edge until the shuffle
+    if (reduced) return; const el = $("#cutRest"), r = el.getBoundingClientRect(), m = $("#mouth").getBoundingClientRect();
+    el.animate([{ translate: `${m.left - (r.left + r.width / 2)}px ${m.top - (r.top + r.height / 2)}px`, rotate: "-36deg" }, { translate: "0 0", rotate: "0deg" }], { duration: 760, easing: "cubic-bezier(.33,0,.15,1)" });
+  }
 
   /* ================= motion ================= */
   const fx = () => $("#fx");
@@ -417,9 +432,10 @@
     const m = $("#mouth").getBoundingClientRect(); const r = el.getBoundingClientRect();
     const dx = m.left - (r.left + r.width / 2), dy = m.top - (r.top + r.height / 2);
     el.style.zIndex = 50; const d = flightMs();
-    await el.animate([{ translate: `${dx}px ${dy}px`, rotate: "-36deg", scale: "1" }, { translate: `${dx * 0.1}px ${dy * 0.1}px`, rotate: "-4deg", scale: "1", offset: 0.84 }, { translate: "0 0", rotate: "0deg", scale: "1" }], { id: "fly", duration: d, easing: "cubic-bezier(.33,0,.15,1)" }).finished.catch(() => {});
+    const turn = faceUp ? sleep(d * 0.8).then(() => flip(el)) : null; // it turns over as it lands, not after
+    await el.animate([{ translate: `${dx}px ${dy}px`, rotate: "-36deg" }, { translate: `${dx * 0.45}px ${dy * 0.45}px`, rotate: "-12deg", offset: 0.45 }, { translate: `${dx * 0.08}px ${dy * 0.08}px`, rotate: "-5deg", offset: 0.84 }, { translate: "0 0", rotate: "0deg" }], { id: "fly", duration: d, easing: "cubic-bezier(.33,0,.15,1)" }).finished.catch(() => {});
     el.style.zIndex = el.dataset.z || ""; el.classList.remove("new");
-    if (faceUp) await flip(el);
+    if (turn) await turn;
   }
   async function flip(el, card) {
     if (card) { const f = $(".cf", el); if (!f.firstChild) f.innerHTML = `<img src="${cardSrc(card)}" alt="${cardAlt(card)}" draggable="false">`; }
@@ -621,34 +637,36 @@
     offerMsg(); renderDock();
   }
   function nextHand() {
-    const my = ++T.run; T.phase = "betting"; T.seats = Array.from({ length: demo.seats }, newSeat); T.dealer = []; T.active = -1; T.verdict = null; fx().innerHTML = "";
+    fx().innerHTML = ""; const swept = sweepFx();
+    const my = ++T.run; T.phase = "betting"; T.seats = Array.from({ length: demo.seats }, newSeat); T.dealer = []; T.active = -1; T.verdict = null;
     $("#felt").className = "felt";
     if (T.cutDrawn) {
       T.phase = "shuffling"; setMsg("Shuffling"); render();
-      shuffleFx().then(() => { if (T.run !== my) return; buildShoe(); $("#shoeBox").classList.remove("cut-out"); T.count = 0; T.phase = "betting"; if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto(); });
+      swept.then(shuffleFx).then(() => { if (T.run !== my) return; buildShoe(); T.count = 0; T.phase = "betting"; if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto(); });
       return;
     }
     if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto();
   }
   // the top card withdraws into the shoe while the dealer shuffles off screen, then comes back
   async function shuffleFx() {
-    const shoe = $("#shoeBox"); shoe.classList.add("shuffling");
+    const shoe = $("#shoeBox"); shoe.classList.add("shuffling"); shoe.classList.remove("cut-out"); T.discard = 0; renderDiscard();
     if (!reduced) {
-      const box = document.createElement("div"); box.className = "riffle"; box.style.top = "12px"; $("#stageIn").appendChild(box);
+      const box = document.createElement("div"); box.className = "riffle"; box.style.top = Math.round(($("#stageIn").clientHeight - chH()) / 2) + "px"; $("#stageIn").appendChild(box); // the centre of the felt
       const w = cw(), N = 7, back = `<svg viewBox="0 0 250 363"><use href="#cardback"/></svg>`, D = 2600;
       const m = $("#mouth").getBoundingClientRect(), b = box.getBoundingClientRect(); const mx = Math.round(m.left - (b.left + b.width / 2)), my = Math.round(m.top - (b.top + b.height / 2));
+      const dm = $("#dmouth").getBoundingClientRect(); const dx0 = Math.round(dm.left - (b.left + b.width / 2)), dy0 = Math.round(dm.top - (b.top + b.height / 2));
       const runs = [];
       for (let i = 0; i < 2 * N; i++) {
         const left = i < N, j = left ? i : i - N, k = 2 * j + (left ? 0 : 1), side = left ? -1 : 1, sx = Math.round(side * w * 0.66), tk = 0.24 + k * 0.03;
         const el = document.createElement("div"); el.className = "rcard"; el.innerHTML = back; el.style.zIndex = k; box.appendChild(el);
         runs.push(el.animate([
-          { transform: `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 0 },
+          { transform: left ? `translate(${dx0}px, ${dy0}px) rotate(36deg)` : `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 0 }, // half from the discard pile, half from the shoe
           { transform: `translate(0px, ${-i * 0.6}px)`, opacity: 1, offset: 0.1 },
           { transform: `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`, opacity: 1, offset: 0.2 },
           { transform: `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`, opacity: 1, offset: tk },
           { transform: `translate(0px, ${-k * 0.6}px) rotate(0deg)`, opacity: 1, offset: tk + 0.06 },
           { transform: `translate(0px, ${-k * 0.6}px) rotate(0deg)`, opacity: 1, offset: 0.82 },
-          { transform: `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 1 },
+          { transform: `translate(${mx}px, ${my}px) rotate(-36deg)`, opacity: 0, offset: 1 }, // the whole deck back into the shoe
         ], { duration: D, easing: "cubic-bezier(.45,0,.25,1)", fill: "both" }).finished);
       }
       await Promise.all(runs).catch(() => {}); box.remove();
@@ -660,7 +678,7 @@
   /* ================= scenes (demo panel) ================= */
   const C = (list) => list.split(" ").map((x) => mk(x));
   function base(bets) {
-    T.run++; fx().innerHTML = ""; $("#shoeBox").classList.remove("cut-out", "shuffling"); T.cutDrawn = false;
+    T.run++; fx().innerHTML = ""; $("#shoeBox").classList.remove("cut-out", "shuffling"); T.cutDrawn = false; T.discard = 0;
     Object.assign(T, { phase: "betting", seats: Array.from({ length: demo.seats }, newSeat), dealer: [], active: -1, balance: BANK, verdict: null, paused: false, offers: null, dStatus: undefined, deferPeek: false });
     T.seats.forEach((s, i) => { const b = bets[i] ?? bets[0]; if (b) { s.bet = b; s.hist = [b]; T.balance -= b; } });
     balShown = T.balance; $("#felt").className = "felt";
@@ -690,7 +708,7 @@
     insurance() { setup(["9S 7D", "10C 6H", "8C 8D"], [50, 20, 15], "AH 6C", { hole: true, count: -1 }); T.seats.forEach((s) => { s.ins = s.bet / 2; T.balance -= s.ins; }); balShown = T.balance; T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     peek() { setup(["9S 7D", "10C 5H", "8C 8D"], [25, 20, 15], "KS 6D", { hole: true, count: -1 }); render(); const my = T.run; peekCheck(my).then(() => { if (live(my)) startPlay(my); }); },
     shuffle() { base([0]); T.count = 0; T.cutSaid = false; T.phase = "shuffling"; setMsg("Shuffling"); render(); const my = T.run; shuffleFx().then(() => { if (live(my)) { T.phase = "betting"; betMsg(); renderDock(); } }); },
-    cut() { base([25, 10, 15]); Object.assign(T, { count: 0, delta: null }); setMsg("Last hand before the shuffle"); render(); requestAnimationFrame(() => { $("#shoeBox").classList.add("cut-out"); T.cutDrawn = true; }); },
+    cut() { base([25, 10, 15]); Object.assign(T, { count: 0, delta: null, discard: 44 }); setMsg("Last hand before the shuffle"); render(); requestAnimationFrame(() => { $("#shoeBox").classList.add("cut-out"); T.cutDrawn = true; }); },
     split() { SCENES.pair(); const my = T.run; setTimeout(() => { if (live(my)) playerAct("split"); }, 450); },
     many() { demo.seats = 6; setup(["8S 3D", "5C 6H", "9C 2D", "10S 4H", "7S 7D", "KD 5C"], [25, 25, 10, 10, 15, 15], "6S KD", { hole: true, count: 2 }); T.phase = "playing"; T.active = 3; setMsg("Your move"); render(); },
   };
