@@ -1,47 +1,52 @@
-# Blakejack design system (round 12)
+# Blakejack design system (round 13)
 
-Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
+Source of truth for the build PRs (#79-#87). Every value below is current; each topic is stated once. The mockup (`index.html`, `mockup.css`, `mockup.js`, `rules.js`, `assets/`) shows all of it; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and feedback; `RESEARCH.md` says what we took from whom. How a decision came about is in the appendix (history only, nothing there is binding).
 
 ## 0. Authority, and where this overrides the approved spec
 **This file is the design authority for the build PRs #79-#87.** Where the approved spec (`01-Projects/Blackjack/Specs/UI revamp.md`) and this file differ, this file wins; the spec will be amended to match.
 
 | Topic | The spec says | This mockup decides | Why |
 |---|---|---|---|
-| Look | Brass, leather and serif "luxury" | Modern dark premium: near-black UI, one accent, real objects on a lit felt | Blake rejected the first look (round 1) |
-| Fonts | One self-hosted display font + system UI | Clash Display (display) + Satoshi (UI), both from Fontshare; self-host one woff2 each | Round 1 direction; licence to be checked |
-| Felt fonts | (none: the print used the display font) | **Two serif families for the felt print only:** Cinzel 700 (the payout line) and Cormorant Garamond 700 with lining numerals (the rules line and "Insurance pays 2 to 1", so "17" and "1" never read as "i7" / "I"). Both OFL; the build **self-hosts one woff2 of each, subset to the print's glyphs** (A-Z, a-z, 0-9, space, "·") | Blake, round 10 notes (lettering that reads as print on the felt) |
-| Rules presets | Preset tiles with summaries | A compact dropdown (button + listbox) showing the preset and its house edge; "Custom" when any rule is changed (a state, not a choice) | Blake, rounds 1 and 7 |
-| Rules layout | Collapsed Customize / House variations / Advanced groups | Every Settings section is collapsible and **collapsed by default**, its header naming it and summing up its values; inside Table rules, flat groups (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced), hidden rules not shown | Blake, rounds 1 and 7 |
-| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One three-way choice "Dealer's second card": Peeks / No peek / **No second card** (= dealerHoleBehaviour). The same words everywhere the mode shows: the felt print's rules line "Dealer peeks" / "No peek" / **"No second card"** (portrait arc and landscape line alike) and the rules sheet ("No second card: the dealer takes it after you play") | Planner I7, Blake rounds 7 and 9 |
+| Look | Brass, leather and serif "luxury" | Modern dark premium: near-black UI, one accent, real objects on a lit felt | Blake, round 1 |
+| Fonts | One self-hosted display font + system UI | Clash Display (display) + Satoshi (UI), both Fontshare; self-host one woff2 each (licence to settle in #79, with a CREDITS.md) | Round 1 direction |
+| Felt fonts | The display font | **Two serif families, the felt print only:** Cinzel 700 (payout line) and Cormorant Garamond 700 with lining numerals (rules and insurance lines). Both OFL; self-host one woff2 each, subset to A-Z, a-z, 0-9, space and "·" | Blake, round 10 |
+| Rules presets | Preset tiles with summaries | A compact dropdown showing the preset and its house edge; "Custom" when any rule is changed (a state, not a choice) | Blake, rounds 1 and 7 |
+| Settings layout | Collapsed Customize / House variations / Advanced groups | Every Settings section is a disclosure, **closed on arrival, one open at a time** (an accordion); its header names it and sums up its values; inside Table rules, flat groups (Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced) | Blake, rounds 1, 7 and 12 |
+| Hole-card mode | "Second card" segment + an Advanced "doesn't check" checkbox | One choice "Dealer's second card": Peeks / No peek / **No second card**; the same words on the felt print and in the rules sheet | Planner, Blake rounds 7 and 9 |
 | Shoe | A shoe in the top strip | Only the corner of the top card, at the felt's top-right; the shoe is off the table | Blake, round 1 |
-| Card width | 44-120 px | 40-156 px, whole pixels, from `--cwr` (section 4) | Readable cards on large screens (round 2) |
-| Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 (compact stacks that build the right way) |
-| Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; past that it scrolls by whole chips, no chip cut at rest | Blake: chips never clip |
-| Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blackjack!" | Blake rounds 1-3, 11 |
-| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **The hand is "blackjack" everywhere: in Settings, the rules sheet, the felt print, and in play** (the natural's total pill "Blackjack!", the verdict "BLACKJACK!", the result tag, for player and dealer). **"Blakejack" is only the app's name** (the wordmark, the page title, the card back). Sentence case everywhere | Blake rounds 7, 9 and 11 (overrides the spec's Brand list) |
-| Hand totals | Always shown | A display setting **Show hand totals** (`showTotals`, on by default): off hides every total pill, the player's and the dealer's, in every phase (visibility, so nothing moves) and drops the total from the hands' accessible names. Not a rule key: no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets | Blake round 7 |
-| Dealer's cards | Overlapped as dealt | Overlapped as dealt, like the player's (the round-8 up-card gap is dropped, Blake round 9 feedback): each card on the one before it, the hole card face down; the 0.27 overlap floor and the shoe clearance hold | Blake rounds 7 and 9 |
-| Top bar | Balance after the wordmark | **Balance centred** on the bar (equal outer columns, so nothing beside it moves it), a sleeker bar (44-52 px, no boxes): menu and wordmark left, count and Settings right | Blake round 7 |
-| Count | Hidden while the opening cards are dealt (`dealingStyle`) | **Live and never blank:** the running and true count change as each card lands face up (the hole card when it turns) and stay in view through the deal; fixed-width tabular figures in a fixed box, so a new value never moves it | Blake round 11 (overrides the app's hide-while-dealing for the count; totals still hide while dealing) |
-| Dock actions | All actions shown, unavailable ones dimmed | An action **turned off by a setting is not shown** (Surrender when surrender is "none", Triple when triple down is off, insurance and even money when insurance is off); an action that is **possible in the rules but not on this hand stays, dimmed** (Double on a three-card hand, Split on a non-pair) | Blake round 11 |
-| Result tags | A tag on every hand | Per-hand tags (WIN, PUSH, BUST … under the circle) **only with two or more hands**; one hand shows just the verdict line and the dock summary | Blake round 11 |
+| Card width | 44-120 px | 40-156 px, whole pixels (section 4) | Readable cards on large screens |
+| Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 |
+| Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; otherwise it scrolls by whole chips, none cut at rest | Blake: chips never clip |
+| Chip tap | A tap on a chip bets it (one seat) | **A tap on a rack chip only selects it; a tap on the bet circle bets it** | Blake, round 12 |
+| Table limits | (none) | None (play money); per-preset limits are a `later` issue | Blake, round 12 |
+| Totals | A total pill | Beside the hand, never on a card (above it with several hands in portrait, in its own column on wide and landscape screens); a natural says "Blackjack!" | Blake |
+| Brand word | "Blakejack on Split", "Blakejack Pays" … | **The hand is "blackjack" everywhere** (Settings, the rules sheet, the felt print, the pill, the verdict, the tags, for player and dealer); **"Blakejack" is only the app's name** (wordmark, page title, card back). Sentence case everywhere | Blake, rounds 7, 9, 11 |
+| Hand totals | Always shown | Display setting **Show hand totals** (`showTotals`, on): off hides every total pill in every phase and drops the totals from the hands' accessible names; **the "Blackjack!" badge still shows** (and the hand's name says "blackjack"). Not a rule key | Blake, rounds 7 and 12 |
+| Count | Hidden while the opening cards are dealt (`dealingStyle`) | **Live, never blank:** changes as each card lands face up (the hole card when it turns); fixed-width figures in a fixed box. Totals still hide while dealing | Blake, round 11 |
+| Dock actions | All shown, unavailable ones dimmed | **Turned off by a setting: not shown** (Surrender when "none", Triple when off, insurance and even money when insurance is off). **Possible in the rules but not on this hand: shown dimmed** | Blake, round 11 |
+| Result tags | A tag on every hand | Per-hand tags only with two or more hands; one hand shows the verdict line and the dock summary | Blake, round 11 |
+| Top bar | Balance after the wordmark | Balance centred on a sleek bar; menu and wordmark left, count and Settings right | Blake, round 7 |
+| Peek | (not designed) | The mirror check: the hole card slides up a short way and back; most of it stays in view; **its length follows Game speed** | Blake, rounds 11 and 12 |
+| Shuffle | (not designed) | In the centre, in order, nothing vanishing; its length follows Game speed; a tap skips it | Blake, rounds 10 and 12 |
+| Include cut card | A switch | Kept, in the Shoe group; off = no end-of-shoe shuffle, and a mid-round refill plays a short shuffle | Blake, round 12 |
+| Split dealing | Not in the spec | **New rule key `splitDeal`** ("Deal split hands": One at a time / Both at once), default "one". **Needs its own issue:** `LEGACY_RULES.splitDeal = "both"`, a `SETTINGS_VERSION` bump, a `RULE_SINCE` entry | Blake |
+| Doubles | Sideways double (shipped); #66 face-down double | Both designed (section 5) | Blake |
+| Start screen | Home first | **A signed-in player opens straight onto the table** (Home is in the menu); a signed-out player sees Home | Blake, round 12 |
 | Tip slot (#3) | Reserved line above the action bar | Kept: `.tip-line` above the dock, 0 px while empty | — |
-| Split dealing | Not in the spec | **New rule key `splitDeal`** ("Deal split hands": One at a time / Both at once), default "one" for new players. **Needs its own issue:** `LEGACY_RULES.splitDeal = "both"`, a `SETTINGS_VERSION` bump and its `RULE_SINCE` entry, so saved settings keep today's "Both at once" | Blake, round 2 + B1 decision |
-| Doubles | The double card lands sideways (shipped); #66 face-down double | Both designed (section 5): sideways double card; a face-down double lands sideways and face down and turns over at REVEAL_HIDDEN | Blake, B4 decision |
+| Kept as they are (Blake, round 12) | — | Count on by default; the results dock keeps the balance; the red "−$25" bet badge; the full-size resting cut card; out of credits = the hidden top-up only (no follow-up); all four fonts; light mode leaves the felt and cards unchanged; the insurance "No thanks" nudge; "Deal split hands" defaults to One at a time (#133); landscape betting keys icon-only; the sideways double stays sideways | Blake, round 12 answers |
 
 ## 1. Direction in one paragraph
-Modern dark premium. A near-black room, flat dark UI with one bold accent (emerald by default), and a table that is a real object seen from above: real card faces at real proportions, small printed **ceramic** chips, the corner of the top card peeking out of a shoe that sits off the table, all lit by **one overhead lamp**. The UI never imitates materials; the table never looks flat. Signature moves: the lamp follows the hand in play and the light *is* the result (bloom on a win, a flash on Blakejack, dim on a loss); one verdict line on the felt; the **Blakejack wordmark** (no monogram anywhere) in the top bar and across every card back.
+Modern dark premium. A near-black room, flat dark UI with one bold accent (emerald by default), and a table that is a real object seen from above: real card faces at real proportions, small printed **ceramic** chips, the corner of the top card peeking out of a shoe that sits off the table, lettering printed into the cloth, all lit by **one overhead lamp**. The UI never imitates materials; the table never looks flat. Signature moves: the lamp follows the hand in play and the light *is* the result (a bloom on a win, a sheen on a blackjack, dim on a loss); one verdict line on the felt; the **Blakejack wordmark** (no monogram anywhere) in the top bar and on every card back.
 
 ## 2. Real-table proportions
 Everything on the table scales from the card width `cw` (a real card is 63 mm wide):
 | Object | Real | On screen |
 |---|---|---|
-| Card | 63 x 88 mm | `cw` x `1.452cw` (the PNG faces carry their own white border) |
-| Chip | 39 mm, 3.3 mm thick | `0.6cw`; each chip in a stack is lifted `6 %` of its width |
-| Bet circle | about 75 mm | `1.15cw` (narrow seats: `0.6 x seat width`) |
-| Card spread | dealers spread about half a card | **step `0.27cw`** for every hand (round 10, from Blake's recording): each earlier card shows only its corner strip (rank and suit whole: the corner is 20 % of the card), the newest card whole; a hand longer than its room on a phone slides left rather than tighten |
-| Card margin | the printed art sits inside a white border | the PNG face is drawn at 94 % inside a white card with `6 %` corners, so no index meets the rounded edge |
-| Felt print | about 15 mm capitals | 12-18 px, fitted to the width |
+| Card | 63 x 88 mm | `cw` x `1.452cw` (the PNG face sits at 94 % inside a white card with 6 % corners) |
+| Chip | 39 mm, 3.3 mm thick | `0.6cw`; each chip in a stack is lifted 6 % of its width |
+| Bet circle | about 75 mm | `1.15cw` in portrait (narrow seats: 0.6 x seat width), `cw` beside the hand on wide and landscape screens; never under 44 px |
+| Card spread | about half a card | **step `0.27cw`** for every hand: each earlier card shows its corner strip (rank and suit whole; the corner is 20 % of the card), the newest card whole. A hand longer than its room never tightens: it slides left, clear of the shoe |
+| Felt print | about 15 mm capitals | 16-26 px payout line, 14-17 px rules line, 13-15 px insurance line; never under 12 px |
 
 ## 3. Tokens
 
@@ -50,282 +55,234 @@ Everything on the table scales from the card width `cw` (a real card is 63 mm wi
 |---|---|---|
 | `data-felt` | `green`, `blue`, `red` | green |
 | `data-accent` | `emerald`, `sapphire`, `ember`, `orchid` | emerald |
-| `data-mode` | `dark`, `light` (Settings also offers "Device", resolved to one of these) | dark |
-The felt and the table objects do not change with the mode; only the UI around them (top bar, dock, Settings) flips. Because these attributes sit on `<html>`, no click handler may look them up with `closest("[data-felt]")` (it matches `<html>`: that was round 2's "Accent and Mode not clickable" bug); the pickers use `button[data-felt]`, `data-pick-accent` and `data-pick-mode`. Likewise never reuse the class `.ghost` (the flying-chip layer) for a button.
+| `data-mode` | `dark`, `light` (Settings also offers "Device") | dark |
+| `class="no-totals"` | Show hand totals off | absent |
+The felt and the table objects do not change with the mode; only the UI around them flips. Because these attributes sit on `<html>`, no click handler may look them up with `closest("[data-felt]")` (it matches `<html>`); the pickers use `button[data-felt]`, `data-pick-accent`, `data-pick-mode`. Never reuse the class `.ghost` (the flying-chip layer) for a button.
 
 ### UI colours per mode
 | Token | Dark | Light | Use |
 |---|---|---|---|
-| `--bg` | `#070908` | `#e6e7e2` | Room, page background, top bar |
-| `--bg-2` | `#0c0f0e` | `#f8f8f5` | Dock surface |
-| `--surf` | `#141817` | `#ffffff` | Keys, segments, dialogs, count box |
+| `--bg` | `#070908` | `#e6e7e2` | Room, page, top bar |
+| `--bg-2` | `#0c0f0e` | `#f8f8f5` | Dock |
+| `--surf` | `#141817` | `#ffffff` | Keys, segments, dialogs, Settings section headers |
 | `--surf-2` | `#1c211f` | `#eef0eb` | Hover |
-| `--surf-3` | `#252b29` | `#e2e5df` | Toggle track off, save bar, toast |
+| `--surf-3` | `#252b29` | `#e2e5df` | Toggle track off, save bar, toast, hint |
+| `--sec-body` | `#0a0d0c` | `#eaece6` | A Settings section's inset body |
 | `--line` / `--line-2` | white 8 % / 15 % | ink 10 % / 18 % | Hairlines / borders |
-| `--tx` | `#eef2ef` | `#0d110f` | Primary text; the selected segment's fill; the Stay key |
-| `--tx-2` | `#a6b0aa` | `#48514c` | Secondary text |
-| `--tx-3` | `#85908a` | `#59625d` | Labels, group titles, edge deltas (AA on `--bg-2` and `--surf`) |
-| `--win-tx` / `--lose-tx` | `#3fe397` / `#ff6b5e` | `#07703f` / `#b42318` | Win and loss as **text on the UI** (balance badge, dock summary, danger buttons). On `--bg` light: 4.97:1 / 5.29:1. The felt keeps `--win` / `--lose` (tags, verdict, bust pill), which sit on the felt in both modes |
-| `--lose-line` | coral 50 % | `#b42318` 45 % | The danger outline button's border |
-| Field errors (`.ferr`), alerts | `#ff8f84`, `#ffd2cc` | `#b3261e`, `#8c1d14` | Inline errors, the login alert |
-| `--groove-1/2` | `#040505` / `#0f1211` | `#d9dcd5` / `#eceee9` | Chip rack and chip-picker groove |
+| `--tx` / `--tx-2` / `--tx-3` | `#eef2ef` / `#a6b0aa` / `#85908a` | `#0d110f` / `#48514c` / `#59625d` | Text levels (`--tx-3` AA on `--bg-2` and `--surf`) |
+| `--win-tx` / `--lose-tx` | `#3fe397` / `#ff6b5e` | `#07703f` / `#b42318` | Win and loss as text on the UI (badge, dock summary, danger buttons) |
+| `--lose-line` | coral 50 % | `#b42318` 45 % | Danger outline border |
+| `.ferr`, alerts | `#ff8f84`, `#ffd2cc` | `#b3261e`, `#8c1d14` | Inline errors, the login alert |
+| `--groove-1/2` | `#040505` / `#0f1211` | `#d9dcd5` / `#eceee9` | Rack and chip-picker groove |
 
 ### Accent (fill, ink on the fill, accent as text)
-| Accent | Dark fill | Ink | Text on dark | Light-mode fill (white ink) | Light-mode text |
+| Accent | Dark fill | Ink | Text on dark | Light fill (white ink) | Light text |
 |---|---|---|---|---|---|
-| Emerald (default) | `#1ed18a` | `#02160d` | `#3fe39f` | `#077f4f` (white 5.05:1) | `#066b43` (5.29:1 on `--bg`) |
-| Sapphire | `#6b95ff` | `#040c22` | `#8eaeff` | `#2f61e3` (white 5.33:1) | `#2552c4` (5.48:1) |
-| Ember | `#ff7b3f` | `#1e0a01` | `#ff9566` | `#b8450f` (white 5.39:1) | `#b04110` (4.68:1) |
-| Orchid | `#c28dff` | `#15062a` | `#d2a9ff` | `#8a4ad8` (white 5.18:1) | `#7438bf` (5.52:1) |
-**Contrast, round 9 (measured):** axe `color-contrast` over every screen and state (table: betting, playing, offers, a win, a loss, out of credits, auto deal; the rules sheet; the leave, delete and reset dialogs; Settings with every section open, the preset list, a field error; Home signed in and out; Login, its error and waking states; sign-up with errors; loading; error) for every accent x felt x dark/light at 390x844 and 1440x900: no failures. A disabled control (a slider whose switch is off) is exempt as inactive. Text on the felt is a gradient that axe cannot judge; `contrast.mjs` measures it on rendered pixels (worst 5.00:1). The primary key's small "auto" line and its key hint (Space, desktop) are full ink (they were 72 % and 45 %); other keys' hints are `--tx-2`.
+| Emerald (default) | `#1ed18a` | `#02160d` | `#3fe39f` | `#077f4f` (5.05:1) | `#066b43` (5.29:1) |
+| Sapphire | `#6b95ff` | `#040c22` | `#8eaeff` | `#2f61e3` (5.33:1) | `#2552c4` (5.48:1) |
+| Ember | `#ff7b3f` | `#1e0a01` | `#ff9566` | `#b8450f` (5.39:1) | `#b04110` (4.68:1) |
+| Orchid | `#c28dff` | `#15062a` | `#d2a9ff` | `#8a4ad8` (5.18:1) | `#7438bf` (5.52:1) |
+Also `--accent-rgb` (glows) and `--back-hi` (the card back's light line). The accent appears on: the primary key (Deal, Hit, Next hand, Save), the selected rack chip's ring, the active bet circle, the active total's ring, the wordmark's diamond, the card back's guilloche, focus rings, toggles, sliders and the win light. Nowhere else. The primary key's small "auto" line and its key hint are full ink; other keys' hints are `--tx-2`.
 
-Also `--accent-rgb` (glows) and `--back-hi` (the card back's light line). The accent appears on: the primary key (Deal, Hit, Next hand, Save), the selected rack chip's ring, the active bet circle, the active total's ring, the wordmark's diamond, the card back's guilloche, focus rings, toggles, sliders, and the win light. Nowhere else.
+**Contrast (measured):** axe `color-contrast` over every screen and state for every accent x felt x mode at 390x844 and 1440x900: no failures (a disabled control is exempt as inactive). The felt print and the message line, which axe cannot judge, are measured over the **brightest felt pixel behind each glyph** not under a card or a moving chip, in betting, playing, offers, cut card, win, blackjack, loss and bust, every felt and mode, 320x568 to 1920x1080: every line at least 4.5:1 (worst 4.6:1, desktop win).
 
 ### Felt (per `data-felt`)
 | Token | Green | Blue | Red | Use |
 |---|---|---|---|---|
-| `--felt` | `#0b4a31` | `#0f3559` | `#56121b` | Cloth mid tone |
-| `--felt-hi` | `#146c47` | `#1a5288` | `#80202d` | Cloth under the lamp |
+| `--felt` | `#0a422c` | `#0e3253` | `#52111a` | Cloth mid tone |
+| `--felt-hi` | `#0f593a` | `#174a7a` | `#771d2a` | Cloth under the lamp |
 | `--felt-lo` | `#021710` | `#041325` | `#1c0407` | Cloth at the edges |
-| `--print` | cream 62 % | cool white 62 % | warm white 62 % | Rules printed on the felt, bet rings |
-| `--print-strong` | 82 % | 84 % | 84 % | The message line |
+| `--print` | near-white 96 % | 96 % | 96 % | The felt print, bet rings |
+| `--print-strong` | 100 % | 100 % | 100 % | The message line |
 | `--shadow-c` | `1 14 8` | `2 9 20` | `18 3 5` | RGB of cast shadows |
 | `--back-bg` | `#0f1513` | `#0f1218` | `#151011` | Card back ground |
 
 ### Fixed colours
-`--win #3fe397`, `--lose #ff6b5e`, `--push #c5cfd8`, `--even #6fe3d2`, `--surr #f0b77d`, rail `#17191a` > `#050606`, `--paper #f6f4ee`, cut card `#f7d55a` > `#e9b81f`.
+`--win #3fe397`, `--lose #ff6b5e`, `--push #c5cfd8`, `--even #6fe3d2`, `--surr #f0b77d` (on the felt, both modes), rail `#17191a` > `#050606`, cut card `#f7d55a` > `#e9b81f`.
 
-Ceramic chips (`assets/build.mjs`, `CHIPS`): body / print (edge blocks, rings, hatch) / ink (numeral) / side.
-`1` `#ebe8e1` `#27458f` `#1f3473` · `5` `#a5222b` `#f1ebe0` · `10` `#1f4a96` `#f1ebe0` · `25` `#1e6a45` `#f1ebe0` · `50` `#c8682a` `#1d2b4d` · `100` `#1c1c21` `#e9e2d2` · `1K` `#d6a92c` `#22201a` · `5K` `#5e3a24` `#ead8b2` · `10K` pink `#d4709a` `#fbeef3` · `20K` light blue `#7fb6dc` `#0f2c44` · `50K` purple `#5b3a8f` `#efe6fb` · `100K` grey `#8d9296` `#16191b` (spec colours; "100K" is set at 27.5 units with tighter spacing so it stays 12 px on a 44 px chip).
+Ceramic chips (`assets/build.mjs`, `CHIPS`): body / print / ink / side. `1` `#ebe8e1` `#27458f` `#1f3473` · `5` `#a5222b` `#f1ebe0` · `10` `#1f4a96` `#f1ebe0` · `25` `#1e6a45` `#f1ebe0` · `50` `#c8682a` `#1d2b4d` · `100` `#1c1c21` `#e9e2d2` · `1K` `#d6a92c` `#22201a` · `5K` `#5e3a24` `#ead8b2` · `10K` `#d4709a` `#fbeef3` · `20K` `#7fb6dc` `#0f2c44` · `50K` `#5b3a8f` `#efe6fb` · `100K` `#8d9296` `#16191b` ("100K" set tighter so it stays 12 px on a 44 px chip).
 
 ### Type
 | Role | Face | Weight | Size |
 |---|---|---|---|
-| Display: balance, verdict, section titles, house edge, felt print, chip numerals | Clash Display (Fontshare) | 500-600 | balance 19 (22 desktop, 18 landscape); verdict 28-40; section title 22; felt print 12-18 |
-| UI: everything else | Satoshi (Fontshare) | 400 / 500 / 700 | keys 13 and 17 (big keys); rows 15; segments 14; labels 12 |
-| Wordmark | drawn paths, no font | stroke 6 on a 28-unit x-height | top bar 17 px tall (15 under 380 px wide, 19 tablet, 21 desktop) |
-12 px is the floor everywhere: the felt print is fitted at runtime, never under 12; chip numerals are 32 units (28 for "100") on a 100-unit chip, so they only show on chips of 44 px or more (rack chips are 44-50 px; stacks show a numeral when `0.6cw >= 44`, otherwise a small diamond and the amount label under the circle).
+| Display: balance, verdict, section titles, house edge, chip numerals | Clash Display | 500-600 | balance 19 (21 desktop, 17 landscape); verdict 28-40; Settings section title 19 |
+| Felt print, payout and insurance lines | Cinzel (capitals + its small capitals) | 700 | payout 16-26, insurance 13-15 |
+| Felt print, rules line (and the landscape line after the payout) | Cormorant Garamond, **lining numerals** | 700 | 14-17 (12 in the landscape line) |
+| UI: everything else | Satoshi | 400 / 500 / 700 | keys 13 and 17; rows 15; segments 14; labels 12; hints 13 |
+| Wordmark | drawn paths | stroke 6 | top bar 15-19 px tall |
+12 px is the floor everywhere. The print is laid out at 1:1 in its own box and fitted to its width (each line keeps its own tracking), and it is redrawn whenever its box changes, so no glyph is ever scaled under 12 px.
 
 ### Space, radii, elevation
-Space 4 px base (`--s1` 4 to `--s7` 48). Radii `--r1` 8, `--r2` 12 (segments, buttons), `--r3` 16 (dock keys), `--r4` 22 (rack groove), `--r5` 28 (felt slab from 600 px); cards `7 %` of their width. UI is flat (1 px `--line` borders); only the primary key and floating layers (menu, save bar, toast) carry shadow.
+Space 4 px base (`--s1` 4 to `--s7` 48). Radii `--r1` 8, `--r2` 12, `--r3` 16 (keys, Settings sections), `--r4` 22, `--r5` 28 (felt slab from 600 px); cards 7 % of their width. UI is flat (1 px `--line` borders); only the primary key and floating layers (menu, save bar, toast, hint, preset list) carry shadow.
 
 ### The light model (table objects only)
-One lamp above the table, slightly toward the player. Art is lit top-left (`ceramicGloss` on chips, `paperLight` on the card back, a 150 deg sheen on faces). `.felt-light` is a radial pool at `--lx --ly` (registered `@property`, 900 ms) that sits mid-table between rounds and follows the active hand. Cast shadows fall away from the lamp (`shadowFor()` sets `--shx/--shy` per hand and stack). Result light (`.felt.r-*`, 900 ms): win bloom `accent / .34` from the player's edge with `--lamp 1.5`; Blakejack adds a sheen sweep; loss/bust/surrender darken from the bottom with `--lamp .55`; push is a faint cool bloom. The shoe throws a soft shadow into the top-right corner of the cloth.
+One lamp above the table, slightly toward the player. Art is lit top-left (chips' gloss, the card back's paper light, a sheen on faces). `.felt-light` is a radial pool at `--lx --ly` (alpha `.08 x --lamp`, 900 ms) that sits mid-table between rounds and follows the active hand. Cast shadows fall away from the lamp (`shadowFor()`). Result light (900 ms): a win lifts the lamp to 1.1 with an accent bloom at the player's edge (`75% 34%`, 30 %) that stays below the print; a blackjack adds an 8 % sheen sweep; loss, bust and surrender darken from the bottom with the lamp at .55; a push is a faint cool bloom. The shoe throws a soft shadow into the top-right corner.
 
 ### Motion
-Easings: `--e-out (.16,1,.3,1)` UI · `--e-weight (.33,0,.15,1)` objects on cloth · `--e-spring (.34,1.4,.64,1)` lift/verdict/toggles · `--e-io (.65,0,.35,1)` flips and light. Durations: press 120, UI 220, state 320, flip 420, slide 560, light 900 ms.
+Easings: `--e-out (.16,1,.3,1)` UI · `--e-weight (.33,0,.15,1)` objects on cloth · `--e-spring (.34,1.4,.64,1)` verdict/toggles · `--e-io (.65,0,.35,1)` flips and light. Durations: press 120, UI 220, state 320, flip 420, slide 560, light 900 ms.
 | Moment | What moves | Timing |
 |---|---|---|
-| Deal | a card leaves the shoe's mouth (top right) **face down at a slight angle** (from the shoe's -36 deg through -12 deg mid-flight and -5 deg at 84 %), squares up as it lands and **turns over as it lands** (the flip starts at 80 % of the flight; the hole card stays down) | slide `clamp(.52 x speed, 300, 760)` ms; flip 420 ms from 80 % |
-| Flips (landing, hole card, face-down double) | **3D, edge-on**: `rotateY` with a 520 px perspective, so the card is seen edge-on mid-turn, and a 7 % lift at that moment (`flipLift`); one element, flips in place | 420 ms `--e-io` |
-| Peek | the **mirror check**: the hole card slides up a short way, so its top edge tucks under the felt's top (about 14 % of the card), holds, then slides back down into place. Most of the card stays in view every frame (it must never look swapped); its face never shows | up 420 ms, hold 450, down 420 |
-| Bet chip | the rack chip glides to the circle and shrinks to table size | 360 ms |
+| Deal | a card leaves the shoe's mouth face down at a slight angle (-36 deg through -12 deg to -5 deg at 84 %), squares up and **turns over as it lands** (the turn starts at 80 % of the flight); the hole card stays down. A card in flight is `down` with **no face image and no alt**; its face arrives with the turn | slide `clamp(.52 x speed, 300, 760)` ms; turn 420 ms |
+| Flips (landing, hole card, face-down double, sweep) | 3D, edge-on: `rotateY` with a 520 px perspective and a 7 % lift at the edge-on moment; the shadow travels on the faces while turning. One element, flips in place | 420 ms `--e-io` |
+| Peek | the mirror check: the hole card slides up so its top edge tucks under the felt's top (about 14 % of the card), holds, slides back; at least 85 % of it stays in view every frame; its face never shows | up 420k, hold 450k, down 420k ms; k = speed / 1000, 0.33-1.2 (as the shuffle) |
+| Bet chip | **a chip tap selects; a tap on the circle bets:** the selected rack chip's copy glides to the circle and shrinks to table size | 360 ms |
 | Undo / Clear | the stack glides back to the rack | 380 ms |
-| Win | the dealer's chips come down from above the table's edge and land beside the stake (560 ms), hold 240, then both slide **down** into the dock (720) | |
-| Loss / bust | the stack is swept **up** off the table's top edge | hold 260, 700 ms |
-| Push | the stake slides down | hold 320, 680 ms |
-| Surrender | half up, half down | 700 ms |
-| Verdict | pops in, letter-spacing closing; a natural ("BLACKJACK!") glows in the accent and flashes once | 620 ms spring; flash 1400 ms |
-| Balance | counts in whole dollars; the change badge shows for 2.6 s after a round, then fades | 700 ms; badge 2.6 s + 400 ms fade |
-| Shuffle | in this order, nothing fading: **the shoe slides away** (and the discard pile with it, emptied), **the deck comes down** into the centre of the felt, **riffles** (two halves, card by card), **goes back up** off the top, and only then **the shoe slides back**. The deck is in view every frame it is on the felt | shoe 780 ms; down 620; riffle 1700; up 560; shoe 780 |
-| Cut card | once drawn it comes out of the shoe and **lies at the felt's left edge**, half off it, level with the dealer's cards, until the shuffle | 760 ms |
-| End of round | Next hand: every card sweeps off to the discard pile (top left), the dealer's first, 45 ms apart; **each turns face down as it starts** (the same 3D edge-on turn) and lands **square** on the pile, which shows only backs; the pile thickens when they arrive. Reduced motion: no sweep, the pile just grows | 620 ms each, turn 420 ms |
-| Totals and count | change only once the card has landed (and turned over); hidden while the opening cards are dealt (as `dealingStyle` in the app) | with the landing |
-| Re-centring | a hand grows from the left; when it re-centres, or a split narrows the seats, every card already down glides to its new place | 320-360 ms `--e-weight` |
-`prefers-reduced-motion: reduce`: all animation and transition off; flights skipped; same order of states.
+| Win | the dealer's chips come down from above the table's edge and land beside the stake **on the side away from the hand** (right of the circle in portrait, left on wide and landscape screens), hold, then both slide down into the dock | 560 ms, hold 240, 720 ms |
+| Loss / bust | the stack is swept up off the table's top edge | hold 260, 700 ms |
+| Push / surrender | the stake slides down / half up, half down | 680 / 700 ms |
+| Settle handoff | each stack on the table (bet, double, insurance) is replaced by an exact moving copy **in the same frame** it hides: a chip never blinks out | — |
+| Verdict | pops in, letter-spacing closing; "BLACKJACK!" glows in the accent with a sheen | 620 ms spring; sheen 1400 ms |
+| Balance | counts in whole dollars. **The badge shows every real change of the balance**: "−$25" when a bet is placed (by hand, by Rebet, 2x, a double, a split, insurance, or **when a new round re-places the bet automatically**), "+$50" when a win pays, "+$25" when a push returns the stake; nothing after a loss. On phones it takes the label's place, on wide screens it sits after the number; the balance never moves | 700 ms; badge 2.6 s + 400 ms |
+| Count | changes as each card lands face up (the hole card when it turns); never blank | with the landing |
+| Totals | change only once the card has landed face up; hidden while the opening cards are dealt | with the landing |
+| End of round | Next hand: every card sweeps off to the discard pile (top left), the dealer's first, 45 ms apart, **turning face down as it starts**, landing square; the pile shows only backs and thickens when they arrive | 620 ms each |
+| Shuffle | in order, nothing fading: **the shoe slides away** (the discard pile with it, emptied), **the deck comes down** into the centre, **riffles**, **goes back up** off the top, then **the shoe slides back**. Its length follows **Game speed** (4.5 s at Normal, about 1.5 s on Very fast); **a tap on the table or the dock skips it** (every move jumps to its end, the order stays). It covers the print's lower lines while it plays (accepted) | shoe 780k, down 620k, riffle 1700k, up 560k, shoe 780k ms; k = speed / 1000, 0.33-1.2 |
+| Mid-round refill (Include cut card off) | when the shoe runs out mid-round the same shuffle plays short (k 0.35), then dealing goes on; the cards on the table stay | about 1.6 s |
+| Cut card | once drawn it comes out of the shoe and lies at the felt's left edge, half off it, well below the discard pile, until the shuffle | 760 ms |
+| Re-centring | when a hand grows or re-centres, or a split narrows the seats, every card already down glides | 320-360 ms |
+`prefers-reduced-motion: reduce`: no flights, flips, sweeps or shuffle; the same order of states, each shown at once.
 
 ## 4. Layout
-One column; the dealer is always above the player; everything centres on the felt; the page is exactly the viewport.
-| Mode | Trigger | `--top` | `--dock` | `--rail` | `--rc` | Dock |
+One column; the dealer is always above the player; everything centres on the felt; the page is exactly the viewport (no scroll).
+| Mode | Trigger | `--top` | `--dock` | `--rail` | `--rc` | Notes |
 |---|---|---|---|---|---|---|
-| Phone | default | 54 | 134 | 10 | 44 | two rows (rack 54, keys 50) |
-| Short phone | height <= 740 | 48 | 126 | 8 | 44 | two rows (52, 46) |
+| Phone | default | 48 | 134 | 10 | 44 | dock two rows (rack 54, keys 50) |
+| Short phone | height <= 740 | 44 | 126 | 8 | 44 | dock two rows (52, 46) |
 | Tablet | width >= 600 | | | | | the felt becomes a slab with gutters and `--r5` corners |
-| Desktop | width >= 900 | 62 | 92 | 12 | 50 | one row; keys show shortcuts |
-| Desktop short | width >= 900, height <= 740 | 52 | 84 | | 46 | one row |
-| Landscape phone | height <= 520 | 42 | 64 | 8 | 44 | one row; the bet circle sits left of the hand; the print splits left / right |
-| Wide desktop | width >= 900 and aspect >= 5:4 | as Desktop | | | | the bet circle beside the hand, as on a landscape phone, so cards can be large (148 px at 1440x900); the felt print is the same centred arc as on a phone, between the dealer and the player; totals 17 px |
+| Desktop | width >= 900 | 52 | 92 | 12 | 50 | dock one row; keys show shortcuts |
+| Desktop short | width >= 900, height <= 740 | 46 | 84 | | 46 | |
+| Landscape phone | height <= 520 | 40 | 64 | 8 | 44 | dock one row (small betting keys icon-only, Deal at least 96 px); the circle beside the hand; the print one line |
+| Wide desktop | width >= 900 and aspect >= 5:4 | as Desktop | | | | the circle beside the hand, as in landscape; the print the same arc as on a phone |
 
-**Card width** (on `.stage-in`, inside the one size container `.stage`): `--cw = clamp(40px, min((100cqb - --fixed) / --rows, --cwi, --cmax), 140px)`. Portrait: `--fixed` 162 (194 with two or more seats, for the totals above the hands), `--rows` 4.254, `--cwi` 23cqi (17cqi multi), `--cmax` 118; desktop `--cmax` 128, `--cwi` 15cqi (12cqi multi); landscape `--fixed` 60, `--rows` 2.904, `--cwi` 13cqi, max 100. Wide desktop: `--fixed` 156, `--rows` 3.104 (the arc print sits in the flow), `--cwi` 12cqi (10cqi with two or three hands, 6.5cqi with four), max 156. Results: 89 px at 390x844, 76 at 375x667, 148 at 1440x900, about 70 at 844x390. The raw formula is `--cwr`; script floors it to whole pixels into `--cw` / `--ch` and snaps every hand to whole pixels (`--fx` / `--fy`), so card faces never resample at fractional sizes.
+**Card width** (`.stage-in`, inside the size container `.stage`): `--cwr = clamp(min, min((100cqb - --fixed) / --rows, --cwi, --cmax), max)`, floored by script into whole-pixel `--cw` / `--ch` (and hands snapped with `--fx/--fy`), so faces never resample.
+- Portrait: `--fixed` 172 (204 with several seats, 226 when narrow seats keep room for side stacks), `--rows` 4.254, `--cwi` 23cqi (17cqi multi), `--cmax` 118 (128 from 900 px wide).
+- Landscape: `--fixed` 88, `--rows` 2.904, `--cwi` 13cqi, max 100; with several hands capped so up to four fit a row: `((100cqi - 24 - (min(n,4) - 1) x gap) / min(n,4) - 82) / 3.664`, min 40.
+- Wide desktop: `--fixed` 168, `--rows` 3.104, `--cwi` 12cqi, max 156; several hands 9cqi (6.5cqi from four) with the same four-in-a-row cap, min 48.
+Results: about 89 px at 390x844, 148 at 1440x900, 66 at 844x390 (one hand).
 
-**Hands:** cards in a straight row, square to the screen (no tilt: a rotated bitmap blurs), each new card on top of the one before it, to the right, for the dealer exactly as for the player. 3D (perspective, preserve-3d, the back face) is switched on only while a card is face down or turning, so a face-up card is a flat, sharp image. Step as in section 2. The **total** never touches a card: beside the hand on the right, vertically centred, for the dealer and a single seat; centred above the hand when two or more seats share the row (the hand reserves 32 px above). The dealer's hand stays clear of the shoe corner and keeps room for its total: `maxWidth = min(stage - 2 x (0.55cw + 14), stage - 116)`.
+**Stage padding** (room above the dealer's cards): 20 px on phones (15 on short phones), 26 on desktop, 12 in landscape.
 
-**Seats:** one by default; a split adds a seat, keyed by hand (cards already down keep their element and glide). A split hand gets its second card only when play reaches it, as at a real table. More than four hands scroll (from four on a landscape phone): snap, edge fades, active hand centred.
+**Hands:** cards in a straight row, square to the screen, each new card on top of the one before it, to the right, for dealer and player alike. 3D is on only while a card is face down or turning. The **total** never touches a card: beside the hand on the right for the dealer and a single seat; centred above the hand with several seats in portrait (32 px reserved); in its own 56 px column beside each hand on wide and landscape screens. The dealer's hand stays clear of the shoe (its room is measured from the shoe's corner card).
 
-**Middle line:** 48 px between the print and the seats for the message (12 px tracked caps) or the verdict.
+**Seats:** one by default; a split adds a seat, keyed by hand (cards already down glide). Up to four hands share one centred row; when a row does not fit (five or more, or four on a small landscape phone, or a side stack spilling) it scrolls one hand at a time, the active hand centred, neighbours fading at the edges. The decision is made once per hand count and width, so a re-render never resets it. Hands not in play dim to 62 % brightness (never opacity).
+
+**Side stacks (double, insurance):** never over the bet. Portrait with room: beside the circle (insurance left, double right). Narrow portrait seats: under the amount, in room the seats keep for them. Wide screens: just above the circle, side by side, "INS" beside its stack. Landscape phones: on the circle's outer side, the circle's column growing to hold them.
+
+**Middle:** the felt print and the message line are one block, **centred between the dealer's hand and the first seat** (`centrePrint()`, by their boxes so it never jumps), never closer to the player's cards than 8 px plus room for a two-line verdict. The message line is 48 px (12 px tracked caps) or the verdict.
+
+**Other:** safe areas on all four sides (`viewport-fit=cover`); one 1240 px column for the top bar, felt and dock; the tip line (#3) above the dock at 0 px; on wide screens between rounds the dealer's card place is printed faintly (one outline, 16 %).
 
 ## 5. Components
 | Component | Code | Notes |
 |---|---|---|
-| Top bar | `.top` | One quiet row, no boxes, three columns with equal outer ones: menu + wordmark left; the **balance centred** on the bar (label "Balance" over the number on phones, one line on wide screens and landscape; plain text, the hidden top-up listens here: no role/tabindex/aria); count (plain text) + Settings right. The change badge takes the label's place for 2.6 s on phones and sits after the number on wide screens, absolutely placed: the balance never moves. Height 48 px (44 on short phones, 52 desktop, 46 short desktop, 40 landscape) |
-| Count | `#count` | As the app: Hi-Lo over cards seen (the hole card when it is turned), reset on a new shoe; true count = `round(running / max(1, cards left / 52))`, an integer. Values hidden while the opening cards are dealt. Two short lines on phones ("Count +3", "True +1"), one pill on wide screens; hidden when the count is off |
-| Menu | `.menu` | Table rules, Analytics (Soon, #15), Settings, felt swatches, Log out. The wordmark screen is reached from the Demo panel only |
-| Felt + rail | `.felt`, `.rail` | A thin matte rail along the dealer's edge. No chip tray: the dealer's float is off screen above it |
-| Shoe corner, discard pile, cut card | `.shoe`, `.shoe-card`, `.mouth`; `.discard`, `.discard-card`, `#dmouth`; `.cut-rest` | The shoe is off the table, top right: only the corner of its top card shows (a real card back, rotated -36 deg, clipped by the felt). The **discard pile is a straight stack, square to the screen, partly off the top-left corner** (a card back; hidden while empty, thicker as it grows). The cut card, once drawn, rests at the felt's left edge, half off it, level with the dealer's cards. None of them is in the accessibility tree |
-| Card | `.card > .cin > .cf + .cb` | Real PNG face clipped to 7 % corners; the back is `#cardback`. A face-down card has no face image in the DOM |
-| Card back | `#cardback` | Graphite ground, white border, lattice, wave lines and a guilloche rosette in the accent, the wordmark on a pill-shaped plate across the centre |
-| Chip | `#chip-<v>` (numeral) / `#chip-<v>-p` (diamond) / `#side-<v>` | Ceramic: flat printed face; eight edge blocks with five fine lines each, dots between, a ring, a hatched band, a centre disc with the numeral; a light diagonal gloss and a thin rim |
-| Chip stack | `stackSVG()`, `.stack` | One SVG. Biggest chip at the bottom, its face centred on the circle (`--k` anchors it); each chip above is lifted up the screen by its thickness, so the lower edges show and the top chip is whole. Up to 10 chips drawn |
-| Bet circle | `.spot`, `.side-spot.dbl/.ins`, `.amt` | Printed double ring, "BET" when empty (breathing), accent ring when active. Double and insurance stacks at table chip size, never over the bet (where they go per layout: section 8, Layout) |
-| Total | `.pill` (`.soft`, `.bust`, `.bj`, `.on`) | Dark glass; soft totals "7/17" |
-| Felt print | `renderPrint()` | Printed on the cloth (round 11, section 14): "Blackjack Pays 3 to 2" / "6 to 5" in **Cinzel 700** (capitals and its small capitals); "Dealer hits soft 17 · Dealer peeks" (or "No peek" / "No second card") in **Cormorant Garamond 700**; "Insurance pays 2 to 1" in Cinzel inside a **ruled band** (two thin arcs) when insurance is on. A strong arc (radius 1.45 x width), the `#ink` filter, full ink. Cards may lie over it |
-| Verdict | `.verdict.<kind>` | One word on the felt, never over a card; several hands show the net plus a tag under each bet. The message line says "Your move" for every hand (no "hand 1 of 2": the lit circle and the lamp show which) |
-| Dock | `renderDock()`, `.key` | Same height in every state. Betting: rack + Undo, Clear, Rebet, 2x, (Pause/Resume), Deal. Playing: Double, Split, Surrender, (Triple) + Stay, Hit. Offers: Insurance $x / Even money / Surrender + No thanks. Results: net, balance, Next hand |
-| Chip rack | `.rack-wrap .rack .rc` | Every enabled chip on show, evenly spaced, no scrolling and nothing cropped (eight 44 px chips fit in 355 px). The chosen chip lifts 3 px with an accent ring inside its own edge |
-| Settings | `buildSettings()` | One calm page of disclosure sections, **all collapsed on arrival**: Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account. Each header is a button (`aria-expanded`, `aria-controls`; Enter/Space) in an h2, showing the name, a one-line summary of the current values ("Vegas · 0.6% house edge", "Normal speed · totals on · count on", "12 of 12 chips", "Green felt · Emerald · Dark", "Sound off · vibration off", the player's name) and a dot when that section has unsaved changes; the body is a region. No section nav (the headers are the index). A deep link (`#settings/sec-rules`) opens its section; Save with an invalid name opens Account. The delete action sits apart at the bottom in a thin coral frame, with no title. Sticky Save/Discard bar |
-| Rules | `renderRules()` | A **preset dropdown**: label "Preset", a button showing the preset name and its house edge ("Vegas · 0.6% house edge"); it opens a listbox of the five presets, each with its own edge and a tick on the current one ("Custom" heads the list, not choosable, while rules are edited). Keys: Down/Up/Enter/Space open; arrows, Home/End and a first letter move; Enter/Space choose; Escape closes and returns focus; Tab closes. Below, one group per section: Shoe, Dealer, Payouts, Doubling, Splitting, Surrender, House variations (Blackjack on split, Triple down, …, face-down double), Advanced. A preset sets every rule; any hand change makes it read Custom |
+| Top bar | `.top` | One quiet row, no boxes, three columns with equal outer ones: menu + wordmark left; the **balance centred** (label over the number on phones, one line on wide screens and landscape; plain text, the hidden top-up listens here: no role/tabindex/aria); count + Settings right. Heights in section 4 |
+| Count | `#count` | Hi-Lo over cards seen face up, reset on a new shoe; true count `round(running / max(1, cards left / 52))`. Two short lines on phones ("Count +3", "True +1"), one line on wide screens: each label then its figure in a fixed right-aligned column (tabular), no gap opening up; hidden when the count setting is off |
+| Menu | `.menu` | Home, Table rules, Analytics (Soon, #15), Settings, felt swatches, Log out |
+| Felt + rail | `.felt`, `.rail` | A thin matte rail along the dealer's edge; no chip tray |
+| Shoe, discard pile, cut card | `.shoe`, `.shoe-card`, `.mouth`; `.discard`, `#dmouth`; `.cut-rest` | The shoe is off the table, top right: only the corner of its top card shows (rotated -36 deg, clipped by the felt). The **discard pile** is a straight stack, square to the screen, partly off the top-left corner (backs only; hidden while empty; thicker as it grows). The **cut card**, once drawn, rests at the felt's left edge, half off it, with clear room below the pile. None is in the accessibility tree |
+| Card | `.card > .cin > .cf + .cb` | Real PNG face clipped to 7 % corners; the back is `#cardback`. A face-down card (in flight, the hole card, a face-down double) has no face image and no alt in the DOM; a face-up card's image alt is its name ("king of diamonds") |
+| Card back | `#cardback` | Graphite ground, white border, lattice and waves, a guilloche rosette in the accent, the wordmark on a plate |
+| Chip / stack | `#chip-<v>`, `stackSVG()`, `.stack` | Ceramic chip; one SVG per stack, biggest chip at the bottom centred on the circle, each above lifted by its thickness; up to 10 drawn |
+| Bet circle | `.spot`, `.side-spot.dbl/.ins`, `.amt` | Printed double ring, "BET" when empty (breathing while betting is open), accent ring when active; idle and disabled when nothing is affordable |
+| Total | `.pill` (`.soft`, `.bust`, `.bj`, `.on`) | Dark glass; soft totals "7/17"; a natural on an unsplit hand "Blackjack!" (a split A + ten is 21, unless "Blackjack on split"); the "Blackjack!" badge shows even with Show hand totals off |
+| Felt print | `renderPrint()`, `#print` | Printed on the cloth: line 1 "Blackjack Pays 3 to 2" / "6 to 5" (Cinzel); line 2 "Dealer hits soft 17 · Dealer peeks" (or "Dealer stands on all 17s", "No peek", "No second card"; Cormorant, lining numerals); line 3 "Insurance pays 2 to 1" (Cormorant, lining numerals) inside a ruled band of two thin arcs, when insurance is on. Strong arc (radius 1.45 x width), the `#ink` filter (a hint of weave, 0.28 px soft edge), full ink. Landscape: one line. Cards may lie over it. A button named "Table rules" (44 px tall in landscape) that opens the rules sheet |
+| Verdict | `.verdict.<kind>` | One word on the felt ("WIN", "BLACKJACK!" …), never over a card; with several hands the net plus a tag under each circle |
+| Dock | `renderDock()`, `.key` | Same height in every state. Betting: rack + Undo, Clear, Rebet, 2x, (Pause/Resume), Deal. Playing: Double, Split, (Surrender), (Triple) + Stay, Hit. Offers: Insurance $x / Even money / Surrender + No thanks. Results: net, balance, Next hand. Out of credits: the rack becomes a note with an info icon; nothing that bets is live |
+| Chip rack | `.rack-wrap .rack .rc` | The enabled chips the balance covers; evenly spaced when they fit, else scrolled by whole chips with a chevron toward more; the selected chip lifts with an accent ring; desktop shows 1-9 |
+| Settings | `buildSettings()` | Sections Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account: each a card (raised `--surf` header, inset `--sec-body` body under a divider), **all closed on arrival, one open at a time**; the header (a button in an h2, `aria-expanded`) shows the name, a one-line summary and a dot when the section has unsaved changes. A deep link opens its section; Save with an invalid name opens Account. Delete profile sits apart at the bottom. Sticky Save/Discard bar |
+| Setting hints | `[data-hint]`, `.hint-tip` | Every setting name carries a hint of a few words on one line ("Same bet each round", "What a natural pays"): shown after 250 ms of hover with a pointer, or a 450 ms long press on touch (for 1.8 s; the press never toggles the control). The same text is the control's `aria-describedby` |
+| Rules | `renderRules()` | Preset dropdown (button + listbox of the five presets with their edges; "Custom" heads it, not choosable, while edited; full keyboard). Groups: Shoe (Deck size, **Include cut card**), Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced; a group with nothing to show has no heading; rules a mode makes meaningless are hidden |
 | Appearance | `.felts`, `.accents`, mode segments | Felt swatches, four accent dots, Dark / Light / Device |
-| Wordmark | `#wordmark`, `assets/brand/*.svg` | "Blakejack" drawn as a monoline geometric logotype: capital B, single-storey a's, an open c, short-armed k's; the j's tittle is a diamond in the accent |
+| Rules sheet | `#rulesDlg` | A bottom sheet on phones, a panel from 720 px; preset, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English; even money only when offered |
+| Wordmark | `#wordmark` | "Blakejack" drawn as a monoline logotype; the j's tittle is a diamond in the accent |
 
 ## 6. Rules
-`mockup/rules.js` holds every rule decision the table makes, as pure functions named after their counterparts in `src/utils/blackjackLogic.js`, `gameEngine.js` and `gameReducer.js` (`canSplit` by card value, `canHit`, `canDouble`, `canSurrender`, `earlyOffer`, `offersAtDeal`, `playerSurrender`'s waiting rule, the initial player and dealer evaluations, `dealerNeedsToPlay`, `dealerOnlyChecksBlackjack`, `dealerShowsSecondCard`, the dealer step, `settleHand` with 6:5 to the cent and `noHoleCardLoss`). `simulateRound()` plays a round through the same steps; a scratch audit compared it with the app's reducer (`playRound` in `src/utils/_tests_/stackedShoe.js`) on 30,000 random rounds and 40,000 unit cases with no difference. The one rule the app does not have yet is **Deal split hands** (Splitting): *One at a time* (default; the next split hand gets its second card when play reaches it) or *Both at once* (the app today). Wording proposed for `ruleCatalog.js`: "Deal split hands" / "One at a time" / "Both at once".
+`mockup/rules.js` holds every rule decision the table makes, as pure functions named after their counterparts in `src/utils/blackjackLogic.js`, `gameEngine.js` and `gameReducer.js` (`canSplit` by card value, `canHit`, `canDouble`, `canSurrender`, `earlyOffer`, `offersAtDeal`, the waiting surrender, the dealer's steps, `settleHand` with 6:5 to the cent and `noHoleCardLoss`, the face-down double's reveal). `simulateRound()` plays a round through the same steps; a scratch audit compares it with the app's reducer (`playRound` in `src/utils/_tests_/stackedShoe.js`) on 30,000 random rounds, 40,000 unit cases and a fixed set "split, first hand A + ten (21), second hand a ten pair" (it resplits whenever `maxSplitHands` allows): no difference. The one rule the app does not have yet is **Deal split hands** (section 0).
 
-## 7. Assets
-`node mockup/assets/build.mjs` regenerates `assets/sprite.svg` (chips, chip sides, card back, wordmark, icons; about 140 KB) and `assets/brand/wordmark*.svg` (pure paths). The sprite is inlined at boot so CSS variables reach inside it; the app can import the same symbols as components.
+## 7. Assets and build notes
+`node mockup/assets/build.mjs` regenerates `assets/sprite.svg` (chips, chip sides, card back, wordmark, icons) and `assets/brand/wordmark*.svg`. The sprite is inlined at boot so CSS variables reach inside it. The card faces in `public/cards` are about 4.7 MB of PNG: convert them to WebP for the build, keeping a 500 px-wide source (the largest card is 156 px at DPR 3). Fonts: self-host Clash Display, Satoshi, Cinzel and Cormorant Garamond (one woff2 each; the felt fonts subset), licences recorded in #79.
 
-## 8. Round 5 additions
+## 8. Screens, states and focus
 
-### Contrast (planner I1)
-The felt print and the message line are near-white (`--print` 96 %, `--print-strong` 100 %), every print line is weight 600, the lamp is `.11` and the lit felt tones are slightly darker (green `#0f593a`, blue `#174a7a`, red `#771d2a`). Measured on rendered pixels (each glyph against the 95th-percentile felt behind it, print hidden), every felt x dark/light at 390x844, 1440x900 and 844x390: **worst 4.95:1** (green, desktop insurance line); AA for 12 px text is 4.5.
+### Table states and where focus goes
+| State | Message line | Focus |
+|---|---|---|
+| Betting | "Place your bets" / "Tap Deal" / "Dealing soon" (auto) | stays where the player is (rack, circle, Deal) |
+| Dealing | "Dealing" | unchanged (keys dimmed) |
+| Offers | "Insurance?" / "Even money?" / "Surrender?" | **moves to the first offer key** (Insurance, Even money or Surrender) |
+| Player's turn | "Your move" ("Last hand before the shuffle" once the cut card is out) | **moves to Hit** |
+| Dealer, settling | "Dealer plays" … | unchanged |
+| Results | the verdict | **moves to Next hand** |
+| Shuffling | "Shuffling" | unchanged; a tap skips |
+Focus moves only when it was on nothing, or already in the dock; it is never pulled away from anywhere else (Settings, the menu, a dialog). Dialogs give focus to their safe button.
 
-### Print (I2, Blake round 4)
-One centred arc between the dealer and the player at every size. A landscape phone sets it as one line (the small-caps payout, then "Dealer hits soft 17 · Dealer peeks · Insurance pays 2 to 1" lighter, 12 px). The print is a button: it opens the Table rules sheet.
+### Keys
+H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 select a chip; U undo, C clear, B rebet, X 2x. Keys follow the dock: a hidden or dimmed action does nothing.
 
-### Doubles (B4)
-- **Double:** the card lands **sideways** (rotated 90 deg) across the end of the hand, as at a casino. Its visual box is a card's height wide; the hand reserves that width. The card height is forced to the same parity as its width, so a card turned 90 deg keeps its corners on whole pixels (crisp).
-- **Face-down double (`doubleFaceDown`):** the card lands sideways and **face down**; it is not in the hand's cards (`hand.hiddenCards` in the app), has no face image in the DOM, and the total, a bust and the count ignore it. After the dealer, at **REVEAL_HIDDEN**, it turns over in place ("The double card" on the message line), then the hand is worked out again and settled. The dealer plays as if the hand were alive (`dealerNeedsToPlay`).
+### Settings behaviour
+- Hidden rules: EU-only rules hide in US modes; "Blackjack pays immediately" and "If the dealer has blackjack" hide under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
+- Leaving with unsaved changes asks "Discard your changes?" (Keep editing / Discard and leave); a page unload uses the browser's prompt.
+- Saving a rule in `RESET_SETTINGS` (including **Include cut card**) mid-round asks "Start a new shoe?": the hand in play ends and bets on it are lost (only an undealt circle bet comes back); between rounds it deals the new shoe without asking.
+- An empty first or last name shows its error and stays unsaved, but never blocks the settings: Save saves the rest.
+- Sound and vibration are off by default; dependent sliders are disabled (grey, never accent) while their switch is off.
+- Display settings that are not rules (no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets): Show hand totals, Show the count, Game speed, Rebet, Auto deal and its delay, chips, appearance, sound.
 
-### Chips and rack (B3, M3, M5)
-Twelve chips (`ALLOWED_CHIPS`). The rack shows `visibleChips`: the enabled chips the balance covers (with $1,250 that is seven). When they fit they are evenly spaced; when they do not, the rack holds exactly k whole chips, scrolls by whole chips (snap), hides anything in its padding and shows a chevron on a side with more chips, so no chip is ever cut at rest. Outside betting the rack dims and takes no taps. A half dollar is not drawn as a chip; the amount label is exact.
-
-### Settings (B2, B5, I3, I7, I12)
-- Hidden rules (one list, `hiddenKeys`): EU-only rules (`dealerDrawsOnPlayerBlackjack`, `dealerDrawsOnPlayerBust`, `dealerDrawsOnceOn21`) hide in US modes; "Blackjack pays immediately" hides under a peek; "If the dealer has blackjack" hides under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
-- **Leaving with unsaved changes** (Back, the menu, Home, Log out) asks "Discard your changes?" (Keep editing / Discard and leave); a page unload uses the browser's own prompt.
-- **Saving a rule that resets the table** (`RESET_SETTINGS`) mid-round asks "Start a new shoe?" (Cancel / Save and reset): the hand in play ends and any bets on it are lost (as `resetTable`: only an undealt circle bet comes back), a new shoe is dealt. Between rounds it deals the new shoe without asking.
-- **Profile fields:** an empty first or last name shows "Enter your first name." under the field (`aria-invalid`, `aria-describedby`), and stays unsaved with its error, but never blocks the settings: Save saves everything else and the bar then reads "1 unsaved change" (the field). With only the invalid field changed, Save is disabled.
-- Sound and vibration are **off by default**; there is one "Sound" switch (no separate card sounds), Volume is disabled while Sound is off, Auto deal delay while Auto deal is off. A disabled slider is grey (track fill and thumb ring), never the accent.
-- (Round 6 section-nav fades: superseded in round 8, the nav is gone.)
-- Labels are sentence case and never repeat the chosen value ("Max hands after splits", "Deck size").
-
-### Screens (I8)
-- **Table rules sheet:** a bottom sheet on phones, a centred panel from 720 px, opened from the menu, Home's Rules and the felt print. Preset name, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English, hidden rules left out; Close and Change rules. Even money is listed only when the mode offers it (`offersAtDeal`: not when your blackjack already pays at once). The sheet says "blackjack" for every hand, the player's and the dealer's ("Blackjack pays 3 to 2"), as Settings does (section 0).
-- **Home:** the wordmark, a felt hero (two cards lying flat, as dealt, on whole pixels, and a chip), Play / Rules / Settings, "Signed in as … · Log out".
-- **Login:** "Log in" (heading and button: the e2e and live smoke click the button by that name); labelled fields that keep the app's placeholders: label "Username or email", placeholder **"Username or Email"** (e2e `fixtures.js` and the live smoke fill it by placeholder; never change it), "Password". **Waking** state (spinner, "Waking up the table. The first log-in can take up to 30 seconds.", the button reads "Logging in..."); **error** state (one alert, both fields `aria-invalid`).
-- **Create an account** (`#login/signup`, from "Create an account" under the form): the app's five fields in its order, each labelled, with its placeholder: Username, Email, Password, First name, Last name. Errors show under a field once it is typed in or left, in the app's words ("Username must be at least 3 characters.", "Invalid email format.", "Password is required." …, `aria-invalid` + `aria-describedby`); "Create account" stays disabled until all five are valid; "Have an account? Log in" goes back.
-- **Loading:** three card backs dealt in a loop, "Shuffling up...". **Error:** "Can't reach the table", Try again, Home.
-- **Message line notices:** "Reconnecting..." with a pulsing dot (dock busy); a refused bet in a soft coral. "Last hand before the shuffle" shows once the cut card is drawn.
-- **Out of credits:** with nothing affordable the rack becomes a note with an info icon ("Out of credits. Your balance is $0."), the message line says so, and nothing that bets is live: Rebet is off unless a last bet is affordable (as 2x), the bet circle is idle (no glow, no breathing, disabled) and the keys follow the dock (Space, B, X, 1-9 do nothing). The balance taps for the hidden top-up still work.
-- **Leaving the table mid-round** (menu Home, once cards are out: any phase but betting and shuffling, as the app's Home button) asks "Leave game and return Home?" / "Any bet in the circle will be lost." (Keep playing / Leave); Leave ends the round as `resetTable` does.
-- **Hidden top-up (#90):** 7 taps in 3 s on the balance (only while the balance is under $100, betting, nothing on the table) create a dialog: "Enter code", a labelled field, Submit / Cancel. Nothing about it exists in the DOM before the 7th tap, and every refusal shows the same "That didn't work." It is removed from the DOM on close.
-
-### Layout (I5, I6, I9, M2, M6)
-- Safe areas on all four sides (`viewport-fit=cover`; top inset in the top row's height, bottom in the dock's, left/right in the top bar, felt and dock).
-- One column (`--col` 1240 px) for the top bar, the felt and the dock, so they line up at 1920x1080.
-- The tip line (#3) sits above the dock at 0 px while empty.
-- With several hands, the hands not in play dim to 62 % brightness (`filter: brightness(.62)`, never opacity: a card is never see-through). The dealer is laid out after the seats (a seat count change resizes the cards).
-- **Side stacks (double, insurance), round 6:** never over the bet. Portrait with room: beside the circle (insurance left, double right). Narrow portrait seats (three on a phone): under the amount, in room the seats keep for them, so nothing moves when one appears. Wide screens: just above the circle, on the insurance line, side by side when both, "INS" beside its stack. Landscape phones (no room above: the print and the verdict are there): on the circle's outer side, the circle's column growing to hold them (one seat: both outer columns, so the hand stays centred; several: the fan closes up); three seats cap the card width so a sideways double and a side stack both fit. The layout check now fails any side stack touching the bet, a card, a label, the print or another side stack, at all seven sizes and 667x375.
-- **Hit areas:** the landscape print is a 44 px button around its 24 px line (same look and footprint); a bet circle is never under 44 px.
-- **Wide screens between rounds:** the dealer's card place is printed faintly (one card outline, 16 %) so the empty felt has a centre; it goes as soon as a card is dealt.
-
-### Keys (I10)
-H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 pick a chip (desktop shows the digit on each rack chip); U undo, C clear, B rebet, X 2x.
-
-### Count (M1)
-Starts at 0 on a fresh shoe; only cards that have landed face up count (the hole card and a face-down double when they turn).
-
-### Build note (M7)
-The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the back) to WebP for the build, keeping a 500 px-wide source so a card is never upscaled (the largest card is 156 px at DPR 3 = 468 px).
-
-### Round 7 polish
-- **Destructive confirms** ("Discard and leave", "Leave", "Save and reset", "Delete for good"): the destructive button is the danger outline (`.btn.danger-o`; delete keeps the filled `.btn.danger`), never the accent; the safe button ("Keep editing", "Keep playing", "Cancel", "Keep my profile") is first and takes focus when the dialog opens.
-- **Rules sheet:** "Even money on your blackjack against a dealer ace" only with insurance on and when the blackjack is not already paid at once (as `offersAtDeal`); with insurance off it reads "No insurance or even money".
-- **Home hero:** the chip sits clear of the king's corner.
-- **The felt print's name is just "Table rules"** (it used to read the rules out, and "Dealer hits soft 17" in a name also matches `getByRole('button', { name: 'Hit' })`, so the test would find two buttons). The sheet reads the rules.
-- **Signed-out Home** (`#home/out`, where Log out lands): the hero, "Please log in to start playing.", Log in / Create an account / Rules.
+### Screens
+- A signed-in player opens on the **table**; Home is in the menu. **Home** (signed in): wordmark, a felt hero (two cards lying flat and a chip), Play / Rules / Settings, "Signed in as … · Log out". **Signed out** (`#home/out`): "Please log in to start playing.", Log in / Create an account / Rules.
+- **Login:** "Log in" (heading and button), label "Username or email" with placeholder **"Username or Email"** (tests fill it by placeholder), "Password"; waking state ("Waking up the table…", "Logging in..."); error state (one alert, fields `aria-invalid`). **Create an account:** the app's five fields and messages; "Create account" disabled until all are valid.
+- **Loading** ("Shuffling up...") and **Error** ("Can't reach the table", Try again, Home).
+- **Notices:** "Reconnecting..." with a pulsing dot; a refused bet in coral; out of credits as in section 5.
+- **Leaving the table mid-round** (menu Home once cards are out) asks "Leave game and return Home?" / "Any bet in the circle will be lost." (Keep playing / Leave).
+- **Destructive confirms** use the danger outline; the safe button comes first and takes focus.
+- **Hidden top-up (#90):** 7 taps in 3 s on the balance (balance under $100, betting, nothing on the table) create the "Enter code" dialog; nothing about it is in the DOM before that; every refusal shows "That didn't work."; removed on close.
+- **Inline links** (Log out, Create an account, Log in) have a 44 px tap area without changing their look.
 
 ## 9. Test names (e2e and the live smoke)
-**Rule:** keep the app's accessible name wherever the visible look stays the same (aria-label, alt text, role); rename only where the visible text changes. Every rename below is made in `e2e/` **and** `e2e-live/live.spec.js` **in the same PR** as the screen it tests (the live smoke runs only after deploy, so a missed rename fails in production CI). The CLAUDE.md hooks `.flight-layer`, `.fly-inner`, `.options-wrap` and `.board.busy` go on the equivalent new elements (FlyCard's layer and inner, the action keys' wrapper, the table while it is busy); they are classes, not design, so they stay.
+**Rule:** keep the app's accessible name wherever the look stays the same; rename only where the visible text or the behaviour changes. Every rename is made in `e2e/` **and** `e2e-live/live.spec.js` **in the same PR** as the screen it tests. The CLAUDE.md hooks `.flight-layer`, `.fly-inner`, `.options-wrap` and `.board.busy` go on the equivalent new elements; they stay.
 
 | e2e / live smoke uses | Where | The mockup | Action |
 |---|---|---|---|
-| link "Log in" | fixtures, live | Signed-out Home: "Log in" link | keep |
-| placeholder "Username or Email", "Password" | fixtures, live | Login: same placeholders (labels "Username or email", "Password") | keep |
+| link "Log in" | fixtures, live | Signed-out Home "Log in" link | keep |
+| placeholder "Username or Email", "Password" | fixtures, live | same placeholders | keep |
 | button "Log in" (exact) | fixtures, live, a11y | Login button "Log in" | keep |
-| text "Please log in to start playing." | a11y | Signed-out Home, same text | keep |
-| role alert (login error) | a11y | Login error `role="alert"` | keep |
-| text /waking up/ | cold-start specs | "Waking up the table. The first log-in can take up to 30 seconds." | update: `/waking up/i` |
+| text "Please log in to start playing." | a11y | Signed-out Home | keep |
+| role alert (login error) | a11y | `role="alert"` | keep |
+| text /waking up/ | cold-start specs | "Waking up the table…" | update: `/waking up/i` |
 | button "Start Game" | most specs, live | Home "Play" (a link) | update |
-| button "tester" (player name in the header) | smoke | no name in the top bar; Home "Signed in as …" | update |
-| button "Settings" (exact) | routing, settings, a11y | top bar icon button, `aria-label="Settings"` | keep |
+| button "tester" (header name) | smoke | Home "Signed in as …" | update |
+| button "Settings" (exact) | routing, settings, a11y | top bar icon button "Settings" | keep |
 | button "Back to game" | routing | Settings back button "Table" | update |
-| tabs "Player", "Game", "Dev" (`selected`) | settings, routing, a11y | one page of collapsed sections, each a button with `aria-expanded` (Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account): open a section with `getByRole('button', { name: /^Table rules/ })`; no Dev section designed yet | update |
-| label "playTimeout" | dev-setting spec | not in the mockup (Dev not designed) | update when designed |
-| button "Add 10", /^Add \d+$/, `Add ${chipValues[0]}` | most specs, live | rack chip `aria-label="Add 10"` (shows "10") | keep |
-| button "Deal" (exact) | most specs, live | Deal key `aria-label="Deal"` (the "auto" note and the Space hint are not in the name) | keep |
-| buttons "Hit", "Stay", "Surrender", "No thanks" | many, live | same labels; key hints are `aria-hidden` | keep |
-| group "Offers" with "Insurance $5", "No thanks" | a11y, offers, live | the dock is `role="group"` "Offers" at the offers; key "Insurance $5" | keep |
+| tabs "Player", "Game", "Dev" | settings, routing, a11y | accordion sections, each a button with `aria-expanded` (`getByRole('button', { name: /^Table rules/ })`); no Dev section yet | update |
+| label "playTimeout" | dev-setting spec | not designed | update when designed |
+| button "Add 10", /^Add \d+$/ | most specs, live | **the chip only selects now:** rack chip "$10 chip" (`aria-pressed`), then the bet circle "Bet spot 1, …" bets it | update: select the chip, then click the circle |
+| button "Deal" (exact) | most specs, live | Deal key "Deal" | keep |
+| buttons "Hit", "Stay", "Surrender", "No thanks" | many, live | same labels (Surrender is absent when surrender is "none") | keep |
+| group "Offers" with "Insurance $5", "No thanks" | a11y, offers, live | the dock is `role="group"` "Offers" at the offers | keep |
 | text "Insurance?" | offers | message line "Insurance?" | keep |
-| text "Insurance or surrender?" | offers | one question per offer ("Insurance?", "Even money?", "Surrender?") | update |
-| button "Pause auto deal" | autodeal | Pause key `aria-label="Pause auto deal"` ("Resume auto deal" when paused) | keep |
-| img "king of diamonds", "7 of clubs" … | deal, split, rules specs | card face `<img alt="king of diamonds">`; hands are `role="group"` so the faces stay in the tree | keep |
+| text "Insurance or surrender?" | offers | one question per offer | update |
+| button "Pause auto deal" | autodeal | Pause key "Pause auto deal" / "Resume auto deal" | keep |
+| img "king of diamonds" … | deal, split, rules specs | face `alt` (only once the card has turned face up) | keep |
 | text "Click anywhere to continue..." | most specs, live | "Next hand" key (a click on the felt still continues) | update |
 | text "Place your bets!" | fixtures, live | "Place your bets" | update |
 | text "Credits:" | a11y top-up specs | top bar "Balance" | update |
-| `.stats-panel > div:nth-child(2)` (balance read) | live | `#bal` in the top bar | update |
-| dialog "Enter code", label "Code", "Submit", "Cancel", role alert | top-up specs | same names; the error is `role="alert"` | keep |
-| group names "Soft 17", "Blackjack Pays", "Double On", "Deck size: 6", "Max Hands After Splits: Unlimited", "If the Dealer Has Blackjack, You Lose", "Surrender", "Insurance and Even Money", "Resplit Aces"; options as buttons with `aria-pressed` | settings | open "Table rules" first; sentence case, no value in the label ("Soft 17", "Blackjack pays", "Double on", "Deck size", "Max hands after splits", "If the dealer has blackjack, you lose", "Surrender", "Insurance and even money", "Resplit aces"); options are `role="radio"` + `aria-checked` | update |
-| checkbox "Blackjack on Split" | settings | switch "Blackjack on split" (`role="switch"`), now under House variations | update (role and case) |
-| preset tile button /^Vegas/ `pressed` | settings | the "Preset" dropdown: button named "Preset Vegas 0.6% house edge"; options `role="option"` "Vegas 0.6%" with `aria-selected` (`getByRole('option', { name: /^Vegas/ })` after opening) | update |
-| rule hint text (/insure for half your bet…/, /Give up half your bet…/ …) | settings | no paragraphs in Settings; plain-English lines in the Table rules sheet | update |
-| `.hand-total … .hand-result.Win` / `.Surrendered` | rules specs | result tag `.tag.win` / `.tag.surrender` (several hands), verdict line (one) | update |
-| `.page-bg`, `details[open]`, `.rule-tile, .seg-btn, .rules-section summary, .toggle-row` | settings, a11y | `.settings-screen`; no collapsed groups; `[data-rule]`, `[data-preset]`, `.sw` | update |
-| (new) switch "Show hand totals" | — | Gameplay: `role="switch"` "Show hand totals" | add tests with the setting |
+| `.stats-panel > div:nth-child(2)` | live | `#bal` | update |
+| dialog "Enter code", label "Code", "Submit", "Cancel", role alert | top-up specs | same | keep |
+| rule group names and `aria-pressed` options | settings | open "Table rules" first; sentence-case names ("Blackjack pays", "Double on", "Deck size", "Include cut card" …); options `role="radio"` + `aria-checked`; each control `aria-describedby` its hint | update |
+| checkbox "Blackjack on Split" | settings | switch "Blackjack on split" under House variations | update |
+| preset tile /^Vegas/ | settings | the "Preset" dropdown; options `role="option"` | update |
+| rule hint text (/insure for half your bet…/ …) | settings | short hints (`[data-hint]`) and the rules sheet | update |
+| `.hand-result.Win` / `.Surrendered` | rules specs | `.tag.win` / `.tag.surrender` (several hands), the verdict (one) | update |
+| `.page-bg`, `details[open]`, `.rule-tile, .seg-btn, .rules-section summary, .toggle-row` | settings, a11y | `.settings-screen`, `.sec-h`, `[data-rule]`, `[data-preset]`, `.sw` | update |
+| (new) switch "Show hand totals" | — | Gameplay | add tests |
 
-## 10. Round 8 (Blake's round 7 notes)
-- **Dealer's up card alone:** superseded in round 10: the dealer's cards overlap as dealt again.
-- **Show hand totals** (Gameplay, default on): `<html class="no-totals">` hides every `#stageIn .pill` with `visibility` (no layout change, so a mid-round toggle moves nothing); the hands' accessible names drop the total too. Saved like any setting (`showTotals`, a flat boolean).
-- **Preset dropdown, sections, "No second card", Blackjack on split in House variations, "blackjack" in Settings, delete with no title, the centred balance:** see sections 0 and 5.
-- The section nav and the wide-screen index are gone: with every section collapsed the page is one screen of headers.
-
-## 11. Round 9 (planner check of round 8)
-- **Light mode passes AA** with the colours in section 3 (accent fills darkened for emerald and ember; light win/loss/danger text tokens).
-- **A group with nothing to show has no heading** (Advanced under a peek: every Advanced rule is hidden there).
-- **Long dealer hands:** the fan never drops under 0.27 of a card (section 2); a hand longer than its room (6-7 cards on a phone) slides left so it stays clear of the shoe instead of tightening the fan.
-- **Wording (Blake):** the EU mode reads "No second card" in Settings, on the felt print ("No second card") and in the rules sheet; the rules sheet says "blackjack" for the hand (section 0).
-- **The delete button reads "Delete profile"** (the row is "Your profile · Balance and history, for good.").
-
-## 12. Round 10 (Blake's round 9 notes)
-- **Felt print:** "BLACKJACK PAYS 3 TO 2" / "6 TO 5" on the portrait arc and the landscape line. The natural's badge stays "Blakejack!".
-- **Settings sections are cards:** each section has a 1 px `--line-2` border and `--r3` corners; the **header** is the raised surface (`--surf`, display type 19 px, the summary in `--tx-3`, hover `--surf-2`), and when open a `--line-2` divider separates it from the **body**, an inset surface a step darker in dark mode (`--sec-body` `#0a0d0c`) and a step greyer in light mode (`#eaece6`). Inside the body, group headings stay small uppercase `--tx-3` labels with 22 px above them, so they read as subordinate to the section. Sections sit 12 px apart. Collapsed by default, summaries and keyboard behaviour unchanged. All text AA in both modes (measured, section 3).
-- **Dealer's cards** overlap as dealt again (section 0).
-- **From Blake's recording (approved tweaks), layout unchanged:** the 0.27 card overlap for every hand; cards fly face down at a slight angle and turn over as they land; 3D edge-on flips; the end-of-round sweep to a discard pile at the top-left corner; the cut card at rest at the felt's left edge; the shuffle in the centre, then back into the shoe (timings in section 3, Motion).
-- **Felt print in the recording's style:** two (or three) lines on a gentle arc, no ruled lines and no insurance box. Line 1 "BLACKJACK PAYS 3 TO 2" in small caps (the initials at full size, 15-24 px, the rest at 78 %, never under 12 px), display type 600. Line 2, smaller (12-14 px; UI type 600 at full ink since round 11, for AA over the brightest felt pixel): "Dealer hits soft 17 · Dealer peeks" (or "No peek" / "No second card"). Line 3, the same style, "Insurance pays 2 to 1" when insurance is on. A landscape phone sets it as one line: the small-caps payout, then the lighter rules. Measured AA on every felt in both modes.
-- Results unchanged (the verdict line).
-
-## 13. Round 11 (planner check of round 10)
-- **Dealt cards fly face down, then turn over (fix):** a card on its way from the shoe is created face down (`down`) with **no face image and no alt**; its face is added at the turn (`flip(el, card)`, the hole card's path), which starts at 80 % of the flight. Until it has landed face up, the hand's accessible name calls it "face-down card" and leaves it out of the total; the pill and the count change only after the turn. Proved by a per-frame trace (Deal to rest) at 390x844 and 1440x900: `down` for the first ~430 ms, the inner element passes edge-on (rotateY through 90 deg), the face image and alt appear in the frame the turn starts, the total and the count change in the frame the card lands. Reduced motion: no flight and no turn, the face appears at once.
-- **Several hands in landscape and on desktop:** the total has its own 56 px column beside each hand (a soft "9 / 19" fits), so it never touches the next seat's circle. Four hands sit in one centred row on a landscape phone (cards capped so each seat fits: 3.664 card widths + 82 px); a row that still does not fit (four on 667x375, five or six anywhere) scrolls one hand at a time, the active one centred. The layout check fails any total touching another seat (1-6 hands, every size).
-- **Landscape betting row:** Undo, Clear, Rebet and Pause are icon-only there (their labels stay as their accessible names, visually hidden, so section 9 is unchanged); 2x keeps its text and Deal its label. Under 360 px wide the Deal key drops its "auto" note (the countdown bar stays).
-- **Felt print and light:** lines 2 and 3 are at full ink, weight 600. The lamp pool is a little softer (`.08` since round 12), a win lifts it to 1.1 (was 1.5) and the win bloom stays below the print (`75% 34%` at the bottom), the Blakejack sheen is 8 %. Measured now over the **brightest felt pixel behind every glyph** (not a percentile), two frames per phase, in betting, playing, offers, cut card, win, Blakejack, loss and bust, every felt and mode, at 320x568 to 1920x1080: every line passes 4.5:1.
-- **"3 TO 2":** the small-caps payout sets "to" all in small capitals (the source is "3 to 2").
-- **Decision:** the centre shuffle covers the print's lower lines for its 2.6 s (as in Blake's recording); accepted.
-
-## 14. Round 11, Blake's round 10 notes
-- **Felt lettering reads as ink on the cloth:** Cinzel 700 for the payout and insurance lines (capitals with small capitals, so "Blackjack Pays 3 to 2" reads BLACKJACK PAYS 3 TO 2 with large initials), Cormorant Garamond 700 with lining numerals for the rules line and the insurance line (round 11 polish: old-style "17" read as "i7", Cinzel's "1" as "I"), both open-licence Google Fonts (self-host one woff2 of each in the build, subset to A-Z, a-z, 0-9, space and "·"). An SVG `#ink` filter gives the print a hint of the weave (`feTurbulence` .9 into a 1.1 px displacement) and a soft edge (0.28 px blur). Tracking is fixed per line (Cinzel 5 %, Cormorant 2 %, insurance 8 %); fitting a line to the width shrinks its size and keeps that ratio (it used to reset every line to 0.14 em). The arc is much stronger (radius 1.45 x the width, was 3.2). The ruled band (two thin arcs at 55 %) frames "Insurance pays 2 to 1" again. The print is on the cloth, so cards may lie over it; AA is measured on every glyph not under a card (section 13 method). Landscape: one Cinzel line.
-- **The bet chip never blinks out:** at settle each stack on the table (the bet, a double, insurance) is copied exactly where it stands into a moving layer **in the same frame** it hides (`lift()`), then the copy moves (`send()`). Proved per frame for a win, a loss and a push with a double.
-- **Peek:** the far edge lifts (section 3).
-- **Shuffle order:** shoe away, deck down, riffle, deck up, shoe back (section 3). Proved per frame: the order, and a card showing in every frame the deck is on the felt.
-- **Balance badge only when the balance changes:** "-$25" when a bet is placed (and for a double, split or insurance), "+$50" when a win pays, "+$25" when a push returns the stake; nothing after a loss. The verdict and the dock's amounts are unchanged.
-- **Discard pile:** a straight stack, square to the screen, partly off the top-left (section 5).
-- **Sweep:** each card turns face down as it leaves for the pile (section 3).
-- **Landscape dock:** the Deal key keeps at least 96 px (its word fits, "Shuffling" included at 14 px); the rack scrolls instead. A layout check fails any key label that is cut.
-
-## 15. Round 12 (Blake's round 11 notes, planned as the last run)
-- **The felt writing is centred** between the dealer's hand and the player's: `centrePrint()` moves the print and the message line together (`--py`) so the block sits midway between the dealer's hand box and the first seat's hand box (boxes, not cards, so it never jumps between phases), never toward the player's cards. The dealer's cards have more room at the top: stage padding 20 px on phones (was 10), 26 desktop (was 14), 12 landscape (was 8); `--fixed` grows by the same so the table still fits.
-- **"Blackjack!" for the hand in play** (pill, verdict, tag), the celebration unchanged (section 0).
-- **Count:** live per card, never blank, fixed width (section 0).
-- **Dock:** setting-off actions hidden, impossible-now actions dimmed (section 0).
-- **Split after a split 21:** not a rules bug: the mockup, its rules and the app's engine agree (the second hand's ten pair splits whenever `maxSplitHands` allows; the rules audit and play QA now include the case). What was wrong was the label: a split hand of A + ten showed "Blackjack!"; it now shows **21** (a natural only on an unsplit hand, or with "Blackjack on split"), as the app counts it.
-- **Peek:** the mirror check, a short slide: the card's top edge tucks under the felt's top, most of the card stays in view (section 3).
-- **Cut card:** rests well clear below the discard pile (`top: .62 cw + 28 px`).
-- Kept as they are: the DEMO edge tab (mockup only), the Blackjack celebration, the defaults; sound stays with #86.
+## Appendix: history (not binding)
+How the current design came about; each line is superseded by sections 0-9 where they differ.
+- **Rounds 1-4:** direction (modern dark, one accent, lit felt), real proportions, ceramic chips, the shoe corner, the wordmark and card back; rules mirrored in `rules.js` and audited against the app.
+- **Round 5:** contrast of the print (then 95th-percentile measurement), sideways and face-down doubles, 12 chips and the whole-chip rack, Settings safety (leave/reset confirms, profile errors), new screens (rules sheet, Home, Login, loading, error, notices, out of credits, hidden top-up), safe areas, keys.
+- **Rounds 6-7:** side stacks never over the bet; out of credits fully idle; e2e placeholders kept; leave-table confirm; destructive confirms in the danger outline; test-name rule (section 9).
+- **Round 8:** Show hand totals; preset dropdown; collapsible sections; "blackjack" in Settings; the balance centred.
+- **Round 9:** light mode AA; long dealer hands; "Delete profile".
+- **Round 10:** Settings sections as cards; the dealer's up-card gap dropped; tweaks from Blake's recording (0.27 overlap, face-down flight and turn, edge-on flips, sweep to a discard pile, cut card at the left edge, centre shuffle, the recording-style print).
+- **Round 11:** dealt cards truly face down until the turn; totals in their own column on wide screens; landscape dock icon-only; the print and light retuned for AA over the brightest pixel; lettering as ink on cloth (Cinzel, Cormorant); chip handoff; mirror shuffle order; balance badge on real changes; straight discard pile; face-down sweep.
+- **Round 12:** the print centred between the hands; "Blackjack!" in play; the count live; setting-off actions hidden; split A + ten shows 21; the mirror peek (short slide); cut card clear of the pile.
+- **Round 13:** desktop multi-hand fixes (four hands in a row, a CSS cycle that made circles 0x0, the print redrawn on resize); winnings on the circle's outer side on wide screens; focus per state; chip tap selects only; the shuffle follows Game speed and can be skipped; Include cut card and the mid-round refill; the badge on the automatic rebet; setting hints; the Settings accordion; the peek follows Game speed; signed-in players start on the table; the "Blackjack!" badge shows with totals off; this document folded into one current text.

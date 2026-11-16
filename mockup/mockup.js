@@ -45,6 +45,7 @@
   // Wording: sentence case; in Settings the hand is "blackjack" (Blakejack is only the app's name: Blake, round 7). The build moves it into ruleCatalog.js.
   const CATALOG = [
     { key: "deckCount", group: "Shoe", label: () => "Deck size", opts: [1, 2, 4, 6, 8].map((n) => ({ v: n, l: String(n) })) },
+    { key: "includeCutCard", group: "Shoe", label: () => "Include cut card", opts: ON_OFF },
     { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", patch: (v, s) => modePatch(v, s),
       opts: [{ v: "peek", l: "Peeks", h: "The dealer checks for blackjack before you play." }, { v: "nopeek", l: "No peek", h: "The dealer has a hole card but doesn't check it." }, { v: "eu", l: "No second card", h: "The dealer takes the second card after you play." }] },
     { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", opts: [{ v: false, l: "Stands" }, { v: true, l: "Hits" }] },
@@ -90,7 +91,7 @@
   /* ================= saved settings and theme ================= */
   const CHIP_VALUES = [1, 5, 10, 25, 50, 100, 1000, 5000, 10000, 20000, 50000, 100000]; // ALLOWED_CHIPS
   const DEFAULTS = { ...PRESETS.Vegas, tripleDown: false, tripleDrawsOnBust: false, doubleFaceDown: false,
-    splitDeal: "one", speed: 1000, rebet: false, count: true, showTotals: true, autoDeal: false, autoDelay: 3000, chips: [...CHIP_VALUES],
+    splitDeal: "one", includeCutCard: true, speed: 1000, rebet: false, count: true, showTotals: true, autoDeal: false, autoDelay: 3000, chips: [...CHIP_VALUES],
     felt: "green", accent: "emerald", mode: "dark", sfx: false, haptics: false, volume: 70, first: "Alex", last: "Morgan" };
   const STORE = "blakejack-mockup-r8";
   let saved = clone(DEFAULTS);
@@ -148,7 +149,7 @@
     const ranks = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"], suits = ["S", "H", "D", "C"]; const out = [];
     for (let d = 0; d < saved.deckCount; d++) for (const s of suits) for (const r of ranks) out.push(r + s);
     for (let i = out.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [out[i], out[j]] = [out[j], out[i]]; }
-    T.shoe = out; T.cutAt = Math.floor(out.length * 0.25); T.cutDrawn = false;
+    T.shoe = out; T.cutAt = saved.includeCutCard === false ? -1 : Math.floor(out.length * 0.25); T.cutDrawn = false; // no cut card: the shoe runs to its last card
   }
   const draw = () => { if (T.shoe.length <= T.cutAt && !T.cutDrawn) { T.cutDrawn = true; T.cutSaid = false; $("#shoeBox").classList.add("cut-out"); cutFly(); } if (!T.shoe.length) buildShoe(); return mk(T.shoe.pop()); };
   const onTable = () => T.seats.reduce((a, s) => a + s.bet, 0);
@@ -319,13 +320,13 @@
   const handCards = (s) => (s.hidden && s.hidden.length ? s.cards.concat(s.hidden) : s.cards);
   function renderSeatsInner() {
     const wrap = $("#seats"); const n = T.seats.length;
-    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); $("#stageIn").style.setProperty("--n", n); wrap.classList.toggle("scroll", n > 4); $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
+    wrap.style.setProperty("--n", n); wrap.classList.toggle("turns", T.phase === "playing" && n > 1); $("#stageIn").classList.toggle("multi", n > 1); $("#stageIn").style.setProperty("--n", n); const fitKey = n + "@" + Math.round($("#stage").clientWidth); if (wrap.dataset.fit !== fitKey) { wrap.dataset.fit = fitKey; wrap.classList.toggle("scroll", n > 4); } // decided once per hand count and width, so a re-render never resets the scroll $("#stageIn").classList.toggle("many", n >= 4); // a landscape phone scrolls from four hands
     const fresh = [];
     T.seats.forEach((s, i) => {
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
       seat.classList.toggle("active", act || (T.phase === "betting" && n === 1 && rackChips().length > 0)); seat.classList.toggle("nocards", !s.cards.length);
       const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act, s.split && !saved.blackJackOnSplit);
-      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (seen(c) ? cardName(c) : "face-down card")).join(", ") + (saved.showTotals && shown.some(seen) ? `, ${total(shown.filter(seen)).t}` : "") : `Hand ${i + 1}: no cards`);
+      hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (seen(c) ? cardName(c) : "face-down card")).join(", ") + (saved.showTotals && shown.some(seen) ? `, ${total(shown.filter(seen)).t}` : hand.querySelector(".pill.bj") ? ", blackjack" : "") : `Hand ${i + 1}: no cards`);
       const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); const canBet = T.phase === "betting" && rackChips().length > 0; spot.classList.toggle("open", canBet && !s.bet); // out of credits: the circle stays idle
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
       spot.disabled = !canBet;
@@ -342,7 +343,7 @@
     });
     layoutSeats();
     if (n > 1 && !wrap.classList.contains("scroll")) { // a row that does not fit (four hands on a small landscape phone) scrolls, one hand at a time, instead of spilling
-      const wr = wrap.getBoundingClientRect(); if ([...wrap.querySelectorAll(".spot-row, .hand, .hand .pill")].some((e) => { const r = e.getBoundingClientRect(); return r.width && (r.left < wr.left - 1 || r.right > wr.right + 1); })) { wrap.classList.add("scroll"); layoutSeats(); }
+      const wr = wrap.getBoundingClientRect(); if ([...wrap.querySelectorAll(".spot-row, .hand, .hand .pill, .side-spot:not([hidden]) .stack svg")].some((e) => { const r = e.getBoundingClientRect(); return r.width && (r.left < wr.left - 1 || r.right > wr.right + 1); })) { wrap.classList.add("scroll"); layoutSeats(); }
     }
     renderSeatsInner.fresh = fresh;
   }
@@ -395,7 +396,7 @@
   function renderDock() {
     const p = T.phase; const one = oneRow(); let A = "", B = "";
     const chips = rackChips(); if (chips.length && !chips.includes(T.chip)) T.chip = chips.filter((v) => v <= T.chip).pop() ?? chips[0];
-    const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="Add ${v}">${chipSVG(v)}${i < 9 ? `<kbd aria-hidden="true">${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
+    const rack = () => `<div class="rack-wrap${p === "betting" ? "" : " off"}"><div class="rack" id="rack" role="group" aria-label="Chips">${chips.map((v, i) => `<button type="button" class="rc" data-chip="${v}" aria-pressed="${v === T.chip}" aria-label="${money(v)} chip">${chipSVG(v)}${i < 9 ? `<kbd aria-hidden="true">${i + 1}</kbd>` : ""}</button>`).join("")}</div></div>`;
     if (p === "betting" || p === "shuffling") {
       const off = p === "shuffling"; const has = onTable() > 0; const auto = autoOn() && has && !off;
       A = chips.length || onTable() ? rack() : `<div class="dock-note">${icon("info")}<span>Out of credits. Your balance is ${money(T.balance)}.</span></div>`;
@@ -420,6 +421,9 @@
     $("#dockIn").dataset.phase = p;
     $("#dockIn").innerHTML = one ? `<div class="dock-row dock-one">${A}${B}</div>` : `<div class="dock-row">${A}</div><div class="dock-row">${B}</div>`;
     fitRack();
+    const a = document.activeElement; const lost = !a || a === document.body || !a.isConnected || $("#dock").contains(a); // only when focus was nowhere or in the dock: never pulled from elsewhere
+    const target = p === "playing" ? $('#dock [data-act="hit"]') : p === "offers" ? $("#dock .key.offer") || $('#dock [data-act="o-no"]') : p === "results" ? $('#dock [data-act="next"]') : null;
+    if (p !== renderDock.phase) { renderDock.phase = p; if (target && lost && document.body.dataset.screen === "table") target.focus({ preventScroll: true }); }
   }
   function renderDiscard() { const d = $("#discard"); d.classList.toggle("empty", !T.discard); d.dataset.lv = Math.min(4, Math.ceil(T.discard / 12)); } // the pile thickens as the shoe runs down
   function render() { renderBalance(); renderDelta(); renderCount(); renderMid(); renderSeats(); renderDealer(); renderDock(); renderPrint(); renderDiscard(); }
@@ -490,6 +494,7 @@
   // Deals one card. Returns after the pacing step; c.landed resolves when it has landed (and turned over), and only then do the
   // total and the count change.
   async function dealCard(target, down = false, o = {}) {
+    if (!T.shoe.length && saved.includeCutCard === false) { const my = T.run; await shuffleFx(0.35); if (my !== T.run) return {}; buildShoe(); } // no cut card: the shoe ran out mid-round, a short shuffle refills it
     const c = draw(); c.down = down; c.land = false; c.side = !!o.side;
     if (target === "d") T.dealer.push(c); else if (o.hidden) (T.seats[target].hidden = [c]); else T.seats[target].cards.push(c);
     const fresh = target === "d" ? renderDealer() : renderSeats(); if (target !== "d") renderDealer();
@@ -537,8 +542,9 @@
     T.phase = "peek"; setMsg("Dealer checks for blackjack"); renderDock();
     const hole = $("#dHand .card.down"); if (hole && !reduced) { // the mirror check: the hole card slides up a short way, its top edge tucking under the felt's top (most of it stays in view, so it never looks swapped), then back
       const r = hole.getBoundingClientRect(); const up = -Math.ceil(r.top - $("#felt").getBoundingClientRect().top + r.height * 0.14); T.peekStep = "up";
-      await hole.animate([{ translate: "0 0" }, { translate: `0 ${up}px` }], { duration: 420, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" }).finished.catch(() => {}); T.peekStep = "out"; await sleep(450);
-      T.peekStep = "down"; await hole.animate([{ translate: `0 ${up}px` }, { translate: "0 0" }], { duration: 420, easing: "cubic-bezier(.25,1,.5,1)", fill: "forwards" }).finished.catch(() => {}); hole.getAnimations().forEach((a) => a.cancel()); T.peekStep = ""; await sleep(200); }
+      const pk = clamp(saved.speed / 1000, 0.33, 1.2); // the peek follows Game speed, like the shuffle
+      await hole.animate([{ translate: "0 0" }, { translate: `0 ${up}px` }], { duration: 420 * pk, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" }).finished.catch(() => {}); T.peekStep = "out"; await sleep(450 * pk);
+      T.peekStep = "down"; await hole.animate([{ translate: `0 ${up}px` }, { translate: "0 0" }], { duration: 420 * pk, easing: "cubic-bezier(.25,1,.5,1)", fill: "forwards" }).finished.catch(() => {}); hole.getAnimations().forEach((a) => a.cancel()); T.peekStep = ""; await sleep(200); }
     if (!live(my)) return false;
     const bj = R.twentyOne(T.dealer);
     if (!bj) setMsg("No blackjack");
@@ -639,10 +645,11 @@
     if (!stake) { [main, dbl].forEach((x) => x?.g.remove()); return Promise.all(jobs); }
     const win = s.payout - stake;
     if (win > 0) {
-      const beside = [c[0] + w * 1.15, c[1]]; const g2 = ghost(stackSVG(win, w), ...trayPt(), w);
+      const f = $("#felt").getBoundingClientRect(); const out = compact() ? -1 : 1; // wide and landscape: the hand is right of the circle, so the winnings land on its left
+      const beside = [Math.max(f.left + w * 0.6, c[0] + out * w * 1.15 * (out < 0 && dbl && landscape() ? 2 : 1)), c[1]]; const g2 = ghost(stackSVG(win, w), ...trayPt(), w);
       await glide(g2, trayPt(), beside, w, { dur: 560, keep: true }); await sleep(240);
       const fall = { dur: 720, o1: 0, ease: "cubic-bezier(.5,0,.75,0)" };
-      jobs.push(send(main, down, fall), send(dbl, [down[0] + w * 0.6, down[1]], fall), glide(g2, beside, [down[0] + w * 1.15, down[1]], w, { ...fall, delay: 60 }));
+      jobs.push(send(main, down, fall), send(dbl, [down[0] + w * 0.6, down[1]], fall), glide(g2, beside, [beside[0], down[1]], w, { ...fall, delay: 60 }));
     } else if (s.payout === 0) {
       await sleep(260); jobs.push(send(main, trayPt(), { dur: 700, s1: 0.45, o1: 0 }), send(dbl, trayPt(), { dur: 700, s1: 0.45, o1: 0 }));
     } else if (s.payout < stake) { // surrender: half goes up to the dealer, half comes back
@@ -665,29 +672,35 @@
     $("#felt").className = "felt";
     if (T.cutDrawn) {
       T.phase = "shuffling"; setMsg("Shuffling"); render();
-      swept.then(shuffleFx).then(() => { if (T.run !== my) return; buildShoe(); T.count = 0; T.phase = "betting"; if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto(); });
+      swept.then(() => shuffleFx()).then(() => { if (T.run !== my) return; buildShoe(); T.count = 0; T.phase = "betting"; if (saved.rebet) { const b0 = T.balance; bettingAct.rebet(); bump(T.balance - b0); } betMsg(); render(); armAuto(); });
       return;
     }
-    if (saved.rebet) bettingAct.rebet(); betMsg(); render(); armAuto();
+    if (saved.rebet) { const b0 = T.balance; bettingAct.rebet(); bump(T.balance - b0); } betMsg(); render(); armAuto(); // the badge shows the re-placed bet
   }
   // the shuffle, in order: the shoe (and the emptied discard pile) slide away, the deck comes down into the centre, riffles,
   // goes back up, and only then the shoe slides back. The deck is in view the whole time it is on the felt: it moves, never fades.
-  async function shuffleFx() {
-    const shoe = $("#shoeBox"), pile = $("#discard");
+  let skipShuffle = false;
+  const pause = (ms) => new Promise((res) => { const t0 = performance.now(); const tick = () => (skipShuffle || performance.now() - t0 >= ms ? res() : requestAnimationFrame(tick)); tick(); });
+  async function shuffleFx(scale) {
+    const k = scale ?? clamp(saved.speed / 1000, 0.33, 1.2); // Normal speed 4.5 s, Very fast about 1.5 s; a mid-round refill passes its own short scale
+    const shoe = $("#shoeBox"), pile = $("#discard"); skipShuffle = false; $("#stageIn").style.setProperty("--shoe-t", Math.round(780 * k) + "ms"); // the shoe and the pile move at the same pace
     shoe.classList.add("shuffling"); shoe.classList.remove("cut-out"); pile.classList.add("away"); T.shuffleStep = "shoe away";
     if (reduced) { T.discard = 0; renderDiscard(); pile.classList.remove("away"); shoe.classList.remove("shuffling"); T.shuffleStep = ""; return; }
-    await sleep(800); T.discard = 0; renderDiscard();
+    await pause(800 * k); T.discard = 0; renderDiscard();
     const box = document.createElement("div"); box.className = "riffle"; box.style.top = Math.round(($("#stageIn").clientHeight - chH()) / 2) + "px"; $("#stageIn").appendChild(box);
     const w = cw(), N = 7, back = `<svg viewBox="0 0 250 363"><use href="#cardback"/></svg>`;
     const up = -(box.offsetTop + chH() + 30); // just above the felt's top edge
-    const cards = []; for (let k = 0; k < 2 * N; k++) { const el = document.createElement("div"); el.className = "rcard"; el.innerHTML = back; el.style.zIndex = k; el.style.transform = `translate(0px, ${-k * 0.6}px)`; box.appendChild(el); cards.push(el); }
-    T.shuffleStep = "deck down"; await box.animate([{ transform: `translateY(${up}px)` }, { transform: "translateY(0)" }], { duration: 620, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" }).finished.catch(() => {});
-    T.shuffleStep = "riffle"; const D = 1700;
-    await Promise.all(cards.map((el, k) => { const left = k % 2 === 0, j = k >> 1, side = left ? -1 : 1, sx = Math.round(side * w * 0.66), tk = 0.34 + j * 0.06, stack = `translate(0px, ${-k * 0.6}px)`, half = `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`;
-      return el.animate([{ transform: stack, offset: 0 }, { transform: half, offset: 0.24 }, { transform: half, offset: Math.min(0.9, tk) }, { transform: stack, offset: Math.min(0.97, tk + 0.07) }, { transform: stack, offset: 1 }], { duration: D, easing: "cubic-bezier(.45,0,.25,1)", fill: "both" }).finished; })).catch(() => {});
-    T.shuffleStep = "deck up"; await box.animate([{ transform: "translateY(0)" }, { transform: `translateY(${up}px)` }], { duration: 560, easing: "cubic-bezier(.6,0,.8,.3)", fill: "both" }).finished.catch(() => {}); box.remove();
-    T.shuffleStep = "shoe back"; shoe.classList.remove("shuffling"); pile.classList.remove("away"); await sleep(800); T.shuffleStep = "";
+    const cards = []; for (let c = 0; c < 2 * N; c++) { const el = document.createElement("div"); el.className = "rcard"; el.innerHTML = back; el.style.zIndex = c; el.style.transform = `translate(0px, ${-c * 0.6}px)`; box.appendChild(el); cards.push(el); }
+    const run = (anim) => { if (skipShuffle) anim.finish(); return anim.finished.catch(() => {}); };
+    T.shuffleStep = "deck down"; await run(box.animate([{ transform: `translateY(${up}px)` }, { transform: "translateY(0)" }], { duration: 620 * k, easing: "cubic-bezier(.2,.7,.2,1)", fill: "both" }));
+    T.shuffleStep = "riffle"; const D = 1700 * k;
+    await Promise.all(cards.map((el, c) => { const left = c % 2 === 0, j = c >> 1, side = left ? -1 : 1, sx = Math.round(side * w * 0.66), tk = 0.34 + j * 0.06, stack = `translate(0px, ${-c * 0.6}px)`, half = `translate(${sx}px, ${-j * 0.8}px) rotate(${side * 8}deg)`;
+      return run(el.animate([{ transform: stack, offset: 0 }, { transform: half, offset: 0.24 }, { transform: half, offset: Math.min(0.9, tk) }, { transform: stack, offset: Math.min(0.97, tk + 0.07) }, { transform: stack, offset: 1 }], { duration: D, easing: "cubic-bezier(.45,0,.25,1)", fill: "both" })); }));
+    T.shuffleStep = "deck up"; await run(box.animate([{ transform: "translateY(0)" }, { transform: `translateY(${up}px)` }], { duration: 560 * k, easing: "cubic-bezier(.6,0,.8,.3)", fill: "both" })); box.remove();
+    T.shuffleStep = "shoe back"; shoe.classList.remove("shuffling"); pile.classList.remove("away"); await pause(800 * k); T.shuffleStep = ""; skipShuffle = false;
   }
+  // a tap on the table skips the shuffle: every move in it jumps to its end, the order stays
+  document.addEventListener("click", (e) => { if (T.shuffleStep && e.target.closest("#felt, #dock")) { skipShuffle = true; $("#stageIn").style.setProperty("--shoe-t", "0ms"); $$(".riffle, .riffle .rcard").forEach((el) => el.getAnimations().forEach((x) => x.finish())); } }, true);
   function armAuto() { if (!(autoOn() && !T.paused && onTable())) return; const r = T.run; setTimeout(() => { if (T.run === r && T.phase === "betting" && !T.paused && onTable()) deal(); }, reduced ? 0 : saved.autoDelay); }
 
   /* ================= scenes (demo panel) ================= */
@@ -719,7 +732,7 @@
     three() { setup(["4S 3D 9C", "5C 6H", "9C 2D"], [25, 20, 15], "10H KD", { hole: true, count: 2 }); T.dealer[0] = mk("7H"); T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     pair() { setup(["8S 8D", "5C 6H", "9C 2D"], [25, 20, 15], "6H KD", { hole: true, count: 1 }); T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     double() { setup(["5C 6H 9D", "8S 7D", "9C 2D"], [25, 20, 15], "6S KD", { hole: true, count: 2 }); T.seats[0].dbl = 25; T.balance -= 25; T.seats[0].done = true; T.phase = demo.seats > 1 ? "playing" : "dealer"; T.active = demo.seats > 1 ? 1 : -1; setMsg(demo.seats > 1 ? "Your move" : "Dealer plays"); render(); },
-    offers() { setup(["10C 6H", "AS KD", "9C 7S"], [50, 20, 15], "AH 6C", { hole: true, count: -2 }); T.seats.forEach((h) => { h.offers = R.offersAtDeal(h.cards, T.dealer[0], saved, h.bet, T.balance); }); T.deferPeek = R.isPeek(saved); T.phase = "offers"; offerMsg(); render(); },
+    offers() { setup(["10C 6H", "AS KD", "9C 7S"], [50, 20, 15], "AH 6C", { hole: true, count: -2 }); T.seats.forEach((h) => { h.offers = R.offersAtDeal(h.cards, T.dealer[0], saved, h.bet, T.balance); }); if (!T.seats.some((h) => h.offers)) return SCENES.playing(); T.deferPeek = R.isPeek(saved); T.phase = "offers"; offerMsg(); render(); },
     insurance() { setup(["9S 7D", "10C 6H", "8C 8D"], [50, 20, 15], "AH 6C", { hole: true, count: -1 }); T.seats.forEach((s) => { s.ins = s.bet / 2; T.balance -= s.ins; }); balShown = T.balance; T.phase = "playing"; T.active = 0; setMsg("Your move"); render(); },
     peek() { setup(["9S 7D", "10C 5H", "8C 8D"], [25, 20, 15], "KS 6D", { hole: true, count: -1 }); render(); const my = T.run; peekCheck(my).then(() => { if (live(my)) startPlay(my); }); },
     shuffle() { base([0]); T.count = 0; T.cutSaid = false; T.phase = "shuffling"; setMsg("Shuffling"); render(); const my = T.run; shuffleFx().then(() => { if (live(my)) { T.phase = "betting"; betMsg(); renderDock(); } }); },
@@ -749,7 +762,7 @@
   /* ================= events: table ================= */
   $("#dock").addEventListener("click", (e) => {
     const chip = e.target.closest("[data-chip]");
-    if (chip) { if (chip.getAttribute("aria-disabled") === "true") return; T.chip = +chip.dataset.chip; $$("#rack .rc").forEach((b) => b.setAttribute("aria-pressed", String(b === chip))); if (T.phase === "betting" && T.seats.length === 1) placeChip(0); return; }
+    if (chip) { if (chip.getAttribute("aria-disabled") === "true") return; T.chip = +chip.dataset.chip; $$("#rack .rc").forEach((b) => b.setAttribute("aria-pressed", String(b === chip))); return; } // a chip tap only selects it; a tap on the circle bets it
     const b = e.target.closest("[data-act]"); if (!b || b.getAttribute("aria-disabled") === "true") return; act(b.dataset.act);
   });
   function act(a) {
@@ -817,12 +830,20 @@
   const posToMs = (p) => { const near = SPEED_STOPS.find((s) => Math.abs(s[2] - p) <= 14); if (near) return near[0]; for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (p <= p1) { const q = i === 4 ? 100 : 25; return Math.round((m0 + ((m1 - m0) * (p - p0)) / (p1 - p0)) / q) * q; } } return 5000; };
   const msToPos = (ms) => { for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (ms <= m1) return p0 + ((p1 - p0) * (ms - m0)) / (m1 - m0); } return 1000; };
   const nearestStop = (v) => SPEED_STOPS.reduce((a, s) => (Math.abs(s[0] - v) < Math.abs(a[0] - v) ? s : a));
+  const HINTS = { deckCount: "Decks in the shoe", includeCutCard: "Shuffle before the shoe runs out", dealerHoleBehaviour: "When the dealer checks", dealerHitsSoft17: "Dealer's move on soft 17",
+    noHoleCardLoss: "Your loss to a dealer blackjack", blackjackPayout: "What a natural pays", insurance: "Side bet against a dealer ace", doubleOn: "Hands you may double", doubleAfterSplit: "Double on split hands",
+    maxSplitHands: "Most hands from splitting", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Draw to split aces", surrender: "Give up half your bet",
+    blackJackOnSplit: "A+ten after a split pays 3:2", tripleDown: "Triple the bet, one card", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
+    dealerDrawsOnPlayerBlackjack: "Dealer draws against your natural", blackjackPaysImmediately: "Natural paid before the dealer", dealerDrawsOnceOn21: "One dealer card against 21", dealerDrawsOnPlayerBust: "Dealer draws after you bust",
+    speed: "How fast cards move", rebet: "Same bet each round", showTotals: "Hand totals on the table", count: "Hi-Lo card count", autoDeal: "Deals without a tap", autoDelay: "Pause before auto deal",
+    sfx: "Table sounds", volume: "Sound level", haptics: "Buzz on key moments" };
+  const hintAttr = (k) => (HINTS[k] ? ` data-hint="${HINTS[k]}"` : ""); const hintDesc = (k) => (HINTS[k] ? `<span class="sr-only" id="hd-${k}">${HINTS[k]}</span>` : ""); const describedBy = (k) => (HINTS[k] ? ` aria-describedby="hd-${k}"` : "");
   const SEC_OF = (k) => (["first", "last"].includes(k) ? "sec-account" : k === "chips" ? "sec-chips" : ["felt", "accent", "mode"].includes(k) ? "sec-look" : ["sfx", "volume", "haptics"].includes(k) ? "sec-sound" : ["speed", "rebet", "count", "showTotals", "autoDeal", "autoDelay"].includes(k) ? "sec-play" : "sec-rules");
-  const sw = (k, label, sub, extra = "") => `<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false" ${extra}><span class="tx"><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
-  const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}">${label}</label><output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}" type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
+  const sw = (k, label, sub, extra = "") => `${hintDesc(k)}<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false"${describedBy(k)} ${extra}><span class="tx"><span${hintAttr(k)}>${label}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
+  const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}"${hintAttr(k)}>${label}</label>${hintDesc(k)}<output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}"${describedBy(k)} type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
   // a section is a disclosure: its header (a button inside the h2) names it and sums up its values; the body is hidden until opened
   const sec = (id, title, inner) => `<section class="sec" id="${id}"><h2 class="sec-t"><button type="button" class="sec-h" id="${id}-h" aria-expanded="false" aria-controls="${id}-b"><span class="sec-n">${title}<span class="sec-dot" hidden><span class="sr-only">, unsaved changes</span></span></span><span class="sec-s" id="${id}-s"></span><svg class="chev" aria-hidden="true"><use href="#i-chevron"/></svg></button></h2><div class="sec-b" id="${id}-b" role="region" aria-labelledby="${id}-h" hidden>${inner}</div></section>`;
-  function openSec(id, open = true) { const h = document.getElementById(id + "-h"); if (!h) return; h.setAttribute("aria-expanded", String(open)); document.getElementById(id + "-b").hidden = !open; }
+  function openSec(id, open = true) { const h = document.getElementById(id + "-h"); if (!h) return; if (open) $$(".sec").forEach((x) => { if (x.id !== id) { const o = document.getElementById(x.id + "-h"); o?.setAttribute("aria-expanded", "false"); const bd = document.getElementById(x.id + "-b"); if (bd) bd.hidden = true; } }); h.setAttribute("aria-expanded", String(open)); document.getElementById(id + "-b").hidden = !open; } // an accordion: one section open at a time
   const grp = (title, inner) => `<div class="grp"><h3>${title}</h3>${inner}</div>`;
   function buildSettings() {
     $("#sBody").innerHTML =
@@ -833,13 +854,13 @@
       sec("sec-sound", "Sound &amp; haptics", sw("sfx", "Sound") + slider("volume", "Volume", 0, 100, 5, null, null, "sfx") + sw("haptics", "Vibration")) +
       sec("sec-account", "Account", `<div class="inputs"><label>First name<input type="text" data-k="first" autocomplete="given-name" maxlength="24" aria-describedby="err-first"><span class="ferr" id="err-first" hidden></span></label><label>Last name<input type="text" data-k="last" autocomplete="family-name" maxlength="24" aria-describedby="err-last"><span class="ferr" id="err-last" hidden></span></label></div><div class="btn-row"><button class="btn" type="button" data-toast="Change password is not wired in the mockup">Change password</button><button class="btn" type="button" data-toast="Log out is not wired in the mockup">Log out</button></div>`) +
       `<div class="danger-zone"><div class="row"><span class="rl"><b>Your profile</b><small>Balance and history, for good.</small></span><button class="btn danger-o" type="button" id="delBtn">Delete profile</button></div></div>`;
-    renderRules(); syncControls(); wirePresetMenu();
+    renderRules(); syncControls(); wirePresetMenu(); wireHints();
   }
   // one rule: its label and a compact segmented control; each other choice shows how far it moves the house edge (small, quiet)
   function segHTML(rule, s) {
     const cur = rule.get ? rule.get(s) : s[rule.key]; let list = rule.opts;
     if (rule.key === "deckCount" && !list.some((o) => o.v === cur)) list = [...list, { v: cur, l: String(cur) }].sort((a, b) => a.v - b.v);
-    return `<div class="rrow"><span class="rl" id="fl-${rule.key}">${rule.label(cur)}</span><div class="seg" role="radiogroup" aria-labelledby="fl-${rule.key}">` +
+    return `<div class="rrow"><span class="rl" id="fl-${rule.key}"${hintAttr(rule.key)}>${rule.label(cur)}</span>${hintDesc(rule.key)}<div class="seg" role="radiogroup" aria-labelledby="fl-${rule.key}"${describedBy(rule.key)}>` +
       list.map((o) => { const patch = rule.patch ? rule.patch(o.v, s) : { [rule.key]: o.v }; const d = o.v === cur ? "" : fmtDelta(edgeDelta(s, patch)); return `<button type="button" role="radio" aria-checked="${o.v === cur}" data-rule="${rule.key}" data-v='${JSON.stringify(o.v)}' data-f="r-${rule.key}-${o.v}"${o.h ? ` title="${o.h}"` : ""}><span>${o.l}</span>${d ? `<span class="d">${d}</span>` : ""}</button>`; }).join("") + `</div></div>`;
   }
   function renderRules() {
@@ -913,7 +934,7 @@
   });
   sBody.addEventListener("input", (e) => { const el = e.target; if (!el.dataset.k) return; if (el.dataset.k === "speed") { setDraft({ speed: posToMs(+el.value) }); return syncControls(); } setDraft({ [el.dataset.k]: el.type === "range" ? +el.value : el.value }); syncControls(); });
   // RESET_SETTINGS (gameReducer.js): saving any of these deals a new shoe and resets the table
-  const RESET_KEYS = ["deckCount", "dealerHoleBehaviour", "blackJackOnSplit", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
+  const RESET_KEYS = ["deckCount", "includeCutCard", "dealerHoleBehaviour", "blackJackOnSplit", "dealerDrawsOnceOn21", "dealerDrawsOnPlayerBlackjack", "dealerDrawsOnPlayerBust", "blackjackPaysImmediately", "maxSplitHands", "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance"];
   const midRound = () => !["betting", "results", "shuffling"].includes(T.phase);
   function resetTable(newShoe) { // as the app's resetTable: only an undealt circle bet comes back; bets on a dealt hand are lost
     if (T.phase === "betting") T.balance = R.cents(T.balance + T.seats.reduce((a, h) => a + h.bet, 0));
@@ -942,6 +963,18 @@
   function closePresets(focus) { const b = $("#presetBtn"), l = $("#presetList"); if (!b || l.hidden) return; l.hidden = true; b.setAttribute("aria-expanded", "false"); l.removeAttribute("aria-activedescendant"); if (focus) b.focus(); }
   function openPresets() { const b = $("#presetBtn"), l = $("#presetList"); l.hidden = false; b.setAttribute("aria-expanded", "true"); const opts = $$('[role="option"]', l); setActive(opts.find((o) => o.getAttribute("aria-selected") === "true") || opts[0]); l.focus(); }
   function setActive(o) { const l = $("#presetList"); $$('[role="option"]', l).forEach((x) => x.classList.toggle("active", x === o)); if (o) { l.setAttribute("aria-activedescendant", o.id); o.scrollIntoView({ block: "nearest" }); } }
+  // the hint bubble: hover (after 250 ms) on a pointer, a long press (450 ms) on touch; it never fires the control under the finger
+  function wireHints() {
+    const tip = document.createElement("div"); tip.className = "hint-tip"; tip.setAttribute("aria-hidden", "true"); tip.hidden = true; document.body.appendChild(tip); let t = 0, held = null;
+    const show = (el) => { tip.textContent = el.dataset.hint; tip.hidden = false; const r = el.getBoundingClientRect(), tw = tip.offsetWidth; tip.style.left = Math.max(8, Math.min(innerWidth - tw - 8, r.left)) + "px"; tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + "px"; };
+    const hide = () => { clearTimeout(t); tip.hidden = true; };
+    let over = null; // the hinted name under a mouse pointer (pointermove, so a pointer already resting on it counts too)
+    $("#sBody").addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; const el = e.target.closest("[data-hint]"); if (el === over) return; over = el; hide(); if (el) t = setTimeout(() => show(el), 250); });
+    $("#sBody").addEventListener("pointerleave", () => { over = null; hide(); });
+    $("#sBody").addEventListener("pointerdown", (e) => { const el = e.target.closest("[data-hint]"); if (!el || e.pointerType !== "touch") return; clearTimeout(t); t = setTimeout(() => { show(el); held = el; setTimeout(hide, 1800); }, 450); });
+    $("#sBody").addEventListener("pointerup", () => clearTimeout(t)); $("#sBody").addEventListener("pointercancel", () => clearTimeout(t)); addEventListener("scroll", hide, { passive: true });
+    $("#sBody").addEventListener("click", (e) => { if (held && held.contains(e.target)) { e.stopPropagation(); e.preventDefault(); held = null; } }, true); // a long press shows the hint, it does not toggle
+  }
   function wirePresetMenu() {
     const b = $("#presetBtn"), l = $("#presetList");
     b.addEventListener("click", () => (l.hidden ? openPresets() : closePresets(true)));
@@ -1020,14 +1053,14 @@
       const check = () => { let bad = 0; F.forEach(([n]) => { const inp = f.elements[n], e = err(n, inp.value), show = touched.has(n) && !!e; if (e) bad++; inp.setAttribute("aria-invalid", String(show)); $("#su-" + n).hidden = !show; $("#su-" + n).textContent = e; }); f.querySelector("[type=submit]").setAttribute("aria-disabled", String(!!bad)); return !bad; };
       f.addEventListener("input", (e) => { touched.add(e.target.name); check(); });
       f.addEventListener("focusout", (e) => { if (e.target.name) { touched.add(e.target.name); check(); } });
-      f.addEventListener("submit", (e) => { e.preventDefault(); F.forEach(([n]) => touched.add(n)); if (check()) { location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#home"; }, 1800); } });
+      f.addEventListener("submit", (e) => { e.preventDefault(); F.forEach(([n]) => touched.add(n)); if (check()) { location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#table"; }, 1800); } }); // signed in: straight onto the table (Home is in the menu)
     } else if (scr === "login") {
       $("#login").innerHTML = `<main class="page">${wmBig}<h1>Log in</h1>
         ${sub === "error" ? '<p class="alert" role="alert">That didn&rsquo;t work. Check your username and password and try again.</p>' : ""}
         ${sub === "waking" ? '<div class="waking" role="status"><span class="spin" aria-hidden="true"></span><span>Waking up the table. The first log-in can take up to 30 seconds.</span></div>' : ""}
         <form class="form" id="loginForm" novalidate><label>Username or email<input name="usernameOrEmail" autocomplete="username" placeholder="Username or Email"${sub === "error" ? ' aria-invalid="true"' : ""}></label><label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password"${sub === "error" ? ' aria-invalid="true"' : ""}></label>
         <button class="btn primary" type="submit"${sub === "waking" ? ' aria-disabled="true"' : ""}>${sub === "waking" ? "Logging in..." : "Log in"}</button></form><p class="signed"><a href="#login/signup">Create an account</a></p></main>`;
-      $("#loginForm").addEventListener("submit", (e) => { e.preventDefault(); location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#home"; }, 1800); });
+      $("#loginForm").addEventListener("submit", (e) => { e.preventDefault(); location.hash = "#login/waking"; setTimeout(() => { if (location.hash === "#login/waking") location.hash = "#table"; }, 1800); }); // signed in: straight onto the table
     }
     if (scr === "loading") $("#loading").innerHTML = `<main class="page" role="status">${wmBig}<div class="deal-load" aria-hidden="true">${[0, 1, 2].map((n) => `<i style="--n:${n}"><svg viewBox="0 0 250 363"><use href="#cardback"/></svg></i>`).join("")}</div><p>Shuffling up...</p></main>`;
     if (scr === "error") $("#error").innerHTML = `<main class="page">${wmBig}<h1>Can't reach the table</h1><p>Check your connection and try again. Your balance is safe.</p><div class="btn-col"><a class="btn primary" href="#loading">Try again</a><a class="btn" href="#home">Home</a></div></main>`;
@@ -1067,7 +1100,7 @@
     $("#leaveYes").addEventListener("click", () => { $("#leaveDlg").close(); draft = clone(saved); applyTheme(saved); updateDirty(); T.leaving = true; location.hash = leaveTo || "#table"; });
     window.addEventListener("beforeunload", (e) => { if (document.body.dataset.screen === "settings" && diffKeys().length) { e.preventDefault(); e.returnValue = ""; } });
     const relayout = () => { if (document.body.dataset.screen !== "table") return; renderPrint(); renderDealer(); layoutSeats(); };
-    if (window.ResizeObserver) new ResizeObserver(relayout).observe($("#stage"));
+    if (window.ResizeObserver) { new ResizeObserver(relayout).observe($("#stage")); let pw = 0, ph = 0; new ResizeObserver(([e]) => { const { width, height } = e.contentRect; if (Math.round(width) !== pw || Math.round(height) !== ph) { pw = Math.round(width); ph = Math.round(height); renderPrint(); } }).observe($("#print")); }
     let wasOne = oneRow(); window.addEventListener("resize", () => { if (oneRow() !== wasOne) { wasOne = oneRow(); renderDock(); } });
     document.fonts?.ready.then(() => renderPrint());
     window.__bj = { stack: (codes) => { T.shoe.push(...[...codes].reverse()); }, cutNow: () => { T.cutAt = T.shoe.length; }, T, demo, render, run: runDemo, result: (n) => runDemo("r:" + n), seats: (n) => runDemo("s:" + n), get saved() { return saved; } };

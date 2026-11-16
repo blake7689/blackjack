@@ -111,7 +111,7 @@ svg { display: block; }
 .top-r { justify-self: end; display: flex; align-items: center; gap: 2px; min-width: 0; }
 /* count: running count and true count, plain text (no box) */
 .count { display: flex; flex-direction: column; justify-content: center; gap: 0; padding: 0 4px; white-space: nowrap; }
-.count span { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; line-height: 1.15; }
+.count span { display: flex; align-items: baseline; justify-content: flex-start; gap: 6px; line-height: 1.15; } /* the label, then the figure in its fixed column: no gap opening up between them */
 .count i { font-style: normal; font-size: 12px; color: var(--tx-3); }
 .count b { font-size: 13px; color: var(--tx); font-weight: 700; display: inline-block; min-width: 2.8ch; text-align: right; font-variant-numeric: tabular-nums; } /* fixed width: a new value never moves the box */
 @media (min-width: 600px) { .top-wm { height: 17px; } .bar-l { gap: 6px; } }
@@ -195,7 +195,7 @@ svg { display: block; }
 .stage-in.multi:has(.seats.tight) { --fixed: 226px; --rows: 5.254; } /* the room kept under narrow seats for side stacks */
 @media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); padding: 12px 0 6px; } }
-@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); padding: 26px 0 12px; } .stage-in.multi { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px), 124px); } /* room for a sideways double in each of three hands */ .stage-in.multi.many { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px), 110px); } }
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); padding: 26px 0 12px; } .stage-in.multi { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 124px); } /* up to four hands in one row, as in landscape */ /* room for a sideways double in each of three hands */ .stage-in.multi.many { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 110px); } }
 .cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; }
 
 .dealer { position: relative; z-index: 3; width: 100%; height: var(--ch); display: flex; justify-content: center; flex: none; }
@@ -221,7 +221,7 @@ svg { display: block; }
 /* the shoe sits off the table, top right: only the corner of its top card shows, with the shoe's shadow on the cloth */
 .shoe { position: absolute; z-index: 5; right: 0; top: calc(var(--rail) * -1); width: calc(var(--cw) * 1.1); height: calc(var(--cw) * .9); pointer-events: none; }
 .shoe::before { content: ""; position: absolute; inset: -40% -40% auto auto; width: 180%; height: 180%; background: radial-gradient(closest-side at 70% 30%, rgb(0 0 0 / .42), transparent); }
-.shoe-card, .cut-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; right: calc(var(--cw) * -.42); top: calc(var(--cw) * -.94); transform: rotate(-36deg); transition: transform 780ms var(--e-weight); }
+.shoe-card, .cut-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; right: calc(var(--cw) * -.42); top: calc(var(--cw) * -.94); transform: rotate(-36deg); transition: transform var(--shoe-t, 780ms) var(--e-weight); }
 .shoe-card { filter: drop-shadow(-2px 4px 3px rgb(0 0 0 / .45)); }
 .cut-card { border-radius: calc(var(--cw) * .06); background: linear-gradient(135deg, #f7d55a, #e9b81f); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18), -2px 4px 4px rgb(0 0 0 / .35); transform: rotate(-36deg) translate(30%, -40%); opacity: 0; }
 .shoe.shuffling .shoe-card { transform: rotate(-36deg) translate(40%, -60%); }
@@ -231,7 +231,7 @@ svg { display: block; }
 .shoe .mouth { position: absolute; left: 30%; top: 44%; width: 1px; height: 1px; }
 /* the discard pile: the shoe's mirror at the top-left corner, partly off the felt; it thickens as the shoe runs down */
 .discard { position: absolute; z-index: 5; left: 0; top: calc(var(--rail) * -1); width: calc(var(--cw) * 1.1); height: calc(var(--cw) * .9); pointer-events: none; }
-.discard-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; left: calc(var(--cw) * -.46); top: calc(var(--cw) * -.86); border-radius: calc(var(--cw) * .06); filter: drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); transition: opacity var(--t-ui), transform 780ms var(--e-weight); } /* a straight stack, square to the screen (Blake, round 10) */
+.discard-card { position: absolute; width: var(--cw); aspect-ratio: 250 / 363; left: calc(var(--cw) * -.46); top: calc(var(--cw) * -.86); border-radius: calc(var(--cw) * .06); filter: drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); transition: opacity var(--t-ui), transform var(--shoe-t, 780ms) var(--e-weight); } /* a straight stack, square to the screen (Blake, round 10) */
 .discard.away .discard-card { transform: translate(-70%, -70%); }
 .discard[data-lv="2"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); }
 .discard[data-lv="3"] .discard-card, .discard[data-lv="4"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(1px 2px 0 rgb(0 0 0 / .4)) drop-shadow(2px 5px 4px rgb(0 0 0 / .45)); }
@@ -279,7 +279,7 @@ svg { display: block; }
 .pill.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .22), 0 4px 10px rgb(0 0 0 / .35); }
 .pill.hidden { opacity: 0; transform: scale(.8); }
 .stage-in.dealing .pill { visibility: hidden; }
-.no-totals #stageIn .pill { visibility: hidden; } /* Show hand totals off */
+.no-totals #stageIn .pill:not(.bj) { visibility: hidden; } /* Show hand totals off; the "Blackjack!" badge still shows (Blake, round 12) */
 
 /* chips: one SVG per stack; each chip is a side band + a face, lifted by the chip's thickness */
 /* a stack's bottom chip sits on the spot's centre; each chip above it is lifted up the screen by its thickness */
@@ -339,7 +339,7 @@ svg { display: block; }
   .seat .hand { margin-top: 0; grid-column: 2; grid-row: 1 / span 2; align-self: center; }
   .seat::after { grid-column: 3; grid-row: 1; }
   .seat.nocards { grid-template-columns: var(--spot); }
-  .seats.scroll { --sw: calc(var(--spot) + var(--cw) * 2.1 + 92px); } /* one hand at a time: the seat holds its circle, a hand of three and its total */
+  .seats.scroll { --sw: calc(max(44px, var(--cw)) + var(--cw) * 2.1 + 92px); } /* one hand at a time: the circle (never --spot: it is derived from --sw), a hand of three and its total */
   .stage-in.multi .seat { grid-template-columns: var(--spot) auto 56px; } /* the total's own column: a soft "9 / 19" fits */
   .stage-in.multi .seat::after { width: 56px; }
   .seat.nocards .hand, .seat.nocards::after { display: none; }
@@ -616,6 +616,8 @@ svg { display: block; }
 .form .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; } /* still focusable and submittable: submit shows every field's error */
 .btn-row { display: flex; gap: 10px; flex-wrap: wrap; }
 /* save bar */
+.hint-tip { position: fixed; z-index: 70; max-width: min(260px, calc(100vw - 16px)); padding: 6px 10px; border-radius: var(--r1); background: var(--surf-3); color: var(--tx); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 8px 24px rgb(0 0 0 / .35); pointer-events: none; }
+[data-hint] { cursor: help; -webkit-touch-callout: none; }
 .dirty { position: fixed; z-index: 40; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); transform: translateX(-50%); width: min(560px, calc(100vw - 20px)); display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 18px; border-radius: var(--r4); background: color-mix(in srgb, var(--surf-3) 92%, transparent); backdrop-filter: blur(16px); border: 1px solid var(--line-2); box-shadow: 0 20px 50px -10px rgb(0 0 0 / .6); animation: rise var(--t-ui) var(--e-out); }
 .dirty-txt { flex: 1; font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
 .dirty-txt::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }

@@ -114,6 +114,17 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
 - **Cut card and discard pile:** leave clear room between them.
 - Answers (same day): the count updates **live per card** (as each card lands face up; the hole card when it flips). Actions not possible on this hand stay **greyed** (setting-off actions are hidden). Keep the DEMO edge tab. Keep the current Blackjack celebration. **Per-hand result tags only with 2+ hands** (one hand: verdict + dock only). Defaults stay green felt, emerald, dark. Sound stays with #86 (mockup silent).
 
+## Round 12 audit answers and notes (Blake, 2026-11-16/17)
+- **Chip tap:** first tap on a rack chip only selects it; a tap on the bet circle bets it (overrides the spec's one-seat "tap bets" rule).
+- **Table limits:** none now (play money); a `later` issue for per-preset limits.
+- **Shuffle:** duration scales with Game speed (about 1.5 s on Very fast) and a tap skips it.
+- **Include cut card:** a switch in the Shoe group, as today; with it off, a mid-round refill plays a short shuffle.
+- **Balance badge on the auto rebet:** when a new round re-places the bet (Rebet / reset bet), the top badge must show the deduction ("−$25"), like a manual bet.
+- **Setting hints:** a long press (mobile) or hover (desktop) on a setting's name shows an extremely short description (a few words, one line).
+- **Settings sections are an accordion:** only one open at a time; opening one collapses the other.
+- **Kept as is:** count on by default; results dock keeps the balance; red "−$25" bet badge; the full-size resting cut card; out of credits = hidden top-up only (no follow-up); all four fonts; light mode leaves the felt and cards unchanged; the insurance "No thanks" nudge; "Deal split hands" defaults to One at a time (#133); landscape betting keys icon-only; the sideways double stays sideways.
+- **Changed:** the peek's duration scales with Game speed (like the shuffle); a signed-in player opens straight onto the table (Home in the menu), a signed-out player sees Home; the "Blackjack!" badge always shows, even with "Show hand totals" off.
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).
