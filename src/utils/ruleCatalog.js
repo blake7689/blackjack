@@ -71,6 +71,10 @@ export const RULE_CATALOG = [
   { key: "maxSplitHands", group: "Splitting", label: (v) => `Max Hands After Splits: ${v === 0 ? "Unlimited" : v}`, input: "select",
     options: [2, 3, 4].map((n) => ({ value: n, label: String(n) })).concat({ value: 0, label: "Unlimited" }),
     summary: { line: 2, text: (v) => (v === 0 ? "Split any number of hands" : `Split up to ${v} hands`) } },
+  { key: "splitDeal", group: "Splitting", label: () => "Deal Split Hands", input: "select", options: [
+      { value: "one", label: "One at a time", hint: "After a split the second hand gets its card only when you reach it." },
+      { value: "both", label: "Both at once", hint: "After a split both hands get their second card at once." },
+    ] },
   { key: "resplitAces", group: "Splitting", label: () => "Resplit Aces", input: "checkbox", hint: "Allows splitting again when a split ace gets another ace.",
     showWhen: (s) => s.maxSplitHands !== 2 }, // with two hands there is no second split to make
   { key: "hitSplitAces", group: "Splitting", label: () => "Hit Split Aces", input: "checkbox", hint: "Off: each split ace gets one card and stands." },

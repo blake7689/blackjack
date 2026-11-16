@@ -18,7 +18,7 @@ describe("ruleCatalog (#91)", () => {
   it("lists the table rules, grouped, in the order the Customize groups show them", () => {
     expect(RULE_CATALOG.map((r) => r.key)).toEqual([
       "deckCount", "dealerHoleBehaviour", "dealerHitsSoft17", "noHoleCardLoss", "blackjackPayout", "insurance", "doubleOn", "doubleAfterSplit",
-      "maxSplitHands", "resplitAces", "hitSplitAces", "surrender",
+      "maxSplitHands", "splitDeal", "resplitAces", "hitSplitAces", "surrender",
     ]);
     expect(GROUPS).toEqual(["Shoe", "Dealer", "Payouts", "Doubling", "Splitting", "Surrender"]);
     for (const rule of RULE_CATALOG) expect(GROUPS, rule.key).toContain(rule.group);
@@ -81,7 +81,7 @@ describe("ruleCatalog (#91)", () => {
   it("a select carries the stored values, each with a label and a one-line hint", () => {
     const stored = {
       dealerHoleBehaviour: [US_PEEK, EU], blackjackPayout: ["3:2", "6:5"], doubleOn: ["any", "9-11", "10-11"], noHoleCardLoss: ["all", "original"],
-      surrender: ["none", "late", "early", "earlyNoAce"], maxSplitHands: [2, 3, 4, 0],
+      surrender: ["none", "late", "early", "earlyNoAce"], maxSplitHands: [2, 3, 4, 0], splitDeal: ["one", "both"],
     };
     const selects = RULE_CATALOG.filter((r) => r.input === "select");
     expect(selects.map((r) => r.key).sort()).toEqual(Object.keys(stored).sort());

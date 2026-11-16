@@ -1,6 +1,6 @@
 import { test, expect, stubApi, login } from './fixtures';
 
-// Table rules on the Settings page (#91): the rules section applies a click at once, and a save writes version 4 with the whole key set.
+// Table rules on the Settings page (#91): the rules section applies a click at once, and a save writes version 5 with the whole key set.
 async function openGameSettings(page) {
   await login(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -18,7 +18,7 @@ const customTile = (page) => page.locator('[aria-current="true"]');
 // Customize, House variations and Advanced start closed: open one by its summary.
 const openDetails = (page, title) => page.locator('summary', { hasText: title }).click();
 
-test('a new player sees the Vegas tile chosen, and changing a rule saves version 4 with every setting at once (#91)', async ({ page }) => {
+test('a new player sees the Vegas tile chosen, and changing a rule saves version 5 with every setting at once (#91)', async ({ page }) => {
   const api = await stubApi(page);
   await openGameSettings(page);
   await expect(tile(page, 'Vegas')).toBeVisible();
@@ -35,11 +35,11 @@ test('a new player sees the Vegas tile chosen, and changing a rule saves version
   await expect(customTile(page)).toContainText('Custom');
 
   await expect.poll(() => api.saves.length).toBe(1);
-  expect(api.saves[0]).toMatchObject({ v: 4, blackjackPayout: '6:5', dealerHitsSoft17: true, noHoleCardLoss: 'original', deckCount: 6, maxSplitHands: 4 });
+  expect(api.saves[0]).toMatchObject({ v: 5, blackjackPayout: '6:5', dealerHitsSoft17: true, noHoleCardLoss: 'original', deckCount: 6, maxSplitHands: 4 });
   expect(Object.keys(api.saves[0])).toEqual(expect.arrayContaining(['dealerHoleBehaviour', 'doubleOn', 'doubleAfterSplit', 'resplitAces', 'hitSplitAces', 'playTimeout']));
 });
 
-test('a table saved before #91 keeps its payout rules, shows Custom, and the next change upgrades it to version 4 with them (#91)', async ({ page }) => {
+test('a table saved before #91 keeps its payout rules, shows Custom, and the next change upgrades it to version 5 with them (#91)', async ({ page }) => {
   const api = await stubApi(page, { settings: { v: 1, playTimeout: 250, dealerHoleBehaviour: 'drawAfter' } });
   await openGameSettings(page);
   await expect(customTile(page)).toContainText('Custom');
@@ -55,11 +55,11 @@ test('a table saved before #91 keeps its payout rules, shows Custom, and the nex
 
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.saves[0]).toMatchObject({
-    v: 4, resplitAces: true, surrender: 'none', insurance: false, dealerHitsSoft17: false, noHoleCardLoss: 'all', blackjackPayout: '3:2', deckCount: 2, maxSplitHands: 0, dealerHoleBehaviour: 'drawAfter',
+    v: 5, resplitAces: true, surrender: 'none', insurance: false, dealerHitsSoft17: false, noHoleCardLoss: 'all', blackjackPayout: '3:2', deckCount: 2, maxSplitHands: 0, dealerHoleBehaviour: 'drawAfter',
   });
 });
 
-test('Surrender is a rule: the hint follows the choice, and choosing Early saves version 4 with surrender early (#91)', async ({ page }) => {
+test('Surrender is a rule: the hint follows the choice, and choosing Early saves version 5 with surrender early (#91)', async ({ page }) => {
   const api = await stubApi(page);
   await openGameSettings(page);
   await openDetails(page, 'Customize rules');
@@ -70,10 +70,10 @@ test('Surrender is a rule: the hint follows the choice, and choosing Early saves
   await expect(page.getByText(/You keep the half even if the dealer has one/)).toBeVisible();
 
   await expect.poll(() => api.saves.length).toBe(1);
-  expect(api.saves[0]).toMatchObject({ v: 4, surrender: 'early', dealerHoleBehaviour: 'drawEarly_Check', deckCount: 6 });
+  expect(api.saves[0]).toMatchObject({ v: 5, surrender: 'early', dealerHoleBehaviour: 'drawEarly_Check', deckCount: 6 });
 });
 
-test('Insurance and Even Money is on for a new player, and switching it off saves version 4 with insurance off and shows Custom (#91)', async ({ page }) => {
+test('Insurance and Even Money is on for a new player, and switching it off saves version 5 with insurance off and shows Custom (#91)', async ({ page }) => {
   const api = await stubApi(page);
   await openGameSettings(page);
   await openDetails(page, 'Customize rules');
@@ -84,7 +84,7 @@ test('Insurance and Even Money is on for a new player, and switching it off save
   await option(page, 'Insurance and Even Money', 'Off').click();
 
   await expect.poll(() => api.saves.length).toBe(1);
-  expect(api.saves[0]).toMatchObject({ v: 4, insurance: false, surrender: 'late', deckCount: 6 });
+  expect(api.saves[0]).toMatchObject({ v: 5, insurance: false, surrender: 'late', deckCount: 6 });
   await expect(customTile(page)).toContainText('Custom'); // every preset has insurance on
 });
 
@@ -98,7 +98,7 @@ test('choosing a preset tile applies the whole preset at once and saves it (#91)
   await expect(tile(page, 'Vegas', false)).toBeVisible();
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.saves[0]).toMatchObject({
-    v: 4, deckCount: 6, dealerHoleBehaviour: 'drawAfter', dealerHitsSoft17: false, doubleOn: '9-11', maxSplitHands: 0, noHoleCardLoss: 'all',
+    v: 5, deckCount: 6, dealerHoleBehaviour: 'drawAfter', dealerHitsSoft17: false, doubleOn: '9-11', maxSplitHands: 0, noHoleCardLoss: 'all',
     surrender: 'none', insurance: true, blackjackPaysImmediately: false, playTimeout: 250,
   });
   await expect(page.locator('[aria-live="polite"]')).toContainText('This table:');
@@ -112,7 +112,7 @@ test('a change in Advanced makes the table Custom, and putting it back shows the
   await expect(customTile(page)).toContainText('Custom');
   await expect(tile(page, 'Vegas', false)).toBeVisible();
   await expect.poll(() => api.saves.length).toBe(1);
-  expect(api.saves[0]).toMatchObject({ v: 4, blackJackOnSplit: true });
+  expect(api.saves[0]).toMatchObject({ v: 5, blackJackOnSplit: true });
 
   await page.getByRole('checkbox', { name: 'Blackjack on Split' }).uncheck();
   await expect(customTile(page)).toHaveCount(0);

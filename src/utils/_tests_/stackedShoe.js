@@ -61,7 +61,9 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], of
 
   const queue = [...actions];
   while (s.phase === GamePhases.PLAYER_TURN) {
-    s = step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
+    // splitDeal "one": a split-off hand waits for its card (an automatic step), then the player acts on it
+    s = nextAutoAction(s) === "DEAL_SPLIT_CARD" ? step(s, { type: "DEAL_SPLIT_CARD" })
+      : step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
   }
   let beforeReveal = null; // the state just before REVEAL_HIDDEN (face-down doubles), if the round reaches it
   const betSeqs = s.creditEvents.filter((e) => e.kind === "bet").map((e) => e.seq);
