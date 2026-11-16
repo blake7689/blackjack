@@ -54,7 +54,7 @@ export function GameProvider({ children }) {
   // Auto deal's own steps (CONTINUE, DEAL) wait while the player is off the game page; gating here clears the timer in the same commit.
   const next = nextAutoAction(state);
   const auto = (next === "CONTINUE" || next === "DEAL") && !onGame ? null : next;
-  const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}`;
+  const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}|${state.selectedHandIndex}`; // the hand: two split hands can wait for a card one after the other
   useEffect(() => {
     if (!autoKey) return;
     const type = autoKey.split("|")[0];

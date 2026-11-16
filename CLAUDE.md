@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
@@ -78,6 +78,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   a hand of A,A stays PLAYING (Stay or Split, no Hit). In SPLIT every ace-split hand that can no longer split is set DONE before
   `advance()` (or the turn can stay on a finished hand). `canDouble` (hard 9-11 / 10-11 means no ace counted as 11; never on split
   aces; DAS) also gates TRIPLE.
+- Split deal (#133): rule `splitDeal` (`"one"` default, `"both"` = the old behaviour; in `RESET_SETTINGS` and every preset). In `"one"` `playerSplit` gives only
+  hand 1 its card; the split-off hand has `cards: [moved card]`, `awaitingCard: true`, status PLAYING, and `canAct` refuses it. When `advance()` selects it the phase stays
+  `PLAYER_TURN` and `nextAutoAction` gives `DEAL_SPLIT_CARD` (`engine.dealSplitSecondCard`, then the usual advance: split aces stand). `finishDeadAces` must skip a waiting
+  hand; the dealer never plays while one waits (it is not DONE). GameProvider's `autoKey` includes `selectedHandIndex` so two waiting hands in a row each get a timer.
 - Surrender (#91): `canSurrender` (pure; first two cards, never split or doubled; `earlyNoAce` never vs an ace) and `engine.playerSurrender`.
   Every surrender sets `surrendered: true`: at once (`result` SURRENDER) or, for `late` with no peek against an ace or ten, waiting (`result`
   NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered round has one hand. The
@@ -103,9 +107,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   "peeks"; it and the Advanced checkbox "Dealer doesn't check the hole card" write `dealerHoleBehaviour`, and move `blackjackPaysImmediately` to the new mode's preset pairing (true with a peek) only while it still holds the current mode's pairing).
   `utils/houseEdge.js` is an additive estimate (baseline 0.4469 + Wizard of Odds rule effects; sources, calculator comparison and the UNVERIFIED figures are in its header comment);
   insurance, House variations and Advanced are not counted; `noHoleCardLoss` counts only without a peek (`"all"` +0.11, `"original"` +0.01). A change to a rule effect needs its source.
-- Saved settings carry `v` (4 since #91 insurance). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
+- Saved settings carry `v` (5 since #133 splitDeal). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is
   older than `RULE_SINCE[key]` (default 2): `v: 1` gets all of them, `v: 1` and `v: 2` get `surrender: "none"`, `v: 1` to `v: 3` get
-  `insurance: false`; `{}`, no `v` and `v: 4` get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
+  `insurance: false`, `v: 1` to `v: 4` get `splitDeal: "both"`; `{}`, no `v` and `v: 5` get the Vegas defaults. A PR that adds a rule key adds its `LEGACY_RULES` and `RULE_SINCE` entries and bumps `SETTINGS_VERSION`.
 - Original-bet-only (`noHoleCardLoss: "original"`): every hand has `baseStake` (the first bet; 0 on a split-off hand). A dealer
   blackjack gives back `bet - baseStake` of a hand that did not bust (a busted hand is never refunded), paid in the one round
   `settle`. The rounded blackjack payout (6:5 pays 2.2x) and the round sum are rounded to the cent (`cents`).

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { dealRound, peekDealer, revealDealerHole, revealHiddenCards, playerSplit, playerDouble, playerSurrender, dealerNeedsToPlay, dealerOnlyChecksBlackjack, dealerShowsSecondCard } from "../gameEngine";
+import { dealRound, peekDealer, revealDealerHole, revealHiddenCards, playerSplit, dealSplitSecondCard, playerDouble, playerSurrender, dealerNeedsToPlay, dealerOnlyChecksBlackjack, dealerShowsSecondCard } from "../gameEngine";
 import { HandResult } from "../constants/handResult";
 import { HandStatus } from "../constants/handStatus";
 import { initialGameState } from "../gameReducer";
@@ -289,5 +289,86 @@ describe("playerSplit and insurance", () => {
     expect(newHandsArray.map((h) => "insurance" in h)).toEqual([false, false]);
     const refused = playerSplit({ ...deal(["8", "A", "8", "K"]), insurance: 0 }, stackedShoe(["3", "4"]), () => {}, outOfCards, {});
     expect(refused.newHandsArray.map((h) => h.insurance)).toEqual([0, 0]);
+  });
+});
+
+describe("playerSplit splitDeal and dealSplitSecondCard (#133)", () => {
+  const deal = (codes) => dealRound(stackedShoe(codes), 10, () => {}, outOfCards, { ...initialGameState.settings, dealerHoleBehaviour: Modes.NO_PEEK, insurance: false }).hands[0];
+  const eights = () => deal(["8", "10", "8", "7"]);
+  const aces = () => deal(["A", "10", "A", "7"]);
+  const rank = (h) => h.cards.map((c) => c.rank[0]).join("");
+
+  it("'one': the first hand gets its card, the second keeps the moved card, waits, and takes nothing from the shoe", () => {
+    const shoe = stackedShoe(["3", "K"]);
+    const { newHandsArray, shoe: left } = playerSplit(eights(), shoe, () => {}, outOfCards, { splitDeal: "one" });
+    expect(newHandsArray.map(rank)).toEqual(["83", "8"]);
+    expect(newHandsArray[1]).toMatchObject({ awaitingCard: true, isSplit: true, status: HandStatus.PLAYING, result: HandResult.NONE, total: 8, totals: [8], isBlackjack: false, isBusted: false, baseStake: 0 });
+    expect(newHandsArray[1].cards[0].moved).toBe(true);
+    expect(newHandsArray[0].awaitingCard).toBeUndefined();
+    expect(left.map((c) => c.rank)).toEqual(["king"]);
+  });
+
+  it("'both', and the default, deal the second card too and set no waiting flag", () => {
+    for (const rules of [{ splitDeal: "both" }, {}, undefined]) {
+      const { newHandsArray, shoe } = playerSplit(eights(), stackedShoe(["3", "K", "2"]), () => {}, outOfCards, rules);
+      expect(newHandsArray.map(rank)).toEqual(["83", "8k"]);
+      expect(newHandsArray.some((h) => "awaitingCard" in h)).toBe(false);
+      expect(shoe).toHaveLength(1);
+    }
+  });
+
+  it("'one' keeps the insurance on the first hand only", () => {
+    const { newHandsArray } = playerSplit({ ...eights(), insurance: 5 }, stackedShoe(["3"]), () => {}, outOfCards, { splitDeal: "one" });
+    expect(newHandsArray.map((h) => h.insurance)).toEqual([5, 0]);
+  });
+
+  it("'one' with split aces: the first ace stands on its card, the second waits (even with an ace, resplit on)", () => {
+    const { newHandsArray } = playerSplit(aces(), stackedShoe(["5"]), () => {}, outOfCards, { splitDeal: "one" });
+    expect(newHandsArray.map((h) => h.status)).toEqual([HandStatus.DONE, HandStatus.PLAYING]);
+    const resplit = playerSplit(aces(), stackedShoe(["A"]), () => {}, outOfCards, { splitDeal: "one", resplitAces: true });
+    expect(resplit.newHandsArray.map((h) => h.status)).toEqual([HandStatus.PLAYING, HandStatus.PLAYING]); // A-A may split again
+  });
+
+  describe("dealSplitSecondCard", () => {
+    const waiting = (hand, rules = {}) => playerSplit(hand, stackedShoe(["2"]), () => {}, outOfCards, { splitDeal: "one", ...rules }).newHandsArray[1];
+
+    it("draws one card, finishes the hand and clears the flag", () => {
+      const shoe = stackedShoe(["K", "9"]);
+      const { hand, shoe: left } = dealSplitSecondCard(waiting(eights()), shoe, () => {}, outOfCards);
+      expect(rank(hand)).toBe("8k");
+      expect(hand).toMatchObject({ awaitingCard: false, isSplit: true, total: 18, totals: [18], status: HandStatus.PLAYING, result: HandResult.NONE, isBusted: false, baseStake: 0 });
+      expect(left).toHaveLength(1);
+    });
+
+    it("equals the second hand playerSplit deals under 'both' (same cards, same rules)", () => {
+      for (const [codes, rules] of [[["8", "K"], {}], [["A", "K"], { blackJackOnSplit: true }], [["A", "K"], {}], [["A", "A"], { resplitAces: true }], [["A", "5"], { hitSplitAces: true }]]) {
+        const hand = codes[0] === "A" ? aces() : eights();
+        const both = playerSplit(hand, stackedShoe(["3", codes[1]]), () => {}, outOfCards, { splitDeal: "both", ...rules }).newHandsArray[1];
+        const late = dealSplitSecondCard(waiting(hand, rules), stackedShoe([codes[1]]), () => {}, outOfCards, rules).hand;
+        const strip = ({ cards, ...h }) => ({ ...h, awaitingCard: undefined, ranks: cards.map((c) => c.rank), moved: cards.map((c) => !!c.moved) });
+        expect(strip(late)).toEqual(strip(both));
+      }
+    });
+
+    it("a split ace's one card ends it, unless it may be hit, or it is an ace and resplitAces is on", () => {
+      const stands = (rules, card) => dealSplitSecondCard(waiting(aces(), rules), stackedShoe([card]), () => {}, outOfCards, rules).hand.status;
+      expect([stands({}, "5"), stands({}, "A"), stands({ resplitAces: true }, "5"), stands({ resplitAces: true }, "A"), stands({ hitSplitAces: true }, "5")])
+        .toEqual([HandStatus.DONE, HandStatus.DONE, HandStatus.DONE, HandStatus.PLAYING, HandStatus.PLAYING]);
+    });
+
+    it("a 21 is a blackjack only with blackJackOnSplit, and it finishes the hand either way", () => {
+      const tens = () => deal(["K", "10", "K", "7"]);
+      const on = dealSplitSecondCard(waiting(tens()), stackedShoe(["A"]), () => {}, outOfCards, { blackJackOnSplit: true }).hand;
+      const off = dealSplitSecondCard(waiting(tens()), stackedShoe(["A"]), () => {}, outOfCards, {}).hand;
+      expect([on.isBlackjack, on.status, on.total]).toEqual([true, HandStatus.DONE, 21]);
+      expect([off.isBlackjack, off.status, off.total]).toEqual([false, HandStatus.DONE, 21]);
+    });
+
+    it("refills an empty shoe and notes the cut card", () => {
+      const cut = { id: "CUT", type: "cut" };
+      let found = false;
+      const { hand } = dealSplitSecondCard(waiting(eights()), [cut], () => { found = true; }, () => stackedShoe(["K"]));
+      expect([rank(hand), found]).toEqual(["8k", true]);
+    });
   });
 });

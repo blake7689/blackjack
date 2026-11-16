@@ -196,55 +196,50 @@ export function playerTripleDown(hand, shoe, setCutCardFound, resetShoe, drawsOn
   return { hand: newHand, shoe };
 }
 
-// Player Split. rules: { blackJackOnSplit, resplitAces, hitSplitAces } //
-export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { blackJackOnSplit = false, resplitAces = false, hitSplitAces = false } = {}) {
-  const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const card2 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const hand1Cards = [hand.cards[0], card1];
-  const hand2Cards = [{ ...hand.cards[1], moved: true }, card2]; // moved: the card that changes hands
-  const hand1Totals = getHandTotals(hand1Cards);
-  const hand2Totals = getHandTotals(hand2Cards);
-  const hand1Evaluation = getHandEvaluation(hand1Totals.totals, hand, hand1Cards.length);
-  const hand2Evaluation = getHandEvaluation(hand2Totals.totals, hand, hand2Cards.length);
-
-  // If blackJackOnSplit is false, then a blackjack on the initial two cards after split should be treated as a regular 21, not a blackjack. //
-  if (!blackJackOnSplit && hand1Evaluation.isBlackjack) { hand1Evaluation.isBlackjack = false; }
-  if (!blackJackOnSplit && hand2Evaluation.isBlackjack) { hand2Evaluation.isBlackjack = false; }
-
-  // Split aces get one card each and stand, unless they may be hit, or may be split again when the card is another ace. //
-  // Not canHit (blackjackLogic.js): this decides from raw cards whether a NEW split-ace hand stands, and reads resplitAces; if the Hit rule changes, check this line too. //
-  const splitAces = hand.cards[0].rank === "ace";
-  const standsAfterOne = (cards) => splitAces && !hitSplitAces && !(resplitAces && cards[1].rank === "ace");
-
-  const newHand1 = {
+// A hand made by a split, once it holds both its cards: works out its status, result and blackjack. //
+// If blackJackOnSplit is false, then a blackjack on the initial two cards after split should be treated as a regular 21, not a blackjack. //
+// Split aces get one card each and stand, unless they may be hit, or may be split again when the card is another ace. //
+// Not canHit (blackjackLogic.js): this decides from raw cards whether a NEW split-ace hand stands, and reads resplitAces; if the Hit rule changes, check this line too. //
+function finishSplitHand(hand, cards, { blackJackOnSplit = false, resplitAces = false, hitSplitAces = false }) {
+  const { total, totals } = getHandTotals(cards);
+  const evaluation = getHandEvaluation(totals, hand, cards.length);
+  const standsAfterOne = cards[0].rank === "ace" && !hitSplitAces && !(resplitAces && cards[1].rank === "ace");
+  return {
     ...hand,
     isSplit: true,
-    cards: hand1Cards,
-    total: hand1Totals.total,
-    totals: hand1Totals.totals,
-    status: standsAfterOne(hand1Cards) ? HandStatus.DONE : hand1Evaluation.handStatus,
-    result: hand1Evaluation.handResult,
-    isBlackjack: hand1Evaluation.isBlackjack,
-    isBusted: hand1Evaluation.isBusted
+    cards,
+    total,
+    totals,
+    status: standsAfterOne ? HandStatus.DONE : evaluation.handStatus,
+    result: evaluation.handResult,
+    isBlackjack: blackJackOnSplit ? evaluation.isBlackjack : false,
+    isBusted: evaluation.isBusted
   };
+}
 
-  const newHand2 = {
+// Player Split. rules: { blackJackOnSplit, resplitAces, hitSplitAces, splitDeal }. //
+// splitDeal "both" (the default) deals each hand its second card now. "one" deals only the first hand's: the split-off hand keeps the
+// card that moved and waits (awaitingCard, PLAYING) until play reaches it, when dealSplitSecondCard gives it the card. //
+export function playerSplit(hand, shoe, setCutCardFound, resetShoe, { splitDeal = "both", ...rules } = {}) {
+  const card1 = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
+  const moved = { ...hand.cards[1], moved: true }; // moved: the card that changes hands
+  const base2 = {
     ...hand,
     baseStake: 0, // the split-off hand's whole stake is an added one
-    ...(hand.insurance > 0 && { insurance: 0 }), // the insurance stays on the first hand: it must not be paid twice
-    isSplit: true,
-    cards: hand2Cards,
-    total: hand2Totals.total,
-    totals: hand2Totals.totals,
-    status: standsAfterOne(hand2Cards) ? HandStatus.DONE : hand2Evaluation.handStatus,
-    result: hand2Evaluation.handResult,
-    isBlackjack: hand2Evaluation.isBlackjack,
-    isBusted: hand2Evaluation.isBusted
+    ...(hand.insurance > 0 && { insurance: 0 }) // the insurance stays on the first hand: it must not be paid twice
   };
+  const newHand1 = finishSplitHand(hand, [hand.cards[0], card1], rules);
+  const newHand2 = splitDeal === "one"
+    ? { ...base2, isSplit: true, cards: [moved], ...getHandTotals([moved]), status: HandStatus.PLAYING, result: HandResult.NONE, isBlackjack: false, isBusted: false, awaitingCard: true }
+    : finishSplitHand(base2, [moved, drawCardFromShoe(shoe, setCutCardFound, resetShoe)], rules);
 
-  const newHandsArray = [newHand1, newHand2];
+  return { newHandsArray: [newHand1, newHand2], shoe };
+}
 
-  return { newHandsArray, shoe };
+// Gives a split-off hand that waits (awaitingCard) its second card and finishes it as playerSplit would have. //
+export function dealSplitSecondCard(hand, shoe, setCutCardFound, resetShoe, rules = {}) {
+  const cards = [...hand.cards, drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  return { hand: { ...finishSplitHand(hand, cards, rules), awaitingCard: false }, shoe };
 }
 
 // Player Surrender. Late with no hole card against an ace or ten waits: the dealer's blackjack decides at settlement.

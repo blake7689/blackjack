@@ -24,7 +24,7 @@ function PlayerHand({ hand, index, active, gamePhase, handCount, maxSplitHands, 
   const showResult = hand.result !== HandResult.NONE && (settled || hand.result === HandResult.SURRENDER || hand.evenMoney); // a surrender and even money show at once
   const resultText = hand.evenMoney ? "Even money" : hand.result;
   const mayDouble = canDouble(hand, { doubleOn, doubleAfterSplit }) && canAffordStake;
-  const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING;
+  const canAct = active && gamePhase === GamePhases.PLAYER_TURN && hand.status === HandStatus.PLAYING && !hand.awaitingCard; // a split hand waits for its card first
   const offering = active && gamePhase === GamePhases.OFFERS && offers; // `offers` is passed only while the phase is OFFERS
 
   return (

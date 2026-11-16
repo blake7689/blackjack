@@ -1070,3 +1070,51 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
     });
   });
 });
+
+describe("a split hand waiting for its card (#133)", () => {
+  const props = { index: 1, active: true, gamePhase: GamePhases.PLAYER_TURN, handCount: 2, maxSplitHands: 4, credits: 1000 };
+  const waiting = (extra = {}) => hand(["8"], { isSplit: true, awaitingCard: true, totals: [8], total: 8, ...extra });
+
+  it("PlayerHand shows its one card and the bet, and none of Hit, Stay, Double, Triple or Split", () => {
+    const { container } = renderUI(<PlayerHand {...props} tripleDown hand={waiting()} />);
+    expect(container.querySelectorAll(".fly-card")).toHaveLength(1);
+    expect(live(container)).toBe("Total: 8 | Bet: $10");
+    for (const name of ["Hit", "Stay", "Double", "Triple", "Split"]) expect(screen.queryByText(name)).toBeNull();
+  });
+
+  it("the same hand without the flag is offered its options, and it is offered them again once the card has come", () => {
+    renderUI(<PlayerHand {...props} hand={waiting({ awaitingCard: undefined })} />);
+    expect(screen.getByText("Hit")).toBeTruthy();
+    cleanup();
+    const { gameActions } = renderUI(<PlayerHand {...props} hand={hand(["8", "5"], { isSplit: true, awaitingCard: false, totals: [13], total: 13 })} />);
+    fireEvent.click(screen.getByText("Stay"));
+    expect(gameActions.stand).toHaveBeenCalledWith(1);
+  });
+
+  describe("on the board", () => {
+    beforeEach(() => { vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+    const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
+    const reachWaitingHand = () => {
+      let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(["8", "10", "8", "7", "3", "K"]) });
+      s = [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" }, { type: "SPLIT", handIdx: 0 }, { type: "STAND", handIdx: 0 }].reduce(step, s);
+      return s;
+    };
+
+    it("shows the first hand's two cards and the second hand's one, no buttons while it waits, then the buttons once it has its card", () => {
+      const waiting = reachWaitingHand();
+      expect(waiting.hands[1].awaitingCard).toBe(true);
+      const { container, gameState, rerender } = renderUI(<GameBoard />, { game: waiting });
+      settleDeal();
+      expect([...container.querySelectorAll(".player-hand")].map((h) => h.querySelectorAll(".fly-card").length)).toEqual([2, 1]);
+      expect(screen.queryByText("Hit")).toBeNull();
+      expect(screen.queryByText("Stay")).toBeNull();
+      Object.assign(gameState, step(waiting, { type: "DEAL_SPLIT_CARD" }));
+      rerender(<GameBoard />);
+      settleDeal();
+      expect([...container.querySelectorAll(".player-hand")].map((h) => h.querySelectorAll(".fly-card").length)).toEqual([2, 2]);
+      expect(screen.getByText("Hit")).toBeTruthy();
+      expect(screen.getByText("Stay")).toBeTruthy();
+    });
+  });
+});

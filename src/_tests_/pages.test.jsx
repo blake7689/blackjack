@@ -770,6 +770,29 @@ describe("Settings table rules (#91)", () => {
     expect(screen.queryByRole("group", { name: NO_HOLE })).toBeNull();
   });
 
+  it("Deal Split Hands (#133) sits in the Splitting group, defaults to One at a time, and a click applies 'both' at once", () => {
+    const { gameActions } = openLive();
+    expect(optionLabels("Deal Split Hands")).toEqual(["One at a time", "Both at once"]);
+    expect(pressed("Deal Split Hands")).toBe("One at a time");
+    expect(screen.getByText("After a split the second hand gets its card only when you reach it.")).toBeTruthy();
+    fireEvent.click(option("Deal Split Hands", "Both at once"));
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ splitDeal: "both" }]]);
+    expect(pressed("Deal Split Hands")).toBe("Both at once");
+    expect(screen.getByText("After a split both hands get their second card at once.")).toBeTruthy();
+    fireEvent.click(option("Deal Split Hands", "Both at once")); // the chosen option again changes nothing
+    expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("a saved 'both' shows Both at once, and it asks before changing during a round", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const { gameActions } = openLive({ phase: GamePhases.PLAYER_TURN, settings: { ...initialGameState.settings, splitDeal: "both" } });
+    expect(pressed("Deal Split Hands")).toBe("Both at once");
+    fireEvent.click(option("Deal Split Hands", "One at a time"));
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(pressed("Deal Split Hands")).toBe("Both at once");
+  });
+
   it("hides Resplit Aces when only two hands are allowed, and brings it back with more", () => {
     openLive();
     expect(screen.getByRole("group", { name: "Resplit Aces" })).toBeTruthy();
@@ -837,14 +860,14 @@ describe("Settings table rules (#91)", () => {
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ tripleDown: true }], [{ doubleFaceDown: true }]]);
   });
 
-  it("applying a preset sends all 17 rule keys in one call, and the tiles name the five presets", () => {
+  it("applying a preset sends all 18 rule keys in one call, and the tiles name the five presets", () => {
     const { gameActions } = openLive();
     const tiles = within(screen.getByRole("group", { name: "Table rules" })).getAllByRole("button");
     expect(tiles.map((t) => t.querySelector("strong").textContent)).toEqual(["Vegas", "Atlantic City", "Europe", "Australia", "Singapore"]);
     fireEvent.click(tile("Singapore"));
     expect(gameActions.changeSettings).toHaveBeenCalledTimes(1);
     const sent = gameActions.changeSettings.mock.calls[0][0];
-    expect(Object.keys(sent)).toHaveLength(17);
+    expect(Object.keys(sent)).toHaveLength(18);
     expect(sent).toMatchObject({ doubleOn: "any", maxSplitHands: 3, deckCount: 6, dealerHitsSoft17: false, noHoleCardLoss: "original" });
     expect(pressed("Double On")).toBe("Any two cards");
     expect(pressed("Max Hands After Splits: 3")).toBe("3");

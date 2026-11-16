@@ -137,8 +137,9 @@ describe("GameProvider", () => {
   });
 
   it("passes the player's balance to bets, doubles and splits", () => {
-    shoes.push(stackedShoe(["8", "10", "8", "7", "3", "10", "2"]));
+    shoes.push(stackedShoe(["2"]), stackedShoe(["8", "10", "8", "7", "3", "10", "2"])); // the first is dealt by the rule change
     const { ctx, player } = setup();
+    act(() => { ctx.actions.changeSetting("splitDeal", "both"); }); // both split hands dealt at once, the rule this scenario was written for
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(500)); // more than the balance
     expect(ctx.state.betCircle).toBe(0);
@@ -327,7 +328,7 @@ describe("GameProvider", () => {
     expect(remote.saveSettings).not.toHaveBeenCalled();
     remote.token = "token";
     await act(async () => { await ctx.actions.changeSetting("deckCount", 3); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
     expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
 
@@ -735,7 +736,7 @@ describe("GameProvider auto deal (#88)", () => {
       cards.createShoe.mockClear(); // the sign-in load built its own shoe
       await act(async () => { await ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
       const saved = remote.saveSettings.mock.calls[0][0];
-      expect(saved).toMatchObject({ v: 4, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
+      expect(saved).toMatchObject({ v: 5, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
       expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
       expect(cards.createShoe).not.toHaveBeenCalled();
     });
@@ -745,7 +746,7 @@ describe("GameProvider auto deal (#88)", () => {
 describe("GameProvider saved table rules (#91)", () => {
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, insurance: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, insurance: false, splitDeal: "both",
   };
   const vegas = {
     dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
@@ -788,26 +789,26 @@ describe("GameProvider saved table rules (#91)", () => {
     expect(cards.createShoe).toHaveBeenLastCalledWith(3, true);
   });
 
-  it("a setting change saves { v: 4, ...every setting }", async () => {
+  it("a setting change saves { v: 5, ...every setting }", async () => {
     remote.token = "token";
     remote.getSettings.mockResolvedValue({});
     const { ctx } = setup({ signedIn: true });
     await flush();
     await act(async () => { await ctx.actions.changeSetting("blackjackPayout", "6:5"); });
     const saved = remote.saveSettings.mock.calls[0][0];
-    expect(saved.v).toBe(4);
+    expect(saved.v).toBe(5);
     expect(Object.keys(saved).sort()).toEqual(["v", ...Object.keys(ctx.state.settings)].sort());
     expect(saved).toMatchObject({ ...vegas, blackjackPayout: "6:5" });
   });
 
-  it("a v: 1 table that changes one setting is saved as v: 4 with its legacy rule values (no silent payout change)", async () => {
+  it("a v: 1 table that changes one setting is saved as v: 5 with its legacy rule values (no silent payout change)", async () => {
     remote.token = "token";
     remote.getSettings.mockResolvedValue({ v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 });
     const { ctx } = setup({ signedIn: true });
     await flush();
     await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
     const saved = remote.saveSettings.mock.calls[0][0];
-    expect(saved).toMatchObject({ v: 4, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(saved).toMatchObject({ v: 5, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
     expect(saved.dealerHitsSoft17).toBe(false);
     expect(saved.noHoleCardLoss).toBe("all");
   });
@@ -823,7 +824,7 @@ describe("GameProvider saved table rules (#91)", () => {
 
 describe("GameProvider: no save before the saved settings have loaded (#91)", () => {
   const stored = { v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 };
-  const legacyRules = { dealerHitsSoft17: false, blackjackPayout: "3:2", noHoleCardLoss: "all", maxSplitHands: 0, insurance: false };
+  const legacyRules = { dealerHitsSoft17: false, blackjackPayout: "3:2", noHoleCardLoss: "all", maxSplitHands: 0, insurance: false, splitDeal: "both" };
   const signInOut = (ctx, player, signedIn) => (
     <MemoryRouter initialEntries={["/game"]}>
       <PlayerContext.Provider value={signedIn ? player : { player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
@@ -843,7 +844,7 @@ describe("GameProvider: no save before the saved settings have loaded (#91)", ()
     expect(remote.saveSettings).not.toHaveBeenCalled();
   });
 
-  it("once the load resolves, the same change saves v: 4 with the loaded values, and a v: 1 table's legacy rules are written, not Vegas", async () => {
+  it("once the load resolves, the same change saves v: 5 with the loaded values, and a v: 1 table's legacy rules are written, not Vegas", async () => {
     remote.token = "token";
     let answer;
     remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
@@ -853,7 +854,7 @@ describe("GameProvider: no save before the saved settings have loaded (#91)", ()
     await act(async () => answer(stored));
     await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
     expect(remote.saveSettings).toHaveBeenCalledTimes(1);
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, ...legacyRules, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, ...legacyRules, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
   });
 
   it("a failed load keeps rejecting saves, while the change still applies here", async () => {
@@ -929,14 +930,14 @@ describe("GameProvider surrender (#91)", () => {
     expect(ctx.state).toBe(before);
   });
 
-  it("saves surrender in the version 4 object, and a change deals a new shoe like any table rule", async () => {
+  it("saves surrender in the version 5 object, and a change deals a new shoe like any table rule", async () => {
     remote.token = "token";
     const { ctx } = setup({ signedIn: true });
     await flush();
     cards.createShoe.mockClear();
     await act(async () => { await ctx.actions.changeSetting("surrender", "early"); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, surrender: "early" });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, surrender: "early" });
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
 
@@ -1090,14 +1091,14 @@ describe("GameProvider offers (#91)", () => {
     expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 5 }]);
   });
 
-  it("saves insurance in the version 4 object, and a change deals a new shoe like any table rule", async () => {
+  it("saves insurance in the version 5 object, and a change deals a new shoe like any table rule", async () => {
     remote.token = "token";
     const { ctx } = setup({ signedIn: true });
     await flush();
     cards.createShoe.mockClear();
     await act(async () => { await ctx.actions.changeSetting("insurance", false); });
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, insurance: false });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, insurance: false });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
 
@@ -1111,5 +1112,93 @@ describe("GameProvider offers (#91)", () => {
     const current = setup({ signedIn: true });
     await flush();
     expect(current.ctx.state.settings.insurance).toBe(true);
+  });
+});
+
+describe("GameProvider split deal (#133)", () => {
+  const ranks = (hand) => hand.cards.map((c) => c.rank[0]).join("");
+  // Starts a round and splits the first hand; `cards` is the whole shoe, `settings` any rule to change first (that deals its own shoe, so it takes the first one).
+  const splitRound = (cards, settings) => {
+    shoes.push(...(settings ? [stackedShoe(["2"])] : []), stackedShoe(cards));
+    const { ctx, player } = setup();
+    if (settings) act(() => { ctx.actions.changeSettings(settings); });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick(); // DEAL_DONE
+    act(() => ctx.actions.split(0));
+    return { ctx, player };
+  };
+
+  it("deals the second hand's card by itself, one beat after the first hand is finished, and not before", () => {
+    const { ctx, player } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    expect(ctx.state.hands.map(ranks)).toEqual(["83", "8"]);
+    expect(vi.getTimerCount()).toBe(0); // the player is playing hand 1: nothing is scheduled
+    act(() => ctx.actions.stand(0));
+    expect(ctx.state.hands[1].awaitingCard).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(ctx.state.hands[1].awaitingCard).toBe(true);
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["83", "8k"]);
+    expect(ctx.state.hands[1].awaitingCard).toBe(false);
+    expect([ctx.state.phase, ctx.state.selectedHandIndex]).toEqual([GamePhases.PLAYER_TURN, 1]);
+    expect(vi.getTimerCount()).toBe(0); // now the player acts
+    expect(events(player).filter((e) => e.kind === "bet")).toHaveLength(2); // the late card adds no bet
+  });
+
+  it("two waiting hands in a row each get their card: the timer is set again for the second hand", () => {
+    const { ctx } = splitRound(["A", "10", "A", "7", "A", "K", "5", "9", "3", "4"], { resplitAces: true });
+    expect(ctx.state.hands.map(ranks)).toEqual(["aa", "a"]);
+    act(() => ctx.actions.split(0)); // [A-K][A waiting][A waiting]
+    expect(ctx.state.hands.map((h) => !!h.awaitingCard)).toEqual([false, true, true]);
+    expect(ctx.state.selectedHandIndex).toBe(1);
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["ak", "a5", "a"]);
+    expect(ctx.state.selectedHandIndex).toBe(2); // same step, dealer and phase as before: only the hand changed
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["ak", "a5", "a9"]);
+    expect(ctx.state.phase).toBe(GamePhases.DEALER_TURN);
+  });
+
+  it("leaving the game page does not stop the late card (it is a step of the round, not of auto deal)", () => {
+    const { ctx } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    act(() => ctx.actions.stand(0));
+    act(() => ctx.navigate("/settings"));
+    tick();
+    expect(ctx.state.hands[1].awaitingCard).toBe(false);
+  });
+
+  it("resetting the game while a hand waits cancels the late card", () => {
+    const { ctx } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    act(() => ctx.actions.stand(0));
+    shoes.push(stackedShoe(["2"])); // the new shoe of the reset
+    act(() => ctx.actions.resetGame());
+    expect(vi.getTimerCount()).toBe(0);
+    for (let i = 0; i < 3; i++) tick();
+    expect(ctx.state.hands).toEqual([]);
+  });
+
+  it("is a table rule: it is saved in the version 5 object and a change deals a new shoe", async () => {
+    remote.token = "token";
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    cards.createShoe.mockClear();
+    await act(async () => { await ctx.actions.changeSetting("splitDeal", "both"); });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, splitDeal: "both" });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads 'both' from a version 4 object and 'one' from a version 5 one", async () => {
+    remote.getSettings.mockResolvedValue({ v: 4, insurance: true });
+    const old = setup({ signedIn: true });
+    await flush();
+    expect(old.ctx.state.settings.splitDeal).toBe("both");
+    cleanup();
+    remote.getSettings.mockResolvedValue({ v: 5, splitDeal: "one" });
+    const current = setup({ signedIn: true });
+    await flush();
+    expect(current.ctx.state.settings.splitDeal).toBe("one");
   });
 });
