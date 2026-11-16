@@ -833,12 +833,12 @@
   const posToMs = (p) => { const near = SPEED_STOPS.find((s) => Math.abs(s[2] - p) <= 14); if (near) return near[0]; for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (p <= p1) { const q = i === 4 ? 100 : 25; return Math.round((m0 + ((m1 - m0) * (p - p0)) / (p1 - p0)) / q) * q; } } return 5000; };
   const msToPos = (ms) => { for (let i = 1; i < SPEED_PTS.length; i++) { const [p1, m1] = SPEED_PTS[i], [p0, m0] = SPEED_PTS[i - 1]; if (ms <= m1) return p0 + ((p1 - p0) * (ms - m0)) / (m1 - m0); } return 1000; };
   const nearestStop = (v) => SPEED_STOPS.reduce((a, s) => (Math.abs(s[0] - v) < Math.abs(a[0] - v) ? s : a));
-  const HINTS = { deckCount: "Decks in the shoe", includeCutCard: "Shuffle before the shoe runs out", dealerHoleBehaviour: "When the dealer checks", dealerHitsSoft17: "Dealer's move on soft 17",
-    noHoleCardLoss: "Your loss to a dealer blackjack", blackjackPayout: "What a natural pays", insurance: "Side bet against a dealer ace", doubleOn: "Hands you may double", doubleAfterSplit: "Double on split hands",
-    maxSplitHands: "Most hands from splitting", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Draw to split aces", surrender: "Give up half your bet",
-    blackJackOnSplit: "A+ten after a split counts as blackjack", tripleDown: "Triple the bet, one card", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
+  const HINTS = { deckCount: "Decks in the shoe", includeCutCard: "Adds cut card to shoe", dealerHoleBehaviour: "When the dealer checks for blackjack", dealerHitsSoft17: "Dealer's move on soft 17",
+    noHoleCardLoss: "Your loss to a dealer blackjack", blackjackPayout: "What a natural blackjack pays", insurance: "Side bet against a dealer ace", doubleOn: "Hands you may double", doubleAfterSplit: "Double on split hands",
+    maxSplitHands: "Maximum number of times allowed to split a hand", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Can hit after splitting aces", surrender: "Give up half your bet",
+    blackJackOnSplit: "A+ten after a split counts as blackjack", tripleDown: "Triple the bet, two cards", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
     dealerDrawsOnPlayerBlackjack: "Dealer draws against your natural", blackjackPaysImmediately: "Natural paid before the dealer", dealerDrawsOnceOn21: "One dealer card against 21", dealerDrawsOnPlayerBust: "Dealer draws after you bust",
-    speed: "How fast cards move", rebet: "Same bet each round", showTotals: "Hand totals on the table", count: "Hi-Lo card count", autoDeal: "Deals without a tap", autoDelay: "Pause before auto deal",
+    speed: "How fast cards move", rebet: "Same bet each round", showTotals: "Hand totals on the table", count: "Hi-Lo card count", autoDeal: "Automatically deal each round", autoDelay: "Pause before auto deal",
     sfx: "Table sounds", volume: "Sound level", haptics: "Buzz on key moments" };
   // the screen reader gets each hint through aria-describedby, so the "i" is hidden from it
   const hintI = (k) => (HINTS[k] ? `<span class="hint-i" data-hint="${HINTS[k]}" data-hk="${k}" aria-hidden="true">i</span>` : ""); const hintDesc = (k) => (HINTS[k] ? `<span class="sr-only" id="hd-${k}">${HINTS[k]}</span>` : ""); const describedBy = (k) => (HINTS[k] ? ` aria-describedby="hd-${k}"` : "");
