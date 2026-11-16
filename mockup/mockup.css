@@ -113,7 +113,7 @@ svg { display: block; }
 .count { display: flex; flex-direction: column; justify-content: center; gap: 0; padding: 0 4px; white-space: nowrap; }
 .count span { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; line-height: 1.15; }
 .count i { font-style: normal; font-size: 12px; color: var(--tx-3); }
-.count b { font-size: 13px; color: var(--tx); font-weight: 700; }
+.count b { font-size: 13px; color: var(--tx); font-weight: 700; display: inline-block; min-width: 2.8ch; text-align: right; font-variant-numeric: tabular-nums; } /* fixed width: a new value never moves the box */
 @media (min-width: 600px) { .top-wm { height: 17px; } .bar-l { gap: 6px; } }
 @media (min-width: 900px) {
   .top { padding: env(safe-area-inset-top, 0px) var(--gutter) 0; }
@@ -161,7 +161,7 @@ svg { display: block; }
 .felt-light {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(48% 40% at var(--lx) var(--ly), rgb(255 250 232 / calc(.09 * var(--lamp))), rgb(255 250 232 / 0) 100%),
+    radial-gradient(48% 40% at var(--lx) var(--ly), rgb(255 250 232 / calc(.08 * var(--lamp))), rgb(255 250 232 / 0) 100%),
     radial-gradient(140% 110% at 50% 50%, transparent 46%, rgb(0 0 0 / .58) 100%);
   transition: --lx var(--t-light) var(--e-io), --ly var(--t-light) var(--e-io), --lamp var(--t-light) var(--e-io);
 }
@@ -183,17 +183,19 @@ svg { display: block; }
 .stage-in, .stage > * { --sg: clamp(8px, 2.4cqi, 22px); }
 .stage-in {
   /* card width from the room left: two hands, the print, a bet spot; capped by width (a real card is 63 mm, a chip 39 mm, a bet circle about 75 mm) */
-  --fixed: 162px; --rows: 4.254; --cwi: 23cqi; --cmax: 118px;
+  --fixed: 172px; --rows: 4.254; --cwi: 23cqi; --cmax: 118px;
   --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), var(--cwi), var(--cmax)), 160px);
   --cw: var(--cwr); --ch: calc(var(--cw) * 1.452);
   --ph: calc(var(--cw) * .2 + 52px);
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 10px 0 8px;
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 20px 0 8px; /* the dealer's cards get room at the top (round 12) */
 }
-.stage-in.multi { --fixed: 194px; --cwi: 17cqi; }
-.stage-in.multi:has(.seats.tight) { --fixed: 216px; --rows: 5.254; } /* the room kept under narrow seats for side stacks */
+.print, .mid { translate: 0 var(--py, 0px); } /* centrePrint(): the writing sits midway between the hands */
+@media (max-height: 740px) and (min-height: 521px) { .stage-in { padding-top: 15px; } } /* short phones: a little less room above the dealer, so a two-line verdict still clears the cards */
+.stage-in.multi { --fixed: 204px; --cwi: 17cqi; }
+.stage-in.multi:has(.seats.tight) { --fixed: 226px; --rows: 5.254; } /* the room kept under narrow seats for side stacks */
 @media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
-@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); padding: 8px 0 6px; } }
-@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 156px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); padding: 14px 0 12px; } .stage-in.multi { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px), 124px); } /* room for a sideways double in each of three hands */ .stage-in.multi.many { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px), 110px); } }
+@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); padding: 12px 0 6px; } }
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); padding: 26px 0 12px; } .stage-in.multi { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px), 124px); } /* room for a sideways double in each of three hands */ .stage-in.multi.many { --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px), 110px); } }
 .cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; }
 
 .dealer { position: relative; z-index: 3; width: 100%; height: var(--ch); display: flex; justify-content: center; flex: none; }
@@ -212,7 +214,7 @@ svg { display: block; }
   .seat::after { content: ""; width: var(--spot); }
   .mid { height: 30px; margin: 4px 0; }
 }
-@media (max-height: 520px) { .stage-in, .stage-in.multi { --fixed: 84px; } .print { position: relative; top: auto; left: auto; width: calc(100% - 32px); height: 44px; padding: 10px 0; box-sizing: border-box; margin: -6px 0 -10px; } /* a 44 px hit area, the same 24 px line and footprint */ .mid { margin: 0 0 4px; } }
+@media (max-height: 520px) { .stage-in, .stage-in.multi { --fixed: 88px; } .print { position: relative; top: auto; left: auto; width: calc(100% - 32px); height: 44px; padding: 10px 0; box-sizing: border-box; margin: -6px 0 -10px; } /* a 44 px hit area, the same 24 px line and footprint */ .mid { margin: 0 0 4px; } }
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) { .print { position: relative; top: auto; left: auto; width: min(calc(100cqi - 32px), calc(var(--cw) * 5.4)); height: var(--ph); margin: auto 0 0; } .mid { height: 56px; margin: 0 0 auto; } .pill { height: 32px; min-width: 40px; padding: 0 12px; border-radius: 16px; font-size: 17px; } .amt { font-size: 15px; } }
 
 /* ================= table objects ================= */
@@ -236,7 +238,7 @@ svg { display: block; }
 .discard.empty .discard-card { opacity: 0; }
 .discard .mouth { position: absolute; left: 4%; top: 6%; width: 1px; height: 1px; } /* the visible part of the top card */
 /* the cut card, once drawn, lies at the felt's left edge, half off it, level with the dealer's cards, until the shuffle */
-.cut-rest { position: absolute; z-index: 4; left: calc(var(--cw) * -.52); top: calc(var(--ch) * .12 + 10px); width: var(--cw); aspect-ratio: 250 / 363; border-radius: calc(var(--cw) * .06); background: linear-gradient(135deg, #f7d55a, #e9b81f); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18), 2px 4px 5px rgb(0 0 0 / .35); opacity: 0; pointer-events: none; transition: opacity var(--t-ui); }
+.cut-rest { position: absolute; z-index: 4; left: calc(var(--cw) * -.52); top: calc(var(--cw) * .62 + 28px); /* well clear below the discard pile */ width: var(--cw); aspect-ratio: 250 / 363; border-radius: calc(var(--cw) * .06); background: linear-gradient(135deg, #f7d55a, #e9b81f); box-shadow: inset 0 0 0 1px rgb(0 0 0 / .18), 2px 4px 5px rgb(0 0 0 / .35); opacity: 0; pointer-events: none; transition: opacity var(--t-ui); }
 #shoeBox.cut-out ~ .cut-rest { opacity: 1; }
 
 /* card: one element; .cin turns for the flip, the shadow stays on the table */
@@ -278,7 +280,6 @@ svg { display: block; }
 .pill.hidden { opacity: 0; transform: scale(.8); }
 .stage-in.dealing .pill { visibility: hidden; }
 .no-totals #stageIn .pill { visibility: hidden; } /* Show hand totals off */
-.count.dealing b { visibility: hidden; }
 
 /* chips: one SVG per stack; each chip is a side band + a face, lifted by the chip's thickness */
 /* a stack's bottom chip sits on the spot's centre; each chip above it is lifted up the screen by its thickness */

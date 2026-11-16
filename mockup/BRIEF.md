@@ -104,6 +104,16 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
 - **Cards turn face down as they are swept to the discard pile** (a flip at the start of the sweep; the pile is all backs).
 - **Discard pile is a straight stack** (square to the screen, like the recording), partly off the top-left edge, not angled into the corner.
 
+## Round 11 feedback (Blake, 2026-11-16): planned as the last run
+- **Felt writing and dealer hand sit too high:** centre the writing vertically between dealer and player without crowding the player area, and give the dealer's cards a little room at the top.
+- **"Blackjack", not "Blakejack", for the hand everywhere in play:** the natural badge/pill ("Blackjack!"), the result tag, the verdict, and the end celebration, for player and dealer. "Blakejack" is only the app name (wordmark, title, card back).
+- **Count:** it shifts sideways awkwardly when its value changes (use fixed-width numerals / a fixed box), and the values must not disappear each round. This overrides the app's hide-while-dealing behaviour: record it in DESIGN.md §0.
+- **Hide dock actions whose setting is off:** Surrender when surrender is "none", Triple when triple down is off, and any other action or offer turned off by a setting (e.g. insurance). Never show them greyed with "Off".
+- **Possible bug:** after a split where the first hand makes 21 with A + ten, the second hand with two ten-value cards could not split. Reproduce; if real, fix so it matches the app's engine (`canSplit` by value, `maxSplitHands`, the split-aces rules), and add it to the rules audit.
+- **Peek check:** replace the far-edge lift with the casino mirror check: the hole card slides up a short way (its top edge just tucks under the top of the felt/view), with most of the card always visible, then slides back down into place. It must **never leave the screen fully**, or it looks like the card is being swapped.
+- **Cut card and discard pile:** leave clear room between them.
+- Answers (same day): the count updates **live per card** (as each card lands face up; the hole card when it flips). Actions not possible on this hand stay **greyed** (setting-off actions are hidden). Keep the DEMO edge tab. Keep the current Blackjack celebration. **Per-hand result tags only with 2+ hands** (one hand: verdict + dock only). Defaults stay green felt, emerald, dark. Sound stays with #86 (mockup silent).
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).

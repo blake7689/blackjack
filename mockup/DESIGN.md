@@ -1,4 +1,4 @@
-# Blakejack design system (round 11)
+# Blakejack design system (round 12)
 
 Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.css`, `mockup.js`, `assets/`) shows every value below; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and his feedback on rounds 1-3; `RESEARCH.md` says what we took from whom. 
 
@@ -17,11 +17,14 @@ Source of truth for the build PRs (#79-#87). The mockup (`index.html`, `mockup.c
 | Card width | 44-120 px | 40-156 px, whole pixels, from `--cwr` (section 4) | Readable cards on large screens (round 2) |
 | Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 (compact stacks that build the right way) |
 | Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; past that it scrolls by whole chips, no chip cut at rest | Blake: chips never clip |
-| Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blakejack!" | Blake rounds 1-3 |
-| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **In Settings the hand is "blackjack"** ("Blackjack pays", "Blackjack on split", "If the dealer has blackjack", "Blackjack pays immediately"): Blakejack is only the app's name. The **Table rules sheet uses "blackjack" too** ("Blackjack pays 3 to 2", "Even money on your blackjack"). The **felt print says "BLACKJACK PAYS 3 TO 2"** too (Blake, round 9 feedback). "Blakejack" is the app's name and the player's natural badge ("Blakejack!") only. Sentence case everywhere | Blake round 7 (overrides the spec's Brand list for Settings) |
+| Totals | A total pill | Beside the hand (above it with several hands), never on a card; a natural says "Blackjack!" | Blake rounds 1-3, 11 |
+| Brand strings | "Blakejack on Split", "Blakejack Pays" … (the Brand list) | **The hand is "blackjack" everywhere: in Settings, the rules sheet, the felt print, and in play** (the natural's total pill "Blackjack!", the verdict "BLACKJACK!", the result tag, for player and dealer). **"Blakejack" is only the app's name** (the wordmark, the page title, the card back). Sentence case everywhere | Blake rounds 7, 9 and 11 (overrides the spec's Brand list) |
 | Hand totals | Always shown | A display setting **Show hand totals** (`showTotals`, on by default): off hides every total pill, the player's and the dealer's, in every phase (visibility, so nothing moves) and drops the total from the hands' accessible names. Not a rule key: no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets | Blake round 7 |
 | Dealer's cards | Overlapped as dealt | Overlapped as dealt, like the player's (the round-8 up-card gap is dropped, Blake round 9 feedback): each card on the one before it, the hole card face down; the 0.27 overlap floor and the shoe clearance hold | Blake rounds 7 and 9 |
 | Top bar | Balance after the wordmark | **Balance centred** on the bar (equal outer columns, so nothing beside it moves it), a sleeker bar (44-52 px, no boxes): menu and wordmark left, count and Settings right | Blake round 7 |
+| Count | Hidden while the opening cards are dealt (`dealingStyle`) | **Live and never blank:** the running and true count change as each card lands face up (the hole card when it turns) and stay in view through the deal; fixed-width tabular figures in a fixed box, so a new value never moves it | Blake round 11 (overrides the app's hide-while-dealing for the count; totals still hide while dealing) |
+| Dock actions | All actions shown, unavailable ones dimmed | An action **turned off by a setting is not shown** (Surrender when surrender is "none", Triple when triple down is off, insurance and even money when insurance is off); an action that is **possible in the rules but not on this hand stays, dimmed** (Double on a three-card hand, Split on a non-pair) | Blake round 11 |
+| Result tags | A tag on every hand | Per-hand tags (WIN, PUSH, BUST … under the circle) **only with two or more hands**; one hand shows just the verdict line and the dock summary | Blake round 11 |
 | Tip slot (#3) | Reserved line above the action bar | Kept: `.tip-line` above the dock, 0 px while empty | — |
 | Split dealing | Not in the spec | **New rule key `splitDeal`** ("Deal split hands": One at a time / Both at once), default "one" for new players. **Needs its own issue:** `LEGACY_RULES.splitDeal = "both"`, a `SETTINGS_VERSION` bump and its `RULE_SINCE` entry, so saved settings keep today's "Both at once" | Blake, round 2 + B1 decision |
 | Doubles | The double card lands sideways (shipped); #66 face-down double | Both designed (section 5): sideways double card; a face-down double lands sideways and face down and turns over at REVEAL_HIDDEN | Blake, B4 decision |
@@ -115,14 +118,14 @@ Easings: `--e-out (.16,1,.3,1)` UI · `--e-weight (.33,0,.15,1)` objects on clot
 |---|---|---|
 | Deal | a card leaves the shoe's mouth (top right) **face down at a slight angle** (from the shoe's -36 deg through -12 deg mid-flight and -5 deg at 84 %), squares up as it lands and **turns over as it lands** (the flip starts at 80 % of the flight; the hole card stays down) | slide `clamp(.52 x speed, 300, 760)` ms; flip 420 ms from 80 % |
 | Flips (landing, hole card, face-down double) | **3D, edge-on**: `rotateY` with a 520 px perspective, so the card is seen edge-on mid-turn, and a 7 % lift at that moment (`flipLift`); one element, flips in place | 420 ms `--e-io` |
-| Peek | the dealer **lifts the far edge** of the hole card (the edge toward the dealer): it tips on its near edge, which stays on the cloth | 350 ms, held 1250 |
+| Peek | the **mirror check**: the hole card slides up a short way, so its top edge tucks under the felt's top (about 14 % of the card), holds, then slides back down into place. Most of the card stays in view every frame (it must never look swapped); its face never shows | up 420 ms, hold 450, down 420 |
 | Bet chip | the rack chip glides to the circle and shrinks to table size | 360 ms |
 | Undo / Clear | the stack glides back to the rack | 380 ms |
 | Win | the dealer's chips come down from above the table's edge and land beside the stake (560 ms), hold 240, then both slide **down** into the dock (720) | |
 | Loss / bust | the stack is swept **up** off the table's top edge | hold 260, 700 ms |
 | Push | the stake slides down | hold 320, 680 ms |
 | Surrender | half up, half down | 700 ms |
-| Verdict | pops in, letter-spacing closing; Blakejack glows in the accent and flashes once | 620 ms spring; flash 1400 ms |
+| Verdict | pops in, letter-spacing closing; a natural ("BLACKJACK!") glows in the accent and flashes once | 620 ms spring; flash 1400 ms |
 | Balance | counts in whole dollars; the change badge shows for 2.6 s after a round, then fades | 700 ms; badge 2.6 s + 400 ms fade |
 | Shuffle | in this order, nothing fading: **the shoe slides away** (and the discard pile with it, emptied), **the deck comes down** into the centre of the felt, **riffles** (two halves, card by card), **goes back up** off the top, and only then **the shoe slides back**. The deck is in view every frame it is on the felt | shoe 780 ms; down 620; riffle 1700; up 560; shoe 780 |
 | Cut card | once drawn it comes out of the shoe and **lies at the felt's left edge**, half off it, level with the dealer's cards, until the shuffle | 760 ms |
@@ -303,7 +306,7 @@ The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the 
 - **Dealt cards fly face down, then turn over (fix):** a card on its way from the shoe is created face down (`down`) with **no face image and no alt**; its face is added at the turn (`flip(el, card)`, the hole card's path), which starts at 80 % of the flight. Until it has landed face up, the hand's accessible name calls it "face-down card" and leaves it out of the total; the pill and the count change only after the turn. Proved by a per-frame trace (Deal to rest) at 390x844 and 1440x900: `down` for the first ~430 ms, the inner element passes edge-on (rotateY through 90 deg), the face image and alt appear in the frame the turn starts, the total and the count change in the frame the card lands. Reduced motion: no flight and no turn, the face appears at once.
 - **Several hands in landscape and on desktop:** the total has its own 56 px column beside each hand (a soft "9 / 19" fits), so it never touches the next seat's circle. Four hands sit in one centred row on a landscape phone (cards capped so each seat fits: 3.664 card widths + 82 px); a row that still does not fit (four on 667x375, five or six anywhere) scrolls one hand at a time, the active one centred. The layout check fails any total touching another seat (1-6 hands, every size).
 - **Landscape betting row:** Undo, Clear, Rebet and Pause are icon-only there (their labels stay as their accessible names, visually hidden, so section 9 is unchanged); 2x keeps its text and Deal its label. Under 360 px wide the Deal key drops its "auto" note (the countdown bar stays).
-- **Felt print and light:** lines 2 and 3 are at full ink, weight 600. The lamp pool is a little softer (`.095`), a win lifts it to 1.1 (was 1.5) and the win bloom stays below the print (`75% 34%` at the bottom), the Blakejack sheen is 8 %. Measured now over the **brightest felt pixel behind every glyph** (not a percentile), two frames per phase, in betting, playing, offers, cut card, win, Blakejack, loss and bust, every felt and mode, at 320x568 to 1920x1080: every line passes 4.5:1.
+- **Felt print and light:** lines 2 and 3 are at full ink, weight 600. The lamp pool is a little softer (`.08` since round 12), a win lifts it to 1.1 (was 1.5) and the win bloom stays below the print (`75% 34%` at the bottom), the Blakejack sheen is 8 %. Measured now over the **brightest felt pixel behind every glyph** (not a percentile), two frames per phase, in betting, playing, offers, cut card, win, Blakejack, loss and bust, every felt and mode, at 320x568 to 1920x1080: every line passes 4.5:1.
 - **"3 TO 2":** the small-caps payout sets "to" all in small capitals (the source is "3 to 2").
 - **Decision:** the centre shuffle covers the print's lower lines for its 2.6 s (as in Blake's recording); accepted.
 
@@ -316,3 +319,13 @@ The card faces in `public/cards` are about 4.7 MB of PNG: convert them (and the 
 - **Discard pile:** a straight stack, square to the screen, partly off the top-left (section 5).
 - **Sweep:** each card turns face down as it leaves for the pile (section 3).
 - **Landscape dock:** the Deal key keeps at least 96 px (its word fits, "Shuffling" included at 14 px); the rack scrolls instead. A layout check fails any key label that is cut.
+
+## 15. Round 12 (Blake's round 11 notes, planned as the last run)
+- **The felt writing is centred** between the dealer's hand and the player's: `centrePrint()` moves the print and the message line together (`--py`) so the block sits midway between the dealer's hand box and the first seat's hand box (boxes, not cards, so it never jumps between phases), never toward the player's cards. The dealer's cards have more room at the top: stage padding 20 px on phones (was 10), 26 desktop (was 14), 12 landscape (was 8); `--fixed` grows by the same so the table still fits.
+- **"Blackjack!" for the hand in play** (pill, verdict, tag), the celebration unchanged (section 0).
+- **Count:** live per card, never blank, fixed width (section 0).
+- **Dock:** setting-off actions hidden, impossible-now actions dimmed (section 0).
+- **Split after a split 21:** not a rules bug: the mockup, its rules and the app's engine agree (the second hand's ten pair splits whenever `maxSplitHands` allows; the rules audit and play QA now include the case). What was wrong was the label: a split hand of A + ten showed "Blackjack!"; it now shows **21** (a natural only on an unsplit hand, or with "Blackjack on split"), as the app counts it.
+- **Peek:** the mirror check, a short slide: the card's top edge tucks under the felt's top, most of the card stays in view (section 3).
+- **Cut card:** rests well clear below the discard pile (`top: .62 cw + 28 px`).
+- Kept as they are: the DEMO edge tab (mockup only), the Blackjack celebration, the defaults; sound stays with #86.

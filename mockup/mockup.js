@@ -175,10 +175,9 @@
     $("#count").hidden = !saved.count; $("#countVal").textContent = (T.count > 0 ? "+" : "") + T.count;
     const tc = Math.round(T.count / Math.max(1, T.shoe.length / 52)) || 0; // trueCount() in src/utils/cards.js
     $("#trueVal").textContent = (tc > 0 ? "+" : "") + tc;
-    $("#count").classList.toggle("dealing", T.phase === "dealing");
   }
   function setMsg(m, cls = "") { T.msg = m; T.msgCls = cls; T.verdict = null; renderMid(); }
-  const VERDICT = { win: "WIN", lose: "LOSE", push: "PUSH", bust: "BUST", surrender: "SURRENDER", even: "EVEN MONEY", bj: "BLAKEJACK!" };
+  const VERDICT = { win: "WIN", lose: "LOSE", push: "PUSH", bust: "BUST", surrender: "SURRENDER", even: "EVEN MONEY", bj: "BLACKJACK!" }; // the hand is "blackjack" everywhere in play; Blakejack is only the app's name (Blake, round 11)
   function renderMid() {
     const m = $("#msg");
     m.className = "msg " + (T.verdict ? "" : T.msgCls || "");
@@ -191,6 +190,13 @@
   const cw = () => parseFloat($("#stageIn").style.getPropertyValue("--cw")) || fixCw();
 
   // print: the rules, drawn 1:1 in CSS pixels so no word can fall under 12 px
+  // the print and the message line, as one block, centred between the dealer's hand and the first seat (its box, totals above the cards included; boxes, not cards, so it never jumps)
+  function centrePrint() {
+    const si = $("#stageIn"); if (!si || document.body.dataset.screen !== "table") return; const py = parseFloat(si.style.getPropertyValue("--py")) || 0;
+    const dh = $("#dHand").getBoundingClientRect(), hand = $("#seats .seat"), txt = $$("#print text").map((t) => t.getBoundingClientRect()).filter((r) => r.height), msg = $("#msg").getBoundingClientRect(); if (!hand || !txt.length) return;
+    const pTop = hand.getBoundingClientRect().top, top = Math.min(...txt.map((r) => r.top)) - py, bot = Math.max(...txt.map((r) => r.bottom), msg.bottom, $(".mid").getBoundingClientRect().bottom + 20) - py; // + room for a two-line verdict ("Insurance lost")
+    let d = Math.round((dh.bottom + pTop) / 2 - (top + bot) / 2); d = Math.min(d, Math.floor(pTop - 8 - bot)); si.style.setProperty("--py", Math.max(0, d) + "px"); // never toward the player's cards
+  }
   function renderPrint() {
     const svg = $("#print"); const W = Math.round(svg.clientWidth), H = Math.round(svg.clientHeight); if (!W || !H) return;
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -204,7 +210,7 @@
     if (matchMedia("(max-height: 520px)").matches) {
       const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
       svg.innerHTML = `<defs>${INK}<path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="0.9" font-family="${CAPS}" font-weight="700" fill="var(--print)" filter="url(#ink)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${pay}<tspan font-family="${BOOK}" style="font-variant-numeric: lining-nums">  ·  ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</tspan></textPath></text>`;
-      fitPrint(svg, W * 0.96); return;
+      fitPrint(svg, W * 0.96); centrePrint(); return;
     }
     const R = W * 1.45; const cx = W / 2; // a stronger curve, like the printed arc on a casino felt
     const arc = (y, half) => { const yc = y - R; const dx = Math.min(half, W / 2 - 2); const dy = Math.sqrt(R * R - dx * dx); return `M${cx - dx} ${yc + dy}A${R} ${R} 0 0 0 ${cx + dx} ${yc + dy}`; };
@@ -214,7 +220,7 @@
     const tp = (id, txt, fs, font, w, ls) => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(2)}" font-family="${font}" font-weight="${w}" fill="var(--print)"${font === BOOK ? ' style="font-variant-numeric: lining-nums"' : ""}><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
     out += tp("pa1", pay, f1, CAPS, 700, 0.05) + tp("pa2", `${soft}  ·  ${mode}`, f2, BOOK, 700, 0.02);
     if (ins) out += `<path d="${arc(yt, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/><path d="${arc(yb, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/>` + tp("pa3", ins, f3, BOOK, 700, 0.03); // the ruled insurance band
-    svg.innerHTML = out + "</g>"; fitPrint(svg, W * 0.94);
+    svg.innerHTML = out + "</g>"; fitPrint(svg, W * 0.94); centrePrint();
   }
   function fitPrint(svg, maxW) { $$("text", svg).forEach((el) => { let fs = +el.getAttribute("font-size"); const k = (+el.getAttribute("letter-spacing") || 0) / fs; let guard = 10; while (guard-- && fs > 12 && el.getComputedTextLength() > maxW) { fs = Math.max(12, fs - 1); el.setAttribute("font-size", fs); el.setAttribute("letter-spacing", (fs * k).toFixed(2)); } }); } // each line keeps its own tracking
 
@@ -255,12 +261,12 @@
     else { pill.style.left = bw + 8 + "px"; pill.style.top = Math.round((h - (pill.offsetHeight || 26)) / 2) + "px"; }
   }
   // a total counts only cards that have landed and turned over
-  function pillHTML(all, cls = "") {
+  function pillHTML(all, cls = "", noNatural = false) {
     const cards = all.filter((c) => c.land !== false); const vis = cards.filter((c) => !c.down); if (!vis.length) return { html: "", cls: "pill hidden" };
-    const { t, soft } = total(cards); const bj = cards.length === 2 && all.length === 2 && t === 21 && !cards.some((c) => c.down);
-    return { html: bj ? "Blakejack!" : soft && t < 21 ? `${t - 10}<small>/</small>${t}` : String(t), cls: "pill num " + (t > 21 ? "bust" : bj ? "bj" : soft ? "soft" : "") + " " + cls };
+    const { t, soft } = total(cards); const bj = !noNatural && cards.length === 2 && all.length === 2 && t === 21 && !cards.some((c) => c.down); // after a split, A + ten is 21, not a blackjack (unless "Blackjack on split")
+    return { html: bj ? "Blackjack!" : soft && t < 21 ? `${t - 10}<small>/</small>${t}` : String(t), cls: "pill num " + (t > 21 ? "bust" : bj ? "bj" : soft ? "soft" : "") + " " + cls };
   }
-  function setPill(box, cards, on) { let p = box.querySelector(".pill"); if (!p) { p = document.createElement("span"); box.appendChild(p); } const { html, cls } = pillHTML(cards, on ? "on" : ""); p.className = cls; p.innerHTML = html; }
+  function setPill(box, cards, on, noNatural) { let p = box.querySelector(".pill"); if (!p) { p = document.createElement("span"); box.appendChild(p); } const { html, cls } = pillHTML(cards, on ? "on" : "", noNatural); p.className = cls; p.innerHTML = html; }
 
   function shadowFor(el) { // shadows fall away from the lamp
     const f = $("#felt").getBoundingClientRect(); const [x, y] = ctr(el.getBoundingClientRect());
@@ -318,7 +324,7 @@
     T.seats.forEach((s, i) => {
       const seat = wrap.children[i]; const hand = $(".hand", seat); const act = T.phase === "playing" && i === T.active;
       seat.classList.toggle("active", act || (T.phase === "betting" && n === 1 && rackChips().length > 0)); seat.classList.toggle("nocards", !s.cards.length);
-      const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act);
+      const shown = handCards(s); fresh.push(...syncHand(hand, shown)); setPill(hand, shown, act, s.split && !saved.blackJackOnSplit);
       hand.setAttribute("aria-label", shown.length ? `Hand ${i + 1}: ` + shown.map((c) => (seen(c) ? cardName(c) : "face-down card")).join(", ") + (saved.showTotals && shown.some(seen) ? `, ${total(shown.filter(seen)).t}` : "") : `Hand ${i + 1}: no cards`);
       const spot = $(".spot", seat); spot.classList.toggle("has", s.bet > 0); const canBet = T.phase === "betting" && rackChips().length > 0; spot.classList.toggle("open", canBet && !s.bet); // out of credits: the circle stays idle
       spot.setAttribute("aria-label", T.phase === "betting" ? `Bet spot ${i + 1}, ${money(s.bet)}. Adds a ${money(T.chip)} chip` : `Bet ${money(s.bet + s.dbl)}`);
@@ -346,6 +352,7 @@
     T.seats.forEach((s, i) => { const seat = wrap.children[i]; if (!seat) return; const hand = $(".hand", seat); const multi = n > 1 && !compact(); const sw = landscape() && (s.dbl || s.ins) ? $(".spot .stack", seat).offsetWidth * 1.12 + 6 : 0; // room the side stacks take beside the circle
       const side = compact() ? (n > 1 ? $(".spot", seat).offsetWidth + 76 + sw : ($(".spot", seat).offsetWidth + 10 + sw) * 2 + 8) : multi ? 6 : 2 * 58; layoutHand(hand, handCards(s), seat.clientWidth - side, multi ? "above" : "side"); shadowFor(hand); $$(".stack", seat).forEach(shadowFor); });
     const dh = $("#dHand"); if (dh.children.length) layoutHand(dh, T.dealer, dealerMaxW(), "side"); // after the seats: a seat count change resizes the cards
+    centrePrint();
     if (wrap.classList.contains("scroll")) { const a = wrap.children[Math.max(0, T.active)]; if (a) wrap.scrollTo({ left: a.offsetLeft - wrap.clientWidth / 2 + a.offsetWidth / 2, behavior: reduced ? "auto" : "smooth" }); }
     moveLamp();
   }
@@ -406,7 +413,7 @@
       B = (autoOn() ? key("pause", T.paused ? "Resume" : "Pause", T.paused ? "play" : "pause", "", { aria: T.paused ? "Resume auto deal" : "Pause auto deal" }) : "") + key("next", "Next hand", "next", "primary big wider", { kbd: "Space", bar: autoOn() && !T.paused ? 1600 : 0 });
     } else {
       const playing = p === "playing"; const s = T.seats[T.active] || T.seats[0]; const can = playing ? seatCan(s) : {};
-      A = key("double", "Double", "double", "", { off: !can.double, kbd: "D" }) + key("split", "Split", "split", "", { off: !can.split, kbd: "P" }) + key("surrender", "Surrender", "surrender", "", { off: !can.surrender, kbd: "R" }) + (saved.tripleDown ? key("triple", "Triple", "triple", "", { off: !can.triple, kbd: "T" }) : "");
+      A = key("double", "Double", "double", "", { off: !can.double, kbd: "D" }) + key("split", "Split", "split", "", { off: !can.split, kbd: "P" }) + (saved.surrender !== "none" ? key("surrender", "Surrender", "surrender", "", { off: !can.surrender, kbd: "R" }) : "") + (saved.tripleDown ? key("triple", "Triple", "triple", "", { off: !can.triple, kbd: "T" }) : "");
       B = key("stay", "Stay", "stay", "solid big", { off: !playing, kbd: "S" }) + key("hit", "Hit", "hit", "primary big", { off: !playing || !can.hit, kbd: "H" });
     }
     const di = $("#dockIn"); if (p === "offers") { di.setAttribute("role", "group"); di.setAttribute("aria-label", "Offers"); } else { di.removeAttribute("role"); di.removeAttribute("aria-label"); }
@@ -528,7 +535,10 @@
   }
   async function peekCheck(my) {
     T.phase = "peek"; setMsg("Dealer checks for blackjack"); renderDock();
-    const hole = $("#dHand .card.down"); if (hole && !reduced) { hole.classList.add("lift"); await sleep(1250); hole.classList.remove("lift"); await sleep(360); }
+    const hole = $("#dHand .card.down"); if (hole && !reduced) { // the mirror check: the hole card slides up a short way, its top edge tucking under the felt's top (most of it stays in view, so it never looks swapped), then back
+      const r = hole.getBoundingClientRect(); const up = -Math.ceil(r.top - $("#felt").getBoundingClientRect().top + r.height * 0.14); T.peekStep = "up";
+      await hole.animate([{ translate: "0 0" }, { translate: `0 ${up}px` }], { duration: 420, easing: "cubic-bezier(.5,0,.75,0)", fill: "forwards" }).finished.catch(() => {}); T.peekStep = "out"; await sleep(450);
+      T.peekStep = "down"; await hole.animate([{ translate: `0 ${up}px` }, { translate: "0 0" }], { duration: 420, easing: "cubic-bezier(.25,1,.5,1)", fill: "forwards" }).finished.catch(() => {}); hole.getAnimations().forEach((a) => a.cancel()); T.peekStep = ""; await sleep(200); }
     if (!live(my)) return false;
     const bj = R.twentyOne(T.dealer);
     if (!bj) setMsg("No blackjack");
@@ -725,7 +735,7 @@
     BUST: ["10S 7H", [["10D 6S 9C", 25], ["10C 9D", 20], ["KS 8D 5H", 15]], -1],
     SURRENDER: ["10S 7H", [["10C 6H", 25, { sur: true }], ["QS 9C", 20], ["9D 9S", 15]], 0],
     "EVEN MONEY": ["AH 9C", [["AS KD", 50, { even: true }], ["8C 8D", 20], ["10C 10D", 15]], -2],
-    BLAKEJACK: ["10H 8S", [["AD KC", 50], ["9H 9C", 20], ["7S 7D 7C", 15]], 3],
+    BLACKJACK: ["10H 8S", [["AD KC", 50], ["9H 9C", 20], ["7S 7D 7C", 15]], 3],
     "INSURANCE PAID": ["AH KC", [["9S 7D", 50, { ins: 25 }], ["10C 6H", 20, { ins: 10 }], ["8C 8D", 15, { ins: 7.5 }]], -2],
     "INSURANCE LOST": ["AH 9C", [["10S 8D", 50, { ins: 25 }], ["10C 6H", 20, { ins: 10 }], ["9C 9D", 15, { ins: 7.5 }]], -1],
   };
