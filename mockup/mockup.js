@@ -203,17 +203,17 @@
     svg.setAttribute("aria-label", "Table rules"); // the name stays short: "Dealer hits soft 17" in it would also match a test looking for the Hit button; the sheet reads the rules out
     if (matchMedia("(max-height: 520px)").matches) {
       const Rr = W * 12, cx = W / 2, y = H - 6, dx = W / 2 - 2, dy = Math.sqrt(Rr * Rr - dx * dx);
-      svg.innerHTML = `<defs>${INK}<path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="0.9" font-family="${CAPS}" font-weight="700" fill="var(--print)" filter="url(#ink)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${pay}  ·  ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</textPath></text>`;
+      svg.innerHTML = `<defs>${INK}<path id="pa0" d="M${cx - dx} ${y - Rr + dy}A${Rr} ${Rr} 0 0 0 ${cx + dx} ${y - Rr + dy}"/></defs><text font-size="15" letter-spacing="0.9" font-family="${CAPS}" font-weight="700" fill="var(--print)" filter="url(#ink)"><textPath href="#pa0" startOffset="50%" text-anchor="middle">${pay}<tspan font-family="${BOOK}" style="font-variant-numeric: lining-nums">  ·  ${[soft, mode, ins].filter(Boolean).join("  ·  ")}</tspan></textPath></text>`;
       fitPrint(svg, W * 0.96); return;
     }
     const R = W * 1.45; const cx = W / 2; // a stronger curve, like the printed arc on a casino felt
     const arc = (y, half) => { const yc = y - R; const dx = Math.min(half, W / 2 - 2); const dy = Math.sqrt(R * R - dx * dx); return `M${cx - dx} ${yc + dy}A${R} ${R} 0 0 0 ${cx + dx} ${yc + dy}`; };
-    const f1 = clamp(Math.round(Math.min(W / 17, H - 36)), 16, 26), f2 = clamp(Math.round(f1 * 0.66), 14, 17), f3 = clamp(Math.round(f1 * 0.5), 12, 13);
+    const f1 = clamp(Math.round(Math.min(W / 17, H - 36)), 16, 26), f2 = clamp(Math.round(f1 * 0.66), 14, 17), f3 = clamp(Math.round(f1 * 0.56), 13, 15);
     const y1 = f1 + 2, y2 = y1 + f2 + 6, yt = y2 + 8, y3 = yt + f3 + 5, yb = y3 + 6;
     let out = `<defs>${INK}<path id="pa1" d="${arc(y1, W)}"/><path id="pa2" d="${arc(y2, W)}"/><path id="pa3" d="${arc(y3, W)}"/></defs><g filter="url(#ink)">`;
-    const tp = (id, txt, fs, font, w, ls) => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(2)}" font-family="${font}" font-weight="${w}" fill="var(--print)"><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
+    const tp = (id, txt, fs, font, w, ls) => `<text font-size="${fs}" letter-spacing="${(fs * ls).toFixed(2)}" font-family="${font}" font-weight="${w}" fill="var(--print)"${font === BOOK ? ' style="font-variant-numeric: lining-nums"' : ""}><textPath href="#${id}" startOffset="50%" text-anchor="middle">${txt}</textPath></text>`;
     out += tp("pa1", pay, f1, CAPS, 700, 0.05) + tp("pa2", `${soft}  ·  ${mode}`, f2, BOOK, 700, 0.02);
-    if (ins) out += `<path d="${arc(yt, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/><path d="${arc(yb, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/>` + tp("pa3", ins, f3, CAPS, 700, 0.08); // the ruled insurance band
+    if (ins) out += `<path d="${arc(yt, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/><path d="${arc(yb, W * 0.36)}" fill="none" stroke="var(--print)" stroke-width="1.2" opacity=".55"/>` + tp("pa3", ins, f3, BOOK, 700, 0.03); // the ruled insurance band
     svg.innerHTML = out + "</g>"; fitPrint(svg, W * 0.94);
   }
   function fitPrint(svg, maxW) { $$("text", svg).forEach((el) => { let fs = +el.getAttribute("font-size"); const k = (+el.getAttribute("letter-spacing") || 0) / fs; let guard = 10; while (guard-- && fs > 12 && el.getComputedTextLength() > maxW) { fs = Math.max(12, fs - 1); el.setAttribute("font-size", fs); el.setAttribute("letter-spacing", (fs * k).toFixed(2)); } }); } // each line keeps its own tracking
