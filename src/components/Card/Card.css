@@ -1,5 +1,5 @@
 .card-img {
-  width: clamp(48px, 12vw, 86px);
+  width: var(--cw, 70px); /* the sizing formula (GameBoard.css), whole pixels */
   aspect-ratio: 86 / 120;
   border-radius: 2px;
   object-fit: contain;

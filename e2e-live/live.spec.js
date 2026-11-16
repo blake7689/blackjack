@@ -47,17 +47,17 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
 
   // Live rules and shoe are unknown: decline every offer, Stay on every hand, never hit, double or split.
-  const results = page.getByText('Click anywhere to continue...');
+  const results = page.getByRole('button', { name: 'Next hand' });
   await expect.poll(async () => {
     if (await results.isVisible()) return 'done';
     for (const button of [page.getByRole('group', { name: 'Offers' }).getByRole('button', { name: 'No thanks' }), page.getByRole('button', { name: 'Stay' })]) {
-      if (await button.isVisible()) await button.click({ timeout: 5_000 }).catch(() => {}); // the buttons can vanish between check and click
+      if (await button.isVisible() && await button.isEnabled()) await button.click({ timeout: 5_000 }).catch(() => {}); // a key is dimmed (aria-disabled) until it can act, and can vanish between check and click
     }
     return 'playing';
   }, { timeout: COLD, intervals: [250], message: 'the round never reached its results' }).toBe('done');
 
   await results.click();
-  await expect(page.getByText('Place your bets!')).toBeVisible();
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible();
   await expect.poll(() => settles.length, { timeout: 30_000, message: 'the settle call never returned' }).toBe(1);
 
   expect(bets, 'exactly one ledger bet').toHaveLength(1);

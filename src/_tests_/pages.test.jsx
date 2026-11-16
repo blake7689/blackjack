@@ -90,7 +90,7 @@ describe("Game", () => {
 
   it("shows the table for a started game", () => {
     renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL } });
-    expect(screen.getByText("Place your bets!")).toBeTruthy();
+    expect(screen.getByText("Place your bets")).toBeTruthy();
   });
 });
 

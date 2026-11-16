@@ -1,22 +1,17 @@
 :root {
   --header-height: 0px;
-  --top-bar-height: 56px;
-  --bet-footer-space: calc(56px + env(safe-area-inset-bottom, 0px));
+  --top-bar-height: 56px; /* the old stats strip; the new top bar is PR 2b */
   --app-vh: 100dvh;
-  --avail-main-height: calc(var(--app-vh) - var(--header-height) - var(--top-bar-height) - var(--bet-footer-space));
-  --avail-board-height: calc(var(--app-vh) - var(--header-height) - env(safe-area-inset-bottom, 0px));
 }
 
+/* The page grid (#80): top bar, felt, tip line, dock. The page is exactly the viewport (the Header above takes its height from
+   --header-height): the felt gets what is left, the tip line is 0 px while empty and the dock is --dock plus the bottom safe area. */
 .board {
-  height: var(--avail-board-height);
+  height: calc(var(--app-vh) - var(--header-height));
   width: 100%;
   display: grid;
-  grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space);
-  grid-template-columns: 1fr;
-  grid-template-areas:
-    "header"
-    "main"
-    "footer";
+  grid-template-rows: var(--top-bar-height) minmax(0, 1fr) auto calc(var(--dock) + var(--safe-b));
+  grid-template-columns: minmax(0, 1fr);
   background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
   color: #fff;
   overflow: hidden;
@@ -24,7 +19,6 @@
 
 /* TOP BAR */
 .top-bar {
-  grid-area: header;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -63,7 +57,6 @@
 
 /* MAIN AREA LAYOUT */
 .main-area {
-  grid-area: main;
   display: flex;
   flex-direction: column;
   flex-wrap: wrap;
@@ -77,14 +70,10 @@
 }
 
 .center-msg-row {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 8px;
-  min-height: 0;
+  flex: 0 0 48px; /* the one message line never changes height */
+  min-width: 0;
 }
+.tip-line { height: 0; overflow: hidden; } /* #3: the tips slot above the dock, collapsed while empty */
 
 /* DEALER: centered wrapper + inner scroll rail */
 .dealer-container {
@@ -157,73 +146,17 @@
 }
 .hands-track > * { flex: 0 0 auto; }
 
-/* BOTTOM BAR */
-.betting-spacer {
-  grid-area: footer;
-  height: var(--bet-footer-space);
-  min-height: var(--bet-footer-space);
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
-  box-sizing: border-box;
-}
+/* room above the dealer and under the hands (the formula's --stage-pt / --stage-pb) */
+.dealer-container { padding-top: var(--stage-pt); }
+.player-container { padding-bottom: var(--stage-pb); }
 
-/* LANDSCAPE/WIDE: put dealer and player on sides with center message fixed */
-@media (orientation: landscape), (min-aspect-ratio: 1/1) {
-  .main-area {
-    flex-direction: row;
-    align-items: stretch;
-    gap: 12px;
-  }
-  .dealer-container,
-  .player-container {
-    flex: 1 1 0;
-    min-width: 0;
-    align-items: center;
-    transform: translateY(-10px);
-  }
-  .center-msg-row {
-    flex: 0 0 clamp(100px, 12vw, 220px);
-    min-width: 100px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-}
-
-/* --- HEIGHT-BASED TUNING --- */
-
-@media (max-height: 760px) {
-  :root { --avail-main-height: calc(var(--app-vh) - var(--header-height) - var(--top-bar-height) - var(--bet-footer-space)); }
-  .player-hand, .dealer-hand { min-width: 110px; }
-  .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.30); }
-  .player-hand .cards, .player.cards { padding-bottom: 4px; }
-}
-
+@media (max-width: 680px) { .main-area { gap: 8px; } }
+/* a short landscape phone: a slimmer top strip and lighter hand boxes, so both hands fit above the 64 px dock (the total beside the cards; PR 2b designs it properly) */
 @media (max-height: 520px) {
-  .player-hand, .dealer-hand { min-width: 80px; gap: 6px; }
-  .player-hand .card-img, .dealer-hand .card-img { max-height: calc(var(--avail-main-height) * 0.36); width: clamp(32px, 12vw, 56px); }
-  .top-bar { font-size: 14px; }
-  .player-hand .cards, .player.cards { padding-bottom: 2px; }
-}
-
-/* --- WIDTH-BASED TUNING --- */
-
-@media (max-width: 680px) {
-  .player-hand, .dealer-hand { min-width: 100px; }
-  .player-hand .card-img, .dealer-hand .card-img { width: clamp(24px, 12vw, 52px); }
-  .main-area { gap: 8px; }
-  .center-msg-row { font-size: 14px; }
-  .player-hand .cards, .player.cards { padding-bottom: 4px; }
-}
-
-@media (max-width: 450px) {
-  .player-hand, .dealer-hand { min-width: 84px; }
-  .center-msg-row { font-size: 13px; }
-  .player-hand .cards, .player.cards { padding-bottom: 2px; }
+  .board { --top-bar-height: 40px; }
+  .player-hand, .dealer-hand { padding: 2px 6px; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
+  .hand-total { margin-bottom: 0; padding: 1px 6px; }
+  .dealer.cards, .player-hand .cards { padding: 0 4px; }
 }
 
 /* Final override to ensure hands can always grow */
@@ -231,8 +164,6 @@
 /* Cards in flight, above the board so nothing clips them */
 .flight-layer { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 50; }
 
-/* While a card flies or flips the buttons wait (hidden, so the layout stays put) */
-.board.busy .options-wrap { visibility: hidden; pointer-events: none; }
 
 /* Live total text over an invisible copy of the final text: the strip keeps its final width, so cards never shift as totals update */
 .hand-total { display: inline-grid; }
@@ -240,13 +171,14 @@
 .hand-total > .ht-size { visibility: hidden; }
 
 /* ===== LAYOUT MODES AND CARD WIDTH (#79, DESIGN sections 2 and 4) =====
-   Only variables so far: later UI-revamp PRs build the table on them. The sizes are px; --top, --dock and --rail are
-   the top bar, the dock and the dealer's rail; --rc is the chip rack's chip; --gutter is the felt's side margin. */
+   The sizes are px; --top, --dock and --rail are the top bar, the dock and the dealer's rail (the dock's height is used since #80;
+   the top bar and the rail are PR 2b's); --rowA / --rowB are the two rows of the phone dock; --rc is the chip rack's chip;
+   --gutter is the felt's side margin. */
 .table-screen {
-  --top: 48px; --dock: 134px; --rail: 10px; --rc: 44px; --gutter: 0px;
+  --top: 48px; --dock: 134px; --rail: 10px; --rc: 44px; --gutter: 0px; --rowA: 54px; --rowB: 50px;
   --col: 1240px; /* the top bar, the felt and the dock share one column */
 }
-@media (max-height: 740px) { .table-screen { --top: 44px; --dock: 126px; --rail: 8px; } }
+@media (max-height: 740px) { .table-screen { --top: 44px; --dock: 126px; --rail: 8px; --rowA: 52px; --rowB: 46px; } }
 @media (min-width: 600px) { .table-screen { --gutter: 14px; } }
 @media (min-width: 900px) { .table-screen { --top: 52px; --dock: 92px; --rail: 12px; --rc: 50px; --gutter: 22px; } }
 @media (min-width: 900px) and (max-height: 740px) { .table-screen { --top: 46px; --dock: 84px; --rc: 46px; } }

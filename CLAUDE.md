@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
@@ -147,6 +147,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   hidden and shown cards in one list), so they flip in place. Never key them by card id or split them into two lists (a remount
   flies again). Hints (`dealOrder`, `revealed`, `moved`) sit on card copies, never in place; a hidden back gets `dealOrder` by prop
   (3 for the hole) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
+- Dock and message line (#80): `components/Dock` is the one bottom bar, a fixed height per mode (`--dock`, `--rowA/B` in GameBoard.css; never let it resize). Its face follows
+  the phase: betting (PRE_DEAL), offers (`role="group"` "Offers", one key per open offer + No thanks), your move (every other phase; the keys are dimmed with `aria-disabled`
+  until it is your turn on `selectedHandIndex`, and while a card flies), results (POST_ROUND / END_ROUND: net, balance, Next hand). Hidden-by-setting keys (Surrender "none",
+  Triple off) are absent; possible-but-not-now keys are dimmed. What a hand may do is `handActions` in blackjackLogic.js, never computed in the component. Focus moves on a
+  phase change (first offer, Hit, Next hand) only when it was on nothing or inside the dock. A click on the felt (`.main-area`, not the whole board) still continues from the
+  results. `CenterMessage` is the one 48 px line (a reconnecting or refused-bet notice replaces the phase wording); keep its height fixed. `.tip-line` is 0 px while empty.
 - Anything that flies or flips reserves its time in the `queue` of `utils/cardAnimation.js`; automatic steps wait `stepWait(T)`;
   totals count only landed cards (`useLanded`). A card object is a new copy on every reducer step, so effects depend on `card.id`,
   never on `card` (a changed dependency cancels the flip in progress). jsdom has no `Element.animate`: `setup.js` stubs it.
@@ -155,7 +161,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   real waits (`page.waitForTimeout` is a lint error): wait on conditions, and keep deliberate delays in the route handlers. If the page's use of
   `Math.random` changes (new shoe builds, router keys), the seed in the deal test needs re-picking; its card assertions fail first. A bug that
   slips past the jsdom tests (timers, layout, animation, network) gets an e2e test. The tests rely on the `.flight-layer`, `.fly-inner`,
-  `.options-wrap` and `.board.busy` hooks: rename one and the test changes with it. CI guards: `globalTimeout` 5 min in `playwright.config.js`, step
+  `.options-wrap` and `.board.busy` hooks (`.options-wrap` is the dock while it holds the action bar or the offers; under `.board.busy` its keys are
+  `aria-disabled` and inert, so the e2e watcher looks for a key that is not `aria-disabled`): rename one and the test changes with it. CI guards: `globalTimeout` 5 min in `playwright.config.js`, step
   timeouts 4 min (browser install) and 6 min (tests) in `ci.yml`, all under the 10-min job limit; #123 was a slow apt mirror during
   `playwright install --with-deps`, not a hang. The install runs through `scripts/install-playwright-browser.sh` (#127: 2 attempts x 105 s,
   5 s apart, all inside the 4-min step timeout; a slow mirror is retried, not waited out), in `ci.yml` and the SWA `live_smoke` job.
@@ -171,8 +178,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `nextAutoAction` gives CONTINUE (POST_ROUND) and DEAL (PRE_DEAL, pending) on the one existing timer; DEAL waits `stepWait(autoDealDelay)`, so delay 0 means right
   after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
   `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
-  shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal); it stops click
-  propagation because `.board` treats a click as CONTINUE. There is no Undo action, only ADD_BET and CLEAR_BET. `OFFERS` has no automatic step, so auto deal waits there.
+  (a dock key since #80, so it needs no stopPropagation) shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal). There is no Undo action, only ADD_BET and CLEAR_BET. `OFFERS` has no automatic step, so auto deal waits there.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

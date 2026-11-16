@@ -15,16 +15,16 @@ async function splitAt262(page, settings) {
   await expect(page.getByRole('img', { name: '4 of hearts' })).toBeVisible();
   await expect(page.getByRole('img', { name: '4 of diamonds' })).toBeVisible();
   await expect(page.getByRole('img', { name: '7 of diamonds' })).toBeVisible();
-  await page.getByRole('button', { name: 'Split' }).click({ timeout: 15_000 }); // hidden while the cards fly
+  await page.getByRole('button', { name: 'Split' }).click({ timeout: 15_000 }); // dimmed (aria-disabled) while the cards fly
   return api;
 }
 
-test('split, one at a time: the second hand holds one card with no buttons until the first is finished, then its card is dealt (#133)', async ({ page }) => {
+test('split, one at a time: the second hand holds one card until the first is finished, then its card is dealt (#133)', async ({ page }) => {
   const api = await splitAt262(page);
   const hands = page.locator('.player-hand');
   await expect(hands).toHaveCount(2);
   await expect(page.getByRole('img', { name: 'king of hearts' })).toBeVisible(); // the first hand's card
-  await expect(page.getByRole('button', { name: 'Stay' })).toBeVisible({ timeout: 15_000 }); // the first hand to play (hidden while its card flies)
+  await expect(page.getByRole('button', { name: 'Stay' })).toBeEnabled({ timeout: 15_000 }); // the first hand to play (dimmed while its card flies)
   await expect(hands.nth(0).locator('.fly-card')).toHaveCount(2);
   await expect(hands.nth(1).locator('.fly-card')).toHaveCount(1); // only the card that moved
   await expect(page.getByRole('img', { name: '8 of spades' })).toHaveCount(0); // the second hand's card is still in the shoe: it must not be on the page
@@ -34,9 +34,9 @@ test('split, one at a time: the second hand holds one card with no buttons until
   await page.getByRole('button', { name: 'Stay' }).click();
   await expect(page.getByRole('img', { name: '8 of spades' })).toBeVisible(); // dealt to the second hand as play reaches it
   await expect(hands.nth(1).locator('.fly-card')).toHaveCount(2);
-  await expect(page.getByRole('button', { name: 'Stay' })).toBeVisible({ timeout: 15_000 }); // the second hand is now in play
+  await expect(page.getByRole('button', { name: 'Stay' })).toBeEnabled({ timeout: 15_000 }); // the second hand is now in play
   await page.getByRole('button', { name: 'Stay' }).click();
-  await expect(page.getByText('Click anywhere to continue...')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'king of spades' })).toBeVisible(); // the dealer played: 17 beats 14 and 12
 
   await expect.poll(() => api.settles.length).toBe(1);
@@ -52,11 +52,11 @@ test('split, both at once: the second hand has its card straight away (#133)', a
   await expect(page.locator('.player-hand')).toHaveCount(2);
   await expect(page.getByRole('img', { name: 'king of hearts' })).toBeVisible();
   await expect(page.getByRole('img', { name: '8 of spades' })).toBeVisible(); // no waiting
-  await expect(page.getByRole('button', { name: 'Stay' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Stay' })).toBeEnabled({ timeout: 15_000 });
   await expect(page.locator('.player-hand').nth(1).locator('.fly-card')).toHaveCount(2);
   await page.getByRole('button', { name: 'Stay' }).click();
   await page.getByRole('button', { name: 'Stay' }).click({ timeout: 15_000 });
-  await expect(page.getByText('Click anywhere to continue...')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => api.settles.length).toBe(1);
   expect(api.bets).toHaveLength(2);
 });

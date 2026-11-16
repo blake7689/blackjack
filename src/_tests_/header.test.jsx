@@ -7,7 +7,17 @@ import { GamePhases } from "../utils/constants/gamePhases";
 const location = () => screen.getByTestId("location").textContent;
 
 describe("Header", () => {
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+  it("publishes its height as --header-height, watches it, and stops watching on unmount", () => {
+    const observer = { observe: vi.fn(), disconnect: vi.fn() };
+    vi.stubGlobal("ResizeObserver", vi.fn(function ResizeObserver() { return observer; }));
+    const { unmount } = renderUI(<Header />, { path: "/" });
+    expect(document.documentElement.style.getPropertyValue("--header-height")).toBe("0px"); // jsdom measures 0
+    expect(observer.observe).toHaveBeenCalledOnce();
+    unmount();
+    expect(observer.disconnect).toHaveBeenCalledOnce();
+  });
 
   it("does nothing on Home when already home", () => {
     const { gameActions } = renderUI(<Header />, { path: "/" });

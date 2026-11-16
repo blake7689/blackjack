@@ -24,7 +24,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Hit' })).toBeVisible({ timeout: 15_000 }); // options appear once the cards have landed
+  await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // the keys wake up once the cards have landed
   await expect(page.locator('.board.busy')).toHaveCount(0);
   await expectNoSeriousA11y(page, 'board, mid-round');
 });

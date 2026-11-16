@@ -134,8 +134,14 @@ describe("GameBoard tapEnabled", () => {
   });
 
   it("not in any other phase", () => {
+    // A real table for every phase: a settled hand, the dealer's up card and the offers (OFFERS shows them in the dock).
+    const table = {
+      hands: [{ tag: "a", cards: [], hiddenCards: [], totals: [0], bet: 10, payout: 0, insurance: 0, status: "done", result: "none" }],
+      dealer: { cards: [], dealerDisplayTotal: 0 },
+      offers: { insurance: true, evenMoney: false, surrender: false },
+    };
     for (const phase of Object.values(GamePhases).filter((p) => p !== GamePhases.PRE_DEAL)) {
-      expect(opens({ ...preDeal, phase }), phase).toBe(false);
+      expect(opens({ ...preDeal, ...table, phase }), phase).toBe(false);
     }
   });
 

@@ -1,0 +1,81 @@
+/* The bottom dock (DESIGN sections 4 and 5, mockup.css "dock"). Its height is the board's --dock plus the bottom safe area, the
+   same in every state; --rowA / --rowB are the two rows of the phone dock. Desktop and landscape phones are one row. */
+.dock {
+  position: relative; z-index: var(--z-dock); box-sizing: border-box; min-width: 0;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+  padding: 10px 10px calc(10px + var(--safe-b));
+}
+.dock-in {
+  height: 100%; max-width: 560px; margin: 0 auto;
+  display: grid; grid-template-rows: var(--rowA) var(--rowB); gap: 8px;
+}
+.dock-row { display: flex; gap: 8px; min-width: 0; }
+
+.key {
+  flex: 1 1 0; min-width: 44px; min-height: 44px; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0 6px;
+  border-radius: var(--r3); border: 1px solid var(--line); background: var(--surf); color: var(--tx);
+  font: 700 13px/1.2 var(--font-ui); letter-spacing: .01em; white-space: nowrap; overflow: hidden;
+  touch-action: manipulation; transition: transform var(--t-press), background var(--t-press); /* no opacity fade: a key waking up must be at full contrast at once */
+}
+.key:active { transform: scale(.96); }
+.key:hover { background: var(--surf-2); }
+.key[aria-disabled="true"] { opacity: .34; pointer-events: none; } /* not now: shown dimmed, keeps its place and its focus */
+.key.big { flex-direction: row; gap: 10px; font-size: 17px; }
+.key.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 10px 26px -10px rgb(var(--accent-rgb) / .8); }
+.key.primary:hover { filter: brightness(1.06); background: var(--accent); }
+.key.solid { background: var(--tx); color: var(--bg); border-color: transparent; }
+.key.solid:hover { background: var(--tx); filter: brightness(.94); }
+.key.offer { border-color: rgb(var(--accent-rgb) / .55); color: var(--accent-tx); background: rgb(var(--accent-rgb) / .08); font-size: 15px; }
+.key small { font-size: 12px; font-weight: 500; color: var(--tx-3); }
+.key.primary small { color: inherit; } /* 12 px on the accent needs the full ink */
+.dock .wider { flex: 3 1 0; }
+
+/* the keys that act wait while a card flies or flips (#6, #72): inert (and dimmed, see aria-disabled) until it lands */
+.board.busy .options-wrap { pointer-events: none; }
+
+/* betting: the chips (the rack is PR 3's), the bet, Clear, Pause, Deal */
+.rack {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; overflow-x: auto; overflow-y: hidden;
+  border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); scrollbar-width: none;
+  box-shadow: inset 0 2px 5px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .05);
+}
+.rack::-webkit-scrollbar { display: none; }
+.rack .chip:first-child { margin-left: auto; } /* centred while they fit, scrolling from the start when they do not */
+.rack .chip:last-child { margin-right: auto; }
+.chip { flex: none; width: var(--rc); height: var(--rc); padding: 0; border: 0; border-radius: 50%; background: none; touch-action: manipulation; }
+.chip svg { width: 100%; height: 100%; }
+.chip circle:first-child { fill: #e2ad03; }
+.chip circle:last-child { fill: #f6d44d; }
+.chip text { fill: #fff; }
+.bet-box {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line-2); border-radius: var(--r3);
+  font: 600 17px/1 var(--font-display); font-variant-numeric: tabular-nums;
+}
+
+/* results: the net and the balance */
+.summary { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 6px; }
+.summary .s-l { display: flex; flex-direction: column; }
+.summary .s-l small { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--tx-3); }
+.summary .s-l b { font: 600 30px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.summary .s-l b.up { color: var(--win-tx); }
+.summary .s-l b.down { color: var(--lose-tx); }
+.summary .s-r { text-align: right; font-size: 13px; color: var(--tx-2); }
+.summary .s-r b { display: block; font-size: 17px; color: var(--tx); font-variant-numeric: tabular-nums; }
+
+/* one row: desktop and landscape phone */
+@media (min-width: 900px), (max-height: 520px) {
+  .dock-in { max-width: var(--col); display: flex; gap: 10px; align-items: stretch; }
+  .dock-row { display: contents; }
+  .rack { flex: 0 1 auto; } /* as wide as its chips, scrolling only when the row is short */
+}
+@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } }
+@media (max-width: 359px) { .key small { display: none; } }
+@media (max-height: 520px) {
+  .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
+  .key { flex-direction: row; gap: 6px; }
+  .key small { display: none; }
+  .dock-in .key.big { flex: none; min-width: 96px; }
+  .summary .s-l b { font-size: 22px; }
+}

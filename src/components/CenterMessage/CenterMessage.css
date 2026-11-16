@@ -1,0 +1,13 @@
+/* The one message line: 48 px whatever it says (DESIGN section 4), 12 px tracked capitals in the felt's strongest ink. */
+.msg {
+  height: 48px; display: flex; align-items: center; justify-content: center; gap: 10px; overflow: hidden;
+  font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; text-align: center;
+  color: var(--print-strong); text-shadow: 0 1px 2px rgb(0 0 0 / .4);
+}
+.msg .notice { color: var(--alert-tx); } /* a refused bet, in coral */
+.msg .reconnecting::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; vertical-align: 1px;
+  background: var(--surr); animation: msg-pulse 1.2s var(--e-io) infinite;
+}
+@keyframes msg-pulse { 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .msg .reconnecting::before { animation: none; } }

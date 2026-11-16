@@ -1,30 +1,40 @@
 import { memo } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
+import "./CenterMessage.css";
 
 const MESSAGES = {
-  [GamePhases.PRE_DEAL]: "Place your bets!",
-  [GamePhases.DEALING]: "Dealing...",
-  [GamePhases.PEEK]: "Dealer checks for blackjack...",
-  [GamePhases.PLAYER_TURN]: "Your turn!",
-  [GamePhases.DEALER_TURN]: "Dealer's turn...",
-  [GamePhases.SETTLING_HANDS]: "Settling bets...",
-  [GamePhases.RESULTS]: "Calculating results...",
-  [GamePhases.POST_ROUND]: "Click anywhere to continue...",
+  [GamePhases.DEALING]: "Dealing",
+  [GamePhases.PEEK]: "Dealer checks for blackjack",
+  [GamePhases.DEALER_TURN]: "Dealer plays",
+  [GamePhases.SETTLING_HANDS]: "Settling bets",
+  [GamePhases.RESULTS]: "Settling bets",
 };
 
-// The offer still open names itself: "Even money?", "Insurance?", "Surrender?" (or both of the last two). //
-function offerMessage({ insurance, evenMoney, surrender }) {
-  if (evenMoney) return "Even money?";
-  if (insurance) return surrender ? "Insurance or surrender?" : "Insurance?";
-  return "Surrender?";
+// The offer still open asks itself, one question at a time: even money, then insurance, then surrender. //
+const offerMessage = ({ evenMoney, insurance }) => (evenMoney ? "Even money?" : insurance ? "Insurance?" : "Surrender?");
+
+// Between rounds: auto deal says it is about to deal, else a bet on the table says to tap Deal. //
+const bettingMessage = (bet, autoDealing) => (autoDealing ? "Dealing soon" : bet > 0 ? "Tap Deal" : "Place your bets");
+
+// What the one line says for a phase. `lastHand`: the cut card is out, so this is the last hand before the shuffle. //
+function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand }) {
+  switch (gamePhase) {
+    case GamePhases.PRE_DEAL: return bettingMessage(bet, autoDealing);
+    case GamePhases.OFFERS: return offerMessage(offers);
+    case GamePhases.PLAYER_TURN: return lastHand ? "Last hand before the shuffle" : "Your move";
+    case GamePhases.END_ROUND: return lastHand ? "Shuffling" : "";
+    default: return MESSAGES[gamePhase] ?? "";
+  }
 }
 
-function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers }) {
+// The one message line (fixed 48 px, CenterMessage.css): a reconnecting or refused-bet notice takes the place of the phase's words. //
+function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, autoDealing = false, lastHand = false }) {
+  const text = waiting ? "Waiting for the server..." : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand });
   return (
-    <div>
-      {waiting ? "Waiting for the server..." : gamePhase === GamePhases.OFFERS && offers ? offerMessage(offers) : MESSAGES[gamePhase] ?? ""}
-      {reconnecting && <div role="status">Reconnecting...</div>}
-      {notice && <div role="status">{notice}</div>}
+    <div className="msg" aria-live="polite">
+      {reconnecting ? <span className="reconnecting">Reconnecting...</span>
+        : notice ? <span className="notice">{notice}</span>
+        : text}
     </div>
   );
 }
