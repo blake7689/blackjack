@@ -1,4 +1,4 @@
-# Blakejack design system (round 13)
+# Blakejack design system (round 14)
 
 Source of truth for the build PRs (#79-#87). Every value below is current; each topic is stated once. The mockup (`index.html`, `mockup.css`, `mockup.js`, `rules.js`, `assets/`) shows all of it; where this file and the code disagree, the code wins. Open it through the dev server: `http://localhost:5173/mockup/index.html` (`#settings`, `#settings/sec-look`, `#brand`; `?clean` hides the Demo tab). `BRIEF.md` holds Blake's decisions and feedback; `RESEARCH.md` says what we took from whom. How a decision came about is in the appendix (history only, nothing there is binding).
 
@@ -17,7 +17,7 @@ Source of truth for the build PRs (#79-#87). Every value below is current; each 
 | Card width | 44-120 px | 40-156 px, whole pixels (section 4) | Readable cards on large screens |
 | Chip stacks | Up to 6 chips per column, several columns | One column, up to 10 chips, each lifted 6 % of its width | Blake, round 1 |
 | Chip rack | Scrolling rack | Whole chips only: evenly spaced when they fit; otherwise it scrolls by whole chips, none cut at rest | Blake: chips never clip |
-| Chip tap | A tap on a chip bets it (one seat) | **A tap on a rack chip only selects it; a tap on the bet circle bets it** | Blake, round 12 |
+| Chip tap | A tap on a chip bets it (one seat) | **A tap on a rack chip selects it; a double tap (double click) adds it to the first bet circle; a tap on the circle bets the selected chip** | Blake, rounds 12 and 13 |
 | Table limits | (none) | None (play money); per-preset limits are a `later` issue | Blake, round 12 |
 | Totals | A total pill | Beside the hand, never on a card (above it with several hands in portrait, in its own column on wide and landscape screens); a natural says "Blackjack!" | Blake |
 | Brand word | "Blakejack on Split", "Blakejack Pays" … | **The hand is "blackjack" everywhere** (Settings, the rules sheet, the felt print, the pill, the verdict, the tags, for player and dealer); **"Blakejack" is only the app's name** (wordmark, page title, card back). Sentence case everywhere | Blake, rounds 7, 9, 11 |
@@ -125,7 +125,7 @@ Easings: `--e-out (.16,1,.3,1)` UI · `--e-weight (.33,0,.15,1)` objects on clot
 | Deal | a card leaves the shoe's mouth face down at a slight angle (-36 deg through -12 deg to -5 deg at 84 %), squares up and **turns over as it lands** (the turn starts at 80 % of the flight); the hole card stays down. A card in flight is `down` with **no face image and no alt**; its face arrives with the turn | slide `clamp(.52 x speed, 300, 760)` ms; turn 420 ms |
 | Flips (landing, hole card, face-down double, sweep) | 3D, edge-on: `rotateY` with a 520 px perspective and a 7 % lift at the edge-on moment; the shadow travels on the faces while turning. One element, flips in place | 420 ms `--e-io` |
 | Peek | the mirror check: the hole card slides up so its top edge tucks under the felt's top (about 14 % of the card), holds, slides back; at least 85 % of it stays in view every frame; its face never shows | up 420k, hold 450k, down 420k ms; k = speed / 1000, 0.33-1.2 (as the shuffle) |
-| Bet chip | **a chip tap selects; a tap on the circle bets:** the selected rack chip's copy glides to the circle and shrinks to table size | 360 ms |
+| Bet chip | **a chip tap selects; a double tap on the chip or a tap on the circle bets:** the rack chip's copy glides to the circle and shrinks to table size | 360 ms |
 | Undo / Clear | the stack glides back to the rack | 380 ms |
 | Win | the dealer's chips come down from above the table's edge and land beside the stake **on the side away from the hand** (right of the circle in portrait, left on wide and landscape screens), hold, then both slide down into the dock | 560 ms, hold 240, 720 ms |
 | Loss / bust | the stack is swept up off the table's top edge | hold 260, 700 ms |
@@ -190,7 +190,7 @@ Results: about 89 px at 390x844, 148 at 1440x900, 66 at 844x390 (one hand).
 | Dock | `renderDock()`, `.key` | Same height in every state. Betting: rack + Undo, Clear, Rebet, 2x, (Pause/Resume), Deal. Playing: Double, Split, (Surrender), (Triple) + Stay, Hit. Offers: Insurance $x / Even money / Surrender + No thanks. Results: net, balance, Next hand. Out of credits: the rack becomes a note with an info icon; nothing that bets is live |
 | Chip rack | `.rack-wrap .rack .rc` | The enabled chips the balance covers; evenly spaced when they fit, else scrolled by whole chips with a chevron toward more; the selected chip lifts with an accent ring; desktop shows 1-9 |
 | Settings | `buildSettings()` | Sections Table rules, Gameplay, Chips, Appearance, Sound & haptics, Account: each a card (raised `--surf` header, inset `--sec-body` body under a divider), **all closed on arrival, one open at a time**; the header (a button in an h2, `aria-expanded`) shows the name, a one-line summary and a dot when the section has unsaved changes. A deep link opens its section; Save with an invalid name opens Account. Delete profile sits apart at the bottom. Sticky Save/Discard bar |
-| Setting hints | `[data-hint]`, `.hint-tip` | Every setting name carries a hint of a few words on one line ("Same bet each round", "What a natural pays"): shown after 250 ms of hover with a pointer, or a 450 ms long press on touch (for 1.8 s; the press never toggles the control). The same text is the control's `aria-describedby` |
+| Setting hints | `.hint-i`, `.hint-tip` | Every setting name is followed by a small "i" (18 px mark, 44 px tap area) whose hint is a few words on one line ("Same bet each round", "What a natural pays"): a tap or click on the "i" shows it (for 2.6 s, or until the next tap; it never toggles the control), as does 250 ms of hover on the "i" with a pointer or keyboard focus on the control. The "i" is `aria-hidden`; the same text is the control's `aria-describedby` |
 | Rules | `renderRules()` | Preset dropdown (button + listbox of the five presets with their edges; "Custom" heads it, not choosable, while edited; full keyboard). Groups: Shoe (Deck size, **Include cut card**), Dealer, Payouts, Doubling, Splitting, Surrender, House variations, Advanced; a group with nothing to show has no heading; rules a mode makes meaningless are hidden |
 | Appearance | `.felts`, `.accents`, mode segments | Felt swatches, four accent dots, Dark / Light / Device |
 | Rules sheet | `#rulesDlg` | A bottom sheet on phones, a panel from 720 px; preset, house edge, then Payouts, Dealer, Doubling, Splitting, Surrender in plain English; even money only when offered |
@@ -217,7 +217,7 @@ Results: about 89 px at 390x844, 148 at 1440x900, 66 at 844x390 (one hand).
 Focus moves only when it was on nothing, or already in the dock; it is never pulled away from anywhere else (Settings, the menu, a dialog). Dialogs give focus to their safe button.
 
 ### Keys
-H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 select a chip; U undo, C clear, B rebet, X 2x. Keys follow the dock: a hidden or dimmed action does nothing.
+H hit, S stay, D double, T triple, P split, R surrender; at the offers I insurance, E even money, R surrender, N no thanks; Space or Enter deal / next hand; 1-9 select a chip, and the same number again straight after adds it to the first bet circle (1, 1 = select, add; any other key in between starts over; a held key does not repeat); U undo, C clear, B rebet, X 2x. Keys follow the dock: a hidden or dimmed action does nothing.
 
 ### Settings behaviour
 - Hidden rules: EU-only rules hide in US modes; "Blackjack pays immediately" and "If the dealer has blackjack" hide under a peek; "Resplit aces" hides with two hands. The preset match ignores hidden rules.
@@ -228,7 +228,7 @@ H hit, S stay, D double, T triple, P split, R surrender; at the offers I insuran
 - Display settings that are not rules (no LEGACY_RULES / RULE_SINCE, not in RESET_SETTINGS or the presets): Show hand totals, Show the count, Game speed, Rebet, Auto deal and its delay, chips, appearance, sound.
 
 ### Screens
-- A signed-in player opens on the **table**; Home is in the menu. **Home** (signed in): wordmark, a felt hero (two cards lying flat and a chip), Play / Rules / Settings, "Signed in as … · Log out". **Signed out** (`#home/out`): "Please log in to start playing.", Log in / Create an account / Rules.
+- A signed-in player opens on the **table**; Home is in the menu. *Implementation note:* in the app `/game` redirects to `/` until a game has started (`src/pages/Game.jsx:11`), and only Home's Start Game starts it (`src/pages/Home.jsx:12`). So: while the session restores, show Loading (up to 90 s on a cold start, `COLD_START_TIMEOUT_MS`); once it has, start the game and replace to `/game`. After a log in, start the game and land on the table the same way. This happens once per restore or log in, never on every visit to `/`: Home opened from the menu stays on Home (no bounce back), and a signed-out `/` stays on Home, so there is no redirect loop. **Home** (signed in): wordmark, a felt hero (two cards lying flat and a chip), Play / Rules / Settings, "Signed in as … · Log out". **Signed out** (`#home/out`): "Please log in to start playing.", Log in / Create an account / Rules.
 - **Login:** "Log in" (heading and button), label "Username or email" with placeholder **"Username or Email"** (tests fill it by placeholder), "Password"; waking state ("Waking up the table…", "Logging in..."); error state (one alert, fields `aria-invalid`). **Create an account:** the app's five fields and messages; "Create account" disabled until all are valid.
 - **Loading** ("Shuffling up...") and **Error** ("Can't reach the table", Try again, Home).
 - **Notices:** "Reconnecting..." with a pulsing dot; a refused bet in coral; out of credits as in section 5.
@@ -254,7 +254,7 @@ H hit, S stay, D double, T triple, P split, R surrender; at the offers I insuran
 | button "Back to game" | routing | Settings back button "Table" | update |
 | tabs "Player", "Game", "Dev" | settings, routing, a11y | accordion sections, each a button with `aria-expanded` (`getByRole('button', { name: /^Table rules/ })`); no Dev section yet | update |
 | label "playTimeout" | dev-setting spec | not designed | update when designed |
-| button "Add 10", /^Add \d+$/ | most specs, live | **the chip only selects now:** rack chip "$10 chip" (`aria-pressed`), then the bet circle "Bet spot 1, …" bets it | update: select the chip, then click the circle |
+| button "Add 10", /^Add \d+$/ | most specs, live | **a chip click selects it:** rack chip "$10 chip" (`aria-pressed`), then the bet circle "Bet spot 1, …" bets it; or double-click the chip (`dblclick()`, or key 2 pressed twice) to bet it at once | update: select the chip and click the circle, or `dblclick()` the chip |
 | button "Deal" (exact) | most specs, live | Deal key "Deal" | keep |
 | buttons "Hit", "Stay", "Surrender", "No thanks" | many, live | same labels (Surrender is absent when surrender is "none") | keep |
 | group "Offers" with "Insurance $5", "No thanks" | a11y, offers, live | the dock is `role="group"` "Offers" at the offers | keep |
@@ -270,7 +270,7 @@ H hit, S stay, D double, T triple, P split, R surrender; at the offers I insuran
 | rule group names and `aria-pressed` options | settings | open "Table rules" first; sentence-case names ("Blackjack pays", "Double on", "Deck size", "Include cut card" …); options `role="radio"` + `aria-checked`; each control `aria-describedby` its hint | update |
 | checkbox "Blackjack on Split" | settings | switch "Blackjack on split" under House variations | update |
 | preset tile /^Vegas/ | settings | the "Preset" dropdown; options `role="option"` | update |
-| rule hint text (/insure for half your bet…/ …) | settings | short hints (`[data-hint]`) and the rules sheet | update |
+| rule hint text (/insure for half your bet…/ …) | settings | short hints (each control's `aria-describedby`; the "i" `.hint-i[data-hint]` shows it) and the rules sheet | update |
 | `.hand-result.Win` / `.Surrendered` | rules specs | `.tag.win` / `.tag.surrender` (several hands), the verdict (one) | update |
 | `.page-bg`, `details[open]`, `.rule-tile, .seg-btn, .rules-section summary, .toggle-row` | settings, a11y | `.settings-screen`, `.sec-h`, `[data-rule]`, `[data-preset]`, `.sw` | update |
 | (new) switch "Show hand totals" | — | Gameplay | add tests |
@@ -286,3 +286,4 @@ How the current design came about; each line is superseded by sections 0-9 where
 - **Round 11:** dealt cards truly face down until the turn; totals in their own column on wide screens; landscape dock icon-only; the print and light retuned for AA over the brightest pixel; lettering as ink on cloth (Cinzel, Cormorant); chip handoff; mirror shuffle order; balance badge on real changes; straight discard pile; face-down sweep.
 - **Round 12:** the print centred between the hands; "Blackjack!" in play; the count live; setting-off actions hidden; split A + ten shows 21; the mirror peek (short slide); cut card clear of the pile.
 - **Round 13:** desktop multi-hand fixes (four hands in a row, a CSS cycle that made circles 0x0, the print redrawn on resize); winnings on the circle's outer side on wide screens; focus per state; chip tap selects only; the shuffle follows Game speed and can be skipped; Include cut card and the mid-round refill; the badge on the automatic rebet; setting hints; the Settings accordion; the peek follows Game speed; signed-in players start on the table; the "Blackjack!" badge shows with totals off; this document folded into one current text.
+- **Round 14:** a double tap (or a number key twice) adds the chip; the "i" after each setting name replaces the long press; the signed-in start-up note; "A+ten after a split counts as blackjack"; the mid-round refill says "Shuffling".

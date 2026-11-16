@@ -494,7 +494,7 @@
   // Deals one card. Returns after the pacing step; c.landed resolves when it has landed (and turned over), and only then do the
   // total and the count change.
   async function dealCard(target, down = false, o = {}) {
-    if (!T.shoe.length && saved.includeCutCard === false) { const my = T.run; await shuffleFx(0.35); if (my !== T.run) return {}; buildShoe(); } // no cut card: the shoe ran out mid-round, a short shuffle refills it
+    if (!T.shoe.length && saved.includeCutCard === false) { const my = T.run, [m0, c0] = [T.msg, T.msgCls]; setMsg("Shuffling"); await shuffleFx(0.35); if (my !== T.run) return {}; buildShoe(); setMsg(m0, c0); } // no cut card: the shoe ran out mid-round, a short shuffle refills it (the line says so, then goes back)
     const c = draw(); c.down = down; c.land = false; c.side = !!o.side;
     if (target === "d") T.dealer.push(c); else if (o.hidden) (T.seats[target].hidden = [c]); else T.seats[target].cards.push(c);
     const fresh = target === "d" ? renderDealer() : renderSeats(); if (target !== "d") renderDealer();
@@ -762,9 +762,12 @@
   /* ================= events: table ================= */
   $("#dock").addEventListener("click", (e) => {
     const chip = e.target.closest("[data-chip]");
-    if (chip) { if (chip.getAttribute("aria-disabled") === "true") return; T.chip = +chip.dataset.chip; $$("#rack .rc").forEach((b) => b.setAttribute("aria-pressed", String(b === chip))); return; } // a chip tap only selects it; a tap on the circle bets it
+    if (chip) { if (chip.getAttribute("aria-disabled") === "true") return; const v = +chip.dataset.chip, now = performance.now(), twice = lastTap.v === v && now - lastTap.t < 400;
+      lastTap = twice ? { v: 0, t: 0 } : { v, t: now }; selectChip(chip); if (twice) placeChip(0); return; } // a tap selects; a double tap (or double click) adds it to the first circle; a tap on the circle bets it
     const b = e.target.closest("[data-act]"); if (!b || b.getAttribute("aria-disabled") === "true") return; act(b.dataset.act);
   });
+  let lastTap = { v: 0, t: 0 }, lastKey = ""; // timed by hand: a touch double tap fires no dblclick
+  function selectChip(chip) { T.chip = +chip.dataset.chip; $$("#rack .rc").forEach((b) => b.setAttribute("aria-pressed", String(b === chip))); }
   function act(a) {
     if (bettingAct[a]) { if (T.phase !== "betting") return; const b0 = T.balance; bettingAct[a](); bump(T.balance - b0); betMsg(); renderBalance(true); setTimeout(renderSeats, reduced ? 0 : 300); renderDock(); armAuto(); return; }
     if (a === "pause") { T.paused = !T.paused; if (T.phase === "betting") { betMsg(); armAuto(); } if (T.phase === "results" && !T.paused) setTimeout(() => T.phase === "results" && nextHand(), 1200); renderDock(); return; }
@@ -776,8 +779,8 @@
   $("#seats").addEventListener("click", (e) => { const s = e.target.closest("[data-spot]"); if (s) placeChip(+s.dataset.spot); });
   document.addEventListener("keydown", (e) => {
     if (document.body.dataset.screen !== "table" || e.target.closest("input, textarea, dialog") || e.metaKey || e.ctrlKey) return;
-    const k = e.key.toLowerCase();
-    if (/^[1-9]$/.test(k) && T.phase === "betting") { const b = $$("#rack .rc")[+k - 1]; if (b) b.click(); return; }
+    const k = e.key.toLowerCase(), prev = lastKey; lastKey = k;
+    if (/^[1-9]$/.test(k) && T.phase === "betting") { const b = $$("#rack .rc")[+k - 1]; if (!b || e.repeat) return; if (prev === k && T.chip === +b.dataset.chip) { lastKey = ""; placeChip(0); } else selectChip(b); return; } // once selects, twice in a row adds
     const map = T.phase === "offers" ? { i: "o-ins", e: "o-even", r: "o-sur", n: "o-no" } : { h: "hit", s: "stay", d: "double", p: "split", r: "surrender", t: "triple", u: "undo", c: "clear", b: "rebet", x: "x2" };
     if (k === " " || k === "enter") { if (e.target.closest("button, a")) return; e.preventDefault(); }
     const a = k === " " || k === "enter" ? (T.phase === "results" ? "next" : "deal") : map[k]; if (!a) return; const btn = $(`#dock [data-act="${a}"]`); if (btn && btn.getAttribute("aria-disabled") !== "true") act(a);
@@ -833,14 +836,15 @@
   const HINTS = { deckCount: "Decks in the shoe", includeCutCard: "Shuffle before the shoe runs out", dealerHoleBehaviour: "When the dealer checks", dealerHitsSoft17: "Dealer's move on soft 17",
     noHoleCardLoss: "Your loss to a dealer blackjack", blackjackPayout: "What a natural pays", insurance: "Side bet against a dealer ace", doubleOn: "Hands you may double", doubleAfterSplit: "Double on split hands",
     maxSplitHands: "Most hands from splitting", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Draw to split aces", surrender: "Give up half your bet",
-    blackJackOnSplit: "A+ten after a split pays 3:2", tripleDown: "Triple the bet, one card", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
+    blackJackOnSplit: "A+ten after a split counts as blackjack", tripleDown: "Triple the bet, one card", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
     dealerDrawsOnPlayerBlackjack: "Dealer draws against your natural", blackjackPaysImmediately: "Natural paid before the dealer", dealerDrawsOnceOn21: "One dealer card against 21", dealerDrawsOnPlayerBust: "Dealer draws after you bust",
     speed: "How fast cards move", rebet: "Same bet each round", showTotals: "Hand totals on the table", count: "Hi-Lo card count", autoDeal: "Deals without a tap", autoDelay: "Pause before auto deal",
     sfx: "Table sounds", volume: "Sound level", haptics: "Buzz on key moments" };
-  const hintAttr = (k) => (HINTS[k] ? ` data-hint="${HINTS[k]}"` : ""); const hintDesc = (k) => (HINTS[k] ? `<span class="sr-only" id="hd-${k}">${HINTS[k]}</span>` : ""); const describedBy = (k) => (HINTS[k] ? ` aria-describedby="hd-${k}"` : "");
+  // the screen reader gets each hint through aria-describedby, so the "i" is hidden from it
+  const hintI = (k) => (HINTS[k] ? `<span class="hint-i" data-hint="${HINTS[k]}" data-hk="${k}" aria-hidden="true">i</span>` : ""); const hintDesc = (k) => (HINTS[k] ? `<span class="sr-only" id="hd-${k}">${HINTS[k]}</span>` : ""); const describedBy = (k) => (HINTS[k] ? ` aria-describedby="hd-${k}"` : "");
   const SEC_OF = (k) => (["first", "last"].includes(k) ? "sec-account" : k === "chips" ? "sec-chips" : ["felt", "accent", "mode"].includes(k) ? "sec-look" : ["sfx", "volume", "haptics"].includes(k) ? "sec-sound" : ["speed", "rebet", "count", "showTotals", "autoDeal", "autoDelay"].includes(k) ? "sec-play" : "sec-rules");
-  const sw = (k, label, sub, extra = "") => `${hintDesc(k)}<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false"${describedBy(k)} ${extra}><span class="tx"><span${hintAttr(k)}>${label}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
-  const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}"${hintAttr(k)}>${label}</label>${hintDesc(k)}<output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}"${describedBy(k)} type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
+  const sw = (k, label, sub, extra = "") => `${hintDesc(k)}<button type="button" class="sw" role="switch" data-k="${k}" aria-checked="false"${describedBy(k)} ${extra}><span class="tx"><span>${label}${hintI(k)}</span>${sub ? `<small>${sub}</small>` : ""}</span><span class="tr" aria-hidden="true"></span></button>`;
+  const slider = (k, label, min, max, step, stops, tail, dep) => `<div class="slider"${dep ? ` data-dep="${dep}"` : ""}><div class="top-l"><label for="in-${k}">${label}${hintI(k)}</label>${hintDesc(k)}<output id="out-${k}" for="in-${k}"></output></div><input id="in-${k}"${describedBy(k)} type="range" min="${min}" max="${max}" step="${step}" data-k="${k}">${stops ? `<div class="stops" aria-hidden="true">${stops.map(([v, l, pos], n) => `<span data-stop="${v}" class="${n === 0 ? "first" : ""}" style="left:${pos / 10}%">${l}</span>`).join("")}${tail ? `<span class="last" style="left:100%">${tail}</span>` : ""}</div>` : ""}</div>`;
   // a section is a disclosure: its header (a button inside the h2) names it and sums up its values; the body is hidden until opened
   const sec = (id, title, inner) => `<section class="sec" id="${id}"><h2 class="sec-t"><button type="button" class="sec-h" id="${id}-h" aria-expanded="false" aria-controls="${id}-b"><span class="sec-n">${title}<span class="sec-dot" hidden><span class="sr-only">, unsaved changes</span></span></span><span class="sec-s" id="${id}-s"></span><svg class="chev" aria-hidden="true"><use href="#i-chevron"/></svg></button></h2><div class="sec-b" id="${id}-b" role="region" aria-labelledby="${id}-h" hidden>${inner}</div></section>`;
   function openSec(id, open = true) { const h = document.getElementById(id + "-h"); if (!h) return; if (open) $$(".sec").forEach((x) => { if (x.id !== id) { const o = document.getElementById(x.id + "-h"); o?.setAttribute("aria-expanded", "false"); const bd = document.getElementById(x.id + "-b"); if (bd) bd.hidden = true; } }); h.setAttribute("aria-expanded", String(open)); document.getElementById(id + "-b").hidden = !open; } // an accordion: one section open at a time
@@ -860,7 +864,7 @@
   function segHTML(rule, s) {
     const cur = rule.get ? rule.get(s) : s[rule.key]; let list = rule.opts;
     if (rule.key === "deckCount" && !list.some((o) => o.v === cur)) list = [...list, { v: cur, l: String(cur) }].sort((a, b) => a.v - b.v);
-    return `<div class="rrow"><span class="rl" id="fl-${rule.key}"${hintAttr(rule.key)}>${rule.label(cur)}</span>${hintDesc(rule.key)}<div class="seg" role="radiogroup" aria-labelledby="fl-${rule.key}"${describedBy(rule.key)}>` +
+    return `<div class="rrow"><span class="rl" id="fl-${rule.key}">${rule.label(cur)}${hintI(rule.key)}</span>${hintDesc(rule.key)}<div class="seg" role="radiogroup" aria-labelledby="fl-${rule.key}"${describedBy(rule.key)}>` +
       list.map((o) => { const patch = rule.patch ? rule.patch(o.v, s) : { [rule.key]: o.v }; const d = o.v === cur ? "" : fmtDelta(edgeDelta(s, patch)); return `<button type="button" role="radio" aria-checked="${o.v === cur}" data-rule="${rule.key}" data-v='${JSON.stringify(o.v)}' data-f="r-${rule.key}-${o.v}"${o.h ? ` title="${o.h}"` : ""}><span>${o.l}</span>${d ? `<span class="d">${d}</span>` : ""}</button>`; }).join("") + `</div></div>`;
   }
   function renderRules() {
@@ -963,17 +967,18 @@
   function closePresets(focus) { const b = $("#presetBtn"), l = $("#presetList"); if (!b || l.hidden) return; l.hidden = true; b.setAttribute("aria-expanded", "false"); l.removeAttribute("aria-activedescendant"); if (focus) b.focus(); }
   function openPresets() { const b = $("#presetBtn"), l = $("#presetList"); l.hidden = false; b.setAttribute("aria-expanded", "true"); const opts = $$('[role="option"]', l); setActive(opts.find((o) => o.getAttribute("aria-selected") === "true") || opts[0]); l.focus(); }
   function setActive(o) { const l = $("#presetList"); $$('[role="option"]', l).forEach((x) => x.classList.toggle("active", x === o)); if (o) { l.setAttribute("aria-activedescendant", o.id); o.scrollIntoView({ block: "nearest" }); } }
-  // the hint bubble: hover (after 250 ms) on a pointer, a long press (450 ms) on touch; it never fires the control under the finger
+  // the hint bubble: a tap or click on the "i" after a setting name (it never fires the control), hover on the "i" (250 ms) with a pointer,
+  // or keyboard focus on the control itself
   function wireHints() {
-    const tip = document.createElement("div"); tip.className = "hint-tip"; tip.setAttribute("aria-hidden", "true"); tip.hidden = true; document.body.appendChild(tip); let t = 0, held = null;
-    const show = (el) => { tip.textContent = el.dataset.hint; tip.hidden = false; const r = el.getBoundingClientRect(), tw = tip.offsetWidth; tip.style.left = Math.max(8, Math.min(innerWidth - tw - 8, r.left)) + "px"; tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + "px"; };
-    const hide = () => { clearTimeout(t); tip.hidden = true; };
-    let over = null; // the hinted name under a mouse pointer (pointermove, so a pointer already resting on it counts too)
-    $("#sBody").addEventListener("pointermove", (e) => { if (e.pointerType === "touch") return; const el = e.target.closest("[data-hint]"); if (el === over) return; over = el; hide(); if (el) t = setTimeout(() => show(el), 250); });
-    $("#sBody").addEventListener("pointerleave", () => { over = null; hide(); });
-    $("#sBody").addEventListener("pointerdown", (e) => { const el = e.target.closest("[data-hint]"); if (!el || e.pointerType !== "touch") return; clearTimeout(t); t = setTimeout(() => { show(el); held = el; setTimeout(hide, 1800); }, 450); });
-    $("#sBody").addEventListener("pointerup", () => clearTimeout(t)); $("#sBody").addEventListener("pointercancel", () => clearTimeout(t)); addEventListener("scroll", hide, { passive: true });
-    $("#sBody").addEventListener("click", (e) => { if (held && held.contains(e.target)) { e.stopPropagation(); e.preventDefault(); held = null; } }, true); // a long press shows the hint, it does not toggle
+    const tip = document.createElement("div"); tip.className = "hint-tip"; tip.setAttribute("aria-hidden", "true"); tip.hidden = true; document.body.appendChild(tip); let t = 0, on = null;
+    const show = (el) => { clearTimeout(t); on = el; tip.textContent = el.dataset.hint; tip.hidden = false; const r = el.getBoundingClientRect(), tw = tip.offsetWidth; tip.style.left = Math.max(8, Math.min(innerWidth - tw - 8, r.left + r.width / 2 - tw / 2)) + "px"; tip.style.top = Math.max(8, r.top - tip.offsetHeight - 6) + "px"; };
+    const hide = () => { clearTimeout(t); on = null; tip.hidden = true; };
+    const body = $("#sBody");
+    body.addEventListener("click", (e) => { const el = e.target.closest(".hint-i"); if (!el) return void (on && hide()); e.stopPropagation(); e.preventDefault(); if (on === el) return hide(); show(el); t = setTimeout(hide, 2600); }, true);
+    body.addEventListener("pointerover", (e) => { if (e.pointerType === "touch") return; const el = e.target.closest(".hint-i"); if (el) { clearTimeout(t); t = setTimeout(() => show(el), 250); } });
+    body.addEventListener("pointerout", (e) => { if (e.pointerType !== "touch" && e.target.closest(".hint-i")) hide(); });
+    body.addEventListener("focusin", (e) => { const k = /hd-(\w+)/.exec(e.target.getAttribute("aria-describedby") || "")?.[1], el = k && $(`.hint-i[data-hk="${k}"]`, body); if (el && e.target.matches(":focus-visible")) show(el); else hide(); });
+    body.addEventListener("focusout", hide); addEventListener("scroll", hide, { passive: true });
   }
   function wirePresetMenu() {
     const b = $("#presetBtn"), l = $("#presetList");

@@ -125,6 +125,10 @@ Blake rejected the previous mockup: "it lost all of the uniqueness and looks lik
 - **Kept as is:** count on by default; results dock keeps the balance; red "−$25" bet badge; the full-size resting cut card; out of credits = hidden top-up only (no follow-up); all four fonts; light mode leaves the felt and cards unchanged; the insurance "No thanks" nudge; "Deal split hands" defaults to One at a time (#133); landscape betting keys icon-only; the sideways double stays sideways.
 - **Changed:** the peek's duration scales with Game speed (like the shuffle); a signed-in player opens straight onto the table (Home in the menu), a signed-out player sees Home; the "Blackjack!" badge always shows, even with "Show hand totals" off.
 
+## Round 13 answers (Blake, 2026-11-17)
+- **Chips: single click/tap selects, double click/tap adds that chip to the circle** (tapping the circle still bets the selected chip). Keyboard mirror: pressing a chip's number key once selects it, twice in a row adds it.
+- **Setting hints: a small "i" after each setting name shows the hint on tap** (and on hover/focus on desktop), replacing the long press.
+
 ## Still binding from the approved spec and earlier feedback
 - One column, **dealer always above the player** at every size, play always horizontally centred.
 - The table must **fit the screen with no vertical scroll** while playing (375x667 up to 1440x900, and 844x390 landscape with dealer still on top).
