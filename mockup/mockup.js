@@ -424,7 +424,7 @@
     return Promise.all(els.map((el, i) => { const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, side = el.classList.contains("side");
       const g = el.cloneNode(true); g.removeAttribute("data-id"); g.className = "card sweep" + (el.classList.contains("down") ? " down" : ""); g.querySelectorAll("img").forEach((x) => (x.alt = ""));
       Object.assign(g.style, { position: "absolute", left: cx - w / 2 - o.left + "px", top: cy - h / 2 - o.top + "px", width: w + "px", height: h + "px", transform: "none", zIndex: 40 + i }); g.setAttribute("aria-hidden", "true"); box.appendChild(g);
-      if (!g.classList.contains("down")) setTimeout(() => g.classList.add("flipping", "down"), i * 45); // the same edge-on turn, face down, as it leaves
+      if (!g.classList.contains("down")) requestAnimationFrame(() => setTimeout(() => g.classList.add("flipping", "down"), i * 45)); // the same edge-on turn, face down, as it leaves
       return g.animate([{ translate: "0 0", rotate: side ? "90deg" : "0deg" }, { translate: `${m.left - cx}px ${m.top - cy}px`, rotate: "0deg" }], { duration: 620, delay: i * 45, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" }).finished.catch(() => {}).then(() => g.remove());
     })).then(done);
   }

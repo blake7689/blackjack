@@ -161,7 +161,7 @@ svg { display: block; }
 .felt-light {
   position: absolute; inset: 0; pointer-events: none;
   background:
-    radial-gradient(48% 40% at var(--lx) var(--ly), rgb(255 250 232 / calc(.095 * var(--lamp))), rgb(255 250 232 / 0) 100%),
+    radial-gradient(48% 40% at var(--lx) var(--ly), rgb(255 250 232 / calc(.09 * var(--lamp))), rgb(255 250 232 / 0) 100%),
     radial-gradient(140% 110% at 50% 50%, transparent 46%, rgb(0 0 0 / .58) 100%);
   transition: --lx var(--t-light) var(--e-io), --ly var(--t-light) var(--e-io), --lamp var(--t-light) var(--e-io);
 }
@@ -247,6 +247,10 @@ svg { display: block; }
 .card.side { transform: translateX(var(--x, 0px)) rotate(90deg); } /* the double card, sideways; --x keeps its corners on whole pixels */
 .card.down, .card.flipping { perspective: 520px; } /* close enough that a turning card is seen edge-on mid-turn */
 .card.flipping { animation: flipLift var(--t-flip) var(--e-io); }
+.card.flipping::before { opacity: 0; transition: opacity 120ms; } /* a turning card: the flat shadow would show as a slab beside the edge-on card */
+.card.flipping .cf, .card.flipping .cb { box-shadow: 4px 10px 14px rgb(0 0 0 / .35); }
+.card.sweep::before { display: none; } /* a swept card tilts and turns: its shadow travels on its faces, not as a flat slab */
+.card.sweep .cf, .card.sweep .cb { box-shadow: 2px 6px 10px rgb(0 0 0 / .35); }
 @keyframes flipLift { 50% { scale: 1.07; } }
 .card::before { content: ""; position: absolute; inset: 0; border-radius: calc(var(--cw) * .07); box-shadow: var(--shx, 2px) var(--shy, 5px) 7px rgb(var(--shadow-c) / .55), 0 1px 2px rgb(0 0 0 / .45); transition: box-shadow var(--t-flip) var(--e-io); }
 .cin { position: absolute; inset: 0; transition: transform var(--t-flip) var(--e-io); }
@@ -449,6 +453,7 @@ svg { display: block; }
 /* landscape betting row: the small keys are icon-only (the label stays as the accessible name); under 360 px the Deal key drops its "auto" note */
 @media (max-height: 520px) { #dockIn:is([data-phase="betting"], [data-phase="shuffling"]) .key:not(.big):has(> svg) > span:not(.bar) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; } }
 @media (max-width: 359px) { .key small { display: none; } }
+@media (max-height: 520px) { .dock-one .key.big { flex: none; min-width: 96px; } #dockIn[data-phase="shuffling"] .key.big > span { font-size: 14px; } } /* the landscape Deal key keeps room for its word ("Shuffling" included); the rack scrolls instead */
 @media (max-height: 520px) { .dock { padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); } .key { flex-direction: row; gap: 6px; } .key kbd, .key small { display: none; } .summary .s-l b { font-size: 22px; } }
 
 /* ================= overlays ================= */
