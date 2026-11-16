@@ -1,0 +1,68 @@
+/* Design tokens (#79, DESIGN.md section 3). The UI theme sits on <html>: data-mode (dark | light), data-accent, data-felt;
+   utils/theme.js sets them from the display settings and index.html carries the defaults, so the first paint is right.
+   The felt and the table objects (cards, chips, rail) never change with the mode. */
+
+:root {
+  /* type: the fonts are self-hosted (public/fonts, @font-face in index.css); swapping a face is one line here */
+  --font-ui: "Figtree", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Familjen Grotesk", "Figtree", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  /* space (4 px base) and radii (cards are 7 % of their width; the UI is flat, 1 px --line borders) */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
+  --r1: 8px; --r2: 12px; --r3: 16px; --r4: 22px; --r5: 28px;
+  /* motion */
+  --e-out: cubic-bezier(.16, 1, .3, 1);       /* default: fast start, long settle (slides, UI) */
+  --e-weight: cubic-bezier(.33, 0, .15, 1);   /* weighty objects: cards and chips sliding on cloth */
+  --e-spring: cubic-bezier(.34, 1.4, .64, 1); /* small overshoot: chip lift, selection, verdict */
+  --e-io: cubic-bezier(.65, 0, .35, 1);       /* flips and light changes */
+  --t-press: 120ms; --t-ui: 220ms; --t-state: 320ms; --t-flip: 420ms; --t-slide: 560ms; --t-light: 900ms;
+  /* z-index layers (never reuse the class .ghost, the flying-chip layer, for a button) */
+  --z-rail: 1; --z-dealer: 3; --z-seats: 3; --z-mid: 4; --z-shoe: 5; --z-riffle: 6; --z-pill: 6; --z-dock: 10; --z-head: 10;
+  --z-list: 15; --z-top: 20; --z-fx: 30; --z-dirty: 40; --z-toast: 60; --z-hint: 70;
+  /* fixed colours: the table's own, the same in both modes */
+  --win: #3fe397; --lose: #ff6b5e; --push: #c5cfd8; --even: #6fe3d2; --surr: #f0b77d;
+  --rail-1: #17191a; --rail-2: #0a0b0b; --rail-3: #050606;
+  --paper: #f6f4ee;
+  --cut-1: #f7d55a; --cut-2: #e9b81f; /* the cut card */
+  /* win / lose as text on the UI (top bar, dock, Settings); the light mode below darkens them */
+  --win-tx: #3fe397; --lose-tx: #ff6b5e; --lose-line: rgb(255 107 94 / .5);
+  --err-tx: #ff8f84; --alert-tx: #ffd2cc; /* inline errors, the login alert */
+}
+
+/* UI mode: dark (default) */
+:root, [data-mode="dark"] {
+  --bg: #070908; --bg-2: #0c0f0e; --surf: #141817; --surf-2: #1c211f; --surf-3: #252b29;
+  --line: rgba(255, 255, 255, .08); --line-2: rgba(255, 255, 255, .15);
+  --tx: #eef2ef; --tx-2: #a6b0aa; --tx-3: #85908a;
+  --groove-1: #040505; --groove-2: #0f1211;
+  --scrim: rgba(3, 4, 4, .72);
+  --sec-body: #0a0d0c; /* a Settings section's inset body, under the --surf header */
+  color-scheme: dark;
+}
+[data-mode="light"] {
+  --bg: #e6e7e2; --bg-2: #f8f8f5; --surf: #ffffff; --surf-2: #eef0eb; --surf-3: #e2e5df;
+  --line: rgba(10, 20, 15, .1); --line-2: rgba(10, 20, 15, .18);
+  --tx: #0d110f; --tx-2: #48514c; --tx-3: #59625d;
+  --groove-1: #d9dcd5; --groove-2: #eceee9;
+  --scrim: rgba(20, 24, 22, .4);
+  --sec-body: #eaece6;
+  --win-tx: #07703f; --lose-tx: #b42318; --lose-line: rgb(180 35 24 / .45); /* on --bg 4.97:1 and 5.29:1 (the felt keeps --win / --lose) */
+  --err-tx: #b3261e; --alert-tx: #8c1d14;
+  color-scheme: light;
+}
+
+/* accent: fill, ink on the fill, accent as text on --bg, glow (rgb), the card back's highlight */
+:root, [data-accent="emerald"] { --accent: #1ed18a; --accent-ink: #02160d; --accent-tx: #3fe39f; --accent-rgb: 30 209 138; --back-hi: #c4f7df; }
+[data-accent="sapphire"] { --accent: #6b95ff; --accent-ink: #040c22; --accent-tx: #8eaeff; --accent-rgb: 107 149 255; --back-hi: #d7e2ff; }
+[data-accent="ember"] { --accent: #ff7b3f; --accent-ink: #1e0a01; --accent-tx: #ff9566; --accent-rgb: 255 123 63; --back-hi: #ffdcc9; }
+[data-accent="orchid"] { --accent: #c28dff; --accent-ink: #15062a; --accent-tx: #d2a9ff; --accent-rgb: 194 141 255; --back-hi: #eddcff; }
+/* light mode: a darker fill with white ink, and a darker text colour */
+[data-mode="light"][data-accent="emerald"] { --accent: #077f4f; --accent-ink: #ffffff; --accent-tx: #066b43; } /* white on the fill 5.05:1; text on --bg 5.29:1 */
+[data-mode="light"][data-accent="sapphire"] { --accent: #2f61e3; --accent-ink: #ffffff; --accent-tx: #2552c4; }
+[data-mode="light"][data-accent="ember"] { --accent: #b8450f; --accent-ink: #ffffff; --accent-tx: #b04110; } /* white on the fill 5.39:1; text on --bg 4.68:1 */
+[data-mode="light"][data-accent="orchid"] { --accent: #8a4ad8; --accent-ink: #ffffff; --accent-tx: #7438bf; }
+:root { --back-ink: var(--accent); }
+
+/* felt: cloth mid / lit / shadow, the printed ink, the cast-shadow rgb, the card back's ground */
+:root, [data-felt="green"] { --felt: #0a422c; --felt-hi: #0f593a; --felt-lo: #021710; --print: rgba(236, 246, 239, .96); --print-strong: rgb(244, 250, 246); --shadow-c: 1 14 8; --back-bg: #0f1513; }
+[data-felt="blue"] { --felt: #0e3253; --felt-hi: #174a7a; --felt-lo: #041325; --print: rgba(236, 242, 250, .96); --print-strong: rgb(244, 248, 253); --shadow-c: 2 9 20; --back-bg: #0f1218; }
+[data-felt="red"] { --felt: #52111a; --felt-hi: #771d2a; --felt-lo: #1c0407; --print: rgba(250, 238, 236, .96); --print-strong: rgb(253, 246, 245); --shadow-c: 18 3 5; --back-bg: #151011; }

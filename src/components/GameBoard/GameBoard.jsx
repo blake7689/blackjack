@@ -5,6 +5,7 @@ import { GamePhases } from "../../utils/constants/gamePhases";
 import { canSurrender } from "../../utils/blackjackLogic";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
+import { useCardWidth } from "../../hooks/useCardWidth";
 import StatsPanel from "../StatsPanel/StatsPanel";
 import DealerArea from "../DealerArea/DealerArea";
 import DeckStack from "../DeckStack/DeckStack";
@@ -23,6 +24,9 @@ export default function GameBoard() {
   const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
   const layerRef = useRef(null);
+  const stageInRef = useRef(null);
+  const probeRef = useRef(null);
+  useCardWidth(stageInRef, probeRef);
   // Cards on the board's first render never fly (returning from Settings): they read `enabled` while it is still false.
   const [enabled, setEnabled] = useState(false);
   useEffect(() => setEnabled(true), []);
@@ -57,7 +61,7 @@ export default function GameBoard() {
 
   return (
     <FlightContext.Provider value={flight}>
-    <div className={`board${busy ? " busy" : ""}`} onClick={handleBoardClick}>
+    <div className={`board table-screen${busy ? " busy" : ""}`} onClick={handleBoardClick}>
       {/* TOP BAR */}
       <div className="top-bar">
         <div className="top-left stats">
@@ -72,7 +76,10 @@ export default function GameBoard() {
       </div>
 
       {/* MAIN GAME AREA */}
-      <div className="main-area">
+      <div className="main-area stage">
+       {/* .stage-in (display: contents) holds --cw / --ch; its probe is the one element whose width is the formula's result */}
+       <div className={`stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}`} ref={stageInRef} style={{ "--n": hands.length }}>
+        <div className="cw-probe" ref={probeRef} aria-hidden="true" />
         <div className="dealer-container">
           <div className="dealer-scroll">
             <div className="dealer-track">
@@ -116,6 +123,7 @@ export default function GameBoard() {
             </div>
           </div>
         </div>
+       </div>
       </div>
 
       {/* BOTTOM BAR */}

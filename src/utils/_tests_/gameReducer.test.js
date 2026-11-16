@@ -436,6 +436,20 @@ describe("saved settings (#36)", () => {
     expect(sanitizeSettings({ dealerHoleBehaviour: "drawAfter" }).dealerHoleBehaviour).toBe("drawAfter");
   });
 
+  it("display settings (#79) default to green / emerald / dark with totals shown", () => {
+    expect(defaults).toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+    expect(sanitizeSettings(undefined)).toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+  });
+
+  it("keeps valid display settings and drops wrong values to the defaults (#79)", () => {
+    expect(sanitizeSettings({ feltTheme: "red", accent: "orchid", mode: "system", showTotals: false }))
+      .toMatchObject({ feltTheme: "red", accent: "orchid", mode: "system", showTotals: false });
+    expect(sanitizeSettings({ feltTheme: "purple", accent: "teal", mode: "auto", showTotals: "no" }))
+      .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+    expect(sanitizeSettings({ feltTheme: 1, accent: null, mode: ["dark"], showTotals: 0 }))
+      .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+  });
+
   it("between rounds deals a new shoe when a table setting changed, otherwise just applies", () => {
     const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
     const fresh = stackedShoe(["4", "5", "6"]);

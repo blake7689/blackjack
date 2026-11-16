@@ -1,9 +1,6 @@
 :root {
-  --app-vh: 100vh;
+  --app-vh: 100dvh;
   --header-height: 0px;
-}
-@supports (height: 100dvh) {
-  :root { --app-vh: 100dvh; }
 }
 
 .spinner {
@@ -48,6 +45,7 @@
 /* Home */
 .home-center { text-align: center; margin-top: 36px; }
 .home-center h1, .home-center p { color: #fff; }
+.home-wordmark { display: block; height: 56px; width: auto; margin: 0 auto; }
 .start-btn { padding: 12px 20px; border-radius: 10px; border: none; background: #1db954; color: #fff; font-size: 18px; }
 
 /* Login */

@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { PlayerProvider } from "./providers/PlayerProvider";
 import { GameProvider } from "./providers/GameProvider";
+import "./tokens.css";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(

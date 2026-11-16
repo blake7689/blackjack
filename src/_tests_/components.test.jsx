@@ -499,6 +499,41 @@ describe("GameBoard", () => {
     }
   });
 
+  it("has the stage structure and the e2e hooks (#79)", () => {
+    const { container } = renderUI(<GameBoard />, { game: playing });
+    const board = container.querySelector(".board");
+    expect(board.classList.contains("table-screen")).toBe(true);
+    const stageIn = board.querySelector(".main-area.stage .stage-in");
+    expect(stageIn).not.toBeNull();
+    expect(stageIn.querySelector(".cw-probe").getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector(".options-wrap")).not.toBeNull();
+    expect(container.querySelector(".flight-layer")).not.toBeNull();
+    expect(container.querySelector(".deck-stack")).not.toBeNull();
+    expect(board.classList.contains("busy")).toBe(false);
+  });
+
+  it("sets --n and the multi / many classes from the hand count (#79)", () => {
+    const hands = (n) => Array.from({ length: n }, () => hand(["8", "8"]));
+    const stageIn = (c) => c.querySelector(".stage-in");
+    const one = renderUI(<GameBoard />, { game: { ...playing, hands: hands(1) } });
+    expect(stageIn(one.container).style.getPropertyValue("--n")).toBe("1");
+    expect(stageIn(one.container).className).toBe("stage-in");
+    one.unmount();
+    const two = renderUI(<GameBoard />, { game: { ...playing, hands: hands(2) } });
+    expect(stageIn(two.container).style.getPropertyValue("--n")).toBe("2");
+    expect(stageIn(two.container).className).toBe("stage-in multi");
+    two.unmount();
+    const four = renderUI(<GameBoard />, { game: { ...playing, hands: hands(4) } });
+    expect(stageIn(four.container).style.getPropertyValue("--n")).toBe("4");
+    expect(stageIn(four.container).className).toBe("stage-in multi many");
+  });
+
+  it("sets the card size variables on the stage (#79)", () => {
+    const { container } = renderUI(<GameBoard />, { game: playing });
+    expect(container.querySelector(".stage-in").style.getPropertyValue("--cw")).toBe("70px"); // jsdom measures 0: the fallback
+    expect(container.querySelector(".stage-in").style.getPropertyValue("--ch")).toBe("102px");
+  });
+
   it("shows the card count by default", () => {
     renderUI(<GameBoard />, { game: playing });
     expect(screen.getByText("Count:")).toBeTruthy();

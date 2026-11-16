@@ -63,6 +63,12 @@ describe("Home", () => {
     expect(screen.getByText("Please log in to start playing.")).toBeTruthy();
   });
 
+  it("names the page Blakejack for screen readers and hides the drawn wordmark (#79)", () => {
+    const { container } = renderUI(<Home />);
+    expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
+    expect(container.querySelector("h1 svg").getAttribute("aria-hidden")).toBe("true");
+  });
+
   it("starts a game and opens the table", () => {
     const { gameActions } = renderUI(<Home />);
     fireEvent.click(screen.getByText("Start Game"));
@@ -590,7 +596,7 @@ describe("Settings", () => {
 describe("App", () => {
   it("renders the header and the routed page", () => {
     renderUI(<App />, { path: "/" });
-    expect(screen.getByText("BlakeJack")).toBeTruthy();
+    expect(screen.getByText("Blakejack")).toBeTruthy();
     expect(screen.getByText("Home")).toBeTruthy();
   });
 });

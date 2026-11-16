@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameActions } from "../hooks/useGame";
+import Wordmark from "../components/Wordmark/Wordmark";
 import "./pages.css";
 
 export default function Home() {
@@ -17,7 +18,10 @@ export default function Home() {
     <div className="page-bg">
       <div className="page-body">
         <div className="home-center">
-          <h1>BlakeJack</h1>
+          <h1>
+            <Wordmark className="home-wordmark" />
+            <span className="sr-only">Blakejack</span>
+          </h1>
           {!player ? (
             <p>Please log in to start playing.</p>
           ) : (
