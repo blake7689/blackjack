@@ -20,8 +20,11 @@ import {
   insuranceStake,
   earlyOffer,
   bjPaysWithoutPeek,
-  offersAtDeal
+  offersAtDeal,
+  handActions,
+  roundNet
 } from "../../utils/blackjackLogic";
+import { initialGameState } from "../gameReducer";
 import { stackedShoe } from "./stackedShoe";
 
 
@@ -894,5 +897,71 @@ describe("settleHand: even money and insurance", () => {
   it("a $1 and a $5 bet insure for 0.5 and 2.5 and pay 1.5 and 7.5, to the cent", () => {
     expect(settleHand({ ...live, bet: 1, insurance: 0.5 }, dealerBj)).toMatchObject({ payout: 1.5, insurancePayout: 1.5 });
     expect(settleHand({ ...live, bet: 5, insurance: 2.5 }, dealerBj)).toMatchObject({ payout: 7.5, insurancePayout: 7.5 });
+  });
+});
+
+describe("handActions (what the dock may offer on one hand)", () => {
+  const hand = (codes, extra = {}) => ({ cards: stackedShoe(codes), bet: 10, ...extra });
+  const dealer = { cards: stackedShoe(["6"]) };
+  const rules = { ...initialGameState.settings, tripleDown: true };
+  const act = (h, { handCount = 1, credits = 1000, settings = rules } = {}) => handActions(h, dealer, handCount, credits, settings);
+
+  it("an affordable pair has every action", () => {
+    expect(act(hand(["8", "8"]))).toEqual({ hit: true, double: true, triple: true, split: true, surrender: true });
+  });
+
+  it("a stake you cannot add rules out double, triple and split, but not hit or surrender", () => {
+    expect(act(hand(["8", "8"]), { credits: 9 })).toEqual({ hit: true, double: false, triple: false, split: false, surrender: true });
+  });
+
+  it("triple needs two more stakes: 19 credits on a bet of 10 doubles but does not triple, 20 does", () => {
+    expect(act(hand(["8", "3"]), { credits: 19 })).toMatchObject({ double: true, triple: false });
+    expect(act(hand(["8", "3"]), { credits: 20 })).toMatchObject({ double: true, triple: true });
+  });
+
+  it("a hand whose own stake was refused (bet 0) can only hit, and surrender", () => {
+    expect(act(hand(["8", "8"], { bet: 0 }))).toEqual({ hit: true, double: false, triple: false, split: false, surrender: true });
+  });
+
+  it("split follows the hand count against maxSplitHands", () => {
+    const two = { ...rules, maxSplitHands: 2 };
+    expect(act(hand(["8", "8"]), { handCount: 1, settings: two }).split).toBe(true);
+    expect(act(hand(["8", "8"], { isSplit: true }), { handCount: 2, settings: two }).split).toBe(false);
+  });
+
+  it("a split ace cannot hit, double or triple unless the rules say so, and surrender is gone after a split", () => {
+    const aces = hand(["A", "5"], { isSplit: true });
+    expect(act(aces)).toEqual({ hit: false, double: false, triple: false, split: false, surrender: false });
+    expect(act(aces, { settings: { ...rules, hitSplitAces: true } }).hit).toBe(true);
+  });
+
+  it("surrender follows the setting and the dealer's card", () => {
+    expect(act(hand(["10", "6"]), { settings: { ...rules, surrender: "none" } }).surrender).toBe(false);
+    expect(act(hand(["2", "3", "4"])).surrender).toBe(false);
+  });
+});
+
+describe("roundNet (what the round paid or cost)", () => {
+  const settled = (bet, payout, extra = {}) => ({ bet, payout, ...extra });
+
+  it("is the payout less the stake: a win, a loss and a push", () => {
+    expect(roundNet([settled(10, 20)])).toBe(10);
+    expect(roundNet([settled(10, 0)])).toBe(-10);
+    expect(roundNet([settled(10, 10)])).toBe(0);
+  });
+
+  it("adds every hand of a split round", () => {
+    expect(roundNet([settled(10, 20), settled(10, 0), settled(10, 10)])).toBe(0);
+    expect(roundNet([settled(10, 20), settled(10, 20)])).toBe(20);
+  });
+
+  it("takes the insurance stake off, so a paid insurance on a lost hand nets zero", () => {
+    expect(roundNet([settled(10, 15, { insurance: 5 })])).toBe(0); // 10 lost, insurance 5 pays 15
+    expect(roundNet([settled(10, 10, { insurance: 5 })])).toBe(-5); // a push and a lost insurance
+  });
+
+  it("rounds to the cent and is 0 for no hands", () => {
+    expect(roundNet([settled(0.1, 0.3), settled(0.2, 0.2)])).toBe(0.2);
+    expect(roundNet([])).toBe(0);
   });
 });

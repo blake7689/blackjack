@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue } from "../../utils/cardAnimation";
 import { GamePhases } from "../../utils/constants/gamePhases";
-import { canSurrender } from "../../utils/blackjackLogic";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useCardWidth } from "../../hooks/useCardWidth";
@@ -11,7 +10,7 @@ import DealerArea from "../DealerArea/DealerArea";
 import DeckStack from "../DeckStack/DeckStack";
 import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
-import BettingFooter from "../BettingFooter/BettingFooter";
+import Dock from "../Dock/Dock";
 import CardCountDisplay from "../CardCountDisplay/CardCountDisplay";
 import "./GameBoard.css";
 
@@ -19,7 +18,7 @@ import "./GameBoard.css";
 const TOP_UP_BELOW = 100;
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, runningCount, settings, pendingBets, notice, offers } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, runningCount, settings, pendingBets, notice, offers, autoDealPending, cutCardFound } = useGameState();
   const { continueRound } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const handsRef = useRef(null);
@@ -51,8 +50,8 @@ export default function GameBoard() {
     handsRef.current.querySelector(".player-hand.active")?.scrollIntoView?.({ behavior: "smooth", block: "nearest", inline: "nearest" });
   }, [selectedHandIndex, hands.length]);
 
-  // Any click on the table moves on from the results //
-  const handleBoardClick = () => {
+  // A click on the felt moves on from the results (the dock has its own Next hand key) //
+  const handleFeltClick = () => {
     if (phase === GamePhases.POST_ROUND) continueRound();
   };
 
@@ -61,7 +60,7 @@ export default function GameBoard() {
 
   return (
     <FlightContext.Provider value={flight}>
-    <div className={`board table-screen${busy ? " busy" : ""}`} onClick={handleBoardClick}>
+    <div className={`board table-screen${busy ? " busy" : ""}`}>
       {/* TOP BAR */}
       <div className="top-bar">
         <div className="top-left stats">
@@ -76,7 +75,7 @@ export default function GameBoard() {
       </div>
 
       {/* MAIN GAME AREA */}
-      <div className="main-area stage">
+      <div className="main-area stage" onClick={handleFeltClick}>
        {/* .stage-in (display: contents) holds --cw / --ch; its probe is the one element whose width is the formula's result */}
        <div className={`stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}`} ref={stageInRef} style={{ "--n": hands.length }}>
         <div className="cw-probe" ref={probeRef} aria-hidden="true" />
@@ -91,7 +90,10 @@ export default function GameBoard() {
         <div className="center-msg-row">
           <CenterMessage
             gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}
-            offers={phase === GamePhases.OFFERS ? offers : null}
+            offers={offers}
+            bet={betCircle}
+            autoDealing={autoDealPending}
+            lastHand={cutCardFound}
             waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
             reconnecting={reconnecting}
             notice={notice}
@@ -105,19 +107,8 @@ export default function GameBoard() {
                 <PlayerHand
                   key={hand.tag}
                   hand={hand}
-                  index={idx}
                   active={selectedHandIndex === idx}
                   gamePhase={phase}
-                  handCount={hands.length}
-                  maxSplitHands={settings.maxSplitHands}
-                  doubleOn={settings.doubleOn}
-                  doubleAfterSplit={settings.doubleAfterSplit}
-                  resplitAces={settings.resplitAces}
-                  hitSplitAces={settings.hitSplitAces}
-                  tripleDown={settings.tripleDown}
-                  showSurrender={phase === GamePhases.PLAYER_TURN && canSurrender(hand, dealer, settings)}
-                  offers={phase === GamePhases.OFFERS ? offers : null}
-                  credits={player.credits}
                 />
               ))}
             </div>
@@ -126,10 +117,10 @@ export default function GameBoard() {
        </div>
       </div>
 
-      {/* BOTTOM BAR */}
-      <div className="betting-spacer">
-        <BettingFooter />
-      </div>
+      {/* #3: the tips slot, 0 px tall while empty */}
+      <div className="tip-line" aria-live="polite" />
+
+      <Dock busy={busy} />
       <div className="flight-layer" ref={layerRef} />
     </div>
     </FlightContext.Provider>

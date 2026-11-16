@@ -220,20 +220,24 @@ describe("GameBoard flights", () => {
     expect(flights()[0].options.duration).toBe(cardTiming(250).slide);
   });
 
-  it("is busy while a card is on its way: the table says Dealing..., the buttons are hidden, then it frees up", () => {
+  it("is busy while a card is on its way: the table says Dealing, the keys wait (aria-disabled, not hidden), then it frees up", () => {
     const { container } = renderUI(<GameBoard />, { game: playing });
     expect(container.querySelector(".board").classList.contains("busy")).toBe(false);
-    expect(screen.getByText("Your turn!")).toBeTruthy();
+    expect(screen.getByText("Your move")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hit" }).getAttribute("aria-disabled")).toBeNull();
     act(() => { reserve(performance.now() + 2000); });
     expect(container.querySelector(".board").classList.contains("busy")).toBe(true);
-    expect(screen.getByText("Dealing...")).toBeTruthy();
-    expect(screen.queryByText("Your turn!")).toBeNull();
+    expect(screen.getByText("Dealing")).toBeTruthy();
+    expect(screen.queryByText("Your move")).toBeNull();
+    for (const name of ["Hit", "Stay", "Double", "Split"]) expect(screen.getByRole("button", { name }).getAttribute("aria-disabled")).toBe("true"); // dimmed, still there
+    expect(container.querySelector(".board.busy .options-wrap")).not.toBeNull(); // .board.busy .options-wrap { pointer-events: none }
     act(() => { reserve(performance.now() + 3000); }); // a later end replaces the check, it does not stack
     advance(2100);
     expect(container.querySelector(".board").classList.contains("busy")).toBe(true);
     advance(1000);
     expect(container.querySelector(".board").classList.contains("busy")).toBe(false);
-    expect(screen.getByText("Your turn!")).toBeTruthy();
+    expect(screen.getByText("Your move")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hit" }).getAttribute("aria-disabled")).toBeNull();
   });
 
   const busy = (c) => c.querySelector(".board").classList.contains("busy");
@@ -246,13 +250,13 @@ describe("GameBoard flights", () => {
     act(() => { release = hold(); });
     expect(queue.free).toBeLessThanOrEqual(performance.now()); // nothing reserved: the clock alone would say free
     expect(busy(container)).toBe(true);
-    expect(screen.getByText("Dealing...")).toBeTruthy();
-    expect(screen.queryByText("Your turn!")).toBeNull();
+    expect(screen.getByText("Dealing")).toBeTruthy();
+    expect(screen.queryByText("Your move")).toBeNull();
     advance(60_000);
     expect(busy(container)).toBe(true);
     act(() => { release(); });
     expect(busy(container)).toBe(false);
-    expect(screen.getByText("Your turn!")).toBeTruthy();
+    expect(screen.getByText("Your move")).toBeTruthy();
   });
 
   it("stays busy past the clock while a hold is open, and frees up when the last one goes", () => {
@@ -279,7 +283,7 @@ describe("GameBoard flights", () => {
     advance(4 * timing.stagger + 20);
     expect(queue.free).toBeLessThan(performance.now());
     expect(busy(container)).toBe(true);
-    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(screen.getByText("Dealing")).toBeTruthy();
     advance(timing.slide + 150 - timing.stagger);
     expect(busy(container)).toBe(false);
   });
@@ -295,10 +299,10 @@ describe("GameBoard flights", () => {
     expect(flips()).toHaveLength(1);
     expect(queue.free).toBeLessThan(performance.now());
     expect(busy(container)).toBe(true);
-    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(screen.getByText("Dealing")).toBeTruthy();
     finishAnimations();
     expect(busy(container)).toBe(false);
-    expect(screen.getByText("Your turn!")).toBeTruthy();
+    expect(screen.getByText("Your move")).toBeTruthy();
   });
 
   describe.each([250, 1000, 5000])("opening deal at Rate of Play %i ms", (T) => {
@@ -320,19 +324,19 @@ describe("GameBoard flights", () => {
       });
       rerender(<GameBoard />);
       expect(busy(container)).toBe(true);
-      expect(screen.getByText("Dealing...")).toBeTruthy();
+      expect(screen.getByText("Dealing")).toBeTruthy();
       // Far past the last reservation (the hole card's slot, 3 staggers on), with no onfinish from the browser.
       run(3 * t.stagger + t.stagger + t.flip + t.gap + t.slide + 1000);
       expect(queue.free).toBeLessThan(performance.now());
       expect(flights()).toHaveLength(4);
       expect(busy(container)).toBe(true); // three faces are still turning
-      expect(screen.getByText("Dealing...")).toBeTruthy();
+      expect(screen.getByText("Dealing")).toBeTruthy();
       run(60_000);
       expect(busy(container)).toBe(true);
       finishAnimations();
       expect(busy(container)).toBe(false);
       expect(queue.holds.size).toBe(0);
-      expect(screen.getByText("Your turn!")).toBeTruthy();
+      expect(screen.getByText("Your move")).toBeTruthy();
     });
   });
 
@@ -340,7 +344,7 @@ describe("GameBoard flights", () => {
     const { container } = renderUI(<GameBoard />, { game: { ...playing, phase: GamePhases.DEALER_TURN } });
     act(() => { reserve(performance.now() + 2000); });
     expect(container.querySelector(".board").classList.contains("busy")).toBe(true);
-    expect(screen.getByText("Dealer's turn...")).toBeTruthy();
+    expect(screen.getByText("Dealer plays")).toBeTruthy();
   });
 
   it("leaving while busy stops the check (no update after unmount)", () => {
@@ -377,17 +381,20 @@ describe("offers and the peek (#91)", () => {
   const atOffers = (codes = ["10", "A", "6", "K"]) => [{ type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" }].reduce(step, step(initialGameState, { type: "START_GAME", shoe: stackedShoe(codes) }));
   const busy = (c) => c.querySelector(".board").classList.contains("busy");
 
-  it("while the dealt cards are still moving, OFFERS reads Dealing... and its buttons sit in the busy board (hidden); then the question and the buttons", () => {
+  it("while the dealt cards are still moving, OFFERS reads Dealing and its keys wait in the busy board (aria-disabled); then the question and the keys", () => {
     const { container } = renderUI(<GameBoard />, { game: atOffers() });
     expect(screen.getByText("Insurance?")).toBeTruthy();
     act(() => { reserve(performance.now() + 2000); });
     expect(busy(container)).toBe(true);
-    expect(screen.getByText("Dealing...")).toBeTruthy();
+    expect(screen.getByText("Dealing")).toBeTruthy();
     expect(screen.queryByText("Insurance?")).toBeNull();
-    expect(container.querySelector(".board.busy .options-wrap")).not.toBeNull(); // .board.busy .options-wrap { visibility: hidden }
+    expect(container.querySelector(".board.busy .options-wrap")).not.toBeNull(); // .board.busy .options-wrap { pointer-events: none }
+    const keys = ["Insurance $5", "No thanks"].map((name) => screen.getByRole("button", { name }));
+    expect(keys.map((k) => k.getAttribute("aria-disabled"))).toEqual(["true", "true"]);
     advance(2100);
     expect(busy(container)).toBe(false);
     expect(screen.getByText("Insurance?")).toBeTruthy();
+    expect(keys.map((k) => k.getAttribute("aria-disabled"))).toEqual([null, null]);
   });
 
   it("the hole card keeps its element from OFFERS through the peek: it flips in place and does not fly again", () => {

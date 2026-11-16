@@ -108,7 +108,7 @@ export async function login(page) {
 export async function openTable(page) {
   await login(page);
   await page.getByRole('button', { name: 'Start Game' }).click();
-  await expect(page.getByText('Place your bets!')).toBeVisible(); // idle, before the deal
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible(); // idle, before the deal
 }
 
 // Any endpoint the stub does not know fails the test (the 501 alone could be swallowed by the app).

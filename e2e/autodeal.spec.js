@@ -26,6 +26,6 @@ test('auto deal continues, rebets and deals the next round with no click (#88)',
     { amount: 10, newRound: true, requestId: expect.stringMatching(V4) },
   ]);
   expect(api.bets[1].requestId).not.toBe(api.bets[0].requestId);
-  await expect(page.getByRole('button', { name: 'Hit' })).toBeVisible({ timeout: 15_000 }); // round 2 is on the table, on the player's turn
+  await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // round 2 is on the table, on the player's turn
   expect(api.failed).toEqual([]);
 });
