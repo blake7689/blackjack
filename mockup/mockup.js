@@ -55,7 +55,7 @@
     { key: "insurance", group: "Payouts", label: () => "Insurance and even money", opts: ON_OFF },
     { key: "doubleOn", group: "Doubling", label: () => "Double on", opts: [{ v: "any", l: "Any two cards" }, { v: "9-11", l: "Hard 9 to 11" }, { v: "10-11", l: "Hard 10 to 11" }] },
     { key: "doubleAfterSplit", group: "Doubling", label: () => "Double after a split", opts: ON_OFF },
-    { key: "maxSplitHands", group: "Splitting", label: () => "Max hands after splits", opts: [{ v: 2, l: "2" }, { v: 3, l: "3" }, { v: 4, l: "4" }, { v: 0, l: "Unlimited" }] },
+    { key: "maxSplitHands", group: "Splitting", label: () => "Max hands after splitting", opts: [{ v: 2, l: "2" }, { v: 3, l: "3" }, { v: 4, l: "4" }, { v: 0, l: "Unlimited" }] },
     { key: "resplitAces", group: "Splitting", label: () => "Resplit aces", show: (s) => s.maxSplitHands !== 2, opts: ON_OFF },
     { key: "splitDeal", group: "Splitting", label: () => "Deal split hands", opts: [{ v: "one", l: "One at a time" }, { v: "both", l: "Both at once" }] },
     { key: "hitSplitAces", group: "Splitting", label: () => "Hit split aces", opts: ON_OFF },
@@ -835,7 +835,7 @@
   const nearestStop = (v) => SPEED_STOPS.reduce((a, s) => (Math.abs(s[0] - v) < Math.abs(a[0] - v) ? s : a));
   const HINTS = { deckCount: "Decks in the shoe", includeCutCard: "Adds cut card to shoe", dealerHoleBehaviour: "When the dealer checks for blackjack", dealerHitsSoft17: "Dealer's move on soft 17",
     noHoleCardLoss: "Your loss to a dealer blackjack", blackjackPayout: "What a natural blackjack pays", insurance: "Side bet against a dealer ace", doubleOn: "Hands you may double", doubleAfterSplit: "Double on split hands",
-    maxSplitHands: "Maximum number of times allowed to split a hand", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Can hit after splitting aces", surrender: "Give up half your bet",
+    maxSplitHands: "Max number of times allowed to split a hand", resplitAces: "Split aces again", splitDeal: "Second cards after a split", hitSplitAces: "Can hit after splitting aces", surrender: "Give up half your bet",
     blackJackOnSplit: "A+ten after a split counts as blackjack", tripleDown: "Triple the bet, two cards", tripleDrawsOnBust: "Second triple card always dealt", doubleFaceDown: "Double card dealt face down",
     dealerDrawsOnPlayerBlackjack: "Dealer draws against your natural", blackjackPaysImmediately: "Natural paid before the dealer", dealerDrawsOnceOn21: "One dealer card against 21", dealerDrawsOnPlayerBust: "Dealer draws after you bust",
     speed: "How fast cards move", rebet: "Same bet each round", showTotals: "Hand totals on the table", count: "Hi-Lo card count", autoDeal: "Automatically deal each round", autoDelay: "Pause before auto deal",
