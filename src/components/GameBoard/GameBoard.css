@@ -2,17 +2,14 @@
   --header-height: 0px;
   --top-bar-height: 56px;
   --bet-footer-space: calc(56px + env(safe-area-inset-bottom, 0px));
-  --app-vh: 100vh;
+  --app-vh: 100dvh;
   --avail-main-height: calc(var(--app-vh) - var(--header-height) - var(--top-bar-height) - var(--bet-footer-space));
   --avail-board-height: calc(var(--app-vh) - var(--header-height) - env(safe-area-inset-bottom, 0px));
-}
-@supports (height: 100dvh) {
-  :root { --app-vh: 100dvh; }
 }
 
 .board {
   height: var(--avail-board-height);
-  width: 100vw;
+  width: 100%;
   display: grid;
   grid-template-rows: var(--top-bar-height) 1fr var(--bet-footer-space);
   grid-template-columns: 1fr;
@@ -241,3 +238,47 @@
 .hand-total { display: inline-grid; }
 .hand-total > * { grid-area: 1 / 1; }
 .hand-total > .ht-size { visibility: hidden; }
+
+/* ===== LAYOUT MODES AND CARD WIDTH (#79, DESIGN sections 2 and 4) =====
+   Only variables so far: later UI-revamp PRs build the table on them. The sizes are px; --top, --dock and --rail are
+   the top bar, the dock and the dealer's rail; --rc is the chip rack's chip; --gutter is the felt's side margin. */
+.table-screen {
+  --top: 48px; --dock: 134px; --rail: 10px; --rc: 44px; --gutter: 0px;
+  --col: 1240px; /* the top bar, the felt and the dock share one column */
+}
+@media (max-height: 740px) { .table-screen { --top: 44px; --dock: 126px; --rail: 8px; } }
+@media (min-width: 600px) { .table-screen { --gutter: 14px; } }
+@media (min-width: 900px) { .table-screen { --top: 52px; --dock: 92px; --rail: 12px; --rc: 50px; --gutter: 22px; } }
+@media (min-width: 900px) and (max-height: 740px) { .table-screen { --top: 46px; --dock: 84px; --rc: 46px; } }
+@media (max-height: 520px) { .table-screen { --top: 40px; --dock: 64px; --rail: 8px; --rc: 44px; --gutter: 10px; } }
+
+/* .stage is the size container (cqi / cqb); .stage-in holds the card width. --cwr is the formula's result; useCardWidth
+   floors it into whole-pixel --cw (at least 40) and --ch (cw x 1.452, ch - cw even). Until it has run --cw is --cwr itself.
+   Per mode: --fixed = the height the other rows need, --rows = card heights in the room left, --cwi = the width cap, --cmax. */
+.stage { container-type: size; }
+.stage-in, .stage > * { --sg: clamp(8px, 2.4cqi, 22px); }
+.stage-in {
+  display: contents; /* holds variables only; the table's own boxes stay the stage's flex items */
+  --fixed: 172px; --rows: 4.254; --cwi: 23cqi; --cmax: 118px;
+  --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), var(--cwi), var(--cmax)), 160px);
+  --cw: var(--cwr); --ch: calc(var(--cw) * 1.452);
+  --ph: calc(var(--cw) * .2 + 52px); /* the print's height */
+  --stage-pt: 20px; --stage-pb: 8px; /* room above the dealer and under the hands */
+}
+.cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; pointer-events: none; }
+.stage-in.multi { --fixed: 204px; --cwi: 17cqi; }
+@media (max-height: 740px) and (min-height: 521px) { .stage-in { --stage-pt: 15px; } }
+@media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
+/* landscape phone, and wide desktop (900 px and 5:4 or wider): up to four hands in one row */
+@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); --stage-pt: 12px; --stage-pb: 6px; }
+}
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); --stage-pt: 26px; --stage-pb: 12px; }
+  .stage-in.multi { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 124px); }
+  .stage-in.multi.many { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 110px); }
+}
+@media (max-height: 520px) {
+  .stage-in, .stage-in.multi { --fixed: 88px; }
+  .stage-in.multi { --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 104px); }
+}

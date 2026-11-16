@@ -8,6 +8,7 @@ import { usePlayer } from "../hooks/usePlayer";
 import { getToken } from "../utils/api";
 import { getSettings, saveSettings } from "../utils/playerEngine";
 import { stepWait } from "../utils/cardAnimation";
+import { useTheme } from "../hooks/useTheme";
 
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
@@ -15,6 +16,7 @@ export function GameProvider({ children }) {
   const signedIn = player != null;
   const { deckCount, includeCutCard, playTimeout, autoDealDelay } = state.settings;
   const onGame = useLocation().pathname === "/game";
+  useTheme(state.settings); // <html> data-felt / data-accent / data-mode / .no-totals follow the saved settings
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
   const stateRef = useRef(state);

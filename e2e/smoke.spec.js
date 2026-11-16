@@ -2,6 +2,16 @@ import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS } from './
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
+test('the tab is titled Blakejack and <html> carries the default theme (#79)', async ({ page }) => {
+  await stubApi(page);
+  await page.goto('/');
+  await expect(page).toHaveTitle('Blakejack');
+  await expect(page.getByRole('heading', { level: 1, name: 'Blakejack' })).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-felt', 'green');
+  await expect(page.locator('html')).toHaveAttribute('data-accent', 'emerald');
+  await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark');
+});
+
 test('cold-start sign-in waits out a slow API (#75)', async ({ page }) => {
   const api = await stubApi(page, { loginDelayMs: 15_000, meDelayMs: 11_000 }); // both past the old 10 s limit
   await submitLogin(page);

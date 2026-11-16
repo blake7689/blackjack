@@ -40,6 +40,10 @@ export const initialGameState = {
     doubleFaceDown: false, // a double's card stays hidden until REVEAL_HIDDEN
     autoDeal: false, // rounds continue and deal by themselves (needs resetInitialBet)
     autoDealDelay: 3000, // ms between the rebet and the automatic deal
+    feltTheme: "green", // display settings (#79): they drive <html data-felt / data-accent / data-mode / .no-totals>, see utils/theme.js
+    accent: "emerald",
+    mode: "dark", // "system" follows the device
+    showTotals: true,
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -95,6 +99,9 @@ const ENUM_SETTINGS = {
   noHoleCardLoss: Object.values(NoHoleCardLoss),
   surrender: Object.values(SurrenderOptions),
   splitDeal: ["one", "both"],
+  feltTheme: ["green", "blue", "red"],
+  accent: ["emerald", "sapphire", "ember", "orchid"],
+  mode: ["dark", "light", "system"],
 };
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
