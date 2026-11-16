@@ -101,7 +101,7 @@ export default function Dock({ busy }) {
           <small>{net > 0 ? "You won" : net < 0 ? "You lost" : "Even round"}</small>
           <b className={net > 0 ? "up" : net < 0 ? "down" : undefined}>{signed(net)}</b>
         </div>
-        <div className="s-r">Balance<b>{money(credits)}</b></div>
+        <div className="s-r">Balance<b>${credits.toLocaleString()}</b></div>
       </div>
     );
     rowB = (
@@ -115,7 +115,7 @@ export default function Dock({ busy }) {
     acting = true;
     const sel = selectedHandIndex;
     // Only on your turn, on a hand still in play with its cards dealt (a split hand waits for its card), and no card in flight.
-    const yours = !busy && phase === GamePhases.PLAYER_TURN && hands[sel].status === HandStatus.PLAYING && !hands[sel].awaitingCard;
+    const yours = !busy && phase === GamePhases.PLAYER_TURN && hands[sel]?.status === HandStatus.PLAYING && !hands[sel].awaitingCard;
     const can = yours ? handActions(hands[sel], dealer, hands.length, credits, settings) : NOTHING;
     rowA = (
       <>

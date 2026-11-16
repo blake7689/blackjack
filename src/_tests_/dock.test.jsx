@@ -238,6 +238,11 @@ describe("Dock", () => {
       for (const act of ["hit", "stand", "double", "triple", "split", "surrender"]) expect(gameActions[act].mock.calls, act).toEqual([[1]]);
     });
 
+    it("a player turn with no hands yet dims every key instead of crashing", () => {
+      show({ phase: PLAYER_TURN, hands: [] });
+      for (const name of ["Double", "Split", "Surrender", "Stay", "Hit"]) expect(dimmed(name), name).toBe(true);
+    });
+
     it("hides what a setting turns off: Surrender none, Triple off", () => {
       show(playing(["8", "8"], {}, { settings: settings({ surrender: "none", tripleDown: false }) }));
       expect(maybe("Surrender")).toBeNull();
@@ -325,7 +330,7 @@ describe("Dock", () => {
     it("shows cents when there are some", () => {
       const { container } = show(settled([hand(["A", "K"], { payout: 22.5 })]), { player: { ...testPlayer, credits: 1234.5 } });
       expect(summary(container).net.textContent).toBe("+$12.50");
-      expect(summary(container).balance).toBe("$1,234.50");
+      expect(summary(container).balance).toBe("$1,234.5"); // same as StatsPanel: credits.toLocaleString()
     });
 
     it("adds every hand of a split round", () => {
