@@ -119,6 +119,8 @@ test('hovered and keyboard-focused controls while betting have no serious access
   await chip.hover();
   await expectNoSeriousA11y(page, 'board, chip hovered');
   await chip.dblclick(); // a double click selects the chip and bets it
+  // the bet's "-$10" badge pops in over 420 ms (opacity 0 to 1): axe must not scan its blended colour mid-pop
+  await expect(page.locator('.delta.down')).toHaveCSS('opacity', '1');
   const deal = page.getByRole('button', { name: 'Deal', exact: true });
   await deal.hover();
   await expectNoSeriousA11y(page, 'board, Deal hovered');
