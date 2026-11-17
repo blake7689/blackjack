@@ -12,6 +12,7 @@
 /* hands not in play dim to 62 % brightness: a filter, never opacity (nothing shows through a card) */
 .seats.turns .seat:not(.active) .hand { filter: brightness(.62) saturate(.85); }
 .hand { position: relative; flex: none; transition: filter 300ms var(--e-io); }
+.seat .hand { min-height: var(--ch); } /* the card slot is kept while the seat is empty, so the felt print above does not move when the cards come */
 .seat { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; align-items: center; scroll-snap-align: center; }
 .stage-in.multi .seat .hand { margin-top: 32px; } /* room for the pill above the hand */
 
@@ -29,7 +30,7 @@
 
 /* CHIPS (#82): one SVG per stack; its bottom chip is centred on the circle (--k, set by ChipStack), each chip above lifted up the screen by its thickness */
 .stack { display: block; position: absolute; left: 50%; top: 50%; width: var(--chip); transform: translateX(-50%); pointer-events: none; container-type: inline-size; }
-.stack svg { display: block; width: 100%; height: auto; overflow: visible; transform: translateY(calc(var(--k, 50) / -100 * var(--chip))); filter: drop-shadow(1px 3px 2px rgb(var(--shadow-c) / .55)); }
+.stack svg { display: block; width: 100%; height: auto; overflow: visible; transform: translateY(calc(var(--k, 50) / -100 * var(--chip))); filter: drop-shadow(var(--shx, 1px) var(--shy, 3px) 2px rgb(var(--shadow-c) / .55)); } /* shadows fall away from the lamp (useLight) */
 .stack .plain-face { display: none; }
 @container (max-width: 43.9px) { .stack .num-face { display: none; } .stack .plain-face { display: inline; } } /* a numeral under 12 px is no use: the diamond face */
 /* side stacks (a double's second stake, the insurance): never over the bet. Beside the circle: insurance left, the double right. */
@@ -46,12 +47,15 @@
 
 .amt { min-height: 22px; margin-top: 4px; max-width: 100%; font-size: 13px; font-weight: 700; color: #fff; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px; }
 .amt > span:not(.tag) { padding: 1px 8px; border-radius: 99px; background: rgb(0 0 0 / .32); white-space: nowrap; }
-.tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; animation: pop 460ms var(--e-spring); }
 .tag.win, .tag.bj, .tag.even { background: var(--win); color: #03170c; }
 .tag.even { background: var(--even); }
 .tag.lose, .tag.bust { background: var(--lose); color: #260503; }
 .tag.push { background: var(--push); color: #0d1216; }
-.tag.surrender, .tag.surrendered { background: var(--surr); color: #2a1503; }
+.tag.surrender { background: var(--surr); color: #2a1503; }
+.tag.bj { background: var(--accent); color: var(--accent-ink); }
+/* the results (#83): the stacks have gone to the dealer or the dock (their moving copies are in the flight layer), so the circle is bare */
+.seat.paid .stack, .seat.paid .side-spot, .seat.paid .amt .num { visibility: hidden; }
 
 /* landscape phones and wide desktops: the bet circle beside the hand, the total in its own column on the other side */
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {

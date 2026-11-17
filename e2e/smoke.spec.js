@@ -102,7 +102,7 @@ test('surrendering a hand returns half the bet, in one settle (#91)', async ({ p
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
-  await expect(page.getByText('Surrendered', { exact: true })).toBeVisible();
+  await expect(page.getByText('SURRENDER', { exact: true })).toBeVisible({ timeout: 30_000 }); // the verdict, once the round settles (#83)
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'jack of hearts' })).toBeVisible(); // the hole card is shown
   await expect(page.getByRole('img', { name: '3 of diamonds' })).toHaveCount(0); // the dealer did not play on (16)
@@ -183,11 +183,11 @@ test('early surrender is offered before the peek: the half bet is kept although 
   await expect(page.getByText('Insurance?')).toBeVisible(); // one question per offer, insurance first
 
   await offers.getByRole('button', { name: 'Surrender' }).click();
-  await expect(page.getByText('Surrendered', { exact: true })).toBeVisible(); // at once, before the peek
   await expect(offers.getByRole('button', { name: 'Surrender' })).toHaveCount(0); // each offer closes by itself
   await offers.getByRole('button', { name: 'No thanks' }).click();
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'king of spades' })).toBeVisible(); // the dealer did have blackjack
+  await expect(page.getByText('SURRENDER', { exact: true })).toBeVisible(); // the verdict (#83)
   await expect(page.getByRole('button', { name: 'Surrender' })).toHaveCount(0); // the results dock has no Surrender key
 
   await expect.poll(() => api.settles.length).toBe(1);

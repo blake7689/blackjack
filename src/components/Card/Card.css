@@ -4,7 +4,7 @@
 .card { position: relative; display: block; flex: none; width: var(--cw, 70px); height: var(--ch, calc(var(--cw, 70px) * 1.452)); user-select: none; }
 .card::before { /* the shadow stays on the table while .cin turns */
   content: ""; position: absolute; inset: 0; border-radius: calc(var(--cw, 70px) * .07);
-  box-shadow: 2px 5px 7px rgb(var(--shadow-c) / .55), 0 1px 2px rgb(0 0 0 / .45);
+  box-shadow: var(--shx, 2px) var(--shy, 5px) 7px rgb(var(--shadow-c) / .55), 0 1px 2px rgb(0 0 0 / .45); /* the lamp sets --shx / --shy: shadows fall away from it (useLight) */
 }
 .cin { position: absolute; inset: 0; }
 .cf, .cb { position: absolute; inset: 0; border-radius: calc(var(--cw, 70px) * .07); overflow: hidden; }
@@ -21,6 +21,12 @@
 .card.turning .cf { transform: rotateY(180deg); }
 .card.turning::before { opacity: 0; } /* the flat shadow would show as a slab beside the edge-on card */
 
-/* a card in flight: a face-down copy in the flight layer (above the board, so nothing clips it) */
-.fly-copy { overflow: hidden; pointer-events: none; }
+/* a card in flight: a copy in the flight layer (above the board, so nothing clips it). It carries both faces: the back shows until the turn starts
+   at 80 % of the flight; the turn is the same edge-on rotateY as a card flipping in place (the .cin animation, 420 ms) and the shadow travels on the faces. */
+.fly-copy { overflow: hidden; pointer-events: none; perspective: 520px; }
+.fly-copy .cin { transform-style: preserve-3d; }
+.fly-copy .cf, .fly-copy .cb { backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: 2px 6px 10px rgb(0 0 0 / .35); }
+.fly-copy .cf { transform: rotateY(180deg); }
 .fly-copy svg { display: block; width: 100%; height: 100%; }
+/* the sweep (end of round): the same copy, turning face down as it leaves for the discard pile; a card that was face up starts at the turn's far end */
+.fly-copy.sweep.up .cin { transform: rotateY(180deg); }

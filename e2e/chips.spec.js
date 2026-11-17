@@ -148,8 +148,9 @@ test('out of credits: the rack is a note with the balance, nothing that bets is 
 });
 
 // Seed 207: a 16 against an ace (a dealer blackjack). Taking insurance puts its stake on the table, as its own labelled stack.
+// A slow Rate of Play keeps the round on its steps long enough to measure at every size: the stake goes to the dealer or the dock only when the round settles (#83).
 test('the insurance stake shows on the table while it is live, and never covers the bet, at every size', async ({ page }) => {
-  await stubApi(page);
+  await stubApi(page, { settings: { ...VEGAS, playTimeout: 5000 } });
   await seedRandom(page, 207);
   await login(page);
   await placeBet(page, 10);
@@ -158,9 +159,7 @@ test('the insurance stake shows on the table while it is live, and never covers 
   await expect(offers.getByRole('button', { name: 'Insurance $5' })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText('INS $5', { exact: true })).toHaveCount(0); // not until it is taken
   await offers.getByRole('button', { name: 'Insurance $5' }).click();
-  await expect(page.getByText('INS $5', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('INS $5', { exact: true })).toBeVisible(); // and it stays through the settle
+  await expect(page.getByText('INS $5', { exact: true })).toBeVisible(); // and it stays until the round settles
 
   const intersects = (a, b) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
   for (const size of [{ width: 375, height: 667 }, { width: 390, height: 844 }, { width: 768, height: 1024 }, { width: 1440, height: 900 }, { width: 844, height: 390 }]) {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, within, act } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import TopBar from "../components/TopBar/TopBar";
@@ -20,14 +20,14 @@ describe("the balance", () => {
     const { container, rerender } = renderUI(<TopBar />, { player: { player: { ...testPlayer, credits: 1234 }, creditChange: { delta: 20, seq: 1 } } });
     expect(container.querySelector("#bal").textContent).toBe("$1,234");
     expect(screen.getByText("Balance")).toBeTruthy();
-    expect(screen.getByText("+20").className).toContain("up");
+    expect(screen.getByText("+$20").className).toContain("up");
     expect(container.querySelector(".bal").classList.contains("changing")).toBe(true);
     rerender(<TopBar />);
   });
 
   it("shows a loss badge, no badge without a recent change, and cents as two places", () => {
     const { container } = renderUI(<TopBar />, { player: { creditChange: { delta: -10, seq: 2 } } });
-    expect(screen.getByText("-10").className).toContain("down");
+    expect(screen.getByText("-$10").className).toContain("down");
     renderUI(<TopBar />, { player: { player: { ...testPlayer, credits: 12.5 } } });
     expect(document.querySelectorAll("#bal")[1].textContent).toBe("$12.50");
     expect(container.querySelectorAll(".delta")).toHaveLength(1);
@@ -36,6 +36,84 @@ describe("the balance", () => {
   it("reads $0 with no player", () => {
     const { container } = renderUI(<TopBar />, { player: { player: null } });
     expect(container.querySelector("#bal").textContent).toBe("$0");
+  });
+});
+
+describe("the balance counts to a new value and shows its change (#83)", () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  const credits = (n) => ({ ...testPlayer, credits: n });
+  const shown = () => document.querySelector("#bal").textContent;
+  const dollars = () => Number(shown().replace(/[$,]/g, ""));
+  const settleTo = (view, n, extra = {}) => { Object.assign(view.playerCtx, { player: credits(n), ...extra }); act(() => view.rerender(<TopBar />)); };
+
+  it("counts up to the new value in whole dollars over 700 ms, ending exactly on it; the real balance is the new value at once", () => {
+    vi.useFakeTimers();
+    const view = renderUI(<TopBar />, { player: { player: credits(100) } });
+    expect(shown()).toBe("$100");
+    settleTo(view, 200);
+    expect(view.playerCtx.player.credits).toBe(200); // only the figure counts: nothing waits for it
+    act(() => { vi.advanceTimersByTime(350); });
+    expect(dollars()).toBeGreaterThan(100);
+    expect(dollars()).toBeLessThan(200);
+    expect(Number.isInteger(dollars())).toBe(true);
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(shown()).toBe("$200");
+    act(() => { vi.advanceTimersByTime(2000); });
+    expect(shown()).toBe("$200"); // and stays
+  });
+
+  it("counts down too, and a new value mid-count carries on from the figure on screen", () => {
+    vi.useFakeTimers();
+    const view = renderUI(<TopBar />, { player: { player: credits(200) } });
+    settleTo(view, 100);
+    act(() => { vi.advanceTimersByTime(200); });
+    const mid = dollars();
+    expect(mid).toBeLessThan(200);
+    expect(mid).toBeGreaterThan(100);
+    settleTo(view, 300);
+    act(() => { vi.advanceTimersByTime(16); });
+    expect(dollars()).toBeGreaterThanOrEqual(mid - 5); // from where it was, not from 200 or 100
+    expect(dollars()).toBeLessThan(300);
+    act(() => { vi.advanceTimersByTime(800); });
+    expect(shown()).toBe("$300");
+  });
+
+  it("reduced motion, the first value and signing out change the figure at once", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const view = renderUI(<TopBar />, { player: { player: credits(100) } });
+    settleTo(view, 500);
+    expect(shown()).toBe("$500");
+    settleTo(view, 100);
+    expect(shown()).toBe("$100");
+    vi.unstubAllGlobals();
+    settleTo(view, null);
+    expect(shown()).toBe("$0");
+    settleTo(view, 700); // from nothing to a value: no count from zero
+    expect(shown()).toBe("$700");
+  });
+
+  it("the count stops with the bar (no frame left running)", () => {
+    vi.useFakeTimers();
+    const view = renderUI(<TopBar />, { player: { player: credits(100) } });
+    settleTo(view, 900);
+    act(() => { vi.advanceTimersByTime(100); });
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("the change badge shows 2.6 s, then fades for 400 ms; a newer change starts it again; the balance figure never moves", () => {
+    vi.useFakeTimers();
+    const view = renderUI(<TopBar />, { player: { player: credits(100), creditChange: { delta: -25, seq: 1 } } });
+    const badge = () => screen.getByText("-$25");
+    expect(badge().classList.contains("out")).toBe(false);
+    act(() => { vi.advanceTimersByTime(2599); });
+    expect(badge().classList.contains("out")).toBe(false);
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(badge().classList.contains("out")).toBe(true);
+    settleTo(view, 100, { creditChange: { delta: 50, seq: 2 } });
+    expect(screen.getByText("+$50").classList.contains("out")).toBe(false); // a new badge, on show again
+    expect(shown()).toBe("$100");
   });
 });
 

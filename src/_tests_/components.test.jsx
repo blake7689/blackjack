@@ -42,11 +42,11 @@ describe("dealing display (cards on the table, nothing landed yet)", () => {
     it("PlayerHand shows no pill, keeps the bet, and shows no result until its cards have landed", () => {
       const blackjack = hand(["A", "K"], { totals: [21], isBlackjack: true, result: HandResult.WIN });
       const props = { active: true, hand: blackjack };
-      const { container } = renderUI(<Flight><PlayerHand {...props} gamePhase={GamePhases.POST_ROUND} /></Flight>);
+      const { container } = renderUI(<Flight><PlayerHand {...props} multi gamePhase={GamePhases.POST_ROUND} /></Flight>); // with several hands each carries its tag (#83)
       expect(live(container)).toBe(" | $10");
       expect(container.querySelectorAll(".fly-card")).toHaveLength(2); // the cards stay on the table
       settleDeal();
-      expect(live(container)).toBe("Blackjack! | $10 Win");
+      expect(live(container)).toBe("Blackjack! | BLACKJACK");
     });
 
     it("the board shows Dealing and no total or count between the deal and the first turn, then the totals and the keys that act", () => {
@@ -54,7 +54,7 @@ describe("dealing display (cards on the table, nothing landed yet)", () => {
       let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) });
       const ready = step(s, { type: "ADD_BET", amount: 10 });
       const dealt = step(ready, { type: "DEAL" });
-      const { container, gameState, rerender } = renderUI(<GameBoard />, { game: ready });
+      const { container, gameState, rerender } = renderUI(<GameBoard />, { game: { ...ready, seenIds: ["seen"] } }); // a table already in play: no shuffle on opening
       Object.assign(gameState, dealt); // the board's first render was the empty table: these cards fly
       rerender(<GameBoard />);
       expect(screen.getByText("Dealing")).toBeTruthy();
@@ -143,13 +143,18 @@ describe("PlayerHand", () => {
     expect(container.firstChild.classList.contains("active")).toBe(false);
   });
 
-  it("shows the result after the round, plus bust and blackjack badges", () => {
-    const { container, rerender } = renderUI(<PlayerHand {...props} gamePhase={GamePhases.POST_ROUND}
+  it("with several hands shows each result as a tag under its circle, plus bust and blackjack tags; one hand has the verdict line instead", () => {
+    const { container, rerender } = renderUI(<PlayerHand {...props} multi gamePhase={GamePhases.POST_ROUND}
       hand={hand(["10", "6", "K"], { status: HandStatus.DONE, result: HandResult.LOSE, isBusted: true })} />);
-    expect(live(container)).toBe("26 | $10 Bust");
+    expect(live(container)).toBe("26 | BUST");
+    rerender(<PlayerHand {...props} multi gamePhase={GamePhases.RESULTS}
+      hand={hand(["A", "K"], { status: HandStatus.DONE, result: HandResult.WIN, isBlackjack: true })} />);
+    expect(live(container)).toBe("Blackjack! | BLACKJACK");
+    expect(container.querySelector(".tag.bj")).not.toBeNull();
     rerender(<PlayerHand {...props} gamePhase={GamePhases.END_ROUND}
       hand={hand(["A", "K"], { status: HandStatus.DONE, result: HandResult.WIN, isBlackjack: true })} />);
-    expect(live(container)).toBe("Blackjack! | $10 Win");
+    expect(live(container)).toBe("Blackjack! | $10"); // one hand: no tag
+    expect(container.querySelector(".tag")).toBeNull();
   });
 
   it("hides an unsettled result", () => {
@@ -443,31 +448,35 @@ describe("Surrender (#91)", () => {
   const given = (result, extra = {}) => hand(["10", "6"], { status: HandStatus.DONE, surrendered: true, result, totals: [16], total: 16, ...extra });
 
   describe("PlayerHand label", () => {
-    it.each([GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS, GamePhases.POST_ROUND, GamePhases.END_ROUND])(
-      "an at-once surrender shows 'Surrendered' straight away (%s)", (gamePhase) => {
-        const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.SURRENDER)} />);
-        expect(label(container)).toBe("16 | $10 Surrendered");
-        expect(screen.queryByText(/pending/)).toBeNull();
-        expect(container.querySelector(".tag.surrendered")).toBeTruthy();
-      });
-
-    it.each([GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS])("a waiting surrender shows 'Surrender pending' while the round plays on (%s)", (gamePhase) => {
-      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.NONE)} />);
-      expect(label(container)).toBe("16 | $10 Surrender pending");
-      expect(screen.queryByText(/Lose|Win|Push/)).toBeNull();
+    it.each([GamePhases.RESULTS, GamePhases.POST_ROUND, GamePhases.END_ROUND])("with several hands a surrendered hand carries the tag 'SURRENDER' once the round settles (%s)", (gamePhase) => {
+      const { container } = renderUI(<PlayerHand {...props} multi active={false} gamePhase={gamePhase} hand={given(HandResult.SURRENDER)} />);
+      expect(label(container)).toBe("16 | SURRENDER");
+      expect(container.querySelector(".tag.surrender")).toBeTruthy();
     });
 
-    it("a waiting surrender settled as a loss to the dealer blackjack shows 'Lose' once the round is over, and nothing about pending", () => {
+    it.each([GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS])("a surrender shows no tag before the round settles (%s)", (gamePhase) => {
+      const { container } = renderUI(<PlayerHand {...props} multi active={false} gamePhase={gamePhase} hand={given(HandResult.SURRENDER)} />);
+      expect(label(container)).toBe("16 | $10");
+      expect(container.querySelector(".tag")).toBeNull();
+    });
+
+    it.each([GamePhases.DEALER_TURN, GamePhases.SETTLING_HANDS, GamePhases.RESULTS])("a waiting surrender shows nothing while the round plays on (%s)", (gamePhase) => {
+      const { container } = renderUI(<PlayerHand {...props} multi active={false} gamePhase={gamePhase} hand={given(HandResult.NONE)} />);
+      expect(label(container)).toBe("16 | $10");
+      expect(screen.queryByText(/pending|Lose|Win|Push/i)).toBeNull();
+    });
+
+    it("a waiting surrender settled as a loss to the dealer blackjack shows 'LOSE' once the round is over, and nothing about pending", () => {
       for (const gamePhase of [GamePhases.POST_ROUND, GamePhases.END_ROUND]) {
-        const { container, unmount } = renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={given(HandResult.LOSE)} />);
-        expect(label(container)).toBe("16 | $10 Lose");
+        const { container, unmount } = renderUI(<PlayerHand {...props} multi active={false} gamePhase={gamePhase} hand={given(HandResult.LOSE)} />);
+        expect(label(container)).toBe("16 | LOSE");
         unmount();
       }
     });
 
-    it("a waiting surrender settled to half shows 'Surrendered' once the round is over", () => {
-      const { container } = renderUI(<PlayerHand {...props} active={false} gamePhase={GamePhases.POST_ROUND} hand={given(HandResult.SURRENDER)} />);
-      expect(label(container)).toBe("16 | $10 Surrendered");
+    it("a waiting surrender settled to half shows 'SURRENDER' once the round is over", () => {
+      const { container } = renderUI(<PlayerHand {...props} multi active={false} gamePhase={GamePhases.POST_ROUND} hand={given(HandResult.SURRENDER)} />);
+      expect(label(container)).toBe("16 | SURRENDER");
     });
 
     it("a hand that was not surrendered and has no result shows no label before the round ends", () => {
@@ -566,7 +575,7 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
   describe("PlayerHand", () => {
     describe("labels", () => {
       const insured = (extra = {}) => hand(["10", "6"], { totals: [16], total: 16, insurance: 5, ...extra });
-      const view = (h, gamePhase) => renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={h} />).container;
+      const view = (h, gamePhase) => renderUI(<PlayerHand {...props} multi active={false} gamePhase={gamePhase} hand={h} />).container; // several hands: the tags (one hand has the verdict line)
 
       it.each([OFFERS, PEEK, GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN])("an insured hand shows its insurance next to the bet (%s)", (gamePhase) => {
         const container = view(insured(), gamePhase);
@@ -589,13 +598,13 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
 
       it.each([GamePhases.POST_ROUND, GamePhases.END_ROUND])("settled, a paid insurance says so (%s)", (gamePhase) => {
         const container = view(insured({ result: HandResult.LOSE, insurancePayout: 15 }), gamePhase);
-        expect(live(container)).toBe("16 | $10 Lose Insurance pays $15");
+        expect(live(container)).toBe("16 | LOSE Insurance pays $15");
         expect(container.querySelector(".tag.win").textContent).toBe("Insurance pays $15");
       });
 
       it("settled, a lost insurance says so", () => {
         const container = view(insured({ result: HandResult.LOSE, insurancePayout: 0 }), GamePhases.POST_ROUND);
-        expect(live(container)).toBe("16 | $10 Lose Insurance lost");
+        expect(live(container)).toBe("16 | LOSE Insurance lost");
         expect(container.querySelector(".tag.lose")).not.toBeNull();
       });
 
@@ -604,21 +613,22 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
         expect(live(container)).toBe("16 | $10");
       });
 
-      it("an insured early surrender shows both: 'Surrendered' at once and the insurance outcome at the end", () => {
+      it("an insured early surrender shows both at the end: 'SURRENDER' and the insurance outcome", () => {
         const gone = insured({ surrendered: true, result: HandResult.SURRENDER, status: HandStatus.DONE, insurancePayout: 15 });
-        expect(live(view(gone, PEEK))).toBe("16 | $10 Surrendered");
+        expect(live(view(gone, PEEK))).toBe("16 | $10");
         cleanup();
-        expect(live(view(gone, GamePhases.POST_ROUND))).toBe("16 | $10 Surrendered Insurance pays $15");
+        expect(live(view(gone, GamePhases.POST_ROUND))).toBe("16 | SURRENDER Insurance pays $15");
       });
 
-      it("even money reads 'Even money' at once, instead of 'Win', next to the Blackjack label", () => {
+      it("even money reads 'EVEN MONEY' instead of 'WIN' once the round settles, next to the Blackjack label", () => {
         const even = hand(["A", "K"], { totals: [21], total: 21, isBlackjack: true, result: HandResult.WIN, evenMoney: true, status: HandStatus.DONE });
-        for (const gamePhase of [PEEK, GamePhases.DEALER_TURN, GamePhases.POST_ROUND]) {
-          const container = view(even, gamePhase);
-          expect(live(container), gamePhase).toBe("Blackjack! | $10 Even money");
-          expect(container.querySelector(".tag.even")).toBeTruthy();
+        for (const gamePhase of [PEEK, GamePhases.DEALER_TURN]) {
+          expect(live(view(even, gamePhase)), gamePhase).toBe("Blackjack! | $10");
           cleanup();
         }
+        const container = view(even, GamePhases.POST_ROUND);
+        expect(live(container)).toBe("Blackjack! | EVEN MONEY");
+        expect(container.querySelector(".tag.even")).toBeTruthy();
       });
 
       it("a declined blackjack shows nothing before the settle, then Win or Push as always", () => {

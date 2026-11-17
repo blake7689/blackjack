@@ -74,8 +74,9 @@ export function PlayerProvider({ children }) {
 
   const getCredits = useCallback(() => playerRef.current?.credits ?? 0, []);
 
+  // The badge says what the balance just did; a change of nothing (a settled loss) takes an older badge away: nothing shows after a loss.
   const showChange = useCallback((delta) => {
-    if (delta !== 0) setCreditChange((prev) => ({ delta, seq: (prev?.seq ?? 0) + 1 }));
+    setCreditChange((prev) => (delta !== 0 ? { delta, seq: (prev?.seq ?? 0) + 1 } : null));
   }, []);
 
   // Sends one ledger call after the ones before it (the queue stays serial, so a retrying call blocks the rest),
@@ -190,7 +191,7 @@ export function PlayerProvider({ children }) {
   // The +/- badge next to the balance fades after a moment. //
   useEffect(() => {
     if (!creditChange) return;
-    const timer = setTimeout(() => setCreditChange(null), 2500);
+    const timer = setTimeout(() => setCreditChange(null), 3000);
     return () => clearTimeout(timer);
   }, [creditChange]);
 

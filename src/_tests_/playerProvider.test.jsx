@@ -319,7 +319,63 @@ describe("credits", () => {
     expect(ctx.creditChange).toEqual({ delta: 20, seq: 1 });
     act(() => ctx.applyCreditEvent({ seq: 3, kind: "local", amount: 20 }, vi.fn()));
     expect(ctx.creditChange).toEqual({ delta: 20, seq: 2 });
-    act(() => { vi.advanceTimersByTime(2500); });
+    act(() => { vi.advanceTimersByTime(3000); }); // 2.6 s on show and 400 ms of fade (TopBar)
+    expect(ctx.creditChange).toBeNull();
+  });
+
+  describe("the badge shows every real change of the balance (#83)", () => {
+    const badge = (ctx) => ctx.creditChange?.delta ?? null;
+
+    it("a bet placed (by hand, Rebet, 2x or the automatic rebet when a new round re-places it): -amount at once, before the server answers", async () => {
+      const { ctx } = await signedIn();
+      for (const amount of [25, 10, 20]) {
+        act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -amount }, vi.fn()));
+        expect(badge(ctx)).toBe(-amount);
+      }
+      expect(ctx.creditChange.seq).toBe(3); // each one a new badge
+    });
+
+    it("a double, a split or the insurance (a bet that goes straight to the server): -amount; the opening bet's move to the server shows no second badge", async () => {
+      const { ctx } = await signedIn();
+      engine.placeBet.mockResolvedValue({ credits: 990, openStake: 10 });
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn()));
+      act(() => ctx.applyCreditEvent({ seq: 2, kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, vi.fn()));
+      expect(ctx.creditChange).toEqual({ delta: -10, seq: 1 }); // the local one only
+      engine.placeBet.mockResolvedValue({ credits: 980, openStake: 20 });
+      act(() => ctx.applyCreditEvent({ seq: 3, kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: "h1" }, vi.fn()));
+      expect(ctx.creditChange).toEqual({ delta: -10, seq: 2 });
+      await settleQueue();
+    });
+
+    it("a win shows +the payout and a push +the stake back; a loss shows nothing, and takes an older badge away", async () => {
+      const { ctx } = await signedIn();
+      engine.settleRound.mockResolvedValue({ credits: 1000, openStake: 0 });
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "settle", amount: 50 }, vi.fn()));
+      expect(badge(ctx)).toBe(50);
+      act(() => ctx.applyCreditEvent({ seq: 2, kind: "settle", amount: 25 }, vi.fn()));
+      expect(badge(ctx)).toBe(25);
+      act(() => ctx.applyCreditEvent({ seq: 3, kind: "settle", amount: 0 }, vi.fn()));
+      expect(badge(ctx)).toBeNull();
+      await settleQueue();
+    });
+
+    it("the settle reaches the ledger and the balance at once, with no timer run: the balance's count-up is a display tween that never delays it", async () => {
+      const { ctx } = await signedIn();
+      engine.settleRound.mockResolvedValue({ credits: 1020, openStake: 0 });
+      vi.useFakeTimers(); // no clock runs from here
+      act(() => ctx.applyCreditEvent({ seq: 1, kind: "settle", amount: 20 }, vi.fn()));
+      expect(ctx.player.credits).toBe(1020); // the real balance, at once
+      await settleQueue();
+      expect(engine.settleRound).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("a settled loss (a change of nothing) takes an older badge away", async () => {
+    const { ctx } = await signedIn();
+    engine.settleRound.mockResolvedValue({ credits: 1000, openStake: 0 });
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -20 }, vi.fn()));
+    expect(ctx.creditChange.delta).toBe(-20);
+    act(() => ctx.applyCreditEvent({ seq: 2, kind: "settle", amount: 0 }, vi.fn()));
     expect(ctx.creditChange).toBeNull();
   });
 });

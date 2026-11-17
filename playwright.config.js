@@ -7,7 +7,7 @@ const ci = !!process.env.CI;
 export default defineConfig({
   testDir: 'e2e',
   timeout: 60_000, // the cold-start test holds sign-in and /player/me for 15 s + 11 s, ~28 s in all
-  globalTimeout: ci ? 5 * 60_000 : undefined, // a normal CI run is ~1m20s; ends before the step/job limits so Playwright fails with a report
+  globalTimeout: ci ? 7 * 60_000 : undefined, // per matrix leg (chromium / phone), each ~3-4 min; ends before the step/job limits so Playwright fails with a report
   retries: ci ? 1 : 0,
   reporter: ci ? [['list'], ['html', { open: 'never' }], ['./e2e/flakyReporter.js']] : 'list',
   use: {
@@ -17,10 +17,10 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   // E2E_CHANNEL=chrome uses the installed Google Chrome where Playwright's own download cannot run (e.g. blocked by security software).
-  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art and chips tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
+  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art, chips and animations tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.E2E_CHANNEL } },
-    { name: 'phone', testMatch: /(smoke|topup|a11y|split|layout|tableart|chips)\.spec\.js/, use: { ...devices['Pixel 7'], channel: process.env.E2E_CHANNEL } },
+    { name: 'phone', testMatch: /(smoke|topup|a11y|split|layout|tableart|chips|animations)\.spec\.js/, use: { ...devices['Pixel 7'], channel: process.env.E2E_CHANNEL } },
   ],
   webServer: {
     // Port 4174, so a local production preview on 4173 (real API) is never picked up.

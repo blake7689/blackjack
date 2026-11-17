@@ -90,5 +90,6 @@
   /* the small betting keys are icon-only (their label stays as the accessible name) */
   .dock-in[data-face="betting"] .key:not(.big):has(> svg) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .dock-in .key.big { flex: none; min-width: 96px; }
+  .dock-in[data-shuffling] .key.big > span { font-size: 14px; } /* the Deal key keeps room for its word */
   .summary .s-l b { font-size: 22px; }
 }

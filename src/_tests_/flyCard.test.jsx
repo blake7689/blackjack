@@ -3,11 +3,13 @@ import { render, act } from "@testing-library/react";
 import { Flight, finishAnimations } from "./testUtils";
 import { animations } from "./setup";
 import FlyCard from "../components/Card/FlyCard";
-import { cardTiming, landed, queue } from "../utils/cardAnimation";
+import { GLIDE, cardTiming, landed, queue, spots } from "../utils/cardAnimation";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 
 const [king] = stackedShoe(["K"]);
-const timing = cardTiming(1000); // slide 350, stagger 390, flip 450
+const timing = cardTiming(1000); // slide 520, stagger 450, flip 420
+const TURN_AT = timing.slide * 0.8; // a dealt card starts turning at 80 % of its flight
+const TOTAL = TURN_AT + timing.flip; // ... and is over when the turn is
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
 const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy"));
 const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner"));
@@ -27,48 +29,51 @@ beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe("FlyCard: a new card", () => {
-  it("flies face down from the shoe, lands, then flips and counts as landed", () => {
+  it("flies face down from the shoe, turns over as it lands (the turn starts at 80 % of the flight) and counts as landed", () => {
     const t0 = performance.now();
     const { container } = mount({ card: king });
-    // The real card waits, hidden; a face-down copy sits in the flight layer, aria-hidden, with no name or rank.
+    // The real card waits, hidden; a copy sits in the flight layer, aria-hidden, showing the back, with no name or rank.
     expect(hiddenWrap(container)).toBe(true);
     const copy = layer(container).querySelector(".fly-copy");
     expect(copy.querySelector("img")).toBeNull();
     expect(copy.getAttribute("aria-hidden")).toBe("true");
     expect(copy.querySelector("use").getAttribute("href")).toBe("#cardback");
-    expect(queue.free).toBe(t0 + timing.stagger + timing.flip); // it reserved its flight and its flip
+    expect(queue.free).toBe(t0 + TOTAL); // it reserved its flight and its turn
     advance(0);
     expect(copy.style.visibility).toBe("visible");
     expect(flights()).toHaveLength(1);
-    expect(flights()[0].frames).toHaveLength(17);
+    expect(flights()[0].frames).toHaveLength(4);
     expect(flights()[0].options).toMatchObject({ duration: timing.slide, fill: "forwards" });
-    expect(hiddenWrap(container)).toBe(true);
-
-    finishAnimations(); // lands, starts the flip, and finishes that too
-    expect(hiddenWrap(container)).toBe(false);
-    expect(layer(container).children).toHaveLength(0);
+    expect(copy.querySelector("img")).toBeNull(); // no face in flight
+    expect(flips()).toHaveLength(0);
+    advance(TURN_AT);
+    expect(copy.querySelector("img").getAttribute("alt")).toBe(""); // its face arrives with the turn, still aria-hidden
     expect(flips()).toHaveLength(1);
     expect(flips()[0].frames).toEqual([{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }]);
     expect(flips()[0].options.duration).toBe(timing.flip);
+    expect(hiddenWrap(container)).toBe(true);
+
+    finishAnimations(); // the turn is over: the real card takes its place face up
+    expect(hiddenWrap(container)).toBe(false);
+    expect(layer(container).children).toHaveLength(0);
     expect(face(container)).toBe("up");
     expect(landed.ids.has(king.id)).toBe(true);
     expect(container.querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
   });
 
-  it("does not count as landed until the flip is over", () => {
+  it("does not count as landed until the turn is over", () => {
     const { container } = mount({ card: king });
-    advance(0);
-    act(() => { flights()[0].onfinish(); });
-    expect(hiddenWrap(container)).toBe(false);
+    advance(TURN_AT);
+    expect(hiddenWrap(container)).toBe(true);
     expect(landed.ids.has(king.id)).toBe(false);
-    expect(face(container)).toBe("turning");
     act(() => { flips()[0].onfinish(); });
+    expect(hiddenWrap(container)).toBe(false);
     expect(landed.ids.has(king.id)).toBe(true);
   });
 
   it("lands from a timer when the browser never fires onfinish (background tab, jsdom)", () => {
     const { container } = mount({ card: king });
-    advance(timing.slide + 149);
+    advance(TOTAL + 149);
     expect(hiddenWrap(container)).toBe(true);
     advance(1);
     expect(hiddenWrap(container)).toBe(false);
@@ -101,7 +106,7 @@ describe("FlyCard: a new card", () => {
     expect(copy.style.visibility).toBe("hidden");
     advance(1);
     expect(copy.style.visibility).toBe("visible");
-    expect(queue.free).toBe(performance.now() + timing.stagger + timing.flip);
+    expect(queue.free).toBe(performance.now() + TOTAL);
   });
 
   it("aims at the shoe, and follows the real card if the layout moves while it flies", () => {
@@ -119,6 +124,7 @@ describe("FlyCard: a new card", () => {
     pos.top = 10;
     advance(16); // the next animation frame
     expect(copy.style.translate).toBe("40px 10px");
+    advance(TURN_AT);
     finishAnimations();
     expect(copy.isConnected).toBe(false);
   });
@@ -143,10 +149,9 @@ describe("FlyCard: a new card", () => {
     expect(animations).toHaveLength(0);
   });
 
-  it("unmounting mid-flip cancels the flip and gives its time back", () => {
+  it("unmounting mid-turn cancels the turn and gives its time back", () => {
     const { unmount } = mount({ card: king });
-    advance(0);
-    act(() => { flights()[0].onfinish(); });
+    advance(TURN_AT);
     const [flip] = flips();
     unmount();
     expect(flip.cancelled).toBe(true);
@@ -185,7 +190,7 @@ describe("FlyCard: a face that arrives later", () => {
     expect(flights()).toHaveLength(1); // no second copy
     expect(layer(container).children).toHaveLength(0);
     expect(container.querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
-    expect(queue.free).toBe(performance.now() + timing.flip + timing.gap); // the flip reserved its time
+    expect(queue.free).toBeGreaterThanOrEqual(performance.now() + timing.flip + timing.gap); // the flip reserved its time
     finishAnimations();
     expect(face(container)).toBe("up");
     expect(landed.ids.has(king.id)).toBe(true);
@@ -193,7 +198,7 @@ describe("FlyCard: a face that arrives later", () => {
 
   it("a card object that is only a new copy of the same card does not flip again", () => {
     const { again } = mount({ card: king });
-    advance(0);
+    advance(TURN_AT);
     finishAnimations();
     expect(flips()).toHaveLength(1);
     again({ card: { ...king } });
@@ -235,6 +240,25 @@ describe("FlyCard: no flight", () => {
     expect(landed.ids.has(king.id)).toBe(true);
   });
 
+  it("a split's moved card glides from where it lay a moment ago (GLIDE ms), and the glide is cancelled if it goes", () => {
+    spots.set("a", { x: 50, y: 30 }); // useSmoothRow's note of where the card was (jsdom lays everything out at 0, 0)
+    const { unmount } = mount({ card: king, moved: true });
+    const glide = animations.find((a) => a.frames[0].translate !== undefined);
+    expect(glide.frames).toEqual([{ translate: "50px 30px" }, { translate: "0 0" }]);
+    expect(glide.options.duration).toBe(GLIDE);
+    unmount();
+    expect(glide.cancelled).toBe(true);
+  });
+
+  it("a moved card with nowhere to glide from, or under reduced motion, just stays", () => {
+    mount({ card: king, moved: true });
+    expect(animations).toHaveLength(0);
+    spots.set("a", { x: 50, y: 30 });
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    mount({ card: king, moved: true });
+    expect(animations).toHaveLength(0);
+  });
+
   it("reduced motion: no flight, no flip, the face at once", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const { container } = mount({ card: king });
@@ -273,7 +297,7 @@ describe("FlyCard: sideways (a double)", () => {
     expect(wrap(container).style.rotate).toBe("90deg");
     expect(wrap(container).style.marginInline).toBe("20px");
     advance(0);
-    expect(flights()[0].frames[16].transform).toContain("rotate(90deg)");
+    expect(flights()[0].frames[3].transform).toContain("rotate(90deg)");
     again({ card: king, sideways: false });
     expect(wrap(container).style.rotate).toBe("");
     expect(wrap(container).style.marginInline).toBe("");
@@ -289,7 +313,7 @@ describe("FlyCard: holds the board until it is over", () => {
     expect(holds()).toBe(1);
     advance(0);
     expect(holds()).toBe(1);
-    act(() => { flights()[0].onfinish(); }); // landed, flip under way
+    advance(TURN_AT); // the turn is under way, as it lands
     expect(holds()).toBe(1);
     act(() => { flips()[0].onfinish(); });
     expect(holds()).toBe(0);
@@ -297,9 +321,8 @@ describe("FlyCard: holds the board until it is over", () => {
 
   it("keeps holding past the reserved time when the frames come late", () => {
     mount({ card: king });
-    advance(0);
-    act(() => { flights()[0].onfinish(); });
-    advance(timing.flip + timing.gap + 5000); // the clock is long over, the browser has not said the flip is done
+    advance(TOTAL + 150); // the clock lands the card; the browser never said its turn was over, so it flips in place and holds
+    advance(timing.flip + timing.gap + 5000);
     expect(queue.free).toBeLessThan(performance.now());
     expect(holds()).toBe(1);
   });
@@ -381,10 +404,9 @@ describe("FlyCard: holds the board until it is over", () => {
     expect(holds()).toBe(0);
   });
 
-  it("unmounting mid-flip releases the hold", () => {
+  it("unmounting mid-turn releases the hold", () => {
     const { unmount } = mount({ card: king });
-    advance(0);
-    act(() => { flights()[0].onfinish(); });
+    advance(TURN_AT);
     expect(holds()).toBe(1);
     unmount();
     expect(holds()).toBe(0);
@@ -394,10 +416,10 @@ describe("FlyCard: holds the board until it is over", () => {
     mount({ card: king, dealOrder: 0 });
     render(<FlyCard fk="b" card={{ ...king, id: "other" }} dealOrder={1} />, { wrapper: ({ children }) => <Flight>{children}</Flight> });
     expect(holds()).toBe(2);
-    advance(timing.stagger);
-    act(() => { flights()[0].onfinish(); });
+    advance(TURN_AT);
     act(() => { flips()[0].onfinish(); });
     expect(holds()).toBe(1);
+    advance(timing.stagger); // the second card's turn starts, too
     finishAnimations();
     expect(holds()).toBe(0);
   });
