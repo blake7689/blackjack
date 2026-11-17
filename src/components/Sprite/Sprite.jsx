@@ -2,6 +2,7 @@
 // url() cannot see them). The card back (#81): the mockup's `#cardback` (assets/sprite.svg, built by its
 // build.mjs). Graphite ground (--back-bg), white border, a lattice and waves and a guilloche rosette in the accent
 // (--back-ink), the wordmark on a plate in --back-hi. Use it as <svg viewBox="0 0 250 363"><use href="#cardback" /></svg>.
+import { memo } from "react";
 import ChipSymbols from "./ChipSymbols";
 const WAVES = Array.from({ length: 9 }, (_, i) => `M22 ${(40 + i * 35.4).toFixed(1)} q12.9 -9 25.8 0` + " t25.8 0".repeat(7));
 const ROSETTE = Array.from({ length: 18 }, (_, i) => i * 10);
@@ -19,7 +20,7 @@ const ICONS = [
   ["i-info", <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v6M12 7.5v.5" /></>],
 ];
 
-export default function Sprite() {
+function Sprite() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
       <defs>
@@ -65,3 +66,6 @@ export default function Sprite() {
     </svg>
   );
 }
+
+// Static: a route change re-renders App, and the sprite (the chips alone are thousands of elements) must not be rebuilt each time.
+export default memo(Sprite);
