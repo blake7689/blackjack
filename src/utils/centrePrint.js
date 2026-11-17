@@ -4,7 +4,7 @@
 // `el` is the stage or anything in it (the print calls this with itself, before its parents' refs are set).
 export function centrePrint(el) {
   const stage = el.closest(".stage-in");
-  const seat = stage.querySelector(".player-hand");
+  const seat = stage.querySelector(".seat");
   const text = [...stage.querySelectorAll(".print text")].map((t) => t.getBoundingClientRect()).filter((r) => r.height);
   if (!seat || !text.length) return;
   const py = parseFloat(stage.style.getPropertyValue("--py")) || 0; // the block's current shift: measure it unshifted

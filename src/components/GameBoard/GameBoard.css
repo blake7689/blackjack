@@ -1,60 +1,18 @@
 :root {
-  --header-height: 0px;
-  --top-bar-height: 56px; /* the old stats strip; the new top bar is PR 2b part 2 */
   --app-vh: 100dvh;
 }
 
-/* The page grid (#80): top bar, felt, tip line, dock. The page is exactly the viewport (the Header above takes its height from
-   --header-height): the felt gets what is left, the tip line is 0 px while empty and the dock is --dock plus the bottom safe area. */
+/* The page grid (#80): top bar, felt, tip line, dock. The page is exactly the viewport (the table has its own top bar, not the page Header):
+   the felt gets what is left, the tip line is 0 px while empty and the dock is --dock plus the bottom safe area. */
 .board {
-  height: calc(var(--app-vh) - var(--header-height));
+  height: var(--app-vh);
   width: 100%;
   display: grid;
-  grid-template-rows: var(--top-bar-height) minmax(0, 1fr) auto calc(var(--dock) + var(--safe-b));
+  grid-template-rows: calc(var(--top) + var(--safe-t)) minmax(0, 1fr) auto calc(var(--dock) + var(--safe-b));
   grid-template-columns: minmax(0, 1fr);
   background: var(--bg);
   color: var(--tx);
   overflow: hidden;
-}
-
-/* TOP BAR (the old one, on a dark strip in both modes until PR 2b part 2 replaces it) */
-.top-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  min-height: var(--top-bar-height);
-  position: relative;
-  flex-wrap: wrap;
-  box-sizing: border-box;
-  background: #070908;
-  color: #fff;
-}
-.top-left.stats {
-  position: absolute;
-  top: 12px;
-  left: 12px;
-  text-align: left;
-  z-index: 2;
-  min-width: 0;
-}
-.top-center.card-count {
-  position: absolute;
-  left: 50%;
-  top: 12px;
-  transform: translateX(-50%);
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  max-width: 70%;
-  pointer-events: none;
-}
-.top-right {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  text-align: right;
-  z-index: 2;
 }
 
 /* ===== FELT AND RAIL (#81, DESIGN sections 3 and 5) =====
@@ -137,65 +95,25 @@
 
 /* ===== FELT PRINT AND MESSAGE (#81): one block, centred between the dealer's hand and the first seat (centrePrint) ===== */
 .print, .mid { translate: 0 var(--py, 0px); }
-.print { flex: none; width: min(calc(100cqi - 32px), calc(var(--cw) * 5.4)); height: var(--ph); margin-top: auto; overflow: visible; cursor: pointer; border-radius: var(--r2); }
-.print:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
-.mid { flex: none; width: 100%; display: grid; place-items: center; margin-bottom: auto; position: relative; z-index: var(--z-mid); }
+.print { flex: none; width: min(calc(100cqi - 32px), calc(var(--cw) * 5.4)); height: var(--ph); margin-top: auto; overflow: visible; border-radius: var(--r2); }
+.mid { flex: none; width: 100%; height: 48px; display: grid; place-items: center; margin-bottom: auto; position: relative; z-index: var(--z-mid); }
 @media (max-height: 520px) {
   /* one line, a 44 px hit area around a 24 px line */
   .print { width: calc(100% - 32px); height: 44px; padding: 10px 0; box-sizing: border-box; margin: -6px 0 -10px; }
-  .mid { margin: 0 0 4px; }
+  .mid { height: 30px; margin: 0 0 4px; }
 }
+/* wide screens: the message line has 56 px */
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .mid { height: 56px; } }
 /* wide screens between rounds: the dealer's card place is printed faintly, so a big empty felt still has a centre */
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) {
   .dealer-container:empty::before { content: ""; width: var(--cw); height: var(--ch); box-sizing: border-box; border: 1.5px solid var(--print); border-radius: calc(var(--cw) * .07); opacity: .16; }
 }
 
-/* PLAYER: centred wrapper + inner scroll rail (the seats are PR 2b part 2) */
-.player-container {
-  position: relative; z-index: var(--z-seats); flex: none; width: 100%;
-  display: flex; align-items: center; justify-content: center;
-  min-width: 0; box-sizing: border-box;
-}
-.hands-scroll {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  text-align: center;
-  box-sizing: border-box;
-}
-.hands-scroll > * {
-  flex: 0 0 auto;
-}
-
-.hands-track {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  white-space: nowrap;
-}
-.hands-track > * { flex: 0 0 auto; }
-
-/* a short landscape phone: a slimmer top strip */
-@media (max-height: 520px) { .board { --top-bar-height: 40px; } }
-/* landscape phone and wide desktop: no room above a hand for its total, so it sits beside the cards (PR 2b part 2 designs it properly) */
-@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
-  .player-hand, .dealer-hand { padding: 2px 6px; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
-  .hand-total { margin-bottom: 0; padding: 1px 6px; }
-}
-
-/* Final override to ensure hands can always grow */
+/* a hand is as wide as its cards, however many (it never tightens) */
 .player-hand, .dealer-hand { max-width: none; }
 /* Cards in flight, above the board so nothing clips them */
 .flight-layer { position: fixed; inset: 0; overflow: hidden; pointer-events: none; z-index: 50; }
 
-
-/* Live total text over an invisible copy of the final text: the strip keeps its final width, so cards never shift as totals update */
-.hand-total { display: inline-grid; }
-.hand-total > * { grid-area: 1 / 1; }
-.hand-total > .ht-size { visibility: hidden; }
 
 /* ===== LAYOUT MODES AND CARD WIDTH (#79, DESIGN sections 2 and 4) =====
    The sizes are px; --top, --dock and --rail are the top bar, the dock and the dealer's rail (the dock's height is used since #80;

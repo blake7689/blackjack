@@ -8,7 +8,6 @@ test('auto deal continues, rebets and deals the next round with no click (#88)',
   const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, resetInitialBet: true, autoDeal: true, autoDealDelay: 300 } });
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
 
   await expect(page.getByRole('button', { name: 'Pause auto deal' })).toBeVisible(); // the setting reached the table
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();

@@ -17,7 +17,8 @@ const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
 const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy"));
 const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner"));
 const glides = () => animations.filter((a) => a.frames[0]?.translate !== undefined);
-const live = (c) => c.querySelector(".hand-total > span:not(.ht-size)").textContent;
+const pill = (c) => c.querySelector(".pill")?.textContent ?? ""; // the total pill: empty until a card has landed
+const amount = (c) => c.querySelector(".amt").textContent;
 
 let tags = 0;
 const mkHand = (cards, extra = {}) => ({
@@ -84,15 +85,15 @@ describe("DealerArea hole card", () => {
     const [upEl, holeEl] = container.querySelectorAll(".fly-card");
     expect(holeEl.querySelector("img")).toBeNull();
     expect(flights()).toHaveLength(2);
-    expect(live(container)).toBe("Total: 10");
+    expect(pill(container)).toBe("10");
 
     rerender(<Flight><DealerArea dealer={{ cards: [ten, ace], dealerDisplayTotal: 21, isBlackjack: true }} hiddenCount={0} /></Flight>);
     const now = container.querySelectorAll(".fly-card");
     expect([now[0], now[1]]).toEqual([upEl, holeEl]);
     expect(flights()).toHaveLength(2);
-    expect(live(container)).toBe("Total: 10"); // the new card has not finished turning over
+    expect(pill(container)).toBe("10"); // the new card has not finished turning over
     finishAnimations();
-    expect(live(container)).toBe("Total: 21 Blackjack");
+    expect(pill(container)).toBe("Blackjack!");
   });
 });
 
@@ -100,24 +101,27 @@ describe("totals count only cards that have landed", () => {
   it("DealerArea: '-' with none, the landed cards' total in between, the final total and labels after the last", () => {
     const dealer = { cards: stackedShoe(["10", "9"]), dealerDisplayTotal: 19, isBusted: false, isBlackjack: false };
     const { container } = renderUI(<Flight><DealerArea dealer={dealer} /></Flight>);
-    expect(live(container)).toBe("Total: -");
+    expect(pill(container)).toBe("");
     landNext();
-    expect(live(container)).toBe("Total: 10");
+    expect(pill(container)).toBe("10");
     landNext();
-    expect(live(container)).toBe("Total: 19");
+    expect(pill(container)).toBe("19");
   });
 
-  it("PlayerHand: the labels and result wait for every card; the bet is always shown", () => {
+  it("PlayerHand: the result waits for every card; the bet is always shown", () => {
     const cards = stackedShoe(["A", "6", "K"]);
     const h = mkHand(cards, { totals: [17], isBusted: true, result: HandResult.LOSE, status: HandStatus.DONE });
     const { container } = renderUI(<Flight><PlayerHand {...handProps} gamePhase={GamePhases.POST_ROUND} hand={h} /></Flight>);
-    expect(live(container)).toBe("Total: - | Bet: $10");
+    expect(pill(container)).toBe("");
+    expect(amount(container)).toBe("$10");
     landNext();
-    expect(live(container)).toBe("Total: 11 / 1 | Bet: $10"); // an ace on its own is soft
+    expect(pill(container)).toBe("1/11"); // an ace on its own is soft
     landNext();
-    expect(live(container)).toBe("Total: 17 / 7 | Bet: $10");
+    expect(pill(container)).toBe("7/17");
+    expect(amount(container)).toBe("$10");
     landNext();
-    expect(live(container)).toBe("Total: 17 | Bet: $10 Lose Busted");
+    expect(pill(container)).toBe("17");
+    expect(amount(container)).toBe("$10Bust");
   });
 
   it("a hand re-rendered with a card that has not landed shows the total of the landed ones", () => {
@@ -125,11 +129,11 @@ describe("totals count only cards that have landed", () => {
     const ui = (cards, totals) => <Flight><PlayerHand {...handProps} hand={mkHand(cards, { tag: "same", totals })} /></Flight>;
     const { container, rerender } = renderUI(ui([ten, nine], [19]));
     settleDeal();
-    expect(live(container)).toBe("Total: 19 | Bet: $10");
+    expect(pill(container)).toBe("19");
     rerender(ui([ten, nine, two], [21]));
-    expect(live(container)).toBe("Total: 19 | Bet: $10"); // the hit card is on its way
+    expect(pill(container)).toBe("19"); // the hit card is on its way
     settleDeal();
-    expect(live(container)).toBe("Total: 21 | Bet: $10");
+    expect(pill(container)).toBe("21");
   });
 });
 
@@ -413,6 +417,6 @@ describe("offers and the peek (#91)", () => {
     expect(flights()).toHaveLength(2); // nothing flew a second time
     finishAnimations();
     expect(screen.getByAltText("king of hearts")).toBeTruthy();
-    expect(live(container)).toBe("Total: 21 Blackjack");
+    expect(pill(container)).toBe("Blackjack!");
   });
 });

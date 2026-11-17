@@ -1,9 +1,17 @@
 // The table's SVG symbols, inline in the page so their CSS variables reach inside (a file loaded through <img> or a
-// url() cannot see them). Only the card back so far (#81): the mockup's `#cardback` (assets/sprite.svg, built by its
+// url() cannot see them). The card back (#81): the mockup's `#cardback` (assets/sprite.svg, built by its
 // build.mjs). Graphite ground (--back-bg), white border, a lattice and waves and a guilloche rosette in the accent
 // (--back-ink), the wordmark on a plate in --back-hi. Use it as <svg viewBox="0 0 250 363"><use href="#cardback" /></svg>.
 const WAVES = Array.from({ length: 9 }, (_, i) => `M22 ${(40 + i * 35.4).toFixed(1)} q12.9 -9 25.8 0` + " t25.8 0".repeat(7));
 const ROSETTE = Array.from({ length: 18 }, (_, i) => i * 10);
+const ICONS = [
+  ["i-menu", <path d="M4 7h16M4 12h16M4 17h10" />],
+  ["i-settings", <><path d="M4 7h9M18 7h2M4 17h3M12 17h8" /><circle cx="15.5" cy="7" r="2.5" /><circle cx="9.5" cy="17" r="2.5" /></>],
+  ["i-chart", <path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3" />],
+  ["i-rules", <><rect x="5" y="3.5" width="14" height="17" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></>],
+  ["i-back", <path d="M15 5l-7 7 7 7" />],
+  ["i-logout", <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4" />],
+];
 
 export default function Sprite() {
   return (
@@ -43,6 +51,10 @@ export default function Sprite() {
         </g>
         <rect width="250" height="363" rx="13" fill="url(#paperLight)" />
       </symbol>
+      {/* the top bar's icons (the mockup's i-menu, i-settings, i-chart, i-rules, i-logout): 24 px grid, 1.75 stroke, the text colour */}
+      {ICONS.map(([id, d]) => (
+        <symbol key={id} id={id} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">{d}</symbol>
+      ))}
     </svg>
   );
 }

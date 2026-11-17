@@ -6,7 +6,8 @@ import "./FeltPrint.css";
 // The table's rules printed on the cloth (#81): the payout, soft 17 and the hole-card mode, and insurance, on strong arcs in --print with a
 // hint of weave (the ink filter). A button named "Table rules" that opens the rules (`onOpen`). Laid out 1:1 in its own box and fitted to
 // its width (each line keeps its own tracking, never under 12 px), and redrawn whenever the box or the fonts change. `onDraw` runs after
-// every draw (the block is centred between the hands then). The words come from ruleCatalog.js (feltPrint).
+// every draw (the block is centred between the hands then). The drawing is aria-hidden and the button is a plain transparent one laid over it:
+// the name stays the short "Table rules" (the words are in Settings), and a button holding the printed text would fail axe's label-content-name-mismatch. The words come from ruleCatalog.js (feltPrint).
 const LANDSCAPE = "(max-height: 520px)";
 const MIN_FONT = 12;
 const landscape = () => typeof matchMedia === "function" && matchMedia(LANDSCAPE).matches;
@@ -62,10 +63,10 @@ export default function FeltPrint({ settings, onOpen, onDraw }) {
   });
 
   const open = (e) => { e.stopPropagation(); onOpen?.(); }; // a click on the print is not a click on the felt (which continues the round)
-  const key = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(e); } };
 
   return (
-    <svg ref={ref} className="print" role="button" tabIndex={0} aria-label="Table rules" viewBox={`0 0 ${box.w} ${box.h}`} onClick={open} onKeyDown={key}>
+    <div className="print">
+    <svg ref={ref} aria-hidden="true" focusable="false" viewBox={`0 0 ${box.w} ${box.h}`}>
       {layout && (
         <>
           <defs>
@@ -103,5 +104,7 @@ export default function FeltPrint({ settings, onOpen, onDraw }) {
         </>
       )}
     </svg>
+    <button type="button" className="print-hit" aria-label="Table rules" onClick={open} />
+    </div>
   );
 }

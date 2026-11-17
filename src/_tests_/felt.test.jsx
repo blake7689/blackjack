@@ -56,16 +56,14 @@ describe("FeltPrint (#81)", () => {
     expect([...container.querySelectorAll("text")].map((t) => t.getAttribute("font-size"))).toEqual(["14", "12", "12"]); // 24 less 10 steps; 16 and 13 down to the floor
   });
 
-  it("opens the rules on a click, Enter or Space, and a click is not a click on the felt", () => {
+  it("opens the rules on a click (a real button: Enter and Space click it), and a click is not a click on the felt", () => {
     const onOpen = vi.fn();
     const onFelt = vi.fn();
     render(<div onClick={onFelt}><FeltPrint settings={settings} onOpen={onOpen} /></div>);
     const print = screen.getByRole("button", { name: "Table rules" });
+    expect(print.tagName).toBe("BUTTON");
     fireEvent.click(print);
-    fireEvent.keyDown(print, { key: "Enter" });
-    fireEvent.keyDown(print, { key: " " });
-    fireEvent.keyDown(print, { key: "a" });
-    expect(onOpen).toHaveBeenCalledTimes(3);
+    expect(onOpen).toHaveBeenCalledTimes(1);
     expect(onFelt).not.toHaveBeenCalled();
   });
 
@@ -216,14 +214,14 @@ describe("useCentrePrint (#81)", () => {
 
 describe("centrePrint (#81): the print and the message are centred between the dealer's hand and the first seat", () => {
   function build() {
-    document.body.innerHTML = `<div class="stage-in"><div class="dealer-container"></div><svg class="print"><text></text></svg><div class="mid"><p class="msg"></p></div><div class="player-hand"></div></div>`;
+    document.body.innerHTML = `<div class="stage-in"><div class="dealer-container"></div><svg class="print"><text></text></svg><div class="mid"><p class="msg"></p></div><div class="seat"></div></div>`;
     const at = (sel, top, bottom) => { document.querySelector(sel).getBoundingClientRect = () => ({ top, bottom, height: bottom - top }); };
     return { stage: document.querySelector(".stage-in"), at };
   }
 
   it("shifts the block to the middle of the gap", () => {
     const { stage, at } = build();
-    at(".dealer-container", 0, 100); at(".player-hand", 400, 500); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248);
+    at(".dealer-container", 0, 100); at(".seat", 400, 500); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248);
     centrePrint(stage);
     expect(stage.style.getPropertyValue("--py")).toBe("41px"); // the block is 150 to 268 (the message line's bottom + 20): its middle 209, the gap's 250
   });
@@ -231,17 +229,17 @@ describe("centrePrint (#81): the print and the message are centred between the d
   it("measures the block without its current shift", () => {
     const { stage, at } = build();
     stage.style.setProperty("--py", "10px");
-    at(".dealer-container", 0, 100); at(".player-hand", 400, 500); at("text", 160, 200); at(".msg", 210, 240); at(".mid", 210, 258); // the same block, 10 px lower
+    at(".dealer-container", 0, 100); at(".seat", 400, 500); at("text", 160, 200); at(".msg", 210, 240); at(".mid", 210, 258); // the same block, 10 px lower
     centrePrint(stage.querySelector(".print")); // any element in the stage will do
     expect(stage.style.getPropertyValue("--py")).toBe("41px");
   });
 
   it("never moves the block closer to the player's cards than 8 px, or up", () => {
     const { stage, at } = build();
-    at(".dealer-container", 0, 250); at(".player-hand", 290, 400); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248);
+    at(".dealer-container", 0, 250); at(".seat", 290, 400); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248);
     centrePrint(stage);
     expect(stage.style.getPropertyValue("--py")).toBe("14px"); // 290 - 8 - 268, though the middle of the gap is further
-    at(".dealer-container", 0, 100); at(".player-hand", 200, 400); // the block is taller than the gap: it stays where the layout put it
+    at(".dealer-container", 0, 100); at(".seat", 200, 400); // the block is taller than the gap: it stays where the layout put it
     centrePrint(stage);
     expect(stage.style.getPropertyValue("--py")).toBe("0px");
   });
@@ -250,7 +248,7 @@ describe("centrePrint (#81): the print and the message are centred between the d
     const { stage } = build();
     centrePrint(stage); // jsdom: the text has no height yet
     expect(stage.style.getPropertyValue("--py")).toBe("");
-    document.querySelector(".player-hand").remove();
+    document.querySelector(".seat").remove();
     centrePrint(stage);
     expect(stage.style.getPropertyValue("--py")).toBe("");
   });

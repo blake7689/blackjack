@@ -1,51 +1,58 @@
 import { memo, useRef } from "react";
 import FlyCard from "../Card/FlyCard";
+import Pill from "../Pill/Pill";
 import { useLanded } from "../../hooks/useLanded";
 import { useSmoothRow } from "../../hooks/useSmoothRow";
+import { handLabel } from "../../utils/handDisplay";
+import { money } from "../../utils/money";
 import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandResult } from "../../utils/constants/handResult";
 
-// One hand: its cards and its total line. The keys that act on it (hit, stay, double, the offers) are in the dock. //
-function PlayerHand({ hand, active, gamePhase }) {
+// One seat (#81): the hand (its cards in a straight row, the total pill beside it or above it), the bet circle under it and the amount
+// (with the insurance and the result) under that. The keys that act on it (hit, stay, double, the offers) are in the dock. A hand with no
+// cards is the betting seat: just the circle and the chips in it. `active`: the hand in play (the circle and the pill carry the accent). //
+function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(hand.cards);
   const settled = gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND;
   const showResult = hand.result !== HandResult.NONE && (settled || hand.result === HandResult.SURRENDER || hand.evenMoney); // a surrender and even money show at once
-  const resultText = hand.evenMoney ? "Even money" : hand.result;
+  const done = !shown.pending; // the result waits for the last card to land
+  const empty = !hand.cards.length && !hand.hiddenCards.length;
+  const natural = hand.isBlackjack && done && !!hand.cards.length; // the pill says it once the last card has turned over
+  const playing = active && gamePhase === GamePhases.PLAYER_TURN;
+
+  // The result: the verdict line itself is PR 4's; until then each hand carries its result as a tag under its amount.
+  const resultKind = hand.evenMoney ? "even" : hand.isBusted ? "bust" : String(hand.result).toLowerCase();
+  const resultText = hand.evenMoney ? "Even money" : hand.isBusted ? "Bust" : hand.result;
 
   return (
-    <div className={`player-hand${active ? " active" : ""}`}>
-      {/* Live text over an invisible copy of the final text (see GameBoard.css). The total counts only cards that have
-          landed and flipped; the labels wait for the last one. */}
-      <div className="hand-total">
-        {[shown.pending, false].map((pending, i) => (
-          <span key={i} className={i ? "ht-size" : undefined} aria-hidden={i ? "true" : undefined}>
-            Total: {pending ? (shown.totals?.totals.join(" / ") ?? "-") : hand.totals.join(" / ")}
-            {' '}| Bet: ${hand.bet}
-            {hand.insurance > 0 && <> | Insurance: ${hand.insurance}</>}
-            {!pending && showResult && <span className={`hand-result ${hand.result}`}> {resultText}</span>}
-            {!pending && hand.surrendered && !showResult && <span className="hand-result Surrendered"> Surrender pending</span>}
-            {!pending && hand.isBusted && <span className={`hand-result busted`}> Busted</span>}
-            {!pending && hand.isBlackjack && <span className={`hand-result blackjack`}> Blackjack</span>}
-            {!pending && settled && hand.insurance > 0 && (hand.insurancePayout > 0
-              ? <span className="hand-result Win"> Insurance pays ${hand.insurancePayout}</span>
-              : <span className="hand-result Lose"> Insurance lost</span>)}
-          </span>
-        ))}
+    <div className={`seat${active ? " active" : ""}${empty ? " nocards" : ""}`}>
+      <div className="hand player-hand" role="group" aria-label={empty ? `Hand ${index + 1}: no cards` : handLabel(`Hand ${index + 1}`, hand.cards, hand.hiddenCards.length, shown.ids, shown.totals, { showTotals, natural })}>
+        <div className="fan-row cards" ref={rowRef}>
+          {/* One list, so a double's card keeps its element from face down to face up (no second flight).
+              Face down: the hidden card itself (and its id) never reaches the DOM. */}
+          {[
+            ...hand.cards.map((card, i) => {
+              const dbl = hand.isDouble && hand.hiddenCards.length === 0 && i === hand.cards.length - 1; // face down: the hidden card is it
+              const k = dbl ? "dbl" : card.id;
+              return <FlyCard key={k} fk={k} card={card} dealOrder={card.dealOrder} moved={card.moved} sideways={dbl} />;
+            }),
+            ...hand.hiddenCards.map(() => <FlyCard key="dbl" fk="dbl" sideways />),
+          ]}
+        </div>
+        <Pill totals={shown.totals} natural={natural} on={playing} />
       </div>
-      <div className="fan-row cards" ref={rowRef}>
-        {/* One list, so a double's card keeps its element from face down to face up (no second flight).
-            Face down: the hidden card itself (and its id) never reaches the DOM. */}
-        {[
-          ...hand.cards.map((card, i) => {
-            const dbl = hand.isDouble && hand.hiddenCards.length === 0 && i === hand.cards.length - 1; // face down: the hidden card is it
-            const k = dbl ? "dbl" : card.id;
-            return <FlyCard key={k} fk={k} card={card} dealOrder={card.dealOrder} moved={card.moved} sideways={dbl} />;
-          }),
-          ...hand.hiddenCards.map(() => <FlyCard key="dbl" fk="dbl" sideways />),
-        ]}
+      <div className="spot-row"><div className={`spot${hand.bet > 0 ? " has" : ""}`} aria-hidden="true"><span className="bet-lbl">BET</span></div></div>
+      <div className="amt">
+        {hand.bet > 0 && <span className="num">{money(hand.bet)}</span>}
+        {hand.insurance > 0 && <span className="num">Insurance: {money(hand.insurance)}</span>}
+        {done && showResult && <span className={`tag ${resultKind}`}>{resultText}</span>}
+        {done && hand.surrendered && !showResult && <span className="tag surrender">Surrender pending</span>}
+        {done && settled && hand.insurance > 0 && (hand.insurancePayout > 0
+          ? <span className="tag win">Insurance pays {money(hand.insurancePayout)}</span>
+          : <span className="tag lose">Insurance lost</span>)}
       </div>
     </div>
   );

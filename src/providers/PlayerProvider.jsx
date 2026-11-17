@@ -21,6 +21,8 @@ export function PlayerProvider({ children }) {
   // Set when a round's opening bet is refused: the rest of that round's bets are then dropped unsent.
   const roundRefusedRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
+  // A saved session is being restored (up to a cold API start): the table shows Loading, not Home, until it is answered.
+  const [restoring, setRestoring] = useState(() => !!getToken());
 
   const signIn = useCallback((p) => {
     playerRef.current = p;
@@ -41,7 +43,7 @@ export function PlayerProvider({ children }) {
   useEffect(() => {
     const token = getToken();
     if (!token) return;
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }).catch(() => {});
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }).catch(() => {}).finally(() => setRestoring(false));
   }, [signIn]);
 
   // Any signed-in request that gets 401 signs you out here.
@@ -193,8 +195,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, restoring, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, restoring, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

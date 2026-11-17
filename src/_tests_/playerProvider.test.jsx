@@ -72,6 +72,27 @@ describe("session", () => {
     expect(engine.getMe).toHaveBeenCalledWith(90000);
   });
 
+  it("says it is restoring until the saved session answers, whatever the answer", async () => {
+    api.getToken.mockReturnValue("tok");
+    const gate = deferred();
+    engine.getMe.mockReturnValueOnce(gate.promise);
+    const { ctx } = setup();
+    expect(ctx.restoring).toBe(true);
+    await act(async () => { gate.reject(refusal(401)); });
+    expect(ctx.restoring).toBe(false);
+    expect(ctx.player).toBeNull();
+    api.getToken.mockReturnValue("tok");
+    const ok = setup();
+    await settleQueue();
+    expect(ok.ctx.restoring).toBe(false);
+    expect(ok.ctx.player).toEqual(player);
+  });
+
+  it("is not restoring without a stored token", () => {
+    const { ctx } = setup();
+    expect(ctx.restoring).toBe(false);
+  });
+
   it("stays signed out without a token, or when the stored token has expired", async () => {
     const { ctx } = setup();
     await settleQueue();

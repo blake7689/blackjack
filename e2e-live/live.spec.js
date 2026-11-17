@@ -6,10 +6,8 @@ import { test, expect } from '@playwright/test';
 
 const COLD = 120_000; // sign-in and /me can each wait out a 30+ s Azure cold start
 
-// The balance in the stats panel: its text nodes only, so the "+10" / "-10" change badge is left out.
-const readBalance = (page) =>
-  page.locator('.stats-panel > div:nth-child(2)').evaluate((el) =>
-    Number(Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/[^0-9.-]/g, '')));
+// The balance in the top bar (#bal holds the figure alone: the "+10" / "-10" change badge is a sibling).
+const readBalance = (page) => page.locator('#bal').innerText().then((text) => Number(text.replace(/[^0-9.-]/g, '')));
 const cents = (n) => Math.round(n * 100) / 100;
 
 test('live site: sign in, play one round, the ledger and the balance agree (#119)', async ({ page }) => {
@@ -34,7 +32,6 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   await page.getByPlaceholder('Username or Email').fill(process.env.E2E_LIVE_USERNAME);
   await page.getByPlaceholder('Password').fill(process.env.E2E_LIVE_PASSWORD);
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await page.getByRole('button', { name: 'Start Game' }).click({ timeout: COLD });
 
   const chips = page.getByRole('button', { name: /^Add \d+$/ });
   await expect(page.getByRole('button', { name: 'Deal', exact: true })).toBeVisible({ timeout: COLD }); // the table is up

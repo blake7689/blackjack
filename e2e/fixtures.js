@@ -98,18 +98,15 @@ export async function submitLogin(page) {
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
 }
 
-// Signs in and waits for the settings load to finish.
+// Signs in and sits at the table: a signed-in player lands on it (DESIGN section 8), once the settings have loaded (each settings load builds a shoe: seed 183, see smoke.spec.js).
 export async function login(page) {
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await submitLogin(page);
-  await (await settingsLoaded).finished(); // each settings load builds a shoe: settled before Start Game (seed 183, see smoke.spec.js)
-}
-
-export async function openTable(page) {
-  await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
+  await (await settingsLoaded).finished();
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible(); // idle, before the deal
 }
+
+export const openTable = login;
 
 // Any endpoint the stub does not know fails the test (the 501 alone could be swallowed by the app).
 export const test = base.extend({
