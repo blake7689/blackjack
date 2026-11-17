@@ -177,6 +177,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   timeouts 4 min (browser install) and 8 min (tests) in `ci.yml`, all under the 12-min job limit; #123 was a slow apt mirror during
   `playwright install --with-deps`, not a hang. The install runs through `scripts/install-playwright-browser.sh` (#127: 2 attempts x 105 s,
   5 s apart, all inside the 4-min step timeout; a slow mirror is retried, not waited out), in `ci.yml` and the SWA `live_smoke` job.
+- E2E and animation (#83, #148): the table opens with a shuffle, so `login()` in `e2e/fixtures.js` taps the felt to skip it (a tap does), and every new test starts from there; an axe scan must never run mid-animation (a pop-in blends colours and fails `color-contrast`): wait for the element's opacity to settle (`toHaveCSS('opacity', '1')`) first.
 - Hidden top-up (#90): 7 taps in 3 s on the balance open a code prompt. The call goes through `enqueue` with one `requestId` per submit; a 429
   (lockout, `Retry-After`) is a definite refusal, never retried. Keep `tapEnabled` in GameBoard (signed in, balance under 100, PRE_DEAL, no chips in
   the circle, nothing pending): the API counts a correct code refused by a guard as a wrong entry toward the per-player lockout (5 wrong, then 10 min).
