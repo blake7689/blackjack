@@ -4,12 +4,12 @@ import { test, expect, stubApi, openTable } from './fixtures';
 const CODE = 'dummy-code-123';
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-// The whole balance block (the chip buttons also read '$100').
-const shown = (page) => page.getByText('Credits:').locator('..');
+// The balance in the top bar (the chip buttons also read '$100').
+const shown = (page) => page.locator('#bal');
 
 // Seven quick clicks on the balance (the hidden gesture: 7 within 3 s).
 async function tapBalance(page, times = 7) {
-  const balance = page.getByText('Credits:');
+  const balance = page.getByText('Balance', { exact: true });
   for (let i = 0; i < times; i++) await balance.click();
 }
 
@@ -22,7 +22,7 @@ test('seven taps on a low balance open the prompt: a wrong code fails genericall
     ],
   });
   await openTable(page);
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await tapBalance(page);
@@ -40,7 +40,7 @@ test('seven taps on a low balance open the prompt: a wrong code fails genericall
   await dialog.getByLabel('Code').fill(CODE);
   await dialog.getByRole('button', { name: 'Submit' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(shown(page)).toHaveText('Credits: $10,040');
+  await expect(shown(page)).toHaveText('$10,040');
   await expect(page.getByText(CODE)).toHaveCount(0);
 
   expect(api.topups).toEqual([
@@ -64,7 +64,7 @@ test('a locked-out code attempt shows the wait from Retry-After, and no retry fo
   await expect(dialog.getByRole('alert')).toHaveText('Too many attempts. Try again later in about 10 minutes.');
   await expect(dialog.getByRole('button', { name: 'Submit' })).toBeEnabled();
   expect(api.topups).toHaveLength(1); // a lockout is final for this attempt; the stub would 501 a second call
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
 });
 
 test('Escape and Cancel close the prompt and leave the balance alone (#90)', async ({ page }) => {
@@ -77,7 +77,7 @@ test('Escape and Cancel close the prompt and leave the balance alone (#90)', asy
   await tapBalance(page);
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
   expect(api.topups).toEqual([]);
 });
 
@@ -85,7 +85,7 @@ test('seven taps open nothing at $100 or more (#90)', async ({ page }) => {
   await stubApi(page, { startCredits: 100 });
   await openTable(page);
   await tapBalance(page, 14);
-  await expect(shown(page)).toHaveText('Credits: $100');
+  await expect(shown(page)).toHaveText('$100');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 

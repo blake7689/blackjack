@@ -14,6 +14,22 @@
   src: url("/fonts/familjen-grotesk-latin-wght-normal.woff2") format("woff2");
 }
 
+/* The felt print (#81): two serifs, one weight each, cut down to A-Z a-z 0-9, space and the middle dot. */
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/cinzel-700-subset.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cormorant Garamond";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/cormorant-garamond-700-subset.woff2") format("woff2");
+}
+
 :root {
   line-height: 1.5;
   font-weight: 400;

@@ -1,5 +1,5 @@
-import { useReducer, useEffect, useRef, useCallback, useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
 import { gameReducer, initialGameState, nextAutoAction, RESET_SETTINGS, SETTINGS_VERSION, sanitizeSettings } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -15,28 +15,44 @@ export function GameProvider({ children }) {
   const { player, getCredits, applyCreditEvent } = usePlayer();
   const signedIn = player != null;
   const { deckCount, includeCutCard, playTimeout, autoDealDelay } = state.settings;
-  const onGame = useLocation().pathname === "/game";
+  const { pathname } = useLocation();
+  const nav = useNavigate();
+  const onGame = pathname === "/game";
+  // Signed in and the table not yet started: the player is about to land on it (see the settings effect below).
+  const [started, setStarted] = useState(false);
   useTheme(state.settings); // <html> data-felt / data-accent / data-mode / .no-totals follow the saved settings
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
+  const whereRef = useRef({ pathname, nav });
+  useEffect(() => { whereRef.current = { pathname, nav }; }, [pathname, nav]);
 
   const makeShoe = useCallback(() => createShoe(deckCount, includeCutCard), [deckCount, includeCutCard]);
 
   // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there, and while
-  // nothing has loaded a signed-in change is applied here but never saved: it would overwrite the stored table with defaults. //
+  // nothing has loaded a signed-in change is applied here but never saved: it would overwrite the stored table with defaults.
+  // Then, once per sign-in or restore (never on a later visit to Home), the table starts and a player still on "/" lands on it (DESIGN
+  // section 8); a failed load starts it with the settings it has. //
   const loadedRef = useRef(false);
   useEffect(() => {
     loadedRef.current = false;
-    if (!signedIn) return;
+    if (!signedIn) { setStarted(false); return; }
     let current = true;
+    const begin = (settings) => {
+      if (!current) return;
+      dispatch({ type: "START_GAME", shoe: createShoe(settings.deckCount, settings.includeCutCard) });
+      setStarted(true);
+      const { pathname: at, nav: go } = whereRef.current;
+      if (at === "/") go("/game", { replace: true });
+    };
     getSettings().then((saved) => {
       if (!current) return;
       const settings = sanitizeSettings(saved);
       dispatch({ type: "LOAD_SETTINGS", saved, shoe: createShoe(settings.deckCount, settings.includeCutCard) });
       loadedRef.current = true;
-    }).catch(() => {});
+      begin(settings);
+    }, () => begin(stateRef.current.settings));
     return () => { current = false; };
   }, [signedIn]);
 
@@ -102,9 +118,13 @@ export function GameProvider({ children }) {
     getPhase: () => stateRef.current.phase,
   }), [makeShoe, getCredits]);
 
+  // `starting`: signed in but the table not started yet, so Home shows Loading instead of its Start Game button (a provider flag, not round state).
+  const starting = signedIn && !started;
+  const shown = useMemo(() => ({ ...state, starting }), [state, starting]);
+
   return (
     <GameActionsContext.Provider value={actions}>
-      <GameStateContext.Provider value={state}>
+      <GameStateContext.Provider value={shown}>
         {children}
       </GameStateContext.Provider>
     </GameActionsContext.Provider>

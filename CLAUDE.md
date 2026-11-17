@@ -147,6 +147,17 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   hidden and shown cards in one list), so they flip in place. Never key them by card id or split them into two lists (a remount
   flies again). Hints (`dealOrder`, `revealed`, `moved`) sit on card copies, never in place; a hidden back gets `dealOrder` by prop
   (3 for the hole) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
+- Table art (#81): the table's top bar is `components/TopBar` (menu, `#bal` balance, count, Settings; its Count shows only landed cards), laid out with `useCardWidth`, `useDealerRoom`, `useCentrePrint`
+  and `useSeatsScroll` on `.stage-in`. Signed-in start: `GameProvider` starts the table itself (`START_GAME`, one shoe) once per sign-in or restore, after the settings load (a failed load starts with the settings
+  it has), and a player still on `/` is sent to `/game` (replace); the provider flag `starting` (and `restoring` in PlayerProvider) makes Home show "Shuffling up..." instead of a flash of Home. There is no Start Game button.
+- Fan layout (#81): each card is a `.fan-slot[data-fk]` (`data-fk` = the card's stable key, which `useSmoothRow` reads; never key it by anything that changes) as wide as `--step` (0.27 of `--cw`, floored to whole
+  pixels by `useCardWidth`); `--room` (set by `useDealerRoom`) is how far the dealer's hand may reach before it slides left of the shoe's corner card. Never put these in per-card inline style.
+- FeltPrint (#81): the rules drawn on the cloth are an `aria-hidden` svg with a separate transparent `<button class="print-hit" aria-label="Table rules">` laid over it. Do not put the printed words in the button
+  (axe label-content-name-mismatch); its click stops propagation (a click on the felt continues the round). The words come from `ruleCatalog.js` (`feltPrint`).
+- Top bar balance and top-up (#81, #90): the balance is `<b id="bal">` inside `.bal` (the live smoke reads `#bal`); the 7-tap top-up hangs on that `.bal` div, still with no role, tabindex or aria. `tapEnabled` still comes from GameBoard.
+  "Table rules" in the menu goes through `useNavActions().goSettings("game")`.
+- E2E seeds (#81): since the game starts right after sign-in, the page builds two shoes before the deal (settings load, then game start) after 4 router-key numbers; seeds 183, 65 and those in `e2e/tableart.spec.js`
+  were picked for that order. A change to when shoes are built, or to the fixture's deck count, means re-picking them (the card assertions fail first).
 - Dock and message line (#80): `components/Dock` is the one bottom bar, a fixed height per mode (`--dock`, `--rowA/B` in GameBoard.css; never let it resize). Its face follows
   the phase: betting (PRE_DEAL), offers (`role="group"` "Offers", one key per open offer + No thanks), your move (every other phase; the keys are dimmed with `aria-disabled`
   until it is your turn on `selectedHandIndex`, and while a card flies), results (POST_ROUND / END_ROUND: net, balance, Next hand). Hidden-by-setting keys (Surrender "none",

@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { usePlayer } from "../../hooks/usePlayer";
-import { useGameActions } from "../../hooks/useGame";
+import { useNavActions } from "../../hooks/useNavActions";
 import { useCssVarHeight } from "../../hooks/useCssVarHeight";
 import "./Header.css";
-import { GamePhases } from "../../utils/constants/gamePhases";
 
+// The page header of Home, Settings and Log in. The table has its own top bar (TopBar), so App does not show this one on /game. //
 export default function Header() {
-  const { player, logout } = usePlayer();
-  const { getPhase, resetGame } = useGameActions();
+  const { player } = usePlayer();
+  const { goHome, goSettings, logOut } = useNavActions();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
-  const nav = useNavigate();
   const headerRef = useRef(null);
   const menuRef = useRef(null);
   useCssVarHeight(headerRef, "--header-height");
@@ -32,29 +31,16 @@ export default function Header() {
     };
   }, [open]);
 
-  const goHome = () => {
-    if (loc.pathname === "/") return;
-    const phase = getPhase();
-    // A bet still in the circle is refunded by the reset; one already dealt is lost.
-    if (phase !== GamePhases.NONE && phase !== GamePhases.PRE_DEAL
-      && !window.confirm("Leave game and return Home? Any bet in the circle will be lost.")) return;
-    resetGame();
-    nav("/");
-  };
-
   const onLogout = () => {
     setOpen(false);
-    if (!window.confirm("Log out?")) return;
-    resetGame();
-    logout();
-    nav("/");
+    logOut();
   };
 
   return (
     <header className="bj-header" ref={headerRef}>
       <div className="bj-left">
         <button className="nav-btn" onClick={goHome}>Home</button>
-        <button className="nav-btn" onClick={() => nav(loc.state?.settingsTab ? `/settings?tab=${loc.state.settingsTab}` : "/settings")}>Settings</button>
+        <button className="nav-btn" onClick={() => goSettings()}>Settings</button>
       </div>
 
       <div className="bj-right">

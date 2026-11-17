@@ -69,6 +69,22 @@ describe("Home", () => {
     expect(container.querySelector("h1 svg").getAttribute("aria-hidden")).toBe("true");
   });
 
+  it("shows Loading, not Home, while a saved session is restored or the table is about to start (DESIGN section 8)", () => {
+    const restoring = renderUI(<Home />, { player: { player: null, restoring: true } });
+    expect(screen.getByRole("status").textContent).toContain("Shuffling up...");
+    expect(screen.queryByText("Please log in to start playing.")).toBeNull();
+    expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
+    restoring.unmount();
+    renderUI(<Home />, { game: { starting: true } });
+    expect(screen.getByRole("status").textContent).toContain("Shuffling up...");
+    expect(screen.queryByText("Start Game")).toBeNull();
+  });
+
+  it("has no status line once it is not loading", () => {
+    renderUI(<Home />);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("starts a game and opens the table", () => {
     const { gameActions } = renderUI(<Home />);
     fireEvent.click(screen.getByText("Start Game"));

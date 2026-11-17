@@ -9,12 +9,13 @@ import { stackedShoe } from "../utils/_tests_/stackedShoe";
 const [king] = stackedShoe(["K"]);
 const timing = cardTiming(1000); // slide 350, stagger 390, flip 450
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
-const flights = () => animations.filter((a) => a.el.tagName === "IMG");
+const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy"));
 const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner"));
 const layer = (c) => c.querySelector(".flight-layer");
 const wrap = (c) => c.querySelector(".fly-card");
 const hiddenWrap = (c) => wrap(c).style.visibility === "hidden";
-const turn = (c) => c.querySelector(".fly-inner").style.transform;
+// 3D is on only while a card turns: face down it is just the back, face up just the face, and `turning` in between.
+const face = (c) => ["down", "turning", "up"].find((f) => wrap(c).classList.contains(f));
 
 const mount = (props, flight = {}) => {
   const Wrapper = ({ children }) => <Flight {...flight}>{children}</Flight>;
@@ -31,10 +32,10 @@ describe("FlyCard: a new card", () => {
     const { container } = mount({ card: king });
     // The real card waits, hidden; a face-down copy sits in the flight layer, aria-hidden, with no name or rank.
     expect(hiddenWrap(container)).toBe(true);
-    const copy = layer(container).querySelector("img");
-    expect(copy.getAttribute("alt")).toBe("");
+    const copy = layer(container).querySelector(".fly-copy");
+    expect(copy.querySelector("img")).toBeNull();
     expect(copy.getAttribute("aria-hidden")).toBe("true");
-    expect(copy.getAttribute("src")).toBe("/cards/back.png");
+    expect(copy.querySelector("use").getAttribute("href")).toBe("#cardback");
     expect(queue.free).toBe(t0 + timing.stagger + timing.flip); // it reserved its flight and its flip
     advance(0);
     expect(copy.style.visibility).toBe("visible");
@@ -49,7 +50,7 @@ describe("FlyCard: a new card", () => {
     expect(flips()).toHaveLength(1);
     expect(flips()[0].frames).toEqual([{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }]);
     expect(flips()[0].options.duration).toBe(timing.flip);
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     expect(landed.ids.has(king.id)).toBe(true);
     expect(container.querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
   });
@@ -60,7 +61,7 @@ describe("FlyCard: a new card", () => {
     act(() => { flights()[0].onfinish(); });
     expect(hiddenWrap(container)).toBe(false);
     expect(landed.ids.has(king.id)).toBe(false);
-    expect(turn(container)).toBe("rotateY(0deg)");
+    expect(face(container)).toBe("turning");
     act(() => { flips()[0].onfinish(); });
     expect(landed.ids.has(king.id)).toBe(true);
   });
@@ -76,7 +77,7 @@ describe("FlyCard: a new card", () => {
 
   it("opening deal: dealOrder delays the copy by dealOrder * stagger", () => {
     const { container } = mount({ card: king, dealOrder: 2 });
-    const copy = layer(container).querySelector("img");
+    const copy = layer(container).querySelector(".fly-copy");
     advance(2 * timing.stagger - 1);
     expect(copy.style.visibility).toBe("hidden");
     expect(flights()).toHaveLength(0);
@@ -89,13 +90,13 @@ describe("FlyCard: a new card", () => {
     queue.free = performance.now() + 5000;
     const { container } = mount({ card: king, dealOrder: 0 });
     advance(0);
-    expect(layer(container).querySelector("img").style.visibility).toBe("visible");
+    expect(layer(container).querySelector(".fly-copy").style.visibility).toBe("visible");
   });
 
   it("without dealOrder it queues behind the cards already on their way", () => {
     queue.free = performance.now() + 500;
     const { container } = mount({ card: king });
-    const copy = layer(container).querySelector("img");
+    const copy = layer(container).querySelector(".fly-copy");
     advance(499);
     expect(copy.style.visibility).toBe("hidden");
     advance(1);
@@ -111,7 +112,7 @@ describe("FlyCard: a new card", () => {
       return { left: 0, top: 0, width: 0, height: 0 };
     });
     const { container } = mount({ card: king });
-    const copy = layer(container).querySelector("img");
+    const copy = layer(container).querySelector(".fly-copy");
     advance(0);
     expect(flights()[0].frames[0].transform).toContain("translate(300px, 100px)"); // shoe centre minus the card's centre
     pos.left = 40;
@@ -126,7 +127,7 @@ describe("FlyCard: a new card", () => {
     const { container, unmount } = mount({ card: king });
     advance(0);
     const [flight] = flights();
-    const copy = layer(container).querySelector("img");
+    const copy = layer(container).querySelector(".fly-copy");
     unmount();
     expect(flight.cancelled).toBe(true);
     expect(copy.isConnected).toBe(false);
@@ -169,7 +170,7 @@ describe("FlyCard: a face that arrives later", () => {
     advance(0);
     finishAnimations();
     check();
-    expect(turn(container)).toBe("rotateY(0deg)");
+    expect(face(container)).toBe("down");
     expect(flips()).toHaveLength(0);
   });
 
@@ -186,7 +187,7 @@ describe("FlyCard: a face that arrives later", () => {
     expect(container.querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
     expect(queue.free).toBe(performance.now() + timing.flip + timing.gap); // the flip reserved its time
     finishAnimations();
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     expect(landed.ids.has(king.id)).toBe(true);
   });
 
@@ -222,14 +223,14 @@ describe("FlyCard: no flight", () => {
 
   it("the board's first render: cards already on the table are just there, face up", () => {
     const { container } = mount({ card: king, dealOrder: 1 }, { enabled: false });
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     noFlight(container);
     expect(landed.ids.has(king.id)).toBe(true);
   });
 
   it("a split's moved card never flies", () => {
     const { container } = mount({ card: king, moved: true });
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     noFlight(container);
     expect(landed.ids.has(king.id)).toBe(true);
   });
@@ -237,7 +238,7 @@ describe("FlyCard: no flight", () => {
   it("reduced motion: no flight, no flip, the face at once", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const { container } = mount({ card: king });
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     expect(container.querySelector("img.fly-front")).not.toBeNull();
     noFlight(container);
     expect(landed.ids.has(king.id)).toBe(true);
@@ -246,9 +247,9 @@ describe("FlyCard: no flight", () => {
   it("reduced motion: a face arriving on a card already on the table shows at once, with no flip", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
     const { container, again } = mount({});
-    expect(turn(container)).toBe("rotateY(0deg)");
+    expect(face(container)).toBe("down");
     again({ card: king });
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
     expect(animations).toHaveLength(0);
     expect(landed.ids.has(king.id)).toBe(true);
   });
@@ -259,7 +260,7 @@ describe("FlyCard: no flight", () => {
     expect(flips()).toHaveLength(1);
     expect(flights()).toHaveLength(0);
     finishAnimations();
-    expect(turn(container)).toBe("rotateY(180deg)");
+    expect(face(container)).toBe("up");
   });
 });
 

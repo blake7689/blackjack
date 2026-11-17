@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act, cleanup } from "@testing-library/react";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, useNavigate, useLocation } from "react-router-dom";
 import { GameProvider } from "../providers/GameProvider";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { PlayerContext } from "../context/PlayerContext";
@@ -25,6 +25,7 @@ function Probe({ ctx }) {
   ctx.state = useGameState();
   ctx.actions = useGameActions();
   ctx.navigate = useNavigate();
+  ctx.pathname = useLocation().pathname;
   return null;
 }
 
@@ -1200,5 +1201,74 @@ describe("GameProvider split deal (#133)", () => {
     const current = setup({ signedIn: true });
     await flush();
     expect(current.ctx.state.settings.splitDeal).toBe("one");
+  });
+});
+
+describe("the signed-in start on the table (DESIGN section 8)", () => {
+  const swap = (rerender, ctx, player, path = "/") => rerender(
+    <MemoryRouter initialEntries={[path]}>
+      <PlayerContext.Provider value={{ player, getCredits: () => 0, applyCreditEvent: () => {} }}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    </MemoryRouter>
+  );
+
+  it("waits for the saved settings, then starts the game and replaces / with /game", async () => {
+    remote.getSettings.mockResolvedValue({ v: 5, deckCount: 4 });
+    const { ctx } = setup({ signedIn: true, path: "/" });
+    expect(ctx.state.starting).toBe(true); // Home shows Loading meanwhile
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.state.settings.deckCount).toBe(4);
+    expect(ctx.state.starting).toBe(false);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("starts with the settings it has when they cannot be loaded", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true, path: "/" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("leaves a player who is on another page where they are", async () => {
+    const { ctx } = setup({ signedIn: true, path: "/settings" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/settings");
+  });
+
+  it("signed out: nothing starts, nothing is loading, / stays Home", async () => {
+    const { ctx } = setup({ path: "/" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
+    expect(ctx.state.starting).toBe(false);
+    expect(ctx.pathname).toBe("/");
+  });
+
+  it("does it once per sign-in: Home opened later stays Home, and the next sign-in starts again", async () => {
+    const { ctx, rerender } = setup({ signedIn: true, path: "/" });
+    await flush();
+    act(() => ctx.actions.resetGame());
+    act(() => ctx.navigate("/"));
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE); // no bounce back to the table
+    expect(ctx.pathname).toBe("/");
+    swap(rerender, ctx, null);
+    expect(ctx.state.starting).toBe(false);
+    swap(rerender, ctx, { userName: "bob" });
+    expect(ctx.state.starting).toBe(true);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+  });
+
+  it("does not start a game for a sign-in that ended before its settings came back", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx, rerender } = setup({ signedIn: true, path: "/" });
+    swap(rerender, ctx, null);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
   });
 });

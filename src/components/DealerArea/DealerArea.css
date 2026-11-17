@@ -1,17 +1,3 @@
-.hand-total {
-  margin-bottom: 8px;
-  font-weight: 700;
-  font-size: clamp(12px, 2.2vw, 15px);
-  opacity: 0.96;
-  background: rgba(0,0,0,0.18);
-  border-radius: 8px;
-  padding: 4px 8px;
-  display: inline-block;
-  min-width: 38px;
-  color: #fff;
-  box-sizing: border-box;
-}
-
 .dealer-area {
   display: flex;
   flex-direction: column;
@@ -20,47 +6,6 @@
   box-sizing: border-box;
 }
 
-.dealer-area .cards {
-  display:flex;
-  gap:12px;
-  align-items:center;
-  justify-content: center;
-}
-
-.dealer-hand {
-  background: rgba(0,0,0,0.24);
-  padding: 8px;
-  border-radius: 12px;
-  min-width: 220px;
-  text-align: center;
-  border: 1px solid rgba(255,255,255,0.04);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  border-color: rgba(255,255,255,0.12);
-  box-sizing: border-box;
-  max-width: none;
-  overflow: visible;
-}
-
-.dealer.cards {
-  display: flex;
-  flex-direction: row;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-  flex-wrap: nowrap;
-  padding: 6px 4px;
-  box-sizing: border-box;
-}
-
-.busted { color: red !important; }
-.blackjack { color: gold !important; }
-
-/* make dealer card row scroll horizontally if necessary on small screens */
-@media (max-width: 450px) {
-  .dealer-hand { padding: 6px; }
-  .dealer.cards { gap: 6px; }
-  .hand-total { font-size: 12px; padding: 3px 6px; }
-}
+/* The dealer's hand is a straight row of cards (.fan-row, GameBoard.css); its total pill sits beside it (Pill.css); no box. */
+.dealer-hand { max-width: none; overflow: visible; }
+.dealer.cards { align-items: center; }

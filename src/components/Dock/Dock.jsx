@@ -4,12 +4,11 @@ import { HandStatus } from "../../utils/constants/handStatus";
 import { SurrenderOptions } from "../../utils/constants/ruleOptions";
 import { handActions, insuranceStake, roundNet } from "../../utils/blackjackLogic";
 import { visibleChips } from "../../utils/chips";
+import { signed } from "../../utils/money";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useGameState, useGameActions } from "../../hooks/useGame";
 import "./Dock.css";
 
-const money = (n) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: 2 })}`;
-const signed = (n) => (n > 0 ? "+" : n < 0 ? "-" : "") + money(n);
 const NOTHING = { hit: false, double: false, triple: false, split: false, surrender: false }; // not your turn: every action dimmed
 
 // A key never leaves the layout: an action that can't be taken now is dimmed with aria-disabled (it still takes focus and

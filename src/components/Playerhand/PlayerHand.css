@@ -1,52 +1,48 @@
-.hand-total {
-  margin-bottom: 8px;
-  font-weight: 700;
-  font-size: clamp(12px, 2.2vw, 15px);
-  opacity: 0.96;
-  background: rgba(0,0,0,0.18);
-  border-radius: 8px;
-  padding: 4px 8px;
-  display: inline-block;
-  min-width: 38px;
-  color: #fff;
-  box-sizing: border-box;
+/* SEATS (#81, DESIGN sections 4 and 5): one centred row of up to four hands; more, or a row that does not fit, scroll one hand at a time.
+   A seat is the hand, its bet circle (a printed double ring, "BET" while empty) and the amount. The cards' own layout is .fan-row (GameBoard.css). */
+.seats {
+  flex: none; display: flex; justify-content: center; gap: var(--sg); width: 100%; padding: 0 12px; box-sizing: border-box; position: relative; z-index: var(--z-seats);
+  --sw: min(calc(var(--cw) * 3.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n)));
+  --spot: max(44px, min(calc(var(--cw) * 1.15), calc(var(--sw) * .6)));
 }
+.seats.scroll { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 14px calc(50cqi - var(--sw) / 2) 0; margin-top: -14px;
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); --sw: calc(var(--cw) * 2.6); } /* fade cues at the edges */
+.seats.scroll::-webkit-scrollbar { display: none; }
+/* hands not in play dim to 62 % brightness: a filter, never opacity (nothing shows through a card) */
+.seats.turns .seat:not(.active) .hand { filter: brightness(.62) saturate(.85); }
+.hand { position: relative; flex: none; transition: filter 300ms var(--e-io); }
+.seat { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; align-items: center; scroll-snap-align: center; }
+.stage-in.multi .seat .hand { margin-top: 32px; } /* room for the pill above the hand */
 
-.Lose { color: red !important; }
-.Push { color: orange !important; }
-.Win { color: #00e600 !important; }
-.Surrendered { color: #8ec5ff !important; }
-.busted { color: red !important; }
-.blackjack { color: gold !important; }
+.spot-row { position: relative; width: 100%; height: var(--spot); margin-top: 12px; display: flex; justify-content: center; }
+.spot { position: relative; width: var(--spot); height: var(--spot); border-radius: 50%; color: var(--print); }
+.spot::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--print); opacity: .7; }
+.spot::after { content: ""; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid var(--print); opacity: .35; }
+.spot .bet-lbl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; letter-spacing: .2em; color: var(--print); }
+.spot.has .bet-lbl { display: none; }
+.seat.active .spot::before { border-color: var(--accent); opacity: 1; box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .16), 0 0 26px rgb(var(--accent-rgb) / .3); }
 
-.player-hand {
-  background: rgba(0,0,0,0.24);
-  padding: 8px;
-  border-radius: 12px;
-  text-align: center;
-  border: 1px solid rgba(255,255,255,0.04);
-  box-sizing: border-box;
-}
+.amt { min-height: 22px; margin-top: 4px; max-width: 100%; font-size: 13px; font-weight: 700; color: #fff; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px; }
+.amt > span:not(.tag) { padding: 1px 8px; border-radius: 99px; background: rgb(0 0 0 / .32); white-space: nowrap; }
+.tag { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 9px; border-radius: 99px; font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.tag.win, .tag.bj, .tag.even { background: var(--win); color: #03170c; }
+.tag.even { background: var(--even); }
+.tag.lose, .tag.bust { background: var(--lose); color: #260503; }
+.tag.push { background: var(--push); color: #0d1216; }
+.tag.surrender, .tag.surrendered { background: var(--surr); color: #2a1503; }
 
-.player-hand .cards,
-.player.cards {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-  width: max-content; 
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding-bottom: 6px;
-}
-
-.player-hand .card-wrap {
-  flex: 0 0 auto;
-}
-
-.player-hand.active {
-  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
-  border-color: rgba(255,255,255,0.12);
+/* landscape phones and wide desktops: the bet circle beside the hand, the total in its own column on the other side */
+@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  .seats { --spot: max(44px, min(calc(var(--cw) * 1), calc(var(--sw) * .36))); --sw: min(calc(var(--cw) * 4.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n))); margin-top: 6px; }
+  .stage-in.multi .seat .hand { margin-top: 0; }
+  .seat { display: grid; grid-template-columns: var(--spot) auto var(--spot); grid-template-rows: auto auto; column-gap: 10px; align-content: center; justify-content: center; }
+  .seat .hand { margin-top: 0; grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+  .seat::after { content: ""; width: var(--spot); grid-column: 3; grid-row: 1; }
+  .seat.nocards { grid-template-columns: var(--spot); }
+  .seat.nocards .hand, .seat.nocards::after { display: none; }
+  .seats.scroll { --sw: calc(max(44px, var(--cw)) + var(--cw) * 2.1 + 92px); } /* one hand at a time: the circle, a hand of three and its total */
+  .stage-in.multi .seat { grid-template-columns: var(--spot) auto 56px; }
+  .stage-in.multi .seat::after { width: 56px; }
+  .spot-row { grid-column: 1; grid-row: 1; width: var(--spot); height: var(--spot); margin-top: 0; align-self: end; }
+  .seat > .amt { grid-column: 1; grid-row: 2; justify-content: center; align-self: start; }
 }

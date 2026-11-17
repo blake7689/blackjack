@@ -16,7 +16,7 @@ test('cold-start sign-in waits out a slow API (#75)', async ({ page }) => {
   const api = await stubApi(page, { loginDelayMs: 15_000, meDelayMs: 11_000 }); // both past the old 10 s limit
   await submitLogin(page);
   await expect(page.getByText(/waking up/)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible({ timeout: 35_000 });
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 35_000 }); // a signed-in player lands on the table
   expect(api.failed).toEqual([]); // no request was aborted early
 });
 
@@ -24,14 +24,15 @@ test('cold-start session restore waits out a slow API (#75)', async ({ page }) =
   const api = await stubApi(page, { meDelayMs: 11_000 });
   await page.addInitScript(() => sessionStorage.setItem('bj.token', 'e2e-token'));
   await page.goto('/');
-  await expect(page.getByText('Please log in to start playing.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Start Game' })).toBeVisible({ timeout: 25_000 });
-  await expect(page.getByRole('button', { name: 'tester' })).toBeVisible();
+  await expect(page.getByText('Shuffling up...')).toBeVisible(); // Loading while the session restores, not Home
+  await expect(page.getByText('Please log in to start playing.')).toHaveCount(0);
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 25_000 });
+  await expect(page.locator('#bal')).toHaveText('$1,000');
   expect(api.failed).toEqual([]);
 });
 
 // Seed 183 (mulberry32), the Vegas table of the fixture (US peek, 6 decks, dealer hits soft 17). Before the deal the page uses 4 random numbers (router keys),
-// the settings load builds one shoe and Start Game a second one; the deal draws from that. The shuffle consumes Math.random in proportion to the shoe
+// the settings load builds one shoe and the start of the game (right after it, since #81) a second one; the deal draws from that. The shuffle consumes Math.random in proportion to the shoe
 // size, so a change of the fixture's deck count means a new seed. To re-pick: replay those steps over createShoe (src/utils/cards.js) and keep a round whose
 // cards are all different, with no pair, no blackjack, no ace or ten up, a Hit that neither busts nor makes 21, and a dealer that has to draw.
 //   player king of diamonds + 4 of clubs = 14, dealer 6 of clubs up + jack of hearts in the hole (16, no blackjack).
@@ -41,7 +42,6 @@ test('the keys wait while cards move through a whole round (#72)', async ({ page
   const api = await stubApi(page);
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   expect(await noHScroll(), 'the game board must not scroll sideways').toBe(true); // matters at phone size (the phone project)
@@ -96,14 +96,13 @@ test('surrendering a hand returns half the bet, in one settle (#91)', async ({ p
   const api = await stubApi(page);
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
-  await expect(page.locator('.hand-total > span:not(.ht-size) .hand-result.Surrendered')).toHaveText('Surrendered') // the live text, not its invisible size copy;
+  await expect(page.getByText('Surrendered', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'jack of hearts' })).toBeVisible(); // the hole card is shown
   await expect(page.getByRole('img', { name: '3 of diamonds' })).toHaveCount(0); // the dealer did not play on (16)
@@ -114,7 +113,7 @@ test('surrendering a hand returns half the bet, in one settle (#91)', async ({ p
   expect(api.settles).toEqual([{ payout: 5, requestId: expect.stringMatching(V4) }]);
 });
 
-// Offers (#91). Seeds picked by script like seed 183 (same steps: 4 router keys, then the settings-load shoe and the Start Game shoe, Vegas 6 decks), keeping the
+// Offers (#91). Seeds picked by script like seed 183 (same steps: 4 router keys, then the settings-load shoe and the game-start shoe, Vegas 6 decks), keeping the
 // first four cards of the second shoe: player, dealer up, player, hole. Seed 183 is left alone.
 //   Seed 207: 10 of clubs + 6 of diamonds (16) against an ace of diamonds, king of spades in the hole (a dealer blackjack; no other king or spade on the table).
 //   Seed 65:  3 of diamonds + jack of spades (13) against an ace of clubs, 7 of clubs in the hole (soft 18: no blackjack, the dealer stands).
@@ -123,7 +122,6 @@ async function dealAt(page, seed, settings) {
   const api = await stubApi(page, settings ? { settings } : {});
   await seedRandom(page, seed);
   await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
   await page.getByRole('button', { name: 'Add 10', exact: true }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   return api;
@@ -144,7 +142,7 @@ test('insurance against an ace: half the bet is a separate ledger bet, the hole 
   await offers.getByRole('button', { name: 'Insurance $5' }).click();
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'king of spades' })).toBeVisible(); // the peek turned the hole card over
-  await expect(page.locator('.hand-total > span:not(.ht-size) .hand-result.Win')).toHaveText(' Insurance pays $15');
+  await expect(page.getByText('Insurance pays $15')).toBeVisible();
   await expect(page.getByRole('group', { name: 'Offers' })).toHaveCount(0);
 
   await expect.poll(() => api.settles.length).toBe(1);
@@ -185,7 +183,7 @@ test('early surrender is offered before the peek: the half bet is kept although 
   await expect(page.getByText('Insurance?')).toBeVisible(); // one question per offer, insurance first
 
   await offers.getByRole('button', { name: 'Surrender' }).click();
-  await expect(page.locator('.hand-total > span:not(.ht-size) .hand-result.Surrendered')).toHaveText('Surrendered'); // at once, before the peek
+  await expect(page.getByText('Surrendered', { exact: true })).toBeVisible(); // at once, before the peek
   await expect(offers.getByRole('button', { name: 'Surrender' })).toHaveCount(0); // each offer closes by itself
   await offers.getByRole('button', { name: 'No thanks' }).click();
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });

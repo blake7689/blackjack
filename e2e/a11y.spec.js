@@ -66,7 +66,7 @@ test.describe('settings', () => {
 test('top-up dialog has no serious accessibility violations (#120)', async ({ page }) => {
   await stubApi(page, { startCredits: 40 });
   await openTable(page);
-  const balance = page.getByText('Credits:');
+  const balance = page.getByText('Balance', { exact: true });
   for (let i = 0; i < 7; i++) await balance.click();
   await expect(page.getByRole('dialog', { name: 'Enter code' })).toBeVisible();
   await expectNoSeriousA11y(page, 'top-up dialog');
@@ -83,7 +83,7 @@ test('sign-in error has no serious accessibility violations (#125)', async ({ pa
 test('top-up dialog error has no serious accessibility violations (#125)', async ({ page }) => {
   await stubApi(page, { startCredits: 40, topUps: [{ status: 400, message: "That didn't work." }] });
   await openTable(page);
-  const balance = page.getByText('Credits:');
+  const balance = page.getByText('Balance', { exact: true });
   for (let i = 0; i < 7; i++) await balance.click();
   const dialog = page.getByRole('dialog', { name: 'Enter code' });
   await dialog.getByLabel('Code').fill('wrong-dummy-code');
@@ -95,7 +95,7 @@ test('top-up dialog error has no serious accessibility violations (#125)', async
 test('top-up dialog with the Code input focused has no serious accessibility violations (#125)', async ({ page }) => {
   await stubApi(page, { startCredits: 40 });
   await openTable(page);
-  const balance = page.getByText('Credits:');
+  const balance = page.getByText('Balance', { exact: true });
   for (let i = 0; i < 7; i++) await balance.click();
   await expect(page.getByRole('dialog', { name: 'Enter code' }).getByLabel('Code')).toBeFocused();
   await expectNoSeriousA11y(page, 'top-up dialog, Code focused');

@@ -3,7 +3,7 @@
 
 export const EASING = "cubic-bezier(.2,.8,.2,1)";
 const ARC = 40; // px the flight bows upward
-const START_ROTATION = -12; // deg, settles to the card's own rotation
+const START_ROTATION = -36; // deg: it leaves the shoe's mouth at the shoe's angle and settles to the card's own rotation
 const SLIDE_SHARE = 0.35; // of Rate of Play
 const SLIDE_CAP = 450; // ms
 const FLIP = 450; // ms, never more than half of Rate of Play
