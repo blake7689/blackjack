@@ -9,6 +9,7 @@ import { useDealerRoom } from "../hooks/useDealerRoom";
 import { useCentrePrint } from "../hooks/useCentrePrint";
 import { centrePrint } from "../utils/centrePrint";
 import { initialGameState } from "../utils/gameReducer";
+import { RULE_PRESETS } from "../utils/rulePresets";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 
@@ -33,6 +34,26 @@ describe("FeltPrint (#81)", () => {
     const { container } = render(<FeltPrint settings={settings} />);
     expect(lines(container)).toEqual(["Blackjack Pays 3 to 2", "Dealer hits soft 17 · Dealer peeks", "Insurance pays 2 to 1"]);
     expect(container.querySelectorAll("path.band")).toHaveLength(2);
+  });
+
+  it("prints each preset's own words, in portrait and in landscape", () => {
+    const words = { Vegas: "Dealer hits soft 17 · Dealer peeks" };
+    for (const name of Object.keys(RULE_PRESETS)) {
+      size(400, 82);
+      const rules = words[name] ?? "Dealer stands on all 17s · No second card";
+      const { container, unmount } = render(<FeltPrint settings={{ ...settings, ...RULE_PRESETS[name] }} />);
+      expect(lines(container), name).toEqual(["Blackjack Pays 3 to 2", rules, "Insurance pays 2 to 1"]);
+      expect(container.querySelectorAll("path.band"), name).toHaveLength(2);
+      unmount();
+      vi.restoreAllMocks();
+      size(800, 44);
+      vi.stubGlobal("matchMedia", () => ({ matches: true }));
+      const wide = render(<FeltPrint settings={{ ...settings, ...RULE_PRESETS[name] }} />);
+      expect(lines(wide.container), name).toEqual([`Blackjack Pays 3 to 2 · ${rules} · Insurance pays 2 to 1`]);
+      wide.unmount();
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    }
   });
 
   it("prints no insurance line or ruled band when insurance is off", () => {

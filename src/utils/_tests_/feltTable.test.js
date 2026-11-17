@@ -5,6 +5,7 @@ import { cardStep, dealerRoom } from "../cardWidth";
 import { discardCount } from "../cards";
 import { initialGameState } from "../gameReducer";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
+import { RULE_PRESETS } from "../rulePresets";
 
 const { US_PEEK, US_NO_PEEK, EU } = DealerHoleOptions;
 const rules = (patch) => feltPrint({ ...initialGameState.settings, ...patch });
@@ -19,6 +20,23 @@ describe("feltPrint (#81): the words the felt prints", () => {
     expect(rules({ dealerHitsSoft17: false }).soft).toBe("Dealer stands on all 17s");
     expect(rules({ insurance: false }).insurance).toBe("");
     expect([US_PEEK, US_NO_PEEK, EU].map((m) => rules({ dealerHoleBehaviour: m }).mode)).toEqual(["Dealer peeks", "No peek", "No second card"]);
+  });
+});
+
+describe("feltPrint (#81): every preset's wording, written out so a change to a preset or to the catalog fails here", () => {
+  // The felt follows the rules of each table: all five pay 3 to 2 and offer insurance; only Vegas hits soft 17 and peeks.
+  const VEGAS_WORDS = { pay: "Blackjack Pays 3 to 2", soft: "Dealer hits soft 17", mode: "Dealer peeks", insurance: "Insurance pays 2 to 1" };
+  const NO_HOLE = { ...VEGAS_WORDS, soft: "Dealer stands on all 17s", mode: "No second card" };
+  it.each([["Vegas", VEGAS_WORDS], ["Atlantic City", NO_HOLE], ["Europe", NO_HOLE], ["Australia", NO_HOLE], ["Singapore", NO_HOLE]])("%s", (name, words) => {
+    expect(feltPrint({ ...initialGameState.settings, ...RULE_PRESETS[name] })).toEqual(words);
+  });
+
+  it("a 6 to 5 table says so on every preset, and insurance off leaves its line empty", () => {
+    for (const name of Object.keys(RULE_PRESETS)) {
+      const print = feltPrint({ ...initialGameState.settings, ...RULE_PRESETS[name], blackjackPayout: "6:5", insurance: false });
+      expect(print.pay).toBe("Blackjack Pays 6 to 5");
+      expect(print.insurance).toBe("");
+    }
   });
 });
 

@@ -81,6 +81,22 @@ describe("the row scrolls one hand at a time (useSeatsScroll)", () => {
     expect(scrollTo).toHaveBeenCalledOnce();
   });
 
+  it("centres the hand in play: the scroll puts the middle of its seat on the middle of the row, for every hand", () => {
+    const scrollTo = vi.fn();
+    Element.prototype.scrollTo = scrollTo;
+    // a row 400 wide of seats 150 wide, 200 apart (a seat's place is its index among its siblings)
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(400);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(150);
+    vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function place() { return 200 * [...this.parentElement.children].indexOf(this); });
+    const { gameState, rerender } = renderUI(<GameBoard />, { game: table(five(), { selectedHandIndex: 0 }) });
+    expect(scrollTo).toHaveBeenLastCalledWith({ left: -125, behavior: "smooth" }); // 0 - 400 / 2 + 150 / 2: the first seat's middle on the row's middle
+    for (const index of [1, 2, 3, 4]) {
+      gameState.selectedHandIndex = index;
+      rerender(<GameBoard />);
+      expect(scrollTo).toHaveBeenLastCalledWith({ left: 200 * index - 125, behavior: "smooth" }); // one seat further each time: one hand at a time
+    }
+  });
+
   it("jumps instead of gliding with reduced motion", () => {
     const scrollTo = vi.fn();
     Element.prototype.scrollTo = scrollTo;
