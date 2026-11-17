@@ -2,17 +2,21 @@
 
 ## Fonts
 
-Both fonts are licensed under the SIL Open Font License, Version 1.1 (full text below). They are self-hosted in `public/fonts/` (one variable woff2 each, Latin subset), taken unmodified from the Fontsource project (`@fontsource-variable/*`, <https://fontsource.org>).
+All four fonts are licensed under the SIL Open Font License, Version 1.1 (full text below). They are self-hosted in `public/fonts/` (one woff2 each, Latin subset), taken from the Fontsource project (`@fontsource-variable/*` and `@fontsource/*`, <https://fontsource.org>). Figtree and Familjen Grotesk are unmodified; the two felt fonts are cut down (glyphs removed, nothing changed) to A-Z, a-z, 0-9, space and the middle dot, with `pyftsubset` (fontTools), because they print one short block of text.
 
 | Role | Font | File | Source |
 |---|---|---|---|
 | UI text (400 / 500 / 700) | Figtree | `fonts/figtree-latin-wght-normal.woff2` | <https://github.com/erikdkennedy/figtree> via <https://fontsource.org/fonts/figtree> |
 | Display: balance, verdict, titles, chip numerals (500-600) | Familjen Grotesk | `fonts/familjen-grotesk-latin-wght-normal.woff2` | <https://github.com/Familjen-Sthlm/Familjen-Grotesk> via <https://fontsource.org/fonts/familjen-grotesk> |
+| Felt print: the payout line (700) | Cinzel | `fonts/cinzel-700-subset.woff2` | <https://github.com/NDISCOVER/Cinzel> via <https://fontsource.org/fonts/cinzel> |
+| Felt print: the rules and insurance lines, lining numerals (700) | Cormorant Garamond | `fonts/cormorant-garamond-700-subset.woff2` | <https://github.com/CatharsisFonts/Cormorant> via <https://fontsource.org/fonts/cormorant-garamond> |
 
 - Copyright 2022 The Figtree Project Authors (<https://github.com/erikdkennedy/figtree>)
 - Copyright 2021 The Familjen Grotesk Project Authors (<https://github.com/Familjen-Sthlm/Familjen-Grotesk>)
+- Copyright 2020 The Cinzel Project Authors (<https://github.com/NDISCOVER/Cinzel>)
+- Copyright 2015 The Cormorant Project Authors (<https://github.com/CatharsisFonts/Cormorant>)
 
-The CSS names them `--font-display` and `--font-ui` (`src/tokens.css`), so changing a face is one line there plus its `@font-face` in `src/index.css`.
+The CSS names them `--font-display`, `--font-ui`, `--font-print-caps` and `--font-print-book` (`src/tokens.css`), so changing a face is one line there plus its `@font-face` in `src/index.css`.
 
 Clash Display and Satoshi (Fontshare / Indian Type Foundry), the faces the design mockup was drawn with, are **not used**: their licence forbids redistributing the font files, which includes committing them to a public repository. Figtree and Familjen Grotesk stand in for them.
 

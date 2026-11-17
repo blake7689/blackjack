@@ -9,7 +9,7 @@ function DealerArea({ dealer, hiddenCount = 0 }) {
   useSmoothRow(rowRef);
   const shown = useLanded(dealer.cards);
   return (
-    <div className="dealer-area">
+    <div className="dealer-area" style={{ "--n": dealer.cards.length + hiddenCount }}>
       <div className="dealer-hand">
         {/* Live text over an invisible copy of the final text (see GameBoard.css). The total counts only cards that have
             landed and flipped; the labels wait for the last one. */}
@@ -22,7 +22,7 @@ function DealerArea({ dealer, hiddenCount = 0 }) {
             </span>
           ))}
         </div>
-        <div className="dealer cards" ref={rowRef}>
+        <div className="fan-row dealer cards" ref={rowRef}>
           {/* One list, so the hole card keeps its element from face down to face up (two lists would remount it and fly it in again).
               Face down: the card itself never reaches the DOM, only its place in the deal (dealOrder 3). */}
           {[

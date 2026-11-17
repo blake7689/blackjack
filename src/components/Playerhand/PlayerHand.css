@@ -28,23 +28,8 @@
   box-sizing: border-box;
 }
 
-.player-hand .cards,
-.player.cards {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  gap: 8px;
-  width: max-content; 
-  margin: 0 auto;
-  box-sizing: border-box;
-  padding-bottom: 6px;
-}
-
-.player-hand .card-wrap {
-  flex: 0 0 auto;
-}
+/* The hand's cards are a straight row (.fan-row, GameBoard.css), as in the dealer's hand. */
+.player-hand .cards { margin: 0 auto; box-sizing: border-box; }
 
 .player-hand.active {
   box-shadow: 0 6px 18px rgba(0,0,0,0.35);

@@ -35,7 +35,7 @@ function PlayerHand({ hand, active, gamePhase }) {
           </span>
         ))}
       </div>
-      <div className="cards" ref={rowRef}>
+      <div className="fan-row cards" ref={rowRef}>
         {/* One list, so a double's card keeps its element from face down to face up (no second flight).
             Face down: the hidden card itself (and its id) never reaches the DOM. */}
         {[

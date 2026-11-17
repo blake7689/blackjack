@@ -136,3 +136,15 @@ export function ruleSummary(settings) {
   const parts = visibleIn(settings).filter((rule) => rule.summary);
   return [1, 2].map((line) => parts.filter((rule) => rule.summary.line === line).map((rule) => rule.summary.text(selectedValue(rule, settings), settings)).join(" · "));
 }
+
+// What the table's felt prints (#81, DESIGN section 5): `pay` (the payout line), `rules` (soft 17 and the hole-card mode, joined by " · ") and
+// `insurance` ("" when insurance is off). The same words as Settings' controls and the rules sheet: change them here only.
+const HOLE_PRINT = { [US_PEEK]: "Dealer peeks", [US_NO_PEEK]: "No peek", [EU]: "No second card" };
+export function feltPrint(settings) {
+  return {
+    pay: `Blackjack Pays ${settings.blackjackPayout === BlackjackPayouts.SIX_FIVE ? "6 to 5" : "3 to 2"}`,
+    soft: settings.dealerHitsSoft17 ? "Dealer hits soft 17" : "Dealer stands on all 17s",
+    mode: HOLE_PRINT[settings.dealerHoleBehaviour],
+    insurance: settings.insurance ? "Insurance pays 2 to 1" : "",
+  };
+}

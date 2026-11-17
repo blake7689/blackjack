@@ -14,7 +14,7 @@ import { initialGameState, gameReducer } from "../utils/gameReducer";
 
 const timing = cardTiming(1000);
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
-const flights = () => animations.filter((a) => a.el.tagName === "IMG");
+const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy"));
 const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner"));
 const glides = () => animations.filter((a) => a.frames[0]?.translate !== undefined);
 const live = (c) => c.querySelector(".hand-total > span:not(.ht-size)").textContent;
@@ -48,7 +48,7 @@ describe("PlayerHand with a face-down double", () => {
     const before = [...container.querySelectorAll(".fly-card")];
     expect(before).toHaveLength(3);
     expect(before.map((el) => el.style.rotate)).toEqual(["", "", "90deg"]);
-    expect(before.map((el) => el.dataset.fk)).toEqual([six.id, five.id, "dbl"]);
+    expect(before.map((el) => el.parentElement.dataset.fk)).toEqual([six.id, five.id, "dbl"]);
     expect(flights()).toHaveLength(3); // each card flew once, in its first mount
     expect(error).not.toHaveBeenCalled(); // no duplicate key warning
 
@@ -57,13 +57,13 @@ describe("PlayerHand with a face-down double", () => {
     expect(after).toHaveLength(3);
     after.forEach((el, i) => expect(el).toBe(before[i])); // same elements: nothing remounted
     expect(after.map((el) => el.style.rotate)).toEqual(["", "", "90deg"]);
-    expect(after.map((el) => el.dataset.fk)).toEqual([six.id, five.id, "dbl"]);
+    expect(after.map((el) => el.parentElement.dataset.fk)).toEqual([six.id, five.id, "dbl"]);
     expect(flights()).toHaveLength(3); // no second launch
     expect(container.querySelector(".flight-layer").children).toHaveLength(0);
     expect(flips()).toHaveLength(3); // the three flips so far: the two cards and the new face of the double
     expect(after[2].querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
     finishAnimations();
-    expect(after[2].querySelector(".fly-inner").style.transform).toBe("rotateY(180deg)");
+    expect(after[2].classList.contains("up")).toBe(true);
     expect(landed.ids.has(king.id)).toBe(true);
     expect(error).not.toHaveBeenCalled();
   });

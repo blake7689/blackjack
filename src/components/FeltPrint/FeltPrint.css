@@ -1,0 +1,5 @@
+/* The felt print (#81): ink on cloth. Its box and place are GameBoard.css (.print); the lines are laid out by FeltPrint.jsx. */
+.print text { fill: var(--print); font-weight: 700; }
+.print .caps { font-family: var(--font-print-caps); }
+.print .book { font-family: var(--font-print-book); font-variant-numeric: lining-nums; }
+.print .band { fill: none; stroke: var(--print); stroke-width: 1.2; opacity: .55; } /* the two ruled arcs round the insurance line */

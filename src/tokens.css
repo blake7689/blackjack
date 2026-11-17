@@ -6,6 +6,9 @@
   /* type: the fonts are self-hosted (public/fonts, @font-face in index.css); swapping a face is one line here */
   --font-ui: "Figtree", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --font-display: "Familjen Grotesk", "Figtree", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  /* the felt print only (DESIGN section 3): capitals and small capitals for the payout, lining figures for the rules */
+  --font-print-caps: "Cinzel", var(--font-display);
+  --font-print-book: "Cormorant Garamond", Georgia, serif;
   /* space (4 px base) and radii (cards are 7 % of their width; the UI is flat, 1 px --line borders) */
   --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px; --s6: 32px; --s7: 48px;
   --r1: 8px; --r2: 12px; --r3: 16px; --r4: 22px; --r5: 28px;

@@ -22,7 +22,7 @@ describe("flightFrames", () => {
     const frames = flightFrames(100, -60, 90);
     expect(frames).toHaveLength(17);
     expect(translate(frames[0])).toEqual([100, -60]);
-    expect(frames[0].transform).toContain("rotate(78deg)"); // 90 - 12
+    expect(frames[0].transform).toContain("rotate(54deg)"); // 90 - 36
     expect(translate(frames[16])).toEqual([0, 0]);
     expect(frames[16].transform).toContain("rotate(90deg)");
   });

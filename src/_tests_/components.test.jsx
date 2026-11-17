@@ -384,7 +384,7 @@ describe("GameBoard", () => {
     const tip = container.querySelector(".tip-line");
     expect(tip.textContent).toBe("");
     expect(tip.childElementCount).toBe(0);
-    expect(tip.previousElementSibling.classList.contains("main-area")).toBe(true);
+    expect(tip.previousElementSibling.classList.contains("room")).toBe(true);
     expect(tip.nextElementSibling).toBe(screen.getByLabelText("Controls"));
   });
 

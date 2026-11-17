@@ -1,4 +1,5 @@
 import { Routes, Route } from "react-router-dom";
+import Sprite from "./components/Sprite/Sprite";
 import Header from "./components/Header/Header";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
@@ -9,6 +10,7 @@ import "./App.css";
 export default function App() {
   return (
     <div className="app-root">
+      <Sprite />
       <Header />
       <Routes>
         <Route path="/" element={<Home />} />
