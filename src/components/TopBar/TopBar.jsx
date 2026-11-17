@@ -9,11 +9,11 @@ import { useNavActions } from "../../hooks/useNavActions";
 import { cardsRemaining } from "../../utils/cards";
 import { reducedMotion } from "../../utils/cardAnimation";
 import { money, signed } from "../../utils/money";
+import { FELTS } from "../../utils/theme";
 import "./TopBar.css";
 
 const TAPS = 7;
 const TAP_WINDOW_MS = 3000;
-const FELTS = [["green", "Green"], ["blue", "Blue"], ["red", "Red"]];
 const signedFigure = (n) => (n > 0 ? `+${n}` : String(n));
 const COUNT_MS = 700; // the balance counts to its new value (whole dollars, ease-out): a display tween only, the ledger never waits for it
 const BADGE_MS = 2600;
@@ -143,7 +143,7 @@ export default function TopBar({ tapEnabled = false }) {
           <span className="sr-only">Blakejack</span>
           <nav id={menuId} className="menu" aria-label="Menu" hidden={!open}>
             <button type="button" className="menu-i" onClick={pick(goHome)}><Icon id="i-back" />Home</button>
-            <button type="button" className="menu-i" onClick={pick(() => goSettings("game"))}><Icon id="i-rules" />Table rules</button>
+            <button type="button" className="menu-i" onClick={pick(() => goSettings("rules"))}><Icon id="i-rules" />Table rules</button>
             <button type="button" className="menu-i" aria-disabled="true"><Icon id="i-chart" />Analytics <small>Soon</small></button>
             <button type="button" className="menu-i" onClick={pick(() => goSettings())}><Icon id="i-settings" />Settings</button>
             <hr />

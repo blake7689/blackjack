@@ -3,6 +3,7 @@ import { RULE_PRESETS, CUSTOM, rulePresetOf } from "../rulePresets";
 import { initialGameState, SETTINGS_VERSION } from "../gameReducer";
 import { VEGAS } from "../../../e2e/vegas";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
+import { hiddenKeys } from "../ruleCatalog";
 
 describe("rulePresetOf", () => {
   it("names each preset, and the default settings are Vegas", () => {
@@ -105,12 +106,13 @@ describe("the five presets (#91)", () => {
     }
   });
 
-  it.each(Object.keys(TABLE))("%s: changing any single rule key gives Custom, and changing it back gives the preset again", (name) => {
+  it.each(Object.keys(TABLE))("%s: changing any single rule key the mode shows gives Custom and changing it back gives the preset again; a key the mode hides changes nothing", (name) => {
     const table = { ...initialGameState.settings, ...RULE_PRESETS[name] };
+    const hidden = hiddenKeys(table);
     for (const key of Object.keys(TABLE[name])) {
       const v = table[key];
       const other = typeof v === "boolean" ? !v : typeof v === "number" ? v + 1 : v === "any" || v === "9-11" ? "10-11" : v === "3:2" ? "6:5" : v === "all" ? "original" : v === "original" ? "all" : DealerHoleOptions.US_NO_PEEK;
-      expect(rulePresetOf({ ...table, [key]: other })).toBe(CUSTOM);
+      expect(rulePresetOf({ ...table, [key]: other }), key).toBe(hidden.has(key) ? name : CUSTOM);
       expect(rulePresetOf({ ...table, [key]: v })).toBe(name);
     }
   });
