@@ -55,6 +55,7 @@ export const initialGameState = {
   offers: null, // what the player is still offered before the first move: { insurance, evenMoney, surrender, peek }, or null
   selectedHandIndex: 0,
   betCircle: 0,
+  betHistory: [], // what was added to the circle since it was last empty, oldest first; UNDO_BET takes the last (the ledger never sees it)
   initialBet: 0,
   cutCardFound: false,
   seenIds: [],
@@ -180,7 +181,7 @@ function countSeen(state, reset = false) {
 
 function resetTable(state, shoe, phase) {
   const refunded = state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 ? credit(state, local(state.betCircle)) : state;
-  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, cutCardFound: false, pendingBets: [], autoDealPending: false }, true);
+  return countSeen({ ...refunded, ...emptyRound, shoe, phase, betCircle: 0, betHistory: [], cutCardFound: false, pendingBets: [], autoDealPending: false }, true);
 }
 
 // The player may act on a hand only on their turn, on the selected hand, while it is still in play. //
@@ -326,11 +327,17 @@ export function gameReducer(state, action) {
 
     case "ADD_BET":
       if (state.phase !== GamePhases.PRE_DEAL || action.amount > action.credits) return state;
-      return credit({ ...state, betCircle: state.betCircle + action.amount, autoDealPending: false }, local(-action.amount));
+      return credit({ ...state, betCircle: state.betCircle + action.amount, betHistory: [...state.betHistory, action.amount], autoDealPending: false }, local(-action.amount));
+
+    case "UNDO_BET": {
+      if (state.phase !== GamePhases.PRE_DEAL || state.betHistory.length === 0) return state;
+      const amount = state.betHistory.at(-1);
+      return credit({ ...state, betCircle: state.betCircle - amount, betHistory: state.betHistory.slice(0, -1), autoDealPending: false }, local(amount));
+    }
 
     case "CLEAR_BET":
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
-      return credit({ ...state, betCircle: 0, autoDealPending: false }, local(state.betCircle));
+      return credit({ ...state, betCircle: 0, betHistory: [], autoDealPending: false }, local(state.betCircle));
 
     case "DEAL": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
@@ -346,6 +353,7 @@ export function gameReducer(state, action) {
         dealerHole: result.dealerHoleCards,
         offers: result.offers,
         initialBet: state.betCircle,
+        betHistory: [],
         autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
       };
@@ -422,7 +430,7 @@ export function gameReducer(state, action) {
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
         // The server never took the stake, so the round never happened: back to betting, nothing to refund.
-        return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, pendingBets: [],
+        return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, betHistory: [], pendingBets: [],
           notice: "The server refused your bet, so the round was cancelled." };
       }
       // Find the hand by its tag: its index may have moved since the bet was made.
@@ -453,7 +461,7 @@ export function gameReducer(state, action) {
       const on = autoDealOn(state);
       const rebet = state.settings.resetInitialBet && initialBet > 0 && action.credits >= initialBet;
       const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
-      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0,
+      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
         autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
         notice: broke ? `Not enough credits to rebet $${initialBet.toLocaleString()}: auto deal paused` : null };
       if (rebet) next = credit(next, local(-initialBet));

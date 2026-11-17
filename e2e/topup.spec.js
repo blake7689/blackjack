@@ -97,7 +97,7 @@ test('the backdrop covers the whole viewport, header and betting footer included
 
   // Header and footer controls sit under the overlay, so a real click there could not reach them.
   const settings = await page.getByRole('button', { name: 'Settings', exact: true }).boundingBox();
-  const chip = await page.getByRole('button', { name: 'Add 10', exact: true }).boundingBox();
+  const chip = await page.getByRole('button', { name: '$10 chip', exact: true }).boundingBox();
   const { width, height } = page.viewportSize();
   const points = [
     [2, 2], [width / 2, 2], [width - 3, 2], // header: corners and top edge

@@ -31,7 +31,7 @@ export function useSeatsScroll(seatsRef, stageRef, count, active) {
     }
     if (count < 2 || scroll) return;
     const row = seats.getBoundingClientRect();
-    const spills = [...seats.querySelectorAll(".spot-row, .hand, .pill")].some((el) => {
+    const spills = [...seats.querySelectorAll(".spot-row, .hand, .pill, .side-spot .stack svg")].some((el) => {
       const r = el.getBoundingClientRect();
       return r.width && (r.left < row.left - 1 || r.right > row.right + 1);
     });

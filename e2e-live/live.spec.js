@@ -33,14 +33,15 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   await page.getByPlaceholder('Password').fill(process.env.E2E_LIVE_PASSWORD);
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
 
-  const chips = page.getByRole('button', { name: /^Add \d+$/ });
+  const chips = page.getByRole('button', { name: /^\$[\d,]+ chip$/ }); // the rack's chips, "$10 chip" (#82)
   await expect(page.getByRole('button', { name: 'Deal', exact: true })).toBeVisible({ timeout: COLD }); // the table is up
   const start = await readBalance(page);
-  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.getAttribute('aria-label').slice(4))))).sort((a, b) => a - b);
+  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.getAttribute('aria-label').replace(/\D/g, ''))))).sort((a, b) => a - b);
   if (!chipValues.length || start < chipValues[0]) {
     throw new Error(`The test account has too little play money (balance ${start}, smallest bet ${chipValues[0] ?? 'none'}): top it up through the app's normal flow.`);
   }
-  await page.getByRole('button', { name: `Add ${chipValues[0]}`, exact: true }).click();
+  await page.getByRole('button', { name: `$${chipValues[0].toLocaleString('en-US')} chip`, exact: true }).click(); // pick the smallest chip, then bet it on the circle
+  await page.getByRole('button', { name: /^Bet spot 1,/ }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
 
   // Live rules and shoe are unknown: decline every offer, Stay on every hand, never hit, double or split.

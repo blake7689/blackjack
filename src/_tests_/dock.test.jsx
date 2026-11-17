@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, cleanup, within } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
@@ -93,7 +93,7 @@ describe("Dock", () => {
   const dealer = { cards: stackedShoe(["6"]), dealerDisplayTotal: 6 };
   const settings = (extra = {}) => ({ ...initialGameState.settings, ...extra });
   const rich = { ...testPlayer, credits: 1000 };
-  const show = (game, { player = rich, busy = false } = {}) => renderUI(<Dock busy={busy} />, { game: { dealer, ...game }, player: { player } });
+  const show = (game, { player = rich, busy = false, props = {} } = {}) => renderUI(<Dock busy={busy} {...props} />, { game: { dealer, ...game }, player: { player } });
   const playing = (codes = ["8", "8"], extra = {}, game = {}) => ({ phase: PLAYER_TURN, hands: [hand(codes, extra)], ...game });
   const key = (name) => screen.getByRole("button", { name });
   const maybe = (name) => screen.queryByRole("button", { name });
@@ -122,25 +122,20 @@ describe("Dock", () => {
     const betting = (extra = {}) => ({ phase: PRE_DEAL, ...extra });
 
     it("offers the chips the player can afford and wires chip, Clear and Deal", () => {
-      const { gameActions } = show(betting({ betCircle: 15 }), { player: { ...testPlayer, credits: 30 } });
+      const { gameActions } = show(betting({ betCircle: 15, betHistory: [15] }), { player: { ...testPlayer, credits: 30 } });
       const rack = screen.getByRole("group", { name: "Chips" });
-      expect(within(rack).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Add 1", "Add 5", "Add 10", "Add 25"]);
-      fireEvent.click(key("Add 10"));
+      expect(within(rack).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["$1 chip", "$5 chip", "$10 chip", "$25 chip"]);
+      fireEvent.click(key("Undo"));
       fireEvent.click(key("Clear"));
       fireEvent.click(key("Deal"));
-      expect(gameActions.addBet).toHaveBeenCalledWith(10);
+      expect(gameActions.undoBet).toHaveBeenCalledOnce();
       expect(gameActions.clearBet).toHaveBeenCalledOnce();
       expect(gameActions.deal).toHaveBeenCalledOnce();
     });
 
     it("offers only the chips chosen in settings", () => {
       show(betting({ settings: settings({ chipValues: "5,25,100" }) }), { player: { ...testPlayer, credits: 60 } });
-      expect(within(screen.getByRole("group", { name: "Chips" })).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["Add 5", "Add 25"]);
-    });
-
-    it("shows the bet in a status (a polite live region that reads \"$N\")", () => {
-      show(betting({ betCircle: 1500 }));
-      expect(screen.getByRole("status").textContent).toBe("$1,500");
+      expect(within(screen.getByRole("group", { name: "Chips" })).getAllByRole("button").map((b) => b.getAttribute("aria-label"))).toEqual(["$5 chip", "$25 chip"]);
     });
 
     it("dims Clear and Deal with no bet: they stay in place, take focus, and do nothing when pressed", () => {
@@ -171,8 +166,405 @@ describe("Dock", () => {
 
     it("has no chips and cannot deal without a player", () => {
       show(betting({ betCircle: 10 }), { player: null });
-      expect(screen.queryByRole("button", { name: /^Add/ })).toBeNull();
+      expect(screen.queryByRole("button", { name: /chip$/ })).toBeNull();
       expect(dimmed("Deal")).toBe(true);
+    });
+  });
+
+  describe("chips and betting keys (#82)", () => {
+    const betting = (extra = {}) => ({ phase: PRE_DEAL, ...extra });
+    const withCredits = (credits) => ({ player: { ...testPlayer, credits } });
+    const chipBtn = (v) => screen.getByRole("button", { name: `$${v.toLocaleString()} chip` });
+    const pressed = () => within(screen.getByRole("group", { name: "Chips" })).getAllByRole("button").filter((b) => b.getAttribute("aria-pressed") === "true").map((b) => b.getAttribute("aria-label"));
+    let clock = 0;
+    const at = (ms) => { clock = ms; };
+    const tap = (v, ms) => { at(ms); fireEvent.click(chipBtn(v)); };
+    const press = (k, init = {}) => fireEvent.keyDown(document.body, { key: k, ...init });
+
+    afterEach(() => { vi.restoreAllMocks(); });
+    const withClock = () => { clock = 0; vi.spyOn(performance, "now").mockImplementation(() => clock); };
+
+    describe("selecting a chip", () => {
+      it("marks the selected chip aria-pressed, and shows the 1-9 key of the first nine on them", () => {
+        const { container } = show(betting(), { props: { chip: 10 } });
+        expect(pressed()).toEqual(["$10 chip"]);
+        expect([...container.querySelectorAll(".rc")].map((b) => b.getAttribute("data-key"))).toEqual(["1", "2", "3", "4", "5", "6", "7"]);
+      });
+
+      it("a chip the rack no longer offers falls to the largest one below it (or the smallest)", () => {
+        show(betting(), { ...withCredits(30), props: { chip: 1000 } });
+        expect(pressed()).toEqual(["$25 chip"]);
+        cleanup();
+        show(betting(), { ...withCredits(30), props: { chip: 0.5 } });
+        expect(pressed()).toEqual(["$1 chip"]);
+        cleanup();
+        show(betting(), { ...withCredits(30) }); // no chip given: the smallest
+        expect(pressed()).toEqual(["$1 chip"]);
+      });
+
+      it("only the first nine chips carry a key number", () => {
+        const { container } = show(betting({ settings: settings({ chipValues: "1,5,10,25,50,100,1000,5000,10000,20000,50000" }) }), { ...withCredits(100000) });
+        const keys = [...container.querySelectorAll(".rc")].map((b) => b.getAttribute("data-key"));
+        expect(keys).toHaveLength(11);
+        expect(keys.slice(0, 9)).toEqual(["1", "2", "3", "4", "5", "6", "7", "8", "9"]);
+        expect(keys.slice(9)).toEqual([null, null]);
+      });
+
+      it("a tap selects the chip and bets nothing", () => {
+        withClock();
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { props: { chip: 25, onChip } });
+        tap(10, 0);
+        expect(onChip.mock.calls).toEqual([[10]]);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("works without an onChip (the dock alone, as in the other tests)", () => {
+        const { gameActions } = show(betting());
+        fireEvent.click(chipBtn(5));
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("double tap (within 400 ms, timed by hand)", () => {
+      it("a second tap on the same chip within 400 ms selects it and bets it once", () => {
+        withClock();
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { props: { chip: 25, onChip } });
+        tap(10, 1000);
+        tap(10, 1399);
+        expect(onChip.mock.calls).toEqual([[10], [10]]);
+        expect(gameActions.addBet.mock.calls).toEqual([[10]]);
+      });
+
+      it("400 ms or more apart is two single taps, not a bet", () => {
+        withClock();
+        const { gameActions } = show(betting());
+        tap(10, 0);
+        tap(10, 400);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+        tap(10, 799); // the second tap started a new pair
+        expect(gameActions.addBet.mock.calls).toEqual([[10]]);
+      });
+
+      it("a different chip in between is not a double tap", () => {
+        withClock();
+        const { gameActions } = show(betting());
+        tap(10, 0);
+        tap(5, 100);
+        tap(10, 200);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("a third quick tap starts over: it does not bet again", () => {
+        withClock();
+        const { gameActions } = show(betting());
+        tap(10, 0);
+        tap(10, 100);
+        tap(10, 200);
+        expect(gameActions.addBet.mock.calls).toEqual([[10]]);
+        tap(10, 300);
+        expect(gameActions.addBet.mock.calls).toEqual([[10], [10]]);
+      });
+
+    });
+
+    describe("keyboard", () => {
+      it("1-9 select the chip at that position in the rack; the same key twice bets it (if it is the selected one)", () => {
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { props: { chip: 5, onChip } });
+        press("2");
+        expect(onChip.mock.calls).toEqual([[5]]);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+        press("2");
+        expect(gameActions.addBet.mock.calls).toEqual([[5]]);
+        press("2"); // the pair is used up
+        expect(gameActions.addBet).toHaveBeenCalledOnce();
+      });
+
+      it("the second press only selects when that chip is not the selected one yet", () => {
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { props: { chip: 25, onChip } }); // the parent has not applied the first press
+        press("2");
+        press("2");
+        expect(onChip.mock.calls).toEqual([[5], [5]]);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("another key in between breaks the pair", () => {
+        const { gameActions } = show(betting({ betHistory: [5], betCircle: 5 }), { props: { chip: 5 } });
+        press("2");
+        press("3");
+        press("2");
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+        press("2");
+        expect(gameActions.addBet.mock.calls).toEqual([[5]]);
+        press("2"); // nothing pending after a bet
+        press("2");
+        expect(gameActions.addBet.mock.calls).toEqual([[5], [5]]);
+      });
+
+      it("a key with no chip behind it (past the rack, or 0) does nothing", () => {
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { ...withCredits(30), props: { onChip } }); // four chips
+        for (const k of ["5", "9", "0"]) press(k);
+        expect(onChip).not.toHaveBeenCalled();
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("a held key (auto repeat) does nothing", () => {
+        const onChip = vi.fn();
+        const { gameActions } = show(betting(), { props: { chip: 1, onChip } });
+        press("1");
+        press("1", { repeat: true });
+        press("1", { repeat: true });
+        expect(onChip.mock.calls).toEqual([[1]]);
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("U undoes, C clears, B rebets the last bet, X doubles every bet (letter case ignored)", () => {
+        const { gameActions } = show(betting({ betCircle: 10, betHistory: [10], initialBet: 10 }));
+        press("u");
+        press("C");
+        press("x");
+        expect(gameActions.undoBet).toHaveBeenCalledOnce();
+        expect(gameActions.clearBet).toHaveBeenCalledOnce();
+        expect(gameActions.addBet.mock.calls).toEqual([[10]]); // X: the circle's 10 again
+        press("b"); // a bet is down: Rebet is dimmed
+        expect(gameActions.addBet).toHaveBeenCalledOnce();
+        cleanup();
+        const empty = show(betting({ initialBet: 15 }));
+        press("B");
+        expect(empty.gameActions.addBet.mock.calls).toEqual([[15]]);
+      });
+
+      it("a key that is dimmed does nothing (U with no history, C and X with an empty circle, B with nothing to rebet)", () => {
+        const { gameActions } = show(betting());
+        for (const k of ["u", "c", "x", "b"]) press(k);
+        for (const fn of [gameActions.undoBet, gameActions.clearBet, gameActions.addBet]) expect(fn).not.toHaveBeenCalled();
+      });
+
+      it("other keys, and keys with Ctrl, Alt or Meta held (browser shortcuts), do nothing", () => {
+        const { gameActions } = show(betting({ betCircle: 10, betHistory: [10], initialBet: 10 }));
+        press("q");
+        press("Enter");
+        for (const mod of ["ctrlKey", "altKey", "metaKey"]) { press("c", { [mod]: true }); press("1", { [mod]: true }); }
+        expect(gameActions.clearBet).not.toHaveBeenCalled();
+        expect(gameActions.addBet).not.toHaveBeenCalled();
+      });
+
+      it("typing in a field, a select or a dialog does not bet", () => {
+        const { gameActions } = show(betting({ betCircle: 10, betHistory: [10], initialBet: 10 }));
+        const field = document.createElement("input");
+        const dialog = document.createElement("dialog");
+        const inner = document.createElement("button");
+        dialog.append(inner);
+        document.body.append(field, dialog);
+        for (const el of [field, inner]) fireEvent.keyDown(el, { key: "c" });
+        field.remove();
+        dialog.remove();
+        expect(gameActions.clearBet).not.toHaveBeenCalled();
+      });
+
+      it("the keys only work while betting", () => {
+        const { gameActions } = show(playing());
+        for (const k of ["1", "u", "c", "x", "b"]) press(k);
+        for (const fn of [gameActions.addBet, gameActions.undoBet, gameActions.clearBet]) expect(fn).not.toHaveBeenCalled();
+      });
+
+      it("stops listening when the dock goes", () => {
+        const { gameActions, unmount } = show(betting({ betCircle: 10, betHistory: [10] }));
+        unmount();
+        press("c");
+        expect(gameActions.clearBet).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("Undo, Clear, Rebet and 2x", () => {
+      it("Undo is dimmed without history and calls undoBet with it", () => {
+        const { gameActions, rerender, gameState } = show(betting());
+        expect(dimmed("Undo")).toBe(true);
+        fireEvent.click(key("Undo"));
+        expect(gameActions.undoBet).not.toHaveBeenCalled();
+        Object.assign(gameState, { betCircle: 5, betHistory: [5] });
+        rerender(<Dock busy={false} />);
+        expect(dimmed("Undo")).toBe(false);
+        fireEvent.click(key("Undo"));
+        expect(gameActions.undoBet).toHaveBeenCalledOnce();
+      });
+
+      it("Rebet adds the last round's bet: only with an empty circle, a bet to repeat, and the balance for it", () => {
+        const cases = [
+          [{ betCircle: 0, initialBet: 20 }, 1000, false],
+          [{ betCircle: 5, initialBet: 20 }, 1000, true], // a bet is already down
+          [{ betCircle: 0, initialBet: 0 }, 1000, true], // nothing to repeat
+          [{ betCircle: 0, initialBet: 20 }, 19, true], // cannot afford it
+          [{ betCircle: 0, initialBet: 20 }, 20, false], // exactly enough
+        ];
+        for (const [game, credits, off] of cases) {
+          const { gameActions } = show(betting(game), withCredits(credits));
+          expect(dimmed("Rebet"), JSON.stringify([game, credits])).toBe(off);
+          fireEvent.click(key("Rebet"));
+          expect(gameActions.addBet.mock.calls, JSON.stringify([game, credits])).toEqual(off ? [] : [[20]]);
+          cleanup();
+        }
+      });
+
+      it("2x ('Double every bet') adds the circle again: not with an empty circle, nor beyond the balance", () => {
+        const cases = [
+          [0, 1000, true],
+          [30, 29, true],
+          [30, 30, false],
+          [30, 1000, false],
+        ];
+        for (const [betCircle, credits, off] of cases) {
+          const { gameActions } = show(betting({ betCircle, betHistory: betCircle ? [betCircle] : [] }), withCredits(credits));
+          expect(dimmed("Double every bet"), `${betCircle}/${credits}`).toBe(off);
+          fireEvent.click(key("Double every bet"));
+          expect(gameActions.addBet.mock.calls, `${betCircle}/${credits}`).toEqual(off ? [] : [[betCircle]]);
+          cleanup();
+        }
+      });
+
+      it("the keys come in order, 2x shown as a glyph with the key hints beside them", () => {
+        const { container } = show(betting());
+        expect([...container.querySelectorAll(".dock-row")[1].querySelectorAll("button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.replace(/[A-Z]$/, "")))
+          .toEqual(["Undo", "Clear", "Rebet", "Double every bet", "Deal"]);
+        expect(container.querySelector(".glyph").getAttribute("data-text")).toBe("2x");
+        expect([...container.querySelectorAll("kbd")].map((k) => k.textContent)).toEqual(["U", "C", "B", "X"]);
+        expect(container.querySelector("kbd").getAttribute("aria-hidden")).toBe("true");
+      });
+    });
+
+    describe("out of credits", () => {
+      it("the rack becomes a note with the balance, and nothing that bets is live", () => {
+        const { container, gameActions } = show(betting({ initialBet: 10 }), withCredits(0.5));
+        expect(screen.queryByRole("group", { name: "Chips" })).toBeNull();
+        expect(screen.getByText("Out of credits. Your balance is $0.50.")).toBeTruthy();
+        expect(container.querySelector(".dock-note svg use").getAttribute("href")).toBe("#i-info");
+        for (const name of ["Undo", "Clear", "Rebet", "Double every bet", "Deal"]) expect(dimmed(name), name).toBe(true);
+        for (const k of ["1", "u", "c", "b", "x"]) press(k);
+        for (const fn of [gameActions.addBet, gameActions.undoBet, gameActions.clearBet]) expect(fn).not.toHaveBeenCalled();
+      });
+
+      it("a signed-out player sees a $0 balance in the note", () => {
+        show(betting(), { player: null });
+        expect(screen.getByText("Out of credits. Your balance is $0.")).toBeTruthy();
+      });
+
+      it("chips still in the circle keep the rack (to Undo them), with no chip to pick", () => {
+        show(betting({ betCircle: 10, betHistory: [10] }), withCredits(0));
+        expect(screen.queryByText(/Out of credits/)).toBeNull();
+        expect(within(screen.getByRole("group", { name: "Chips" })).queryAllByRole("button")).toHaveLength(0);
+        expect(dimmed("Undo")).toBe(false);
+      });
+    });
+
+    // The rack fits whole chips (jsdom has no layout, so the sizes are given): a chip is 44 px, the rack and its wrapper are `rack` / `wrap` wide.
+    describe("the rack scrolls by whole chips when they do not fit", () => {
+      const sizes = { rc: 44, rack: 280, wrap: 300, scrollWidth: 500 };
+      const own = (proto, name) => Object.getOwnPropertyDescriptor(proto, name);
+      const saved = { offsetWidth: own(HTMLElement.prototype, "offsetWidth"), clientWidth: own(Element.prototype, "clientWidth"), scrollWidth: own(Element.prototype, "scrollWidth") };
+      const layout = (over = {}) => {
+        const s = { ...sizes, ...over };
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get() { return this.classList.contains("rc") ? s.rc : 0; } });
+        Object.defineProperty(Element.prototype, "clientWidth", { configurable: true, get() { return this.classList.contains("rack") ? s.rack : this.classList.contains("rack-wrap") ? s.wrap : 0; } });
+        Object.defineProperty(Element.prototype, "scrollWidth", { configurable: true, get() { return this.classList.contains("rack") ? s.scrollWidth : 0; } });
+      };
+      afterEach(() => {
+        for (const [name, proto] of [["offsetWidth", HTMLElement.prototype], ["clientWidth", Element.prototype], ["scrollWidth", Element.prototype]]) Object.defineProperty(proto, name, saved[name]);
+        delete globalThis.ResizeObserver;
+      });
+      const wrap = (container) => container.querySelector(".rack-wrap");
+      const rackEl = (container) => container.querySelector(".rack");
+      const classes = (container) => ["scroll", "more-l", "more-r"].filter((c) => wrap(container).classList.contains(c));
+
+      it("chips that fit stay evenly spaced: no scrolling, nothing set by hand", () => {
+        layout({ rack: 1000 });
+        const { container } = show(betting());
+        expect(classes(container)).toEqual([]);
+        expect(wrap(container).style.getPropertyValue("--rgap")).toBe("");
+      });
+
+      it("seven chips in 280 px scroll: whole chips (k = 5 at 52 px a chip), the padding centring them, a chevron toward more", () => {
+        layout();
+        const { container } = show(betting(), { props: { chip: 5 } });
+        expect(classes(container)).toEqual(["scroll", "more-r"]); // selected chip 2 is in view: at the start
+        expect(wrap(container).style.getPropertyValue("--rgap")).toBe("8px");
+        expect(wrap(container).style.getPropertyValue("--rpad")).toBe("24px"); // (300 - (5 * 52 - 8)) / 2
+        expect(rackEl(container).scrollLeft).toBe(0);
+      });
+
+      it("scrolls to bring the selected chip into view as the last whole chip", () => {
+        layout();
+        const { container } = show(betting(), { props: { chip: 1000 } }); // seventh of seven
+        expect(rackEl(container).scrollLeft).toBe(104); // (7 - 5) chips of 52
+        expect(classes(container)).toEqual(["scroll", "more-l", "more-r"]);
+      });
+
+      it("a scroll event updates the chevrons: more to the left, then none at the far end", () => {
+        layout();
+        const { container } = show(betting(), { props: { chip: 5 } });
+        const rack = rackEl(container);
+        rack.scrollLeft = 100;
+        fireEvent.scroll(rack);
+        expect(classes(container)).toEqual(["scroll", "more-l", "more-r"]);
+        rack.scrollLeft = 218; // scrollWidth - clientWidth - 2: the end
+        fireEvent.scroll(rack);
+        expect(classes(container)).toEqual(["scroll", "more-l"]);
+        rack.scrollLeft = 1; // within 2 px of the start
+        fireEvent.scroll(rack);
+        expect(classes(container)).toEqual(["scroll", "more-r"]);
+      });
+
+      it("never scrolls less than one chip wide, however narrow the dock", () => {
+        layout({ wrap: 30, rack: 30 });
+        const { container } = show(betting(), { props: { chip: 5 } });
+        expect(wrap(container).style.getPropertyValue("--rpad")).toBe("-7px"); // k is held at 1: floor((30 - 44) / 2)
+      });
+
+      it("fits again when the window is resized or the dock is resized (ResizeObserver)", () => {
+        layout();
+        const observers = [];
+        globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; this.disconnect = vi.fn(); this.observe = vi.fn(); observers.push(this); } };
+        const { container, unmount } = show(betting(), { props: { chip: 5 } });
+        expect(observers).toHaveLength(1);
+        expect(observers[0].observe.mock.calls[0][0]).toBe(container.querySelector(".dock-in"));
+        expect(classes(container)).toEqual(["scroll", "more-r"]);
+        layout({ rack: 1000 }); // the dock grew: everything fits
+        observers[0].cb();
+        expect(classes(container)).toEqual([]);
+        layout();
+        fireEvent(window, new Event("resize"));
+        expect(classes(container)).toEqual(["scroll", "more-r"]);
+        unmount();
+        expect(observers[0].disconnect).toHaveBeenCalledOnce();
+      });
+
+      it("a refit with no chip pressed (the guard) keeps the rack where it is", () => {
+        layout();
+        const observers = [];
+        globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb; this.disconnect = vi.fn(); this.observe = vi.fn(); observers.push(this); } };
+        const { container } = show(betting(), { props: { chip: 1000 } });
+        const rack = rackEl(container);
+        expect(rack.scrollLeft).toBe(104);
+        rack.scrollLeft = 30;
+        container.querySelector('[aria-pressed="true"]').setAttribute("aria-pressed", "false");
+        observers[0].cb();
+        expect(rack.scrollLeft).toBe(30);
+        expect(classes(container)).toEqual(["scroll", "more-l", "more-r"]);
+      });
+
+      it("measures again when the chips on offer change (the balance moved), and stops listening on unmount", () => {
+        layout();
+        const { container, rerender, playerCtx, unmount } = show(betting(), { props: { chip: 5 } });
+        expect(classes(container)).toContain("scroll");
+        playerCtx.player = { ...testPlayer, credits: 30 }; // four chips of 44 px fit in 280
+        rerender(<Dock busy={false} chip={5} />);
+        expect(classes(container)).toEqual([]);
+        unmount();
+        fireEvent(window, new Event("resize")); // would throw on a removed rack if the listener were still there
+      });
     });
   });
 

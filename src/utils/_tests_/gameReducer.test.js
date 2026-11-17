@@ -1856,3 +1856,98 @@ describe("splitDeal (#133): the reducer", () => {
     });
   });
 });
+
+describe("betHistory and UNDO_BET (#82)", () => {
+  const add = (...amounts) => amounts.map((amount) => ({ type: "ADD_BET", amount }));
+  const betting = (...amounts) => run(started(["5"]), ...add(...amounts));
+  const finishedRound = (settings = {}) => {
+    const r = playRound({ cards: ["10", "10", "9", "7"] });
+    return { ...r.state, settings: { ...r.state.settings, ...settings } };
+  };
+
+  it("starts empty, and ADD_BET pushes each amount in the order it was added", () => {
+    expect(initialGameState.betHistory).toEqual([]);
+    expect(betting(10, 5, 25).betHistory).toEqual([10, 5, 25]);
+  });
+
+  it("a refused ADD_BET (too poor, wrong phase) leaves the history alone", () => {
+    const s = betting(10);
+    expect(run(s, { type: "ADD_BET", amount: 50, credits: 5 }).betHistory).toEqual([10]);
+    expect(run(initialGameState, { type: "ADD_BET", amount: 5 }).betHistory).toEqual([]);
+  });
+
+  it("UNDO_BET takes the last amount off the circle and gives it back locally, one at a time", () => {
+    const s = run(betting(10, 5, 25), { type: "UNDO_BET" });
+    expect([s.betCircle, s.betHistory]).toEqual([15, [10, 5]]);
+    expect(events(s)).toEqual([local(-10), local(-5), local(-25), local(25)]);
+    const none = run(s, { type: "UNDO_BET" }, { type: "UNDO_BET" });
+    expect([none.betCircle, none.betHistory]).toEqual([0, []]);
+    expect(events(none).slice(-2)).toEqual([local(5), local(10)]);
+  });
+
+  it("UNDO_BET with an empty history, or outside betting, changes nothing", () => {
+    const s = started(["5"]);
+    expect(run(s, { type: "UNDO_BET" })).toBe(s);
+    expect(run(initialGameState, { type: "UNDO_BET" })).toBe(initialGameState);
+    const dealtState = dealt(["10", "10", "9", "7"]);
+    expect(run({ ...dealtState, betHistory: [10] }, { type: "UNDO_BET" }).betCircle).toBe(dealtState.betCircle); // wrong phase wins over a stale history
+    expect(run({ ...dealtState, betHistory: [10] }, { type: "UNDO_BET" })).toEqual({ ...dealtState, betHistory: [10] });
+  });
+
+  it("UNDO_BET cancels a pending auto deal, like ADD_BET and CLEAR_BET", () => {
+    const AUTO = { resetInitialBet: true, autoDeal: true };
+    const armed = run(finishedRound(AUTO), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect(armed.autoDealPending).toBe(true);
+    expect(run(armed, { type: "UNDO_BET" })).toMatchObject({ betCircle: 0, betHistory: [], autoDealPending: false });
+  });
+
+  it("CLEAR_BET empties the history", () => {
+    expect(run(betting(10, 5), { type: "CLEAR_BET" })).toMatchObject({ betCircle: 0, betHistory: [] });
+  });
+
+  it("DEAL clears the history, and the ledger still gets one opening bet of the whole circle (undo never reaches it)", () => {
+    const s = run(started(["10", "10", "9", "7"]), ...add(25, 10, 5), { type: "UNDO_BET" }, { type: "DEAL" });
+    expect(s.betHistory).toEqual([]);
+    expect(s.initialBet).toBe(35);
+    const ledger = s.creditEvents.filter((e) => e.kind === "bet");
+    expect(ledger.map(withoutSeq)).toEqual([bet(35, true, true)]);
+    expect(s.pendingBets).toHaveLength(1);
+  });
+
+  it("resetTable (a new game, a reset, a settings reset) clears the history and refunds the circle", () => {
+    const s = betting(10, 5);
+    const reset = run(s, { type: "RESET_GAME", shoe: stackedShoe(["5"]), phase: GamePhases.PRE_DEAL });
+    expect([reset.betCircle, reset.betHistory]).toEqual([0, []]);
+    expect(events(reset).at(-1)).toEqual(local(15));
+    expect(run(s, { type: "START_GAME", shoe: stackedShoe(["5"]) }).betHistory).toEqual([]);
+  });
+
+  it("a voided round (the server refuses the opening bet) clears the history", () => {
+    const s = run(started(["10", "10", "9", "7"]), ...add(10, 5), { type: "DEAL" });
+    const voided = run({ ...s, betHistory: [10, 5] }, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+    expect([voided.phase, voided.betCircle, voided.betHistory]).toEqual([GamePhases.PRE_DEAL, 0, []]);
+  });
+
+  it("a refused double (not the opening bet) leaves the history alone", () => {
+    const s = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
+    const refused = run({ ...s, betHistory: [7] }, { type: "BET_REJECTED", seq: s.pendingBets.at(-1).seq });
+    expect(refused.betHistory).toEqual([7]);
+  });
+
+  it("END_ROUND seeds the history with the initial bet on an auto rebet, and leaves it empty otherwise", () => {
+    const rebet = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect([rebet.betCircle, rebet.betHistory]).toEqual([10, [10]]);
+    const off = run(finishedRound(), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect(off.betHistory).toEqual([]);
+    const poor = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND", credits: 5 });
+    expect([poor.betCircle, poor.betHistory]).toEqual([0, []]);
+  });
+
+  it("an undone rebet leaves nothing to undo again, and the next ADD_BET starts a fresh history", () => {
+    const rebet = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
+    const undone = run(rebet, { type: "UNDO_BET" });
+    expect(undone).toMatchObject({ betCircle: 0, betHistory: [] });
+    expect(run(undone, { type: "UNDO_BET" })).toBe(undone);
+    expect(run(undone, ...add(5)).betHistory).toEqual([5]);
+  });
+});

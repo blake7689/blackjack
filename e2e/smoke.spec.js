@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS, placeBet } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -42,7 +42,7 @@ test('the keys wait while cards move through a whole round (#72)', async ({ page
   const api = await stubApi(page);
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
   expect(await noHScroll(), 'the game board must not scroll sideways').toBe(true); // matters at phone size (the phone project)
 
@@ -96,7 +96,7 @@ test('surrendering a hand returns half the bet, in one settle (#91)', async ({ p
   const api = await stubApi(page);
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
@@ -122,7 +122,7 @@ async function dealAt(page, seed, settings) {
   const api = await stubApi(page, settings ? { settings } : {});
   await seedRandom(page, seed);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   return api;
 }

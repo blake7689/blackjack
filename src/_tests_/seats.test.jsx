@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, act } from "@testing-library/react";
+import { screen, act, fireEvent } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import GameBoard from "../components/GameBoard/GameBoard";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
@@ -33,10 +33,11 @@ describe("the betting seat", () => {
     expect(container.querySelector(".spot").classList.contains("has")).toBe(true);
   });
 
-  it("the circle is never a button: a bet is placed with the dock's chips for now", () => {
-    const { container } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0 } });
-    expect(container.querySelector(".spot").getAttribute("aria-hidden")).toBe("true");
-    expect(container.querySelector(".seats button")).toBeNull();
+  it("the circle is a button that bets the selected chip (the default is the $25 chip)", () => {
+    const { gameActions } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0 } });
+    const spot = screen.getByRole("button", { name: "Bet spot 1, $0. Adds a $25 chip" });
+    fireEvent.click(spot);
+    expect(gameActions.addBet).toHaveBeenCalledWith(25);
   });
 });
 

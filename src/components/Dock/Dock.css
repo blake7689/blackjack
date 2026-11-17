@@ -18,6 +18,7 @@
   font: 700 13px/1.2 var(--font-ui); letter-spacing: .01em; white-space: nowrap; overflow: hidden;
   touch-action: manipulation; transition: transform var(--t-press), background var(--t-press); /* no opacity fade: a key waking up must be at full contrast at once */
 }
+.key svg { width: 20px; height: 20px; flex: none; }
 .key:active { transform: scale(.96); }
 .key:hover { background: var(--surf-2); }
 .key[aria-disabled="true"] { opacity: .34; pointer-events: none; } /* not now: shown dimmed, keeps its place and its focus */
@@ -28,31 +29,36 @@
 .key.solid:hover { background: var(--tx); filter: brightness(.94); }
 .key.offer { border-color: rgb(var(--accent-rgb) / .55); color: var(--accent-tx); background: rgb(var(--accent-rgb) / .08); font-size: 15px; }
 .key small { font-size: 12px; font-weight: 500; color: var(--tx-3); }
+.key kbd { display: none; position: absolute; top: 6px; right: 7px; font: 600 12px/1 var(--font-ui); color: var(--tx-2); } /* the shortcut, on desktop */
+.key.primary kbd { color: inherit; }
+.glyph::before { content: attr(data-text); }
 .key.primary small { color: inherit; } /* 12 px on the accent needs the full ink */
 .dock .wider { flex: 3 1 0; }
 
 /* the keys that act wait while a card flies or flips (#6, #72): inert (and dimmed, see aria-disabled) until it lands */
 .board.busy .options-wrap { pointer-events: none; }
 
-/* betting: the chips (the rack is PR 3's), the bet, Clear, Pause, Deal */
-.rack {
-  flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 10px; overflow-x: auto; overflow-y: hidden;
-  border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); scrollbar-width: none;
-  box-shadow: inset 0 2px 5px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .05);
-}
-.rack::-webkit-scrollbar { display: none; }
-.rack .chip:first-child { margin-left: auto; } /* centred while they fit, scrolling from the start when they do not */
-.rack .chip:last-child { margin-right: auto; }
-.chip { flex: none; width: var(--rc); height: var(--rc); padding: 0; border: 0; border-radius: 50%; background: none; touch-action: manipulation; }
-.chip svg { width: 100%; height: 100%; }
-.chip circle:first-child { fill: #e2ad03; }
-.chip circle:last-child { fill: #f6d44d; }
-.chip text { fill: #fff; }
-.bet-box {
-  flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center;
-  border: 1px solid var(--line-2); border-radius: var(--r3);
-  font: 600 17px/1 var(--font-display); font-variant-numeric: tabular-nums;
-}
+/* betting (#82): the chip rack, then Undo, Clear, Rebet, 2x, Pause and Deal. The rack shows every chip the balance covers, whole chips only: evenly
+   spaced when they fit, else scrolled by whole chips (Dock's ChipRack sets .scroll, --rgap and --rpad), a chevron toward more, none cut at rest. */
+.rack-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); box-shadow: inset 0 2px 5px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .05); }
+.rack { display: flex; align-items: center; justify-content: space-evenly; height: 100%; padding: 0; }
+.rack-wrap.scroll .rack { justify-content: flex-start; gap: var(--rgap, 8px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding: 0 var(--rpad, 12px); padding: 0 var(--rpad, 12px); scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent calc(var(--rpad, 12px) - 1px), #000 var(--rpad, 12px), #000 calc(100% - var(--rpad, 12px)), transparent calc(100% - var(--rpad, 12px) + 1px)); } /* a chip outside the k whole slots is not shown at all */
+.rack-wrap.scroll::before, .rack-wrap.scroll::after { content: ""; position: absolute; top: 50%; width: 8px; height: 8px; border: solid var(--tx-2); border-width: 0 2px 2px 0; opacity: 0; transition: opacity var(--t-ui); pointer-events: none; }
+.rack-wrap.scroll::before { left: calc(var(--rpad, 12px) / 2 - 2px); transform: translate(-50%, -50%) rotate(135deg); }
+.rack-wrap.scroll::after { right: calc(var(--rpad, 12px) / 2 - 2px); transform: translate(50%, -50%) rotate(-45deg); }
+.rack-wrap.more-l::before, .rack-wrap.more-r::after { opacity: .8; } /* more chips this way */
+.rack-wrap.scroll .rack::-webkit-scrollbar { display: none; }
+.rack-wrap.scroll .rc { scroll-snap-align: start; }
+.rc { touch-action: manipulation; flex: none; width: var(--rc); height: var(--rc); padding: 0; border: 0; border-radius: 50%; background: none; position: relative; }
+.rc svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 1.5px rgb(0 0 0 / .5)); transition: filter var(--t-ui), transform var(--t-ui) var(--e-spring); } /* the lift moves the chip and its ring, never the button (its box stays 44 px) */
+.rc::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px rgb(var(--accent-rgb) / .45); opacity: 0; transition: opacity var(--t-ui), transform var(--t-ui) var(--e-spring); } /* the selected chip's ring, inside its own edge */
+.rc[aria-pressed="true"] svg, .rc[aria-pressed="true"]::after { transform: translateY(-3px); }
+.rc[aria-pressed="true"] svg { filter: drop-shadow(1px 6px 4px rgb(0 0 0 / .5)); }
+.rc[aria-pressed="true"]::after { opacity: 1; }
+.rc[data-key]::before { content: attr(data-key); display: none; position: absolute; z-index: 1; right: -2px; top: -2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: var(--surf-3); color: var(--tx); font: 700 12px/16px var(--font-ui); text-align: center; }
+.dock-note { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--tx-2); letter-spacing: .02em; } /* out of credits */
+.dock-note svg { width: 20px; height: 20px; flex: none; }
 
 /* results: the net and the balance */
 .summary { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 6px; }
@@ -68,14 +74,21 @@
 @media (min-width: 900px), (max-height: 520px) {
   .dock-in { max-width: var(--col); display: flex; gap: 10px; align-items: stretch; }
   .dock-row { display: contents; }
-  .rack { flex: 0 1 auto; } /* as wide as its chips, scrolling only when the row is short */
+  .key kbd { display: block; }
+  .rc[aria-pressed="true"] svg, .rc[aria-pressed="true"]::after { transform: translateY(-2px); }
+  .rack-wrap { flex: 0 1 auto; padding: 0 10px; } /* as wide as its chips, scrolling only when the row is short */
+  .rack-wrap.scroll { flex: 1 1 auto; padding: 0; }
+  .rack { gap: 8px; }
+  .dock-note { flex: 3 1 auto; white-space: nowrap; }
 }
-@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } }
+@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } .rc[data-key]::before { display: block; } }
 @media (max-width: 359px) { .key small { display: none; } }
 @media (max-height: 520px) {
   .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
   .key { flex-direction: row; gap: 6px; }
-  .key small { display: none; }
+  .key kbd, .key small { display: none; }
+  /* the small betting keys are icon-only (their label stays as the accessible name) */
+  .dock-in[data-face="betting"] .key:not(.big):has(> svg) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .dock-in .key.big { flex: none; min-width: 96px; }
   .summary .s-l b { font-size: 22px; }
 }
