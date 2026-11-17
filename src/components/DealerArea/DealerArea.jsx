@@ -6,8 +6,9 @@ import { useSmoothRow } from "../../hooks/useSmoothRow";
 import { handLabel } from "../../utils/handDisplay";
 import "./DealerArea.css";
 
-// The dealer's hand (#81): a straight row of cards with its total pill beside it on the right. `hiddenCount`: the face-down hole card. //
-function DealerArea({ dealer, hiddenCount = 0, showTotals = true }) {
+// The dealer's hand (#81): a straight row of cards with its total pill beside it on the right. `hiddenCount`: the face-down hole card. `holdHole`: the
+// hole card is already in the hand (a peek found a blackjack at the deal) but its face waits for the mirror check (#83): it stays the face-down element. //
+function DealerArea({ dealer, hiddenCount = 0, showTotals = true, holdHole = false }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(dealer.cards);
@@ -21,7 +22,7 @@ function DealerArea({ dealer, hiddenCount = 0, showTotals = true }) {
           {[
             ...dealer.cards.map((c, i) => {
               const k = i === 1 ? "hole" : c.id;
-              return <FlyCard key={k} fk={k} card={c} dealOrder={c.dealOrder} />;
+              return <FlyCard key={k} fk={k} card={holdHole && i === 1 ? undefined : c} dealOrder={c.dealOrder} />;
             }),
             ...Array.from({ length: hiddenCount }, () => <FlyCard key="hole" fk="hole" dealOrder={3} />),
           ]}

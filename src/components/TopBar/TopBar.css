@@ -18,6 +18,9 @@
 .delta { position: absolute; left: 50%; top: 0; translate: -50% 0; font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 14px; white-space: nowrap; }
 .delta.up { color: var(--win-tx); background: rgb(63 227 151 / .13); }
 .delta.down { color: var(--lose-tx); background: rgb(255 107 94 / .13); }
+.delta { transition: opacity 400ms var(--e-io); } /* 2.6 s on show, then it fades over 400 ms (TopBar sets .out) */
+.delta.pop { animation: pop 420ms var(--e-spring); }
+.delta.out { opacity: 0; }
 .num { font-variant-numeric: tabular-nums; }
 
 /* the count and Settings: plain text, no box. The label, then the figure in its fixed column: no gap opening up between them */

@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FlightContext } from "../../context/FlightContext";
-import { cardTiming, clearLanded, queue } from "../../utils/cardAnimation";
+import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
+import { sweepCards } from "../../utils/cardFx";
+import { MOOD, verdictOf } from "../../utils/verdict";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandResult } from "../../utils/constants/handResult";
 import { useGameState, useGameActions } from "../../hooks/useGame";
@@ -11,6 +13,8 @@ import { useDealerRoom } from "../../hooks/useDealerRoom";
 import { useCentrePrint } from "../../hooks/useCentrePrint";
 import { useSeatsScroll } from "../../hooks/useSeatsScroll";
 import { useTightSeats } from "../../hooks/useTightSeats";
+import { useLight } from "../../hooks/useLight";
+import { usePeek } from "../../hooks/usePeek";
 import { centrePrint } from "../../utils/centrePrint";
 import { discardCount } from "../../utils/cards";
 import { DEFAULT_CHIP, effectiveChip, visibleChips } from "../../utils/chips";
@@ -21,19 +25,22 @@ import FeltPrint from "../FeltPrint/FeltPrint";
 import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
 import Dock from "../Dock/Dock";
+import ShuffleFx from "./ShuffleFx";
 import "./GameBoard.css";
 
 // Mirrors the API's "balance under 100" top-up guard; the API is the authority.
 const TOP_UP_BELOW = 100;
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound } = useGameState();
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound,
+    seenIds, shoeSeq, shoeMid, nextHandTag } = useGameState();
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const navigate = useNavigate();
   const seatsRef = useRef(null);
   const layerRef = useRef(null);
   const stageInRef = useRef(null);
+  const feltRef = useRef(null);
   const probeRef = useRef(null);
   useCardWidth(stageInRef, probeRef);
   useDealerRoom(stageInRef, probeRef);
@@ -49,7 +56,7 @@ export default function GameBoard() {
   // Cards on the board's first render never fly (returning from Settings): they read `enabled` while it is still false.
   const [enabled, setEnabled] = useState(false);
   useEffect(() => setEnabled(true), []);
-  useEffect(() => { if (phase === GamePhases.PRE_DEAL) clearLanded(); }, [phase]);
+  useEffect(() => { if (phase === GamePhases.PRE_DEAL) { clearLanded(); spots.clear(); } }, [phase]);
   // Busy while any card is flying or flipping: the buttons wait until it lands (like a real dealer's hands).
   const [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -60,6 +67,7 @@ export default function GameBoard() {
       if (left > 0) { setBusy(true); t = setTimeout(check, left + 5); } else setBusy(queue.holds.size > 0); // released holds call check again
     };
     queue.listeners.add(check);
+    check(); // time reserved before this subscribed (the opening shuffle's layout effect) counts too
     return () => { queue.listeners.delete(check); clearTimeout(t); };
   }, []);
   const timing = useMemo(() => cardTiming(Number(settings.playTimeout)), [settings.playTimeout]);
@@ -68,6 +76,23 @@ export default function GameBoard() {
   // The discard pile: what was dealt and is no longer on the table.
   const onTable = dealer.cards.length + dealerHole.cards.length + hands.reduce((n, h) => n + h.cards.length + h.hiddenCards.length, 0);
   const discard = discardCount(settings.deckCount, shoe, onTable);
+
+  // Motion (#83). The shuffle (ShuffleFx, below): the shoe and the pile slide off while it plays, the pile still shows what it held until it is emptied.
+  // The peek check: a blackjack's hole card keeps its face down until the check is over. The sweep: Next hand sends every card to the pile (the real cards
+  // go with the round's state a moment later). The light follows the hand in play; the verdict and the result light show once the hands are settled.
+  const [shuf, setShuf] = useState(null);
+  const speed = Number(settings.playTimeout);
+  const { peek, hideHole } = usePeek({ phase, dealer, dealerHole, settings, round: nextHandTag, speed });
+  useLayoutEffect(() => {
+    if (phase !== GamePhases.END_ROUND) return;
+    const fx = sweepCards();
+    if (!fx) return;
+    const undo = reserve(performance.now() + fx.ms + 50);
+    return () => { undo(); fx.cancel(); };
+  }, [phase]);
+  useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
+  const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
+  const shownDiscard = shuf && !shuf.emptied ? shuf.pile : discard;
 
   // The seats: the hands, or (before the deal) one empty seat holding the chips in the circle. Keyed by tag, never by index.
   const seats = hands.length ? hands : [{ tag: "bet", cards: [], hiddenCards: [], bet: betCircle, result: HandResult.NONE }];
@@ -81,25 +106,27 @@ export default function GameBoard() {
   const tapEnabled = !!player && player.credits < TOP_UP_BELOW && phase === GamePhases.PRE_DEAL && betCircle === 0 && pendingBets.length === 0;
 
   const seatsClass = `seats${scroll ? " scroll" : ""}${tight ? " tight" : ""}${hands.length > 1 && phase === GamePhases.PLAYER_TURN ? " turns" : ""}`;
-  const stageClass = `stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}${phase === GamePhases.DEALING ? " dealing" : ""}`;
+  const stageClass = `stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}${phase === GamePhases.DEALING ? " dealing" : ""}${phase === GamePhases.END_ROUND ? " ending" : ""}`;
 
   return (
     <FlightContext.Provider value={flight}>
     <div className={`board table-screen${busy ? " busy" : ""}`}>
+      <ShuffleFx set={setShuf} seq={shoeSeq} mid={shoeMid} speed={speed} enter={phase === GamePhases.PRE_DEAL && seenIds.length === 0} pile={discard + onTable} />
       <TopBar tapEnabled={tapEnabled} />
 
       {/* THE FELT (#81): the cloth, its rail, and the table on it */}
       <div className="room">
-       <div className="felt">
+       <div className={`felt${verdict ? ` ${MOOD[verdict.kind]}` : ""}`} ref={feltRef}>
         <div className="felt-light" aria-hidden="true" />
+        <div className="mood" aria-hidden="true" />
         <div className="rail" aria-hidden="true" />
         <div className="main-area stage" onClick={handleFeltClick}>
          {/* .stage-in holds --cw / --ch / --step / --room; its probe is the one element whose width is the formula's result */}
          <div className={stageClass} ref={stageInRef} style={{ "--n": seats.length }}>
           <div className="cw-probe" ref={probeRef} aria-hidden="true" />
-          <Shoe discard={discard} cutOut={cutCardFound} />
+          <Shoe discard={shownDiscard} cutOut={cutCardFound} away={!!shuf?.away} />
           <div className="dealer-container">
-            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} />}
+            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}
           </div>
 
           <FeltPrint settings={settings} onOpen={() => navigate("/settings?tab=game")} onDraw={centrePrint} />
@@ -113,6 +140,9 @@ export default function GameBoard() {
               waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
               reconnecting={reconnecting}
               notice={notice}
+              verdict={verdict}
+              shuffling={!!shuf}
+              peek={peek}
             />
           </div>
 
@@ -128,6 +158,7 @@ export default function GameBoard() {
                 chip={chip}
                 canBet={canBet}
                 onBet={addBet}
+                multi={seats.length > 1}
               />
             ))}
           </section>
@@ -139,7 +170,7 @@ export default function GameBoard() {
       {/* #3: the tips slot, 0 px tall while empty */}
       <div className="tip-line" aria-live="polite" />
 
-      <Dock busy={busy} chip={chip} onChip={setPicked} />
+      <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} />
       <div className="flight-layer" ref={layerRef} />
     </div>
     </FlightContext.Provider>

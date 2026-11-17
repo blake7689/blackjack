@@ -199,5 +199,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   stacks beside the circle, never over the bet. The chip symbols (`#chip-<v>`, `#chip-<v>-p`, `#side-<v>`) are in `components/Sprite/ChipSymbols.jsx`: change a colour
   there only with the issue table (#82) and the mockup's `build.mjs`. The rack's scroll classes and `--rgap` / `--rpad` are set by hand in `Dock`'s `ChipRack`, not through React.
 
+- Motion (#83, DESIGN section 3): bet chip flights never `reserve`/`hold` (taps must not delay the dock); payout, sweep and discard flights `reserve`; the shuffle
+  and the peek `reserve(end, true)` and `hold(maxMs)` (released on finish, a skip tap or the timeout, so a background tab never leaves the board busy). The shuffle
+  plays when `shoeSeq` changes (bumped in `countSeen`'s `reset` branch; `shoeMid` = mid-round refill, short) and on the board's first render in `PRE_DEAL` with empty `seenIds`
+  (tests that mount `GameBoard` there pass `seenIds: ["x"]`). The peek check on a round that offers nothing is a display hold in `usePeek` (DEALING to the turn), never a
+  reducer step; a dealer blackjack's hole face stays out of the DOM until the check ends. Per-hand `.tag.*` only with 2+ hands (one hand: the `.verdict.<kind>`). The balance badge
+  shows every real change and a settled loss clears it; the count-up is display only and never delays settle. Reduced motion: no flights, flips, sweeps, shuffle or holds.
+
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

@@ -27,13 +27,24 @@ function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand }) {
   }
 }
 
-// The one message line (fixed 48 px, CenterMessage.css): a reconnecting or refused-bet notice takes the place of the phase's words. //
-function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, autoDealing = false, lastHand = false }) {
-  const text = waiting ? "Waiting for the server..." : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand });
+// The one message line (fixed 48 px, CenterMessage.css): a reconnecting or refused-bet notice takes the place of the phase's words. Then, in turn (#83):
+// the shuffle ("Shuffling", also when the shoe runs out mid-round), the peek ("Dealer checks for blackjack", "No blackjack": `peek` is "checking" or
+// "clear") and, once the hands are settled, the verdict: one word, never over a card (`verdict`: { kind, word, amt, extra }, see utils/verdict.js). //
+function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, autoDealing = false, lastHand = false, verdict = null, shuffling = false, peek = null }) {
+  const text = waiting ? "Waiting for the server..." : shuffling ? "Shuffling"
+    : peek === "clear" ? "No blackjack" : peek === "checking" ? "Dealer checks for blackjack"
+    : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand });
   return (
     <div className="msg" aria-live="polite">
       {reconnecting ? <span className="reconnecting">Reconnecting...</span>
         : notice ? <span className="notice">{notice}</span>
+        : verdict && !shuffling ? (
+          <span className={`verdict ${verdict.kind}`}>
+            <b>{verdict.word}</b>
+            {verdict.amt && <span className="num">{verdict.amt}</span>}
+            {verdict.extra && <em>{verdict.extra}</em>}
+          </span>
+        )
         : text}
     </div>
   );

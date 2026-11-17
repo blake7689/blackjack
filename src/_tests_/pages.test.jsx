@@ -105,8 +105,14 @@ describe("Game", () => {
   });
 
   it("shows the table for a started game", () => {
-    renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL } });
+    renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL, seenIds: ["seen"] } });
     expect(screen.getByText("Place your bets")).toBeTruthy();
+  });
+
+  it("opens with the shuffle when the round has not started (#83): the line and the Deal key say Shuffling", () => {
+    renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL } });
+    expect(screen.getByText("Shuffling", { selector: ".msg" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Shuffling" }).getAttribute("aria-disabled")).toBe("true");
   });
 });
 

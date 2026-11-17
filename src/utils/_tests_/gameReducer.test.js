@@ -317,6 +317,49 @@ describe("dealer and settlement steps", () => {
   });
 });
 
+describe("the shuffle signal (#83): shoeSeq counts new shoes, shoeMid says the shoe ran out in a round", () => {
+  it("starts at 0, and a new game's shoe is shoe 1 (made between rounds, not mid-round)", () => {
+    expect([initialGameState.shoeSeq, initialGameState.shoeMid]).toEqual([0, false]);
+    const s = started(["5"]);
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, false]);
+  });
+
+  it("plain draws, bets and a round to its end change nothing", () => {
+    const s = dealt(["10", "10", "9", "7"]);
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, false]);
+    const done = playRound({ cards: ["10", "10", "9", "7"] }).state;
+    expect([done.shoeSeq, done.shoeMid]).toEqual([1, false]);
+    expect(run(done, { type: "CONTINUE" }, { type: "END_ROUND" }).shoeSeq).toBe(1); // no cut card seen: the same shoe
+  });
+
+  it("the cut card's shuffle (Next hand after it was drawn) is a new shoe between rounds", () => {
+    const finished = { ...playRound({ cards: ["10", "10", "9", "7"] }).state, cutCardFound: true };
+    const s = run(finished, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["2", "3"]) });
+    expect([s.shoeSeq, s.shoeMid]).toEqual([finished.shoeSeq + 1, false]);
+  });
+
+  it("a table setting with a new shoe (Rate of Play does not count) deals a new shoe, even from a round in progress", () => {
+    const s = dealt(["10", "10", "9", "7"]);
+    const decks = run(s, { type: "SET_SETTING", key: "deckCount", value: 3, shoe: stackedShoe(["2"]) });
+    expect([decks.shoeSeq, decks.shoeMid]).toEqual([s.shoeSeq + 1, false]); // the table is reset first: it is between rounds again
+    const speed = run(s, { type: "SET_SETTING", key: "playTimeout", value: 500 });
+    expect(speed.shoeSeq).toBe(s.shoeSeq);
+  });
+
+  it("the shoe running out in the middle of a round is a new shoe flagged mid-round, so the board plays the short shuffle and the cards stay", () => {
+    const shoe = [...stackedShoe(["10", "10"]), { id: "CUT-1", type: "cut" }, ...stackedShoe(["9"])];
+    const s = run({ ...initialGameState, phase: GamePhases.PRE_DEAL, shoe }, { type: "ADD_BET", amount: 10 },
+      { type: "DEAL", refill: () => stackedShoe(["7", "5"]) });
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, true]);
+    expect(s.hands[0].cards.length).toBeGreaterThan(0);
+  });
+
+  it("resetting to no game is not a shuffle to play mid-round", () => {
+    const s = run(dealt(["10", "10", "9", "7"]), { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE });
+    expect(s.shoeMid).toBe(false);
+  });
+});
+
 describe("end of round", () => {
   const finished = (settings = {}) => {
     const r = playRound({ cards: ["10", "10", "9", "7"] });

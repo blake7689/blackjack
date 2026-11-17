@@ -6,7 +6,7 @@ export function Chip({ value }) {
   return <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href={`#chip-${value}`} /></svg>;
 }
 
-const THICK = 6; // each chip in a stack is lifted 6 % of its width (a 39 mm chip is 3.3 mm thick, foreshortened)
+export const THICK = 6; // each chip in a stack is lifted 6 % of its width (a 39 mm chip is 3.3 mm thick, foreshortened); chipFlight.js draws the same stacks
 
 // One stack seen from above (#82, the mockup's stackSVG): the amount split greedily into the largest chips, the biggest at the bottom, up to ten
 // drawn, each above lifted by its thickness so only its lower edge shows. `--k` is where the bottom chip's centre sits (1/100 of the width), so CSS

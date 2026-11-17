@@ -37,6 +37,8 @@ test('split, one at a time: the second hand holds one card until the first is fi
   await page.getByRole('button', { name: 'Stay' }).click();
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole('img', { name: 'king of spades' })).toBeVisible(); // the dealer played: 17 beats 14 and 12
+  await expect(page.getByText('LOSE', { exact: true })).toHaveCount(3); // two hands: the verdict and a tag under each circle (#83)
+  await expect(page.getByRole('banner').getByText(/^[+-]\$\d/)).toHaveCount(0); // a loss leaves no balance badge in the top bar (#83)
 
   await expect.poll(() => api.settles.length).toBe(1);
   expect(api.bets).toEqual([

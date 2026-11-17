@@ -5,7 +5,7 @@ import { animations } from "./setup";
 import DealerArea from "../components/DealerArea/DealerArea";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import GameBoard from "../components/GameBoard/GameBoard";
-import { EASING, cardTiming, hold, landed, queue, reserve } from "../utils/cardAnimation";
+import { EASING, GLIDE, cardTiming, hold, landed, queue, reserve } from "../utils/cardAnimation";
 import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
@@ -14,8 +14,10 @@ import { initialGameState, gameReducer } from "../utils/gameReducer";
 
 const timing = cardTiming(1000);
 const advance = (ms) => act(() => { vi.advanceTimersByTime(ms); });
-const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy"));
-const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner"));
+const flights = () => animations.filter((a) => a.el.classList.contains("fly-copy") && a.options.fill === "forwards"); // the flight itself (the lift on the copy has no fill)
+const turns = () => animations.filter((a) => a.el.classList.contains("fly-inner") && a.el.closest(".fly-copy")); // a dealt card turning over as it lands
+const flips = () => animations.filter((a) => a.el.classList.contains("fly-inner") && !a.el.closest(".fly-copy")); // a card flipping in place (a face that arrives later)
+const TURN_AT = timing.slide * 0.8; // a dealt card starts turning at 80 % of its flight
 const glides = () => animations.filter((a) => a.frames[0]?.translate !== undefined);
 const pill = (c) => c.querySelector(".pill")?.textContent ?? ""; // the total pill: empty until a card has landed
 const amount = (c) => c.querySelector(".amt").textContent;
@@ -27,11 +29,11 @@ const mkHand = (cards, extra = {}) => ({
 });
 const handProps = { index: 0, active: true, gamePhase: GamePhases.DEALER_TURN, handCount: 1, maxSplitHands: 0, credits: 1000 };
 
-// One card at a time: the next flight starts once the previous has landed and flipped.
+// One card at a time: the next flight starts once the previous has landed and turned over.
 function landNext() {
-  for (let i = 0; i < 40 && !flights().some((a) => !a.fired); i++) advance(50); // the queue starts the next flight when the last is done
-  const flight = flights().find((a) => !a.fired);
-  act(() => { flight.fired = true; flight.onfinish(); });
+  for (let i = 0; i < 80 && !turns().some((a) => !a.fired); i++) advance(50); // the queue starts the next flight when the last is done
+  const turn = turns().find((a) => !a.fired);
+  act(() => { turn.fired = true; turn.onfinish(); });
   finishAnimations();
 }
 
@@ -61,7 +63,8 @@ describe("PlayerHand with a face-down double", () => {
     expect(after.map((el) => el.parentElement.dataset.fk)).toEqual([six.id, five.id, "dbl"]);
     expect(flights()).toHaveLength(3); // no second launch
     expect(container.querySelector(".flight-layer").children).toHaveLength(0);
-    expect(flips()).toHaveLength(3); // the three flips so far: the two cards and the new face of the double
+    expect(turns()).toHaveLength(2); // the two cards turned over as they landed ...
+    expect(flips()).toHaveLength(3); // ... (jsdom's clock landed them first, so they flipped in place too) and the double's new face
     expect(after[2].querySelector("img.fly-front").getAttribute("alt")).toBe("king of hearts");
     finishAnimations();
     expect(after[2].classList.contains("up")).toBe(true);
@@ -108,10 +111,10 @@ describe("totals count only cards that have landed", () => {
     expect(pill(container)).toBe("19");
   });
 
-  it("PlayerHand: the result waits for every card; the bet is always shown", () => {
+  it("PlayerHand: with several hands the result tag waits for every card; the bet shows until then", () => {
     const cards = stackedShoe(["A", "6", "K"]);
     const h = mkHand(cards, { totals: [17], isBusted: true, result: HandResult.LOSE, status: HandStatus.DONE });
-    const { container } = renderUI(<Flight><PlayerHand {...handProps} gamePhase={GamePhases.POST_ROUND} hand={h} /></Flight>);
+    const { container } = renderUI(<Flight><PlayerHand {...handProps} multi gamePhase={GamePhases.POST_ROUND} hand={h} /></Flight>);
     expect(pill(container)).toBe("");
     expect(amount(container)).toBe("$10");
     landNext();
@@ -121,7 +124,7 @@ describe("totals count only cards that have landed", () => {
     expect(amount(container)).toBe("$10");
     landNext();
     expect(pill(container)).toBe("17");
-    expect(amount(container)).toBe("$10Bust");
+    expect(amount(container)).toBe("BUST");
   });
 
   it("a hand re-rendered with a card that has not landed shows the total of the landed ones", () => {
@@ -158,7 +161,7 @@ describe("useSmoothRow", () => {
     rerender(ui([a, b]));
     expect(glides()).toHaveLength(1);
     expect(glides()[0].frames).toEqual([{ translate: "40px 0" }, { translate: "0 0" }]);
-    expect(glides()[0].options).toEqual({ duration: timing.slide, easing: EASING });
+    expect(glides()[0].options).toEqual({ duration: GLIDE, easing: EASING });
     expect(glides()[0].el.dataset.fk).toBe(a.id); // the new card does not glide: it flies
   });
 
@@ -280,15 +283,15 @@ describe("GameBoard flights", () => {
     const { container, gameState, rerender } = renderUI(<GameBoard />, { game: { ...playing, dealer: { cards: [ten], dealerDisplayTotal: 10 } } });
     advance(5000);
     expect(busy(container)).toBe(false);
-    // The hole card joins (dealOrder 3): it reserves 4 staggers, but lands only 150 ms after its flight should have ended.
+    // The hole card joins (dealOrder 3): it reserves 3 staggers and its flight, but lands only 150 ms after its flight should have ended.
     Object.assign(gameState, { dealerHole: { cards: [up] } });
     rerender(<GameBoard />);
     expect(busy(container)).toBe(true);
-    advance(4 * timing.stagger + 20);
+    advance(3 * timing.stagger + timing.slide + 20);
     expect(queue.free).toBeLessThan(performance.now());
     expect(busy(container)).toBe(true);
     expect(screen.getByText("Dealing")).toBeTruthy();
-    advance(timing.slide + 150 - timing.stagger);
+    advance(150);
     expect(busy(container)).toBe(false);
   });
 
@@ -299,7 +302,7 @@ describe("GameBoard flights", () => {
     rerender(<GameBoard />);
     advance(0);
     expect(busy(container)).toBe(true);
-    run(timing.slide + 150 + timing.flip + timing.gap + 1000); // the landing timer ran, the flip was started, the browser never reported either as finished
+    run(timing.slide + 150 + timing.flip + timing.gap + 1000); // the landing timer ran, the flip was started in place, the browser never reported the turn or the flip as finished
     expect(flips()).toHaveLength(1);
     expect(queue.free).toBeLessThan(performance.now());
     expect(busy(container)).toBe(true);
@@ -316,7 +319,7 @@ describe("GameBoard flights", () => {
     it("is busy until every card has landed and flipped, however late the frames, then not", () => {
       const [pA, dUp, pB, hole] = stackedShoe(["9", "10", "7", "A"]);
       const { container, gameState, rerender } = renderUI(<GameBoard />, {
-        game: { phase: GamePhases.PRE_DEAL, hands: [], dealer: { cards: [] }, dealerHole: { cards: [] }, settings },
+        game: { phase: GamePhases.PRE_DEAL, hands: [], dealer: { cards: [] }, dealerHole: { cards: [] }, settings, seenIds: ["seen"] }, // already in play: no shuffle on opening
       });
       advance(100);
       const spot = { phase: GamePhases.PLAYER_TURN, settings };

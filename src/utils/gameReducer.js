@@ -60,6 +60,8 @@ export const initialGameState = {
   cutCardFound: false,
   seenIds: [],
   runningCount: 0,
+  shoeSeq: 0, // +1 whenever a new shoe is made: the board plays its shuffle. shoeMid: it happened in a round (the shoe ran out)
+  shoeMid: false,
   creditEvents: [],
   creditSeq: 0,
   pendingBets: [], // bets sent to the server and not yet answered: { seq, handTag, amount, newRound }
@@ -167,7 +169,7 @@ function draw(state, refill, fn) {
   return { result, next: { ...state, shoe, cutCardFound }, refilled };
 }
 
-// Adds newly visible cards to the running count (reset = a fresh shoe). //
+// Adds newly visible cards to the running count (reset = a fresh shoe: the board plays its shuffle, a short one when it happened in a round). //
 function countSeen(state, reset = false) {
   const seenIds = reset ? [] : state.seenIds;
   const visible = [...state.hands.flatMap((h) => h.cards), ...state.dealer.cards];
@@ -176,6 +178,7 @@ function countSeen(state, reset = false) {
     ...state,
     seenIds: [...seenIds, ...fresh.map((c) => c.id)],
     runningCount: (reset ? 0 : state.runningCount) + fresh.reduce((sum, c) => sum + c.count, 0),
+    ...(reset && { shoeSeq: state.shoeSeq + 1, shoeMid: state.phase !== GamePhases.PRE_DEAL && state.phase !== GamePhases.NONE }),
   };
 }
 

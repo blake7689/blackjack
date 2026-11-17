@@ -103,7 +103,8 @@ export async function login(page) {
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await submitLogin(page);
   await (await settingsLoaded).finished();
-  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible(); // idle, before the deal
+  // idle, before the deal. The table opens with its shuffle (#83: 4.5 s at Normal speed, 1.5 s on the fixture's fastest), the line says Shuffling until it is over.
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 export const openTable = login;

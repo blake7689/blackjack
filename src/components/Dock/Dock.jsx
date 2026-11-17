@@ -71,7 +71,7 @@ function ChipRack({ chips, chip, onTap }) {
     <div className="rack-wrap" ref={wrapRef}>
       <div className="rack" role="group" aria-label="Chips" ref={rackRef}>
         {chips.map((v, i) => (
-          <button key={v} type="button" className="rc" data-key={i < 9 ? i + 1 : undefined} aria-pressed={v === chip} aria-label={`${money(v)} chip`} onClick={() => onTap(v)}>
+          <button key={v} type="button" className="rc" data-chip={v} data-key={i < 9 ? i + 1 : undefined} aria-pressed={v === chip} aria-label={`${money(v)} chip`} onClick={() => onTap(v)}>
             <Chip value={v} />
           </button>
         ))}
@@ -85,8 +85,9 @@ function ChipRack({ chips, chip, onTap }) {
 // and results (the net, the balance, Next hand). `busy`: a card is still flying, so the keys that act wait.
 // Betting (#82): the chip rack, then Undo, Clear, Rebet, 2x and Deal. `chip` is the selected chip (GameBoard holds it: the bet circle bets it too) and
 // `onChip` picks one. A tap on a chip selects it; a second tap on it within 400 ms (timed by hand: a touch fires no dblclick) bets it on the first
-// circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. //
-export default function Dock({ busy, chip: picked, onChip = () => {} }) {
+// circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. `shuffling` (#83): the Deal key says
+// "Shuffling" and the betting keys wait; a tap on the dock skips the shuffle (useShuffle listens for it), the chips still take it. //
+export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false }) {
   const { player } = usePlayer();
   const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPending, autoDealPaused } = useGameState();
   const actions = useGameActions();
@@ -106,10 +107,10 @@ export default function Dock({ busy, chip: picked, onChip = () => {} }) {
   };
   // What each betting key does, and whether it can: the buttons and the keyboard share it (a dimmed key does nothing).
   const bet = {
-    undo: { off: betHistory.length === 0, run: actions.undoBet },
-    clear: { off: betCircle === 0, run: actions.clearBet },
-    rebet: { off: betCircle > 0 || initialBet <= 0 || credits < initialBet, run: () => actions.addBet(initialBet) },
-    x2: { off: betCircle === 0 || credits < betCircle, run: () => actions.addBet(betCircle) },
+    undo: { off: shuffling || betHistory.length === 0, run: actions.undoBet },
+    clear: { off: shuffling || betCircle === 0, run: actions.clearBet },
+    rebet: { off: shuffling || betCircle > 0 || initialBet <= 0 || credits < initialBet, run: () => actions.addBet(initialBet) },
+    x2: { off: shuffling || betCircle === 0 || credits < betCircle, run: () => actions.addBet(betCircle) },
   };
   // The listener is attached once per betting face and calls the latest handler through a ref, so a render never unbinds it between two key presses.
   const onKey = useRef(null);
@@ -166,7 +167,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {} }) {
         <Key label="Rebet" icon="i-rebet" kbd="B" off={bet.rebet.off} onClick={bet.rebet.run} />
         <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" kbd="X" off={bet.x2.off} onClick={bet.x2.run} />
         {pause}
-        <Key label="Deal" name="Deal" kind="primary big wider" sub={autoDealPending ? "auto" : undefined} off={betCircle === 0 || !player}
+        <Key label={shuffling ? "Shuffling" : "Deal"} name={shuffling ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffling ? "auto" : undefined} off={shuffling || betCircle === 0 || !player}
           onClick={actions.deal} />
       </>
     );
@@ -225,7 +226,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {} }) {
   // .options-wrap: the hook for "the keys that act wait while cards fly" (the e2e tests watch it; .board.busy .options-wrap is inert).
   return (
     <footer className="dock" aria-label="Controls">
-      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face}
+      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face} data-shuffling={shuffling || undefined}
         role={face === "offers" ? "group" : undefined} aria-label={face === "offers" ? "Offers" : undefined}>
         <div className="dock-row">{rowA}</div>
         <div className="dock-row">{rowB}</div>

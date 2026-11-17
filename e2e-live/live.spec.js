@@ -55,7 +55,7 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   }, { timeout: COLD, intervals: [250], message: 'the round never reached its results' }).toBe('done');
 
   await results.click();
-  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible();
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 }); // the sweep, and a shuffle (4.5 s at Normal) when the cut card came out (#83)
   await expect.poll(() => settles.length, { timeout: 30_000, message: 'the settle call never returned' }).toBe(1);
 
   expect(bets, 'exactly one ledger bet').toHaveLength(1);

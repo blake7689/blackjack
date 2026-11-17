@@ -7,13 +7,39 @@ import { useGameState, useGameActions } from "../../hooks/useGame";
 import { useLanded } from "../../hooks/useLanded";
 import { useNavActions } from "../../hooks/useNavActions";
 import { cardsRemaining } from "../../utils/cards";
-import { money } from "../../utils/money";
+import { reducedMotion } from "../../utils/cardAnimation";
+import { money, signed } from "../../utils/money";
 import "./TopBar.css";
 
 const TAPS = 7;
 const TAP_WINDOW_MS = 3000;
 const FELTS = [["green", "Green"], ["blue", "Blue"], ["red", "Red"]];
 const signedFigure = (n) => (n > 0 ? `+${n}` : String(n));
+const COUNT_MS = 700; // the balance counts to its new value (whole dollars, ease-out): a display tween only, the ledger never waits for it
+const BADGE_MS = 2600;
+
+// The figure the balance shows: `credits` itself, reached by counting from what is on screen (a new value mid-count carries on from there). The first
+// value, signing in or out, and reduced motion are at once. //
+function useCountUp(credits) {
+  const [shown, setShown] = useState(credits);
+  const now = useRef(credits);
+  useEffect(() => {
+    const from = now.current;
+    if (from === credits) return;
+    if (from === null || credits === null || reducedMotion()) { now.current = credits; setShown(credits); return; }
+    const t0 = performance.now();
+    let raf;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / COUNT_MS);
+      now.current = p < 1 ? Math.round(from + (credits - from) * (1 - (1 - p) ** 3)) : credits;
+      setShown(now.current);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [credits]);
+  return shown;
+}
 
 const Icon = ({ id }) => <svg aria-hidden="true" focusable="false"><use href={`#${id}`} /></svg>;
 
@@ -25,6 +51,15 @@ const Balance = memo(function Balance({ player, tapEnabled }) {
   const delta = creditChange?.delta;
   const [asking, setAsking] = useState(false);
   const taps = useRef([]);
+  const shown = useCountUp(player ? player.credits : null);
+  // The badge shows 2.6 s, then fades over 400 ms (PlayerProvider drops it after 3 s); a newer change starts it again.
+  const [fading, setFading] = useState(false);
+  useEffect(() => {
+    setFading(false);
+    if (!creditChange) return;
+    const timer = setTimeout(() => setFading(true), BADGE_MS);
+    return () => clearTimeout(timer);
+  }, [creditChange]);
 
   const handleTap = () => {
     if (!tapEnabled) return;
@@ -42,9 +77,9 @@ const Balance = memo(function Balance({ player, tapEnabled }) {
       <div className={`bal${delta !== undefined ? " changing" : ""}`} onClick={handleTap}>
         <span className="bal-top">
           <span className="bal-lbl">Balance</span>
-          {delta !== undefined && <span className={`delta num ${delta > 0 ? "up" : "down"}`}>{delta > 0 ? `+${delta}` : delta}</span>}
+          {delta !== undefined && <span key={creditChange.seq} className={`delta num pop ${delta > 0 ? "up" : "down"}${fading ? " out" : ""}`}>{signed(delta)}</span>}
         </span>
-        <b id="bal" className="num">{money(player ? player.credits : 0)}</b>
+        <b id="bal" className="num">{money(shown ?? 0)}</b>
       </div>
       {asking && <TopUpPrompt onClose={closePrompt} />}
     </>
