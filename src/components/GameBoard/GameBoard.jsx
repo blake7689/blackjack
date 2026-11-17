@@ -129,7 +129,7 @@ export default function GameBoard() {
             {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}
           </div>
 
-          <FeltPrint settings={settings} onOpen={() => navigate("/settings?tab=game")} onDraw={centrePrint} />
+          <FeltPrint settings={settings} onOpen={() => navigate("/settings#rules")} onDraw={centrePrint} />
           <div className="mid">
             <CenterMessage
               gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}

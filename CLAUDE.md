@@ -21,8 +21,9 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 ## Architecture
 - Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
-- Settings has Player / Game / Dev tabs (`?tab=`; "Back to game" carries it so the header's Settings reopens it).
-  A new game setting goes in `GAME_SETTINGS` (`tab: "dev"` for developer options; Game otherwise).
+- Settings (#84) is one page with no tabs: five accordion sections (Table rules, Gameplay, Chips, Appearance, Account), closed on arrival, one open at a time; a deep link
+  opens its section (`/settings#rules`, the hash is the section id; `goSettings("rules")`). A new setting needs: a default in `initialGameState.settings` (and a range if it is a
+  number), its label and hint in `APP_SETTINGS` (`ruleCatalog.js`), its control in `pages/Settings.jsx`, and its key in `PLAY_KEYS` / `LOOK_KEYS` there (an unlisted key counts as a table rule).
 - Saved settings (#36): `GameProvider` loads `GET /api/player/me/settings` on sign-in and applies it with one
   `LOAD_SETTINGS` (cleaned by `sanitizeSettings`: unknown keys dropped, wrong types and unknown dealer modes fall
   back to defaults, numbers clamped to `SETTING_RANGES`, `maxSplitHands` 0 kept). `changeSettings` saves the whole
@@ -100,12 +101,18 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (the API has no such field; a refused one voids only the insurance, in `BET_REJECTED`). `settleHand` pays it 3x its stake when the dealer has
   blackjack, inside the hand's `payout`, so the round still settles once. Even money is `evenMoney: true` (WIN, 2x). `dealerShowsSecondCard`
   reads `insurance`; `dealerOnlyChecksBlackjack` must not (a live insured hand still needs the dealer's total). `playRound` takes `offers`.
-- Rules section (#91 PR 4): the Settings Game tab shows `components/RulesSection` (preset tiles with summary and estimated house edge, Customize groups,
-  House variations, Advanced) above the settings that keep their own Save button. It applies at once through `applyRules(patch)` in Settings: a patch that changes
-  nothing does nothing (a click on the chosen option or tile must never call `changeSettings`: GameProvider deals a new shoe for any `RESET_SETTINGS` key in the patch, even unchanged),
-  and one with a `RESET_SETTINGS` key asks to confirm only mid-round. All rule wording (labels, hints, groups, summaries, the edge notes, the app toggles' labels) lives in
-  `ruleCatalog.js` only; an entry may carry `selected(settings)` / `patch(value, settings)` when the control is not just `settings[key]` (Second card: no peek shows as
-  "peeks"; it and the Advanced checkbox "Dealer doesn't check the hole card" write `dealerHoleBehaviour`, and move `blackjackPaysImmediately` to the new mode's preset pairing (true with a peek) only while it still holds the current mode's pairing).
+- Rules section (#91, #84): the Settings Table rules section is `components/RulesSection` (preset dropdown with each preset's house edge, flat groups Shoe, Dealer, Payouts,
+  Doubling, Splitting, Surrender, House variations, Advanced). It is part of Settings' one draft: `onApply(patch)` writes the draft, and Save sends only the keys that changed
+  (a key GameProvider sees in a patch with a `RESET_SETTINGS` name deals a new shoe even when unchanged, so an unchanged draft saves nothing); a changed `RESET_SETTINGS` key asks
+  "Start a new shoe?" at Save only mid-round, before the profile PUT. The profile PUT runs first and never blocks the settings (an invalid name stays dirty with its error).
+  A dirty draft is guarded without `useBlocker` (it cannot work with `<BrowserRouter>`): Settings sets `leaveGuard.ask` (`utils/leaveGuard.js`), `useNavActions` (Home, Settings,
+  Log out) and the Table button ask "Discard your changes?" first, and `beforeunload` covers a page unload. All rule wording (labels, short hints, groups, summaries, the app
+  toggles' labels, `APP_SETTINGS` for the rest) lives in `ruleCatalog.js` only. Its `showWhen` is the ONE hidden-in-this-mode list (EU-only toggles in the US modes, "Blackjack pays
+  immediately" and "If the dealer has blackjack" under a peek, "Resplit aces" with two hands): `visibleIn`, `togglesIn` and `rulePresetOf` (which imports the catalog, never the
+  reverse) read it, so a preset never reads Custom over a rule that does nothing; the rules sheet (PR 8) must read it too. "Dealer's second card" is one 3-way choice (Peeks / No
+  peek / No second card) writing `dealerHoleBehaviour`; `patch(value, settings)` moves `blackjackPaysImmediately` to the new mode's preset pairing (true with a peek) only while it
+  still holds the current mode's pairing. Options are `role="radio"` + `aria-checked`, switches are real labels around `role="switch"` checkboxes, every control is
+  `aria-describedby` its hint (the "i" is aria-hidden), pickers use `button[data-felt]`, `data-pick-accent`, `data-pick-mode`, rule options `[data-rule]`, presets `[data-preset]`.
   `utils/houseEdge.js` is an additive estimate (baseline 0.4469 + Wizard of Odds rule effects; sources, calculator comparison and the UNVERIFIED figures are in its header comment);
   insurance, House variations and Advanced are not counted; `noHoleCardLoss` counts only without a peek (`"all"` +0.11, `"original"` +0.01). A change to a rule effect needs its source.
 - Saved settings carry `v` (5 since #133 splitDeal). A missing or invalid rule key gets its `LEGACY_RULES` value when the saved `v` is

@@ -153,7 +153,7 @@ describe("the table's felt (#81)", () => {
     expect(container.querySelector(".room > .felt > .rail")).not.toBeNull();
     expect(container.querySelector(".felt .main-area.stage .stage-in .shoe .deck-stack")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Table rules" }));
-    expect(screen.getByTestId("location").textContent).toBe("/settings?tab=game");
+    expect(screen.getByTestId("location").textContent).toBe("/settings#rules");
   });
 
   it("the discard pile counts what was dealt and has left the table", () => {

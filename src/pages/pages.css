@@ -53,16 +53,7 @@
 .login-panel .tabs { margin-bottom: 12px; }
 .load-status { margin-top: 8px; opacity: 0.9; font-size: 14px; }
 
-/* Settings */
-.settings-body { padding: 18px; color: #fff; }
-.back-btn { margin-bottom: 16px; background: #1976d2; color: #fff; padding: 8px 18px; border-radius: 8px; font-weight: bold; float: right; }
-.divider { margin: 14px 0; border-color: rgba(255, 255, 255, 0.06); }
-.settings-panel { max-width: 720px; }
-.field-input { margin-left: 8px; }
-.range-input { margin-left: 8px; vertical-align: middle; }
-.checkbox-input { margin-right: 8px; }
-.chip-options { border: 0; padding: 0; margin: 0; }
-/* the chip picker: real chips in a groove (the mockup's .chip-pick / .cp); off chips sink */
+/* Settings: its styles are components/SettingsControls/SettingsControls.css (#84); the chip picker stays here. */
 .chip-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 10px 8px; border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); box-shadow: inset 0 2px 6px rgb(0 0 0 / .4); }
 @media (min-width: 600px) { .chip-pick { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
 .cp { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; border-radius: var(--r2); cursor: pointer; touch-action: manipulation; }
@@ -72,32 +63,3 @@
 .cp[aria-pressed="false"] svg { transform: scale(.86); filter: grayscale(1) brightness(.6); opacity: .5; }
 .cp[aria-pressed="false"] span { color: var(--tx-3); font-weight: 500; }
 .cp[aria-disabled="true"] { cursor: not-allowed; }
-.chip-hint { opacity: 0.7; font-size: 0.85em; margin: 4px 0; }
-.actions-row { margin-top: 12px; }
-.danger-btn { margin-left: 8px; background: #b22; color: #fff; }
-.reset-warning { color: red; margin-top: 4px; margin-bottom: 4px; }
-.save-btn { cursor: pointer; }
-.save-btn:disabled { cursor: not-allowed; }
-.save-btn.spaced { margin-top: 4px; }
-
-/* Rules section of the Game tab (#91): tiles, segmented controls and disclosures. Tap targets are 44px or more for phones. */
-.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-.rules-section h3 { margin: 4px 0 8px; }
-.rule-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.rule-tile { display: flex; flex-direction: column; gap: 2px; min-height: 44px; padding: 10px; text-align: left; border-radius: 8px; border: 2px solid transparent;
-  background: #2b3a44; color: #fff; overflow-wrap: anywhere; font: inherit; }
-button.rule-tile { cursor: pointer; }
-.rule-tile.selected { border-color: #2e7bff; background: #1d3a5f; }
-.rule-line { font-size: 0.85em; opacity: 0.85; }
-.rule-edge { margin-top: 4px; font-size: 0.85em; }
-.rule-details { margin-top: 12px; }
-.rule-details > summary { display: flex; align-items: center; min-height: 44px; cursor: pointer; font-weight: bold; }
-.rule-group h4 { margin: 12px 0 4px; }
-.rule-row { margin-bottom: 10px; }
-.rule-label { margin-bottom: 4px; }
-.seg { display: flex; flex-wrap: wrap; gap: 6px; }
-.seg-btn { min-height: 44px; min-width: 44px; padding: 8px 12px; border-radius: 8px; border: 2px solid transparent; background: #2b3a44; color: #fff; font: inherit; cursor: pointer; }
-.seg-btn.selected { border-color: #2e7bff; background: #1d3a5f; }
-.rule-delta { opacity: 0.8; }
-.toggle-row { display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.toggle-row .checkbox-input { width: 22px; height: 22px; margin: 0; }

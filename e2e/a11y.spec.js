@@ -29,37 +29,57 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
+// Settings is one page (#84): scan it closed, then once per section opened. Opening and the switches ease for a moment (chevron, switch track),
+// so wait until every running animation or transition has finished before axe reads the colours.
+const settled = (page) => page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+
 test.describe('settings', () => {
   test.beforeEach(async ({ page }) => {
     await stubApi(page);
     await login(page);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     // Scan only once the loaded table shows (the fixture's Rate of Play), as settings.spec.js does.
-    await page.getByRole('tab', { name: 'Dev' }).click();
-    await expect(page.getByLabel('playTimeout', { exact: true })).toHaveValue('250');
-    await page.getByRole('tab', { name: 'Player' }).click();
+    await expect(page.getByRole('button', { name: /^Gameplay/ })).toContainText('Very fast');
   });
 
-  test('Player tab has no serious accessibility violations (#120)', async ({ page }) => {
-    await expect(page.getByRole('tab', { name: 'Player', selected: true })).toBeVisible();
-    await expectNoSeriousA11y(page, 'settings, Player');
+  test('Settings with every section closed has no serious accessibility violations (#84)', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /^Table rules/ })).toHaveAttribute('aria-expanded', 'false');
+    await settled(page);
+    await expectNoSeriousA11y(page, 'settings, closed');
   });
 
-  test('Game tab (all sections open) has no serious accessibility violations (#120)', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Game' }).click();
-    await expect(page.getByRole('tab', { name: 'Game', selected: true })).toBeVisible();
-    await expectNoSeriousA11y(page, 'settings, Game');
-    for (const title of ['Customize rules', 'House variations', 'Advanced']) {
-      await page.locator('summary', { hasText: title }).click();
-    }
-    await expect(page.locator('details[open]')).toHaveCount(3);
-    await expectNoSeriousA11y(page, 'settings, Game, sections open');
+  for (const name of ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Account']) {
+    test(`Settings with ${name} open has no serious accessibility violations (#84)`, async ({ page }) => {
+      await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
+      await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-expanded', 'true');
+      await settled(page);
+      await expectNoSeriousA11y(page, `settings, ${name} open`);
+    });
+  }
+
+  test('Settings with unsaved changes and the Save bar has no serious accessibility violations (#84)', async ({ page }) => {
+    await page.getByRole('button', { name: /^Table rules/ }).click();
+    await page.getByRole('radiogroup', { name: 'Surrender', exact: true }).getByRole('radio', { name: /^None/ }).click();
+    await expect(page.getByRole('region', { name: 'Save bar' })).toBeVisible();
+    await settled(page);
+    await expectNoSeriousA11y(page, 'settings, unsaved changes');
   });
 
-  test('Dev tab has no serious accessibility violations (#120)', async ({ page }) => {
-    await page.getByRole('tab', { name: 'Dev' }).click();
-    await expect(page.getByLabel('playTimeout', { exact: true })).toBeVisible();
-    await expectNoSeriousA11y(page, 'settings, Dev');
+  test('Settings preset dropdown open has no serious accessibility violations (#84)', async ({ page }) => {
+    await page.getByRole('button', { name: /^Table rules/ }).click();
+    await page.getByRole('button', { name: /^Preset/ }).click();
+    await expect(page.getByRole('listbox')).toBeFocused();
+    await settled(page);
+    await expectNoSeriousA11y(page, 'settings, preset dropdown');
+  });
+
+  test('Settings confirm dialog (Discard your changes?) has no serious accessibility violations (#84)', async ({ page }) => {
+    await page.getByRole('button', { name: /^Gameplay/ }).click();
+    await page.locator('label.sw', { hasText: 'Show the count' }).click(); // the checkbox sits under its track: tap the row
+    await page.getByRole('button', { name: 'Table', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Discard your changes?' })).toBeVisible();
+    await settled(page);
+    await expectNoSeriousA11y(page, 'settings, discard dialog');
   });
 });
 

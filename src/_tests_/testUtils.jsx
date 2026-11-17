@@ -31,8 +31,8 @@ export function fakeActions(overrides = {}) {
 }
 
 function Location() {
-  const { pathname, search } = useLocation();
-  return <div data-testid="location">{pathname + search}</div>;
+  const { pathname, search, hash } = useLocation();
+  return <div data-testid="location">{pathname + search + hash}</div>;
 }
 
 // Renders ui with fake player and game contexts at `path`; returns the fakes for assertions.

@@ -175,11 +175,11 @@ describe("the menu", () => {
     expect(menu().hidden).toBe(true);
   });
 
-  it("Table rules opens the Game tab of Settings, Settings opens Settings, and the menu closes", () => {
+  it("Table rules opens the Table rules section of Settings, Settings opens Settings, and the menu closes", () => {
     renderUI(<TopBar />);
     fireEvent.click(menuButton());
     fireEvent.click(screen.getByRole("button", { name: "Table rules" }));
-    expect(screen.getByTestId("location").textContent).toBe("/settings?tab=game");
+    expect(screen.getByTestId("location").textContent).toBe("/settings#rules");
     expect(menu().hidden).toBe(true);
   });
 

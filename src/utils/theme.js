@@ -1,5 +1,7 @@
 // The display settings drive four axes on <html> (tokens.css reads them): data-felt, data-accent, data-mode and the
 // class no-totals. `mode: "system"` resolves through prefers-color-scheme. meta[name=theme-color] follows --bg. //
+export const FELTS = [["green", "Green"], ["blue", "Blue"], ["red", "Red"]];
+export const ACCENTS = [["emerald", "Emerald", "#1ed18a"], ["sapphire", "Sapphire", "#6b95ff"], ["ember", "Ember", "#ff7b3f"], ["orchid", "Orchid", "#c28dff"]]; // key, name, the dot's colour
 export const resolveMode = (mode, systemLight) => (mode === "system" ? (systemLight ? "light" : "dark") : mode);
 
 export function applyTheme({ feltTheme, accent, mode, showTotals }, systemLight, root = document.documentElement) {

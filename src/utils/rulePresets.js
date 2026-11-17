@@ -1,5 +1,6 @@
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
+import { hiddenKeys } from "./ruleCatalog";
 
 // Rules presets (#35 A5, #91): each sets every rule setting at once. Any other combination is "Custom".
 // Vegas is the default: initialGameState.settings equals it. Sources are in the spec (Specs\Regional rules.md).
@@ -49,7 +50,9 @@ export const RULE_PRESETS = {
 
 export const CUSTOM = "Custom";
 
+// The preset these settings match, ignoring the keys the current mode hides (ruleCatalog's `showWhen`: they do nothing there, so they never make a preset read as Custom).
 export function rulePresetOf(settings) {
+  const hidden = hiddenKeys(settings);
   return Object.keys(RULE_PRESETS).find((name) =>
-    Object.entries(RULE_PRESETS[name]).every(([key, value]) => settings[key] === value)) ?? CUSTOM;
+    Object.entries(RULE_PRESETS[name]).every(([key, value]) => hidden.has(key) || settings[key] === value)) ?? CUSTOM;
 }
