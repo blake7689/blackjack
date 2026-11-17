@@ -164,7 +164,7 @@ describe("the table's felt (#81)", () => {
   });
 });
 
-function Stage({ cw = "89px" }) {
+function Stage({ cw = "89px", shoe = true }) {
   const stage = useRef(null);
   const probe = useRef(null);
   useDealerRoom(stage, probe);
@@ -172,7 +172,7 @@ function Stage({ cw = "89px" }) {
   return (
     <div ref={stage} className="stage-in" style={cw ? { "--cw": cw } : undefined}>
       <div ref={probe} />
-      <i className="shoe-card" />
+      {shoe && <i className="shoe-card" />}
     </div>
   );
 }
@@ -192,6 +192,12 @@ describe("useDealerRoom (#81)", () => {
     rects({ left: 0, width: 390 }, { left: 0, width: 0 });
     const { container } = render(<Stage />);
     expect(container.querySelector(".stage-in").style.getPropertyValue("--room")).toBe("264px"); // 390 - 2 x (0.55 cards + 14)
+  });
+
+  it("copes with no shoe on the stage (only the stage's limits apply)", () => {
+    rects({ left: 0, width: 390 }, { left: 0, width: 0 });
+    const { container } = render(<Stage shoe={false} />);
+    expect(container.querySelector(".stage-in").style.getPropertyValue("--room")).toBe("264px");
   });
 
   it("takes a card for 70 px wide until the card width is set", () => {

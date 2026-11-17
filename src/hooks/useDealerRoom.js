@@ -8,9 +8,9 @@ export function useDealerRoom(stageRef, probeRef) {
     const stage = stageRef.current;
     const update = () => {
       const r = stage.getBoundingClientRect();
-      const shoe = stage.querySelector(".shoe-card").getBoundingClientRect();
+      const shoe = stage.querySelector(".shoe-card")?.getBoundingClientRect();
       const cw = parseFloat(stage.style.getPropertyValue("--cw")) || 70;
-      const room = dealerRoom({ stageW: r.width, cw, shoeLeft: shoe.width ? shoe.left : null, centre: r.left + r.width / 2 });
+      const room = dealerRoom({ stageW: r.width, cw, shoeLeft: shoe?.width ? shoe.left : null, centre: r.left + r.width / 2 });
       stage.style.setProperty("--room", `${Math.round(room)}px`);
     };
     update();

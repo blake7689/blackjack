@@ -29,7 +29,7 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true }) {
 
   return (
     <div className={`seat${active ? " active" : ""}${empty ? " nocards" : ""}`}>
-      <div className="hand player-hand" role="group" aria-label={empty ? `Hand ${index + 1}: no cards` : handLabel(`Hand ${index + 1}`, hand.cards, hand.hiddenCards.length, shown.ids, shown.totals, { showTotals, natural })}>
+      <div className="hand player-hand" role="group" aria-label={empty ? `Hand ${index + 1}: no cards` : handLabel(`Hand ${index + 1}`, hand.cards, hand.hiddenCards.length, shown, shown.totals, { showTotals, natural })}>
         <div className="fan-row cards" ref={rowRef}>
           {/* One list, so a double's card keeps its element from face down to face up (no second flight).
               Face down: the hidden card itself (and its id) never reaches the DOM. */}

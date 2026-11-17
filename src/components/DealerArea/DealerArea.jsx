@@ -14,7 +14,7 @@ function DealerArea({ dealer, hiddenCount = 0, showTotals = true }) {
   const natural = !!dealer.isBlackjack && !shown.pending;
   return (
     <div className="dealer-area" style={{ "--n": dealer.cards.length + hiddenCount }}>
-      <div className="dealer-hand hand" role="group" aria-label={handLabel("Dealer", dealer.cards, hiddenCount, shown.ids, shown.totals, { showTotals, natural })}>
+      <div className="dealer-hand hand" role="group" aria-label={handLabel("Dealer", dealer.cards, hiddenCount, shown, shown.totals, { showTotals, natural })}>
         <div className="fan-row dealer cards" ref={rowRef}>
           {/* One list, so the hole card keeps its element from face down to face up (two lists would remount it and fly it in again).
               Face down: the card itself never reaches the DOM, only its place in the deal (dealOrder 3). */}

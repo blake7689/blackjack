@@ -14,8 +14,8 @@ export function pillFace(totals, natural) {
 export const cardName = (c) => `${c.rank} of ${c.suit}`;
 
 // "Hand 1: king of diamonds, 4 of clubs, 14": a card still in flight or face down is "face-down card" and never gives its name away;
-// the total is left out with Show hand totals off, and a natural says "blackjack" (the pill shows it either way). `landed` is the
-// set of landed card ids; the dealer's total reads "showing 6". //
+// the total is left out with Show hand totals off, and a natural says "blackjack" (the pill shows it either way). `landed` is
+// anything with `has(id)` for the landed card ids (a Set, or the useLanded result); the dealer's total reads "showing 6". //
 export function handLabel(who, cards, hiddenCount, landed, totals, { showTotals, natural }) {
   if (!cards.length && !hiddenCount) return `${who}: no cards`;
   const names = [...cards.map((c) => (landed.has(c.id) ? cardName(c) : "face-down card")), ...Array(hiddenCount).fill("face-down card")];

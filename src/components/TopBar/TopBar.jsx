@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import Wordmark from "../Wordmark/Wordmark";
 import TopUpPrompt from "../TopUpPrompt/TopUpPrompt";
 import { usePlayer } from "../../hooks/usePlayer";
@@ -42,7 +42,8 @@ const Balance = memo(function Balance({ player, tapEnabled }) {
       <div className={`bal${delta !== undefined ? " changing" : ""}`} onClick={handleTap}>
         <span className="bal-top">
           <span className="bal-lbl">Balance</span>
-          {delta !== undefined && <span className={`delta num ${delta > 0 ? "up" : "down"}`}>{delta > 0 ? `+${delta}` : delta}</span>}        </span>
+          {delta !== undefined && <span className={`delta num ${delta > 0 ? "up" : "down"}`}>{delta > 0 ? `+${delta}` : delta}</span>}
+        </span>
         <b id="bal" className="num">{money(player ? player.credits : 0)}</b>
       </div>
       {asking && <TopUpPrompt onClose={closePrompt} />}
@@ -55,8 +56,8 @@ const Balance = memo(function Balance({ player, tapEnabled }) {
 function Count() {
   const { runningCount, shoe, hands, dealer } = useGameState();
   const onTable = [...hands.flatMap((h) => h.cards), ...dealer.cards];
-  const { ids } = useLanded(onTable); // subscribes to landings
-  const flying = onTable.filter((c) => !ids.has(c.id));
+  const { has } = useLanded(onTable); // subscribes to landings
+  const flying = onTable.filter((c) => !has(c.id));
   const running = runningCount - flying.reduce((sum, c) => sum + c.count, 0);
   const trueCount = Math.round(running / Math.max(1, (cardsRemaining(shoe) + flying.length) / 52));
   return (
@@ -74,7 +75,6 @@ export default function TopBar({ tapEnabled = false }) {
   const { settings } = useGameState();
   const { changeSettings } = useGameActions();
   const { goHome, goSettings, logOut } = useNavActions();
-  const nav = useNavigate();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
   const menuId = useId();
@@ -108,7 +108,7 @@ export default function TopBar({ tapEnabled = false }) {
           <span className="sr-only">Blakejack</span>
           <nav id={menuId} className="menu" aria-label="Menu" hidden={!open}>
             <button type="button" className="menu-i" onClick={pick(goHome)}><Icon id="i-back" />Home</button>
-            <button type="button" className="menu-i" onClick={pick(() => nav("/settings?tab=game"))}><Icon id="i-rules" />Table rules</button>
+            <button type="button" className="menu-i" onClick={pick(() => goSettings("game"))}><Icon id="i-rules" />Table rules</button>
             <button type="button" className="menu-i" aria-disabled="true"><Icon id="i-chart" />Analytics <small>Soon</small></button>
             <button type="button" className="menu-i" onClick={pick(() => goSettings())}><Icon id="i-settings" />Settings</button>
             <hr />
