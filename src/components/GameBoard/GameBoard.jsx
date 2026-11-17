@@ -10,8 +10,10 @@ import { useCardWidth } from "../../hooks/useCardWidth";
 import { useDealerRoom } from "../../hooks/useDealerRoom";
 import { useCentrePrint } from "../../hooks/useCentrePrint";
 import { useSeatsScroll } from "../../hooks/useSeatsScroll";
+import { useTightSeats } from "../../hooks/useTightSeats";
 import { centrePrint } from "../../utils/centrePrint";
 import { discardCount } from "../../utils/cards";
+import { DEFAULT_CHIP, effectiveChip, visibleChips } from "../../utils/chips";
 import TopBar from "../TopBar/TopBar";
 import DealerArea from "../DealerArea/DealerArea";
 import Shoe from "../Shoe/Shoe";
@@ -26,7 +28,7 @@ const TOP_UP_BELOW = 100;
 
 export default function GameBoard() {
   const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound } = useGameState();
-  const { continueRound } = useGameActions();
+  const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const navigate = useNavigate();
   const seatsRef = useRef(null);
@@ -37,6 +39,13 @@ export default function GameBoard() {
   useDealerRoom(stageInRef, probeRef);
   useCentrePrint(stageInRef);
   const scroll = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1);
+  const tight = useTightSeats(seatsRef, stageInRef, Math.max(1, hands.length));
+  // The chip picked in the rack (#82) is UI state, not round state: the rack picks it, the bet circle bets it. What is shown is always a chip the
+  // rack offers (the balance fell below it: the largest one below it).
+  const [picked, setPicked] = useState(DEFAULT_CHIP);
+  const chips = visibleChips(settings.chipValues, player ? player.credits : 0);
+  const chip = effectiveChip(chips, picked);
+  const canBet = !!player && chips.length > 0;
   // Cards on the board's first render never fly (returning from Settings): they read `enabled` while it is still false.
   const [enabled, setEnabled] = useState(false);
   useEffect(() => setEnabled(true), []);
@@ -71,7 +80,7 @@ export default function GameBoard() {
   // The hidden top-up taps (#90) count only when idle, signed in, low, with no chips in the circle and nothing awaiting the server.
   const tapEnabled = !!player && player.credits < TOP_UP_BELOW && phase === GamePhases.PRE_DEAL && betCircle === 0 && pendingBets.length === 0;
 
-  const seatsClass = `seats${scroll ? " scroll" : ""}${hands.length > 1 && phase === GamePhases.PLAYER_TURN ? " turns" : ""}`;
+  const seatsClass = `seats${scroll ? " scroll" : ""}${tight ? " tight" : ""}${hands.length > 1 && phase === GamePhases.PLAYER_TURN ? " turns" : ""}`;
   const stageClass = `stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}${phase === GamePhases.DEALING ? " dealing" : ""}`;
 
   return (
@@ -113,9 +122,12 @@ export default function GameBoard() {
                 key={hand.tag}
                 hand={hand}
                 index={idx}
-                active={hands.length ? selectedHandIndex === idx && phase === GamePhases.PLAYER_TURN : phase === GamePhases.PRE_DEAL}
+                active={hands.length ? selectedHandIndex === idx && phase === GamePhases.PLAYER_TURN : phase === GamePhases.PRE_DEAL && canBet}
                 gamePhase={phase}
                 showTotals={settings.showTotals}
+                chip={chip}
+                canBet={canBet}
+                onBet={addBet}
               />
             ))}
           </section>
@@ -127,7 +139,7 @@ export default function GameBoard() {
       {/* #3: the tips slot, 0 px tall while empty */}
       <div className="tip-line" aria-live="polite" />
 
-      <Dock busy={busy} />
+      <Dock busy={busy} chip={chip} onChip={setPicked} />
       <div className="flight-layer" ref={layerRef} />
     </div>
     </FlightContext.Provider>

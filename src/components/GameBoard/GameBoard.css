@@ -145,6 +145,7 @@
 }
 .cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; pointer-events: none; }
 .stage-in.multi { --fixed: 204px; --cwi: 17cqi; }
+.stage-in.multi:has(.seats.tight) { --fixed: 226px; --rows: 5.254; } /* the room kept under narrow seats for the side stacks (#82) */
 @media (max-height: 740px) and (min-height: 521px) { .stage-in { --stage-pt: 15px; } }
 @media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
 /* landscape phone, and wide desktop (900 px and 5:4 or wider): up to four hands in one row */

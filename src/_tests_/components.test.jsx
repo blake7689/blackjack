@@ -132,7 +132,8 @@ describe("PlayerHand", () => {
   it("shows soft totals, and holds no keys (they are in the dock)", () => {
     const { container } = renderUI(<PlayerHand {...props} active={false} hand={hand(["A", "6"], { totals: [17, 7] })} />);
     expect(live(container)).toBe("7/17 | $10");
-    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByRole("button", { name: "Bet $10" }).hasAttribute("disabled")).toBe(true); // only the idle bet circle
+    expect(screen.getAllByRole("button")).toHaveLength(1);
   });
 
   it("marks the hand in play as active", () => {
@@ -568,41 +569,46 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
       const view = (h, gamePhase) => renderUI(<PlayerHand {...props} active={false} gamePhase={gamePhase} hand={h} />).container;
 
       it.each([OFFERS, PEEK, GamePhases.PLAYER_TURN, GamePhases.DEALER_TURN])("an insured hand shows its insurance next to the bet (%s)", (gamePhase) => {
-        expect(live(view(insured(), gamePhase))).toBe("16 | $10 Insurance: $5");
+        const container = view(insured(), gamePhase);
+        expect(live(container)).toBe("16 | $10");
+        expect(container.querySelector(".side-spot.ins").textContent).toBe("INS $5"); // its own side stack, its amount on a label
+        expect(container.querySelector(".side-spot.ins svg")).not.toBeNull();
       });
 
       it("a half-dollar insurance shows as $2.50", () => {
-        expect(live(view(insured({ bet: 5, insurance: 2.5 }), PEEK))).toBe("16 | $5 Insurance: $2.50");
+        const container = view(insured({ bet: 5, insurance: 2.5 }), PEEK);
+        expect(live(container)).toBe("16 | $5");
+        expect(container.querySelector(".side-spot.ins i").textContent).toBe("INS $2.50");
       });
 
       it("an uninsured hand, or one whose insurance was refused (0), shows nothing about it", () => {
         expect(live(view(hand(["10", "6"], { totals: [16], total: 16 }), PEEK))).toBe("16 | $10");
         expect(live(view(insured({ insurance: 0 }), GamePhases.POST_ROUND))).toBe("16 | $10");
-        expect(screen.queryByText(/Insurance/)).toBeNull();
+        expect(screen.queryByText(/Insurance|INS/)).toBeNull();
       });
 
       it.each([GamePhases.POST_ROUND, GamePhases.END_ROUND])("settled, a paid insurance says so (%s)", (gamePhase) => {
         const container = view(insured({ result: HandResult.LOSE, insurancePayout: 15 }), gamePhase);
-        expect(live(container)).toBe("16 | $10 Insurance: $5 Lose Insurance pays $15");
+        expect(live(container)).toBe("16 | $10 Lose Insurance pays $15");
         expect(container.querySelector(".tag.win").textContent).toBe("Insurance pays $15");
       });
 
       it("settled, a lost insurance says so", () => {
         const container = view(insured({ result: HandResult.LOSE, insurancePayout: 0 }), GamePhases.POST_ROUND);
-        expect(live(container)).toBe("16 | $10 Insurance: $5 Lose Insurance lost");
+        expect(live(container)).toBe("16 | $10 Lose Insurance lost");
         expect(container.querySelector(".tag.lose")).not.toBeNull();
       });
 
       it("the outcome of the insurance waits for the round to settle", () => {
         const container = view(insured({ result: HandResult.NONE, insurancePayout: 15 }), GamePhases.DEALER_TURN);
-        expect(live(container)).toBe("16 | $10 Insurance: $5");
+        expect(live(container)).toBe("16 | $10");
       });
 
       it("an insured early surrender shows both: 'Surrendered' at once and the insurance outcome at the end", () => {
         const gone = insured({ surrendered: true, result: HandResult.SURRENDER, status: HandStatus.DONE, insurancePayout: 15 });
-        expect(live(view(gone, PEEK))).toBe("16 | $10 Insurance: $5 Surrendered");
+        expect(live(view(gone, PEEK))).toBe("16 | $10 Surrendered");
         cleanup();
-        expect(live(view(gone, GamePhases.POST_ROUND))).toBe("16 | $10 Insurance: $5 Surrendered Insurance pays $15");
+        expect(live(view(gone, GamePhases.POST_ROUND))).toBe("16 | $10 Surrendered Insurance pays $15");
       });
 
       it("even money reads 'Even money' at once, instead of 'Win', next to the Blackjack label", () => {
@@ -668,7 +674,8 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
     it("the insurance is shown on the hand once taken", () => {
       const insured = step(table(["10", "A", "6", "K"]), { type: "TAKE_INSURANCE" });
       const { container } = renderUI(<GameBoard />, { game: insured });
-      expect(live(container.querySelector(".seat"))).toBe("16 | $10 Insurance: $5");
+      expect(live(container.querySelector(".seat"))).toBe("16 | $10");
+      expect(container.querySelector(".side-spot.ins i").textContent).toBe("INS $5");
     });
 
     describe("the dealt hole card stays out of the page until the peek", () => {

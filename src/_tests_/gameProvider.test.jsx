@@ -137,6 +137,21 @@ describe("GameProvider", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("undoBet takes back the last chip locally (the balance, the circle, the history); the ledger sees one opening bet at the deal", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "7"]));
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(25));
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.undoBet());
+    expect([ctx.state.betCircle, ctx.state.betHistory]).toEqual([25, [25]]);
+    expect(events(player).filter((e) => e.kind === "local").map((e) => e.amount)).toEqual([-25, -10, 10]);
+    act(() => ctx.actions.deal());
+    expect(events(player).filter((e) => e.kind === "bet")).toEqual([{ kind: "bet", amount: 25, newRound: true, alreadyDeducted: true, handTag: null }]);
+    act(() => ctx.actions.undoBet()); // dealt: nothing to undo
+    expect(ctx.state.betCircle).toBe(25);
+  });
+
   it("passes the player's balance to bets, doubles and splits", () => {
     shoes.push(stackedShoe(["2"]), stackedShoe(["8", "10", "8", "7", "3", "10", "2"])); // the first is dealt by the rule change
     const { ctx, player } = setup();

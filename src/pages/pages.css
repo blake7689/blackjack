@@ -62,7 +62,16 @@
 .range-input { margin-left: 8px; vertical-align: middle; }
 .checkbox-input { margin-right: 8px; }
 .chip-options { border: 0; padding: 0; margin: 0; }
-.chip-option { display: inline-block; margin-right: 12px; }
+/* the chip picker: real chips in a groove (the mockup's .chip-pick / .cp); off chips sink */
+.chip-pick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 10px 8px; border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); box-shadow: inset 0 2px 6px rgb(0 0 0 / .4); }
+@media (min-width: 600px) { .chip-pick { grid-template-columns: repeat(8, minmax(0, 1fr)); } }
+.cp { all: unset; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 0; border-radius: var(--r2); cursor: pointer; touch-action: manipulation; }
+.cp:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.cp svg { width: min(48px, 100%); height: auto; filter: drop-shadow(1px 4px 3px rgb(0 0 0 / .5)); transition: transform var(--t-ui) var(--e-spring), filter var(--t-ui), opacity var(--t-ui); }
+.cp span { font-size: 13px; font-weight: 700; color: var(--tx); }
+.cp[aria-pressed="false"] svg { transform: scale(.86); filter: grayscale(1) brightness(.6); opacity: .5; }
+.cp[aria-pressed="false"] span { color: var(--tx-3); font-weight: 500; }
+.cp[aria-disabled="true"] { cursor: not-allowed; }
 .chip-hint { opacity: 0.7; font-size: 0.85em; margin: 4px 0; }
 .actions-row { margin-top: 12px; }
 .danger-btn { margin-left: 8px; background: #b22; color: #fff; }

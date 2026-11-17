@@ -9,6 +9,7 @@ import RulesSection from "../components/RulesSection/RulesSection";
 import { validateField } from "../utils/validation";
 import { ALLOWED_CHIPS } from "../utils/constants/chips";
 import { parseChipValues, formatChipValues } from "../utils/chips";
+import { Chip } from "../components/Chip/Chip";
 import "./pages.css";
 
 const PROFILE_FIELDS = [
@@ -41,16 +42,24 @@ function SettingInput({ setting, value, onChange }) {
     return <input type="checkbox" aria-label={setting.key} checked={value} onChange={(e) => onChange(e.target.checked)} className="checkbox-input" />;
   }
   if (setting.input === "chips") {
+    // Real chips in a groove, as toggle buttons: a chip that is off sinks. The last chip on cannot be turned off (aria-disabled keeps it focusable and described).
     const chosen = parseChipValues(value);
-    return ALLOWED_CHIPS.map((chip) => (
-      <label key={chip} className="chip-option">
-        <input type="checkbox" className="checkbox-input" checked={chosen.includes(chip)}
-          disabled={chosen.length === 1 && chosen[0] === chip}
-          aria-describedby={chosen.length === 1 && chosen[0] === chip ? "chip-hint" : undefined}
-          onChange={(e) => onChange(formatChipValues(e.target.checked ? [...chosen, chip] : chosen.filter((c) => c !== chip)))} />
-        ${chip.toLocaleString()}
-      </label>
-    ));
+    return (
+      <div className="chip-pick">
+        {ALLOWED_CHIPS.map((chip) => {
+          const on = chosen.includes(chip);
+          const last = on && chosen.length === 1;
+          return (
+            <button key={chip} type="button" className="cp" aria-pressed={on} aria-label={`$${chip.toLocaleString()} chip`} aria-disabled={last || undefined}
+              aria-describedby={last ? "chip-hint" : undefined}
+              onClick={() => !last && onChange(formatChipValues(on ? chosen.filter((c) => c !== chip) : [...chosen, chip]))}>
+              <Chip value={chip} />
+              <span aria-hidden="true">${chip.toLocaleString()}</span>
+            </button>
+          );
+        })}
+      </div>
+    );
   }
   return (
     <input type="range" aria-label={setting.key} min={setting.range[0]} max={setting.range[1]} step={setting.step} value={value}

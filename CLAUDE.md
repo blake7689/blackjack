@@ -185,11 +185,19 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Auto deal (#88): settings `autoDeal` and `autoDealDelay` (0-10000 ms, default 3000; not in `RESET_SETTINGS` or the presets); `autoDealOn(state)` needs `autoDeal`,
   `resetInitialBet` and `!autoDealPaused`, and `sanitizeSettings` turns a saved `autoDeal` off without `resetInitialBet`. Two reducer fields: `autoDealPaused`
   (sticky: Pause button, or an unaffordable rebet, which also sets the notice after `emptyRound`; cleared by Resume, START_GAME/RESET_GAME and enabling `autoDeal`)
-  and `autoDealPending` (armed by END_ROUND when a rebet was placed; cleared by ADD_BET, CLEAR_BET, DEAL, any table reset, Pause, and leaving `/game`).
+  and `autoDealPending` (armed by END_ROUND when a rebet was placed; cleared by ADD_BET, UNDO_BET, CLEAR_BET, DEAL, any table reset, Pause, and leaving `/game`).
   `nextAutoAction` gives CONTINUE (POST_ROUND) and DEAL (PRE_DEAL, pending) on the one existing timer; DEAL waits `stepWait(autoDealDelay)`, so delay 0 means right
   after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
   `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
-  (a dock key since #80, so it needs no stopPropagation) shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal). There is no Undo action, only ADD_BET and CLEAR_BET. `OFFERS` has no automatic step, so auto deal waits there.
+  (a dock key since #80, so it needs no stopPropagation) shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal). `UNDO_BET` (#82) clears `autoDealPending` like ADD_BET and CLEAR_BET (Rebet and 2x are ADD_BETs, so they do too). `OFFERS` has no automatic step, so auto deal waits there.
+- Chips and betting (#82): `betHistory` is the amounts added to the circle since it was last empty, oldest first; ADD_BET pushes, `UNDO_BET` pops the last
+  (`local(+x)`), and it is emptied by DEAL, CLEAR_BET, `resetTable` and a voided round (BET_REJECTED on the opening bet); END_ROUND's auto rebet seeds it with `[initialBet]`.
+  Rebet is `ADD_BET` of `initialBet` and 2x is `ADD_BET` of `betCircle` (the dock dims them unless affordable): never give them reducer actions or ledger events of their
+  own. The ledger still sees one opening bet. The selected rack chip is UI state in GameBoard (`picked`, shown through `effectiveChip`), never reducer state: the rack
+  selects it, the bet circle (`.spot`, a button named "Bet spot N, ...") bets it, and a double tap on a rack chip (timed by hand, 400 ms) bets it too. Stacks are
+  `ChipStack` (`splitChips`: greedy over `ALLOWED_CHIPS`, up to 10 drawn, the exact amount on `.amt`); a double's second stake and the insurance are `.side-spot`
+  stacks beside the circle, never over the bet. The chip symbols (`#chip-<v>`, `#chip-<v>-p`, `#side-<v>`) are in `components/Sprite/ChipSymbols.jsx`: change a colour
+  there only with the issue table (#82) and the mockup's `build.mjs`. The rack's scroll classes and `--rgap` / `--rpad` are set by hand in `Dock`'s `ChipRack`, not through React.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

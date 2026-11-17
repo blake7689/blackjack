@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, VEGAS, placeBet } from './fixtures';
 
 // Table art acceptance (#81): what jsdom cannot see (CSS, real layout, fonts, the keyboard, cards landing one at a time).
 // The seeds were found like seed 183 (see smoke.spec.js: 4 router keys, the settings-load shoe, then the game-start shoe, Vegas 6 decks); the first four
@@ -14,7 +14,7 @@ async function dealAt(page, seed, settings = {}) {
   const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, ...settings } });
   await seedRandom(page, seed);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   return api;
 }
@@ -73,7 +73,7 @@ test('the count is never blank and moves one card at a time, as each lands face 
     read();
   });
   await expect(page.getByRole('group', { name: 'Card count' })).toContainText('Count0'); // empty table: 0, not blank
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: '4 of clubs' })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Card count' })).toContainText('Count+1'); // king, 6 and 4 are down; the hole card is not counted
@@ -181,7 +181,7 @@ for (const [name, viewport, slides] of [['a 320 px phone', { width: 320, height:
     await stubApi(page);
     await seedRandom(page, 38821090);
     await login(page);
-    await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+    await placeBet(page);
     await page.getByRole('button', { name: 'Deal', exact: true }).click();
     await page.getByRole('button', { name: 'Hit', exact: true }).click({ timeout: 15_000 });
     await expect(page.getByRole('img', { name: '5 of spades' })).toBeVisible();
@@ -224,7 +224,7 @@ test('five hands scroll one hand at a time, fading at the edges, with the hand i
   await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, maxSplitHands: 0 } });
   await seedRandom(page, 33973);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   const hands = page.getByRole('group', { name: /^Hand \d/ });
   for (let n = 2; n <= 5; n++) {

@@ -4,6 +4,7 @@
   flex: none; display: flex; justify-content: center; gap: var(--sg); width: 100%; padding: 0 12px; box-sizing: border-box; position: relative; z-index: var(--z-seats);
   --sw: min(calc(var(--cw) * 3.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n)));
   --spot: max(44px, min(calc(var(--cw) * 1.15), calc(var(--sw) * .6)));
+  --chip: min(calc(var(--cw) * .6), calc(var(--spot) * .62)); /* a chip on the table: 0.6 of a card, a 39 mm chip beside a 63 mm card */
 }
 .seats.scroll { justify-content: flex-start; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding: 14px calc(50cqi - var(--sw) / 2) 0; margin-top: -14px;
   mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); --sw: calc(var(--cw) * 2.6); } /* fade cues at the edges */
@@ -15,12 +16,33 @@
 .stage-in.multi .seat .hand { margin-top: 32px; } /* room for the pill above the hand */
 
 .spot-row { position: relative; width: 100%; height: var(--spot); margin-top: 12px; display: flex; justify-content: center; }
-.spot { position: relative; width: var(--spot); height: var(--spot); border-radius: 50%; color: var(--print); }
+.spot { position: relative; width: var(--spot); height: var(--spot); border-radius: 50%; border: 0; padding: 0; background: transparent; color: var(--print); font: inherit; cursor: pointer; touch-action: manipulation; }
+.spot:disabled { cursor: default; } /* idle: not betting, or nothing is affordable */
 .spot::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--print); opacity: .7; }
 .spot::after { content: ""; position: absolute; inset: 9%; border-radius: 50%; border: 1px solid var(--print); opacity: .35; }
 .spot .bet-lbl { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 700; letter-spacing: .2em; color: var(--print); }
 .spot.has .bet-lbl { display: none; }
 .seat.active .spot::before { border-color: var(--accent); opacity: 1; box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / .16), 0 0 26px rgb(var(--accent-rgb) / .3); }
+.spot.open::before { animation: breathe 2.4s var(--e-io) infinite; } /* betting is open and the circle is empty */
+@keyframes breathe { 0%, 100% { opacity: .5; } 50% { opacity: .95; } }
+@media (prefers-reduced-motion: reduce) { .spot.open::before { animation: none; } }
+
+/* CHIPS (#82): one SVG per stack; its bottom chip is centred on the circle (--k, set by ChipStack), each chip above lifted up the screen by its thickness */
+.stack { display: block; position: absolute; left: 50%; top: 50%; width: var(--chip); transform: translateX(-50%); pointer-events: none; container-type: inline-size; }
+.stack svg { display: block; width: 100%; height: auto; overflow: visible; transform: translateY(calc(var(--k, 50) / -100 * var(--chip))); filter: drop-shadow(1px 3px 2px rgb(var(--shadow-c) / .55)); }
+.stack .plain-face { display: none; }
+@container (max-width: 43.9px) { .stack .num-face { display: none; } .stack .plain-face { display: inline; } } /* a numeral under 12 px is no use: the diamond face */
+/* side stacks (a double's second stake, the insurance): never over the bet. Beside the circle: insurance left, the double right. */
+.side-spot { position: absolute; top: 50%; width: calc(var(--chip) * 1.12); height: calc(var(--chip) * 1.12); transform: translateY(-50%); border-radius: 50%; }
+.side-spot::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 1px dashed var(--print); opacity: .55; }
+.side-spot.dbl { left: min(calc(50% + var(--spot) * .5 + 4px), calc(100% - var(--chip) * 1.12)); }
+.side-spot.ins { right: min(calc(50% + var(--spot) * .5 + 4px), calc(100% - var(--chip) * 1.12)); }
+.side-spot i { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 7px; font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--print); white-space: nowrap; }
+/* narrow portrait seats (three on a phone): no room beside the circle, so the side stacks sit under the amount, in room kept for them */
+.seats.tight .seat { padding-bottom: calc(var(--chip) * 1.66 + 22px); }
+.seats.tight .side-spot { left: 50%; right: auto; top: calc(100% + 32px + var(--chip) * .54); transform: translateX(-50%); } /* bottoms on one line; a 10-chip stack still clears the amount */
+.seats.tight .spot-row:has(.ins) .dbl { transform: translateX(3px); }
+.seats.tight .spot-row:has(.dbl) .ins { transform: translateX(calc(-100% - 3px)); }
 
 .amt { min-height: 22px; margin-top: 4px; max-width: 100%; font-size: 13px; font-weight: 700; color: #fff; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 6px; }
 .amt > span:not(.tag) { padding: 1px 8px; border-radius: 99px; background: rgb(0 0 0 / .32); white-space: nowrap; }
@@ -45,4 +67,20 @@
   .stage-in.multi .seat::after { width: 56px; }
   .spot-row { grid-column: 1; grid-row: 1; width: var(--spot); height: var(--spot); margin-top: 0; align-self: end; }
   .seat > .amt { grid-column: 1; grid-row: 2; justify-content: center; align-self: start; }
+  /* side stacks sit just above the circle, on the insurance line, never over the bet; side by side when both; the INS label beside its stack */
+  .side-spot.dbl, .side-spot.ins { left: 50%; right: auto; top: auto; bottom: calc(100% + 4px); transform: translateX(-50%); }
+  .spot-row:has(.ins) .dbl { transform: translateX(3px); }
+  .spot-row:has(.dbl) .ins { transform: translateX(calc(-100% - 3px)); }
+  .side-spot i { left: auto; right: 100%; top: 50%; transform: translateY(-50%); margin: 0 4px 0 0; }
+}
+/* landscape phones: no room above the circle (the print and the verdict are there), so the side stacks go on its outer side; the circle's column
+   grows to hold them (one seat: both outer columns, so the hand stays centred; several: the fan closes up) */
+@media (max-height: 520px) {
+  .seat.sides { grid-template-columns: calc(var(--spot) + var(--chip) * 1.12 + 6px) auto calc(var(--spot) + var(--chip) * 1.12 + 6px); }
+  .stage-in.multi .seat.sides { grid-template-columns: calc(var(--spot) + var(--chip) * 1.12 + 6px) auto 56px; }
+  .seat.sides .spot-row, .seat.sides > .amt { justify-self: end; width: var(--spot); }
+  .side-spot.dbl, .side-spot.ins { left: auto; right: calc(100% + 6px); top: 50%; bottom: auto; transform: translateY(-50%); }
+  .spot-row:has(.ins) .dbl { transform: translateY(-100%); }
+  .spot-row:has(.dbl) .ins { transform: none; }
+  .side-spot i { left: 50%; right: auto; top: 100%; transform: translateX(-50%); margin: 2px 0 0; }
 }

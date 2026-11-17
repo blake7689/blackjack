@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, VEGAS, placeBet } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -10,7 +10,7 @@ test('auto deal continues, rebets and deals the next round with no click (#88)',
   await login(page);
 
   await expect(page.getByRole('button', { name: 'Pause auto deal' })).toBeVisible(); // the setting reached the table
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click(); // the only Deal click of the test
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await page.getByRole('button', { name: 'Hit' }).click({ timeout: 15_000 });

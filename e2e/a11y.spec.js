@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, submitLogin, openTable } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, submitLogin, openTable, placeBet } from './fixtures';
 import { expectNoSeriousA11y } from './a11y';
 
 // Automated accessibility scans (#120): axe on each screen; serious and critical violations fail (see e2e/a11y.js).
@@ -20,7 +20,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await stubApi(page);
   await seedRandom(page, 183); // the smoke test's deal: king of diamonds + 4 of clubs against a 6 of clubs, a jack in the hole
   await openTable(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
@@ -105,7 +105,7 @@ test('offers dialog (insurance) has no serious accessibility violations (#125)',
   await stubApi(page);
   await seedRandom(page, 207); // the smoke test's insurance deal: 10 of clubs against an ace of diamonds
   await openTable(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('group', { name: 'Offers' }).getByRole('button', { name: 'Insurance $5' })).toBeVisible({ timeout: 15_000 });
   await expect(page.locator('.board.busy')).toHaveCount(0);
@@ -115,10 +115,10 @@ test('offers dialog (insurance) has no serious accessibility violations (#125)',
 test('hovered and keyboard-focused controls while betting have no serious accessibility violations (#125)', async ({ page }) => {
   await stubApi(page);
   await openTable(page);
-  const chip = page.getByRole('button', { name: 'Add 10', exact: true });
+  const chip = page.getByRole('button', { name: '$10 chip', exact: true });
   await chip.hover();
   await expectNoSeriousA11y(page, 'board, chip hovered');
-  await chip.click();
+  await chip.dblclick(); // a double click selects the chip and bets it
   const deal = page.getByRole('button', { name: 'Deal', exact: true });
   await deal.hover();
   await expectNoSeriousA11y(page, 'board, Deal hovered');

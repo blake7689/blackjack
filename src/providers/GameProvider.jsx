@@ -91,6 +91,7 @@ export function GameProvider({ children }) {
     startGame: () => dispatch({ type: "START_GAME", shoe: makeShoe() }),
     resetGame: (phase = GamePhases.NONE) => dispatch({ type: "RESET_GAME", shoe: makeShoe(), phase }),
     addBet: (amount) => dispatch({ type: "ADD_BET", amount, credits: getCredits() }),
+    undoBet: () => dispatch({ type: "UNDO_BET" }),
     clearBet: () => dispatch({ type: "CLEAR_BET" }),
     deal: () => dispatch({ type: "DEAL", refill: makeShoe, credits: getCredits() }), // credits: only insurance reads it (affordable?)
     hit: (handIdx) => dispatch({ type: "HIT", handIdx, refill: makeShoe }),

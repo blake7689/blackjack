@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, placeBet } from './fixtures';
 
 // The layout core (#80): the table never resizes between betting, dealing, the offers, your move and the results, the dock keeps
 // its height, the message line holds its 48 px, the tip line is 0 px, and Hit and Stay stay on screen at every size.
@@ -39,7 +39,7 @@ async function playRound(page) {
   await login(page);
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible();
   await watchLayout(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await expect(page.getByText('Tap Deal', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   const offers = page.getByRole('group', { name: 'Offers' });
@@ -106,7 +106,7 @@ test.describe('at 844x390 (a phone on its side)', () => {
     await stubApi(page);
     await seedRandom(page, 65);
     await login(page);
-      await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+      await placeBet(page);
     await page.getByRole('button', { name: 'Deal', exact: true }).click();
     await page.getByRole('group', { name: 'Offers' }).getByRole('button', { name: 'No thanks' }).click();
     const hit = page.getByRole('button', { name: 'Hit', exact: true });
@@ -133,7 +133,7 @@ for (const [w, h] of [[320, 568], [375, 667], [390, 844], [768, 1024], [1440, 90
     await stubApi(page);
     await seedRandom(page, 183);
     await login(page);
-    await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+    await placeBet(page);
     await page.getByRole('button', { name: 'Deal', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 });
     await page.getByRole('button', { name: 'Hit' }).click();

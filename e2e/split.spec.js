@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, VEGAS, placeBet } from './fixtures';
 
 // Split deal (#133). Seed 262 (mulberry32), found by the same script as seed 183 and the offers seeds (see smoke.spec.js: 4 router keys, the settings-load shoe,
 // then the game-start shoe, Vegas 6 decks), keeping a round with a pair, a 7 up (no peek, no offers) and the next two cards different and not finishing a hand:
@@ -9,7 +9,7 @@ async function splitAt262(page, settings) {
   const api = await stubApi(page, settings ? { settings } : {});
   await seedRandom(page, 262);
   await login(page);
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(page.getByRole('img', { name: '4 of hearts' })).toBeVisible();
   await expect(page.getByRole('img', { name: '4 of diamonds' })).toBeVisible();

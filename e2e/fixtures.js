@@ -108,6 +108,12 @@ export async function login(page) {
 
 export const openTable = login;
 
+// Bets a chip the way a player does (#82): pick it in the rack, then tap the bet circle (the circle bets the selected chip).
+export async function placeBet(page, chip = 10) {
+  await page.getByRole('button', { name: `$${chip} chip`, exact: true }).click();
+  await page.getByRole('button', { name: /^Bet spot 1,/ }).click();
+}
+
 // Any endpoint the stub does not know fails the test (the 501 alone could be swallowed by the app).
 export const test = base.extend({
   noUnknownEndpoints: [async ({ page }, use) => {

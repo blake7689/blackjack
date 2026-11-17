@@ -2,6 +2,8 @@
 // url() cannot see them). The card back (#81): the mockup's `#cardback` (assets/sprite.svg, built by its
 // build.mjs). Graphite ground (--back-bg), white border, a lattice and waves and a guilloche rosette in the accent
 // (--back-ink), the wordmark on a plate in --back-hi. Use it as <svg viewBox="0 0 250 363"><use href="#cardback" /></svg>.
+import { memo } from "react";
+import ChipSymbols from "./ChipSymbols";
 const WAVES = Array.from({ length: 9 }, (_, i) => `M22 ${(40 + i * 35.4).toFixed(1)} q12.9 -9 25.8 0` + " t25.8 0".repeat(7));
 const ROSETTE = Array.from({ length: 18 }, (_, i) => i * 10);
 const ICONS = [
@@ -11,9 +13,14 @@ const ICONS = [
   ["i-rules", <><rect x="5" y="3.5" width="14" height="17" rx="2" /><path d="M9 8h6M9 12h6M9 16h3" /></>],
   ["i-back", <path d="M15 5l-7 7 7 7" />],
   ["i-logout", <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l4-4-4-4M14 12H4" />],
+  // the dock's betting keys and the out-of-credits note (#82)
+  ["i-undo", <><path d="M9 7L4.5 11.5 9 16" /><path d="M5 11.5h9.5a5 5 0 0 1 0 10H11" /></>],
+  ["i-clear", <path d="M6 6l12 12M18 6L6 18" />],
+  ["i-rebet", <><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9" /><path d="M20 4v5h-5" /><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15" /><path d="M4 20v-5h5" /></>],
+  ["i-info", <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v6M12 7.5v.5" /></>],
 ];
 
-export default function Sprite() {
+function Sprite() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style={{ position: "absolute", width: 0, height: 0, overflow: "hidden" }}>
       <defs>
@@ -24,6 +31,7 @@ export default function Sprite() {
           <path d="M0 0H9M0 0V9" stroke="var(--back-ink,#1ed18a)" strokeOpacity=".14" strokeWidth=".6" />
         </pattern>
       </defs>
+      <ChipSymbols />
       <symbol id="cardback" viewBox="0 0 250 363">
         <rect width="250" height="363" rx="13" fill="#f6f4ee" />
         <rect x="10" y="10" width="230" height="343" rx="8" fill="var(--back-bg,#101413)" />
@@ -58,3 +66,6 @@ export default function Sprite() {
     </svg>
   );
 }
+
+// Static: a route change re-renders App, and the sprite (the chips alone are thousands of elements) must not be rebuilt each time.
+export default memo(Sprite);
