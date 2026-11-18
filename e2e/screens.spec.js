@@ -295,6 +295,33 @@ test.describe('Home and the sign-in screens', () => {
     await expect(page.getByLabel('Username or email')).toBeVisible();
   });
 
+  // #153: the small inline links get a 44 px tap area from padding and a negative margin, so the line itself must not grow.
+  test('the inline links (Create an account, Log in, Log out) are at least 44 x 44 px, and the signed-in line is as tall as the signed-out one', async ({ page }) => {
+    await stubApi(page);
+    await page.goto('/');
+    const note = page.getByText('Please log in to start playing.');
+    await expect(note).toBeVisible();
+    const signedOutHeight = (await note.boundingBox()).height;
+
+    await page.goto('/login');
+    const create = page.getByRole('main').getByRole('link', { name: 'Create an account' });
+    await expect(create).toBeVisible();
+    expect(await tooSmall(create), '/login: Create an account').toEqual([]);
+
+    await page.goto('/signup');
+    const logIn = page.getByRole('main').getByRole('link', { name: 'Log in' });
+    await expect(logIn).toBeVisible();
+    expect(await tooSmall(logIn), '/signup: Log in').toEqual([]);
+
+    await login(page);
+    await page.getByRole('button', { name: 'Menu' }).click();
+    await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
+    const signed = page.getByText('Signed in as tester');
+    await expect(signed).toBeVisible();
+    expect(await tooSmall(page.getByRole('main').getByRole('button', { name: 'Log out' })), 'Home: Log out').toEqual([]);
+    expect((await signed.boundingBox()).height, 'the signed-in line is as tall as the signed-out line').toBe(signedOutHeight);
+  });
+
   test('Create account stays disabled until every field is valid, and each error is shown against its field', async ({ page }) => {
     await stubApi(page);
     await page.goto('/signup');
