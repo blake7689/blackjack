@@ -1255,6 +1255,36 @@ describe("the signed-in start on the table (DESIGN section 8)", () => {
     expect(ctx.pathname).toBe("/settings");
   });
 
+  it.each(["/login", "/signup"])("replaces %s with /game once signed in (#144)", async (path) => {
+    const { ctx } = setup({ signedIn: true, path });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("replaces /login with /game when the settings cannot be loaded (#144)", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true, path: "/login" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("the sign-in lands on /game while the ref still reads /login: Login's own navigate has not rendered (#144)", async () => {
+    const { ctx, rerender } = setup({ path: "/login" });
+    swap(rerender, ctx, { userName: "alice" }); // signed in, no route change yet
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+  });
+
+  it("leaves a player already on /game where they are", async () => {
+    const { ctx } = setup({ signedIn: true, path: "/game" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
   it("signed out: nothing starts, nothing is loading, / stays Home", async () => {
     const { ctx } = setup({ path: "/" });
     await flush();
