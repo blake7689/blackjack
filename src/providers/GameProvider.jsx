@@ -10,6 +10,8 @@ import { getSettings, saveSettings } from "../utils/playerEngine";
 import { stepWait } from "../utils/cardAnimation";
 import { useTheme } from "../hooks/useTheme";
 
+const ENTRY_ROUTES = new Set(["/", "/login", "/signup"]);
+
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState);
   const { player, getCredits, applyCreditEvent } = usePlayer();
@@ -33,7 +35,8 @@ export function GameProvider({ children }) {
   // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there, and while
   // nothing has loaded a signed-in change is applied here but never saved: it would overwrite the stored table with defaults.
   // Then, once per sign-in or restore (never on a later visit to Home), the table starts and a player still on "/" lands on it (DESIGN
-  // section 8); a failed load starts it with the settings it has. //
+  // section 8); a failed load starts it with the settings it has. The sign-in pages count as entry routes too: whereRef lags the route commit
+  // (Login's nav("/") may not have rendered yet), so a player can still read "/login" here (#144). //
   const loadedRef = useRef(false);
   useEffect(() => {
     loadedRef.current = false;
@@ -44,7 +47,7 @@ export function GameProvider({ children }) {
       dispatch({ type: "START_GAME", shoe: createShoe(settings.deckCount, settings.includeCutCard) });
       setStarted(true);
       const { pathname: at, nav: go } = whereRef.current;
-      if (at === "/") go("/game", { replace: true });
+      if (ENTRY_ROUTES.has(at)) go("/game", { replace: true });
     };
     getSettings().then((saved) => {
       if (!current) return;
