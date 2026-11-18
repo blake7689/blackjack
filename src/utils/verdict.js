@@ -1,5 +1,5 @@
 import { HandResult } from "./constants/handResult";
-import { roundNet } from "./blackjackLogic";
+import { getHandTotals, roundNet } from "./blackjackLogic";
 import { money, signed } from "./money";
 
 // The verdict and the result tags (#83, DESIGN section 5): one word on the felt for the round, and with two or more hands a tag under each circle. The hand is
@@ -38,4 +38,15 @@ export function verdictOf(hands) {
   const kind = handKind(hand);
   const extra = hand.insurance > 0 ? (hand.insurancePayout > 0 ? `Insurance pays ${money(hand.insurancePayout)}` : "Insurance lost") : null;
   return { kind, word: WORDS[kind], amt, extra };
+}
+
+// What the screen reader hears at the results besides the verdict (#85): each hand's outcome and total, then the dealer's, "Hand 1: win, 20. Dealer: 18.".
+// With Show hand totals off the totals are left out, but a blackjack is still said (the pill shows it either way). By the results the hole card is turned over. //
+export function resultsLine(hands, dealer, showTotals) {
+  const say = (who, ...words) => { const heard = [...new Set(words.filter(Boolean))]; return heard.length > 0 && `${who}: ${heard.join(", ")}.`; };
+  const total = (t, natural) => (natural ? "blackjack" : showTotals && String(t));
+  return [
+    ...hands.map((h, i) => say(`Hand ${i + 1}`, tagOf(h).text.toLowerCase(), total(h.total, h.isBlackjack))),
+    say("Dealer", total(getHandTotals(dealer.cards).total, dealer.isBlackjack)),
+  ].filter(Boolean).join(" ");
 }

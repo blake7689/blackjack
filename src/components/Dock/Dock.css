@@ -30,8 +30,8 @@
 .key.offer { border-color: rgb(var(--accent-rgb) / .55); color: var(--accent-tx); background: rgb(var(--accent-rgb) / .08); font-size: 15px; }
 .key small { font-size: 12px; font-weight: 500; color: var(--tx-3); }
 .key kbd { display: none; position: absolute; top: 6px; right: 7px; font: 600 12px/1 var(--font-ui); color: var(--tx-2); } /* the shortcut, on desktop */
-.key.primary kbd { color: inherit; }
-.glyph::before { content: attr(data-text); }
+.key.primary kbd, .key.solid kbd { color: inherit; } /* on the primary fill and the solid slab the hint takes the key's ink: --tx-2 would not read there */
+.glyph::before, .key kbd::before { content: attr(data-text); }
 .key.primary small { color: inherit; } /* 12 px on the accent needs the full ink */
 .dock .wider { flex: 3 1 0; }
 
@@ -87,6 +87,7 @@
   .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
   .key { flex-direction: row; gap: 6px; }
   .key kbd, .key small { display: none; }
+  .rc:focus-visible { outline-offset: -3px; } /* the rack is 48 px tall here: an outside ring would be cut by it */
   /* the small betting keys are icon-only (their label stays as the accessible name) */
   .dock-in[data-face="betting"] .key:not(.big):has(> svg) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .dock-in .key.big { flex: none; min-width: 96px; }

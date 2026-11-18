@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
-import { MOOD, verdictOf } from "../../utils/verdict";
+import { MOOD, resultsLine, verdictOf } from "../../utils/verdict";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandResult } from "../../utils/constants/handResult";
 import { useGameState, useGameActions } from "../../hooks/useGame";
@@ -141,6 +141,7 @@ export default function GameBoard() {
               reconnecting={reconnecting}
               notice={notice}
               verdict={verdict}
+              heard={verdict && resultsLine(hands, dealer, settings.showTotals)}
               shuffling={!!shuf}
               peek={peek}
             />
@@ -168,7 +169,7 @@ export default function GameBoard() {
       </div>
 
       {/* #3: the tips slot, 0 px tall while empty */}
-      <div className="tip-line" aria-live="polite" />
+      <div className="tip-line" />
 
       <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} />
       <div className="flight-layer" ref={layerRef} />

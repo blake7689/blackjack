@@ -12,20 +12,26 @@ import "./Dock.css";
 
 const NOTHING = { hit: false, double: false, triple: false, split: false, surrender: false }; // not your turn: every action dimmed
 
+// Keys never act from these (typing, a dialog); Space and Enter also keep their own action on a focused control. `OPEN_LAYER`: a dialog or the menu is open.
+const NOT_FOR_THE_TABLE = "input, textarea, select, dialog, [role='dialog'], [contenteditable]";
+const OWN_ACTION = "button, a, summary, [role='button']";
+const OPEN_LAYER = "[role='dialog'], .menu:not([hidden])";
+
 const Icon = ({ id }) => <svg aria-hidden="true" focusable="false"><use href={`#${id}`} /></svg>;
 
 // A key never leaves the layout: an action that can't be taken now is dimmed with aria-disabled (it still takes focus and
-// keeps its place). `focus` marks the key the dock moves focus to when the phase changes (see Dock). `icon` and `kbd` (the keyboard
-// shortcut, shown on desktop) are decoration: the label or `name` is the accessible name. A `name` that does not hold the label's words (2x) gets the label as
-// generated content (.glyph), so axe's label-content-name-mismatch has no visible text to compare. //
-function Key({ label, name, sub, kind = "", off = false, focus = false, icon, kbd, onClick }) {
+// keeps its place). `focus` marks the key the dock moves focus to when the phase changes (see Dock). `icon` and `hotkey` (the keyboard
+// shortcut: its `aria-keyshortcuts`, and the hint shown on desktop) are decoration: the label or `name` is the accessible name. A `name` that does not hold the
+// label's words (2x) gets the label as generated content (.glyph), so axe's label-content-name-mismatch has no visible text to compare. The hotkey hint is
+// generated content too (kbd[data-text]): as real text it would count as visible label text and mismatch `name` (Deal). //
+function Key({ label, name, sub, kind = "", off = false, focus = false, icon, hotkey, onClick }) {
   return (
-    <button type="button" className={`key ${kind}`} aria-label={name} aria-disabled={off || undefined} data-focus={focus || undefined}
+    <button type="button" className={`key ${kind}`} aria-label={name} aria-keyshortcuts={hotkey} aria-disabled={off || undefined} data-focus={focus || undefined}
       onClick={off ? undefined : onClick}>
       {icon && <Icon id={icon} />}
       <span>{label}</span>
       {sub && <small>{sub}</small>}
-      {kbd && <kbd aria-hidden="true">{kbd}</kbd>}
+      {hotkey && <kbd aria-hidden="true" data-text={hotkey} />}
     </button>
   );
 }
@@ -105,47 +111,44 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     onChip(v);
     if (twice) actions.addBet(v);
   };
-  // What each betting key does, and whether it can: the buttons and the keyboard share it (a dimmed key does nothing).
-  const bet = {
-    undo: { off: shuffling || betHistory.length === 0, run: actions.undoBet },
-    clear: { off: shuffling || betCircle === 0, run: actions.clearBet },
-    rebet: { off: shuffling || betCircle > 0 || initialBet <= 0 || credits < initialBet, run: () => actions.addBet(initialBet) },
-    x2: { off: shuffling || betCircle === 0 || credits < betCircle, run: () => actions.addBet(betCircle) },
-  };
-  // The listener is attached once per betting face and calls the latest handler through a ref, so a render never unbinds it between two key presses.
+  // The keyboard (DESIGN section 8) and the buttons share one table: `bind` registers a key's letter with the same `off` flag and action as its button
+  // (a dimmed or absent key does nothing) and gives the button its props. Space and Enter are one key (Deal, Next hand).
+  const keys = {};
+  const bind = (hotkey, off, run) => { keys[hotkey.toLowerCase()] = { off, run }; return { hotkey, off, onClick: run }; };
+  // The listener is attached once and calls the latest handler through a ref, so a render never unbinds it between two key presses.
   const onKey = useRef(null);
   useEffect(() => {
     onKey.current = (e) => {
-      if (e.target.closest?.("input, textarea, select, dialog") || e.metaKey || e.ctrlKey || e.altKey) return;
-      const k = e.key.toLowerCase();
+      if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.(NOT_FOR_THE_TABLE) || document.querySelector(OPEN_LAYER)) return;
+      const k = e.key === " " || e.key === "Enter" ? "space" : e.key.toLowerCase();
       const prev = lastKey.current;
       lastKey.current = k;
-      if (/^[1-9]$/.test(k)) {
+      if (betting && /^[1-9]$/.test(k)) {
         const v = chips[Number(k) - 1];
-        if (v === undefined || e.repeat) return;
+        if (v === undefined) return;
         if (prev === k && chip === v) { lastKey.current = ""; actions.addBet(v); } else onChip(v);
         return;
       }
-      const key = bet[{ u: "undo", c: "clear", b: "rebet", x: "x2" }[k]];
-      if (key && !key.off) key.run();
+      if (k === "space" && e.target.closest?.(OWN_ACTION)) return;
+      const key = keys[k];
+      if (key && !key.off) { e.preventDefault(); key.run(); }
     };
   });
   useEffect(() => {
-    if (!betting) return;
     const listener = (e) => onKey.current(e);
     document.addEventListener("keydown", listener);
     return () => document.removeEventListener("keydown", listener);
-  }, [betting]);
+  }, []);
 
   // Focus follows the phase (offers: the first offer; your move: Hit; results: Next hand), but only when it was on nothing
   // or already in the dock: never pulled from Settings, a menu or a dialog. It also runs when the open offers change: the focused
-  // offer unmounts when taken, and focus would fall to the page.
+  // offer unmounts when taken, and focus would fall to the page. It runs again when `busy` clears, so a move that waited on a flying card still lands.
   const openOffers = offers ? `${!!offers.insurance}${!!offers.evenMoney}${!!offers.surrender}` : "";
   useEffect(() => {
     const active = document.activeElement;
     if (active && active !== document.body && !ref.current.contains(active)) return;
     ref.current.querySelector("[data-focus]")?.focus({ preventScroll: true });
-  }, [phase, openOffers]);
+  }, [phase, openOffers, busy]);
 
   const autoOn = settings.autoDeal && settings.resetInitialBet; // Pause / Resume shows between rounds while auto deal is on
   const pause = autoOn && (
@@ -162,13 +165,13 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
       : <div className="dock-note"><Icon id="i-info" /><span>Out of credits. Your balance is {money(credits)}.</span></div>;
     rowB = (
       <>
-        <Key label="Undo" icon="i-undo" kbd="U" off={bet.undo.off} onClick={bet.undo.run} />
-        <Key label="Clear" icon="i-clear" kbd="C" off={bet.clear.off} onClick={bet.clear.run} />
-        <Key label="Rebet" icon="i-rebet" kbd="B" off={bet.rebet.off} onClick={bet.rebet.run} />
-        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" kbd="X" off={bet.x2.off} onClick={bet.x2.run} />
+        <Key label="Undo" icon="i-undo" {...bind("U", shuffling || betHistory.length === 0, actions.undoBet)} />
+        <Key label="Clear" icon="i-clear" {...bind("C", shuffling || betCircle === 0, actions.clearBet)} />
+        <Key label="Rebet" icon="i-rebet" {...bind("B", shuffling || betCircle > 0 || initialBet <= 0 || credits < initialBet, () => actions.addBet(initialBet))} />
+        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", shuffling || betCircle === 0 || credits < betCircle, () => actions.addBet(betCircle))} />
         {pause}
-        <Key label={shuffling ? "Shuffling" : "Deal"} name={shuffling ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffling ? "auto" : undefined} off={shuffling || betCircle === 0 || !player}
-          onClick={actions.deal} />
+        <Key label={shuffling ? "Shuffling" : "Deal"} name={shuffling ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffling ? "auto" : undefined}
+          {...bind("Space", shuffling || betCircle === 0 || !player, actions.deal)} />
       </>
     );
   } else if (phase === GamePhases.OFFERS) {
@@ -176,12 +179,12 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     acting = true;
     const half = insuranceStake(hands[0].bet);
     const open = [
-      offers.insurance && { id: "insurance", label: `Insurance $${half}`, onClick: actions.takeInsurance },
-      offers.evenMoney && { id: "evenMoney", label: "Even money", onClick: actions.evenMoney },
-      offers.surrender && { id: "surrender", label: "Surrender", sub: `$${half} back`, onClick: () => actions.surrender(0) },
+      offers.insurance && { id: "insurance", hotkey: "I", label: `Insurance $${half}`, run: actions.takeInsurance },
+      offers.evenMoney && { id: "evenMoney", hotkey: "E", label: "Even money", run: actions.evenMoney },
+      offers.surrender && { id: "surrender", hotkey: "R", label: "Surrender", sub: `$${half} back`, run: () => actions.surrender(0) },
     ].filter(Boolean);
-    rowA = open.map((o, i) => <Key key={o.id} label={o.label} sub={o.sub} kind="offer" off={busy} focus={i === 0} onClick={o.onClick} />);
-    rowB = <Key label="No thanks" kind="solid big" off={busy} onClick={actions.declineOffers} />;
+    rowA = open.map((o, i) => <Key key={o.id} label={o.label} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy, o.run)} />);
+    rowB = <Key label="No thanks" kind="solid big" {...bind("N", busy, actions.declineOffers)} />;
   } else if (phase === GamePhases.POST_ROUND || phase === GamePhases.END_ROUND) {
     face = "results";
     const net = roundNet(hands);
@@ -197,7 +200,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     rowB = (
       <>
         {pause}
-        <Key label="Next hand" kind="primary big wider" focus onClick={actions.continueRound} />
+        <Key label="Next hand" kind="primary big wider" focus {...bind("Space", false, actions.continueRound)} />
       </>
     );
   } else {
@@ -209,16 +212,16 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     const can = yours ? handActions(hands[sel], dealer, hands.length, credits, settings) : NOTHING;
     rowA = (
       <>
-        <Key label="Double" off={!can.double} onClick={() => actions.double(sel)} />
-        <Key label="Split" off={!can.split} onClick={() => actions.split(sel)} />
-        {settings.surrender !== SurrenderOptions.NONE && <Key label="Surrender" off={!can.surrender} onClick={() => actions.surrender(sel)} />}
-        {settings.tripleDown && <Key label="Triple" off={!can.triple} onClick={() => actions.triple(sel)} />}
+        <Key label="Double" {...bind("D", !can.double, () => actions.double(sel))} />
+        <Key label="Split" {...bind("P", !can.split, () => actions.split(sel))} />
+        {settings.surrender !== SurrenderOptions.NONE && <Key label="Surrender" {...bind("R", !can.surrender, () => actions.surrender(sel))} />}
+        {settings.tripleDown && <Key label="Triple" {...bind("T", !can.triple, () => actions.triple(sel))} />}
       </>
     );
     rowB = (
       <>
-        <Key label="Stay" kind="solid big" off={!yours} onClick={() => actions.stand(sel)} />
-        <Key label="Hit" kind="primary big" off={!can.hit} focus={phase === GamePhases.PLAYER_TURN} onClick={() => actions.hit(sel)} />
+        <Key label="Stay" kind="solid big" {...bind("S", !yours, () => actions.stand(sel))} />
+        <Key label="Hit" kind="primary big" focus={phase === GamePhases.PLAYER_TURN} {...bind("H", !can.hit, () => actions.hit(sel))} />
       </>
     );
   }

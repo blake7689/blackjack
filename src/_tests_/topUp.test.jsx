@@ -137,7 +137,7 @@ describe("GameBoard tapEnabled", () => {
   it("not in any other phase", () => {
     // A real table for every phase: a settled hand, the dealer's up card and the offers (OFFERS shows them in the dock).
     const table = {
-      hands: [{ tag: "a", cards: [], hiddenCards: [], totals: [0], bet: 10, payout: 0, insurance: 0, status: "done", result: "none" }],
+      hands: [{ tag: "a", cards: [], hiddenCards: [], totals: [0], bet: 10, payout: 0, insurance: 0, status: "done", result: "None" }],
       dealer: { cards: [], dealerDisplayTotal: 0 },
       offers: { insurance: true, evenMoney: false, surrender: false },
     };

@@ -8,9 +8,9 @@
   box-shadow: 0 10px 20px rgba(0,0,0,0.35);
 }
 .topup-dialog h2 { margin: 0; font-size: 1.1em; }
-.topup-dialog input { padding: 8px 10px; border-radius: 8px; border: 1px solid #22313f; background: #16232f; color: #fff; font-size: 16px; }
+.topup-dialog input { padding: 8px 10px; border-radius: 8px; border: 1px solid #22313f; background: #16232f; color: #fff; font-size: 16px; min-height: 44px; box-sizing: border-box; }
 .topup-dialog [role="alert"] { color: #ff6b6b; }
 .topup-buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.topup-buttons button { background: #1f2a34; color: #fff; padding: 8px 12px; cursor: pointer; }
+.topup-buttons button { background: #1f2a34; color: #fff; padding: 8px 12px; min-height: 44px; min-width: 44px; cursor: pointer; }
 .topup-buttons button:hover:not(:disabled) { background: #2e3f4b; }
 .topup-buttons button:disabled { opacity: 0.5; cursor: default; }

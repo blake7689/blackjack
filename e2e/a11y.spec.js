@@ -29,6 +29,62 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
+test('game board at the results has no serious accessibility violations, and announces them (#85)', async ({ page }) => {
+  await stubApi(page);
+  await seedRandom(page, 183); // the smoke test's deal: Hit makes 19, Stay, the dealer draws to 19 (a push)
+  await openTable(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await page.getByRole('button', { name: 'Hit', exact: true }).click({ timeout: 15_000 });
+  await expect(page.getByRole('img', { name: '5 of hearts' })).toBeVisible();
+  await page.getByRole('button', { name: 'Stay', exact: true }).click({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.board.busy')).toHaveCount(0);
+  await expect(page.locator('.msg .verdict')).toHaveCSS('opacity', '1'); // the verdict pops in: never scan it blended
+  await expect(page.getByText('Hand 1: push, 19. Dealer: 19.')).toBeAttached(); // what a screen reader hears
+  await expect(page.locator('[aria-live]')).toHaveCount(1); // one live region on the table
+  await expectNoSeriousA11y(page, 'board, results');
+});
+
+// Touch targets (#85): 44 px or more, in both directions, on the table's top bar (and its open menu), the dock's keys in every face, and the sign-in form.
+const tooSmall = (locator) => locator.evaluateAll((els) => els
+  .filter((el) => el.checkVisibility())
+  .map((el) => [el.getAttribute('aria-label') || el.textContent.trim().slice(0, 20) || el.placeholder, Math.round(el.getBoundingClientRect().width), Math.round(el.getBoundingClientRect().height)])
+  .filter(([, w, h]) => w < 44 || h < 44));
+
+test('the top bar, its menu and the dock keys are at least 44 px, in every face of the dock (#85)', async ({ page }) => {
+  await stubApi(page);
+  await seedRandom(page, 65); // the layout test's round: offers (insurance), your move, the results
+  await openTable(page);
+  const bar = page.getByRole('banner').getByRole('button');
+  const dock = page.getByRole('contentinfo', { name: 'Controls' }).getByRole('button');
+  const small = async (label) => expect({ label, found: [...await tooSmall(bar), ...await tooSmall(dock)] }, `${label}: targets under 44 px`).toEqual({ label, found: [] });
+  await placeBet(page);
+  await small('betting');
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await expect(page.getByRole('navigation', { name: 'Menu' })).toBeVisible();
+  expect(await tooSmall(page.getByRole('navigation', { name: 'Menu' }).getByRole('button')), 'the open menu').toEqual([]);
+  await page.getByRole('button', { name: 'Menu', exact: true }).click();
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  const offers = page.getByRole('group', { name: 'Offers' });
+  await expect(offers.getByRole('button', { name: 'Insurance $5' })).toBeEnabled({ timeout: 15_000 });
+  await small('offers');
+  await offers.getByRole('button', { name: 'No thanks' }).click();
+  await expect(page.getByRole('button', { name: 'Hit', exact: true })).toBeEnabled({ timeout: 15_000 });
+  await small('your move');
+  await page.getByRole('button', { name: 'Stay', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
+  await small('results');
+});
+
+test('the sign-in form and the header have 44 px targets (#85)', async ({ page }) => {
+  await stubApi(page);
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  expect(await tooSmall(page.locator('main').getByRole('textbox').or(page.locator('main input')).or(page.locator('main').getByRole('button'))), 'sign-in').toEqual([]);
+  expect(await tooSmall(page.getByRole('banner').getByRole('button')), 'the header').toEqual([]);
+});
+
 // Settings is one page (#84): scan it closed, then once per section opened. Opening and the switches ease for a moment (chevron, switch track),
 // so wait until every running animation or transition has finished before axe reads the colours.
 const settled = (page) => page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
