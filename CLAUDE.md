@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) + screens (#87) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
@@ -109,7 +109,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   Log out) and the Table button ask "Discard your changes?" first, and `beforeunload` covers a page unload. All rule wording (labels, short hints, groups, summaries, the app
   toggles' labels, `APP_SETTINGS` for the rest) lives in `ruleCatalog.js` only. Its `showWhen` is the ONE hidden-in-this-mode list (EU-only toggles in the US modes, "Blackjack pays
   immediately" and "If the dealer has blackjack" under a peek, "Resplit aces" with two hands): `visibleIn`, `togglesIn` and `rulePresetOf` (which imports the catalog, never the
-  reverse) read it, so a preset never reads Custom over a rule that does nothing; the rules sheet (PR 8) must read it too. "Dealer's second card" is one 3-way choice (Peeks / No
+  reverse) read it, so a preset never reads Custom over a rule that does nothing; the rules sheet (`sheetGroups`, #87) reads it too. "Dealer's second card" is one 3-way choice (Peeks / No
   peek / No second card) writing `dealerHoleBehaviour`; `patch(value, settings)` moves `blackjackPaysImmediately` to the new mode's preset pairing (true with a peek) only while it
   still holds the current mode's pairing. Options are `role="radio"` + `aria-checked`, switches are real labels around `role="switch"` checkboxes, every control is
   `aria-describedby` its hint (the "i" is aria-hidden), pickers use `button[data-felt]`, `data-pick-accent`, `data-pick-mode`, rule options `[data-rule]`, presets `[data-preset]`.
@@ -156,13 +156,13 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (3 for the hole) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
 - Table art (#81): the table's top bar is `components/TopBar` (menu, `#bal` balance, count, Settings; its Count shows only landed cards), laid out with `useCardWidth`, `useDealerRoom`, `useCentrePrint`
   and `useSeatsScroll` on `.stage-in`. Signed-in start: `GameProvider` starts the table itself (`START_GAME`, one shoe) once per sign-in or restore, after the settings load (a failed load starts with the settings
-  it has), and a player still on `/` is sent to `/game` (replace); the provider flag `starting` (and `restoring` in PlayerProvider) makes Home show "Shuffling up..." instead of a flash of Home. There is no Start Game button.
+  it has), and a player still on `/` is sent to `/game` (replace); the provider flag `starting` (and `restoring` in PlayerProvider) makes Home show "Shuffling up..." instead of a flash of Home. Home's "Play" is a link to `/game` that calls `startGame`.
 - Fan layout (#81): each card is a `.fan-slot[data-fk]` (`data-fk` = the card's stable key, which `useSmoothRow` reads; never key it by anything that changes) as wide as `--step` (0.27 of `--cw`, floored to whole
   pixels by `useCardWidth`); `--room` (set by `useDealerRoom`) is how far the dealer's hand may reach before it slides left of the shoe's corner card. Never put these in per-card inline style.
 - FeltPrint (#81): the rules drawn on the cloth are an `aria-hidden` svg with a separate transparent `<button class="print-hit" aria-label="Table rules">` laid over it. Do not put the printed words in the button
   (axe label-content-name-mismatch); its click stops propagation (a click on the felt continues the round). The words come from `ruleCatalog.js` (`feltPrint`).
 - Top bar balance and top-up (#81, #90): the balance is `<b id="bal">` inside `.bal` (the live smoke reads `#bal`); the 7-tap top-up hangs on that `.bal` div, still with no role, tabindex or aria. `tapEnabled` still comes from GameBoard.
-  "Table rules" in the menu goes through `useNavActions().goSettings("game")`.
+  "Table rules" in the menu opens the rules sheet (see Rules sheet, #87).
 - E2E seeds (#81): since the game starts right after sign-in, the page builds two shoes before the deal (settings load, then game start) after 4 router-key numbers; seeds 183, 65 and those in `e2e/tableart.spec.js`
   were picked for that order. A change to when shoes are built, or to the fixture's deck count, means re-picking them (the card assertions fail first).
 - Dock and message line (#80): `components/Dock` is the one bottom bar, a fixed height per mode (`--dock`, `--rowA/B` in GameBoard.css; never let it resize). Its face follows
@@ -206,6 +206,16 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `ChipStack` (`splitChips`: greedy over `ALLOWED_CHIPS`, up to 10 drawn, the exact amount on `.amt`); a double's second stake and the insurance are `.side-spot`
   stacks beside the circle, never over the bet. The chip symbols (`#chip-<v>`, `#chip-<v>-p`, `#side-<v>`) are in `components/Sprite/ChipSymbols.jsx`: change a colour
   there only with the issue table (#82) and the mockup's `build.mjs`. The rack's scroll classes and `--rgap` / `--rpad` are set by hand in `Dock`'s `ChipRack`, not through React.
+
+- Rules sheet, pages, icons, WebP, SWA 404 (#87): the Table rules sheet is `components/RulesSheet` (portal, `role="dialog"`, bottom sheet on phones and a panel from 720 px; focus to its one Close button, Escape / backdrop
+  close, focus back to the opener). GameBoard owns its state; the felt print, the menu item and Home's Rules open it. Its lines come from `sheetGroups(settings)` in `ruleCatalog.js` (reuses the felt's words, labels and
+  summaries, hides by `showWhen`; even money only when `offersAtDeal` would offer it): add a rule's line there. Destructive asks (Leave game, Log out) are `ConfirmDialog`s returned by `useNavActions` as `confirm`: the
+  component that calls the hook must render `{confirm}`; never `window.confirm`. Home, Log in (`/login`), Create an account (`/signup`), Loading and Error are the standalone `.page-screen` screens
+  (`components/PageScreens`); only Settings still shows `Header`. `App` shows Loading while a saved session is restored and Error ("Can't reach the table": Try again / Home) when the restore got no answer
+  (`restoreFailed`; a 401 clears the token and just signs out). The manifest (`public/manifest.webmanifest`) and `public/icons/*.png` (wordmark on #070908, one-off Playwright rasterisation, no script kept) are linked
+  from `index.html`; no service worker. Card faces are 500 px WebP (`/cards/<rank>_of_<suit>.webp`, no PNG): never add PNG faces back. `staticwebapp.config.json`: static folders (`/assets`, `/brand`, `/cards`, `/fonts`,
+  `/icons`, `/sounds`) and root `*.svg` / `*.webmanifest` are excluded from the `index.html` fallback and there is NO 404 `responseOverride` (it served HTML for a missing file, so a broken image or font looked like
+  a parse error); a new static folder goes in that exclude list.
 
 - Motion (#83, DESIGN section 3): bet chip flights never `reserve`/`hold` (taps must not delay the dock); payout, sweep and discard flights `reserve`; the shuffle
   and the peek `reserve(end, true)` and `hold(maxMs)` (released on finish, a skip tap or the timeout, so a background tab never leaves the board busy). The shuffle

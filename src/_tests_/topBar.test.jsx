@@ -175,12 +175,26 @@ describe("the menu", () => {
     expect(menu().hidden).toBe(true);
   });
 
-  it("Table rules opens the Table rules section of Settings, Settings opens Settings, and the menu closes", () => {
-    renderUI(<TopBar />);
+  it("Table rules asks the board to open the rules sheet (it stays on the table), puts focus on the menu button for the sheet to return to, and closes the menu", () => {
+    const onRules = vi.fn();
+    renderUI(<TopBar onRules={onRules} />, { path: "/game" });
     fireEvent.click(menuButton());
     fireEvent.click(screen.getByRole("button", { name: "Table rules" }));
-    expect(screen.getByTestId("location").textContent).toBe("/settings#rules");
+    expect(onRules).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(menuButton());
+    expect(screen.getByTestId("location").textContent).toBe("/game");
     expect(menu().hidden).toBe(true);
+  });
+
+  it("the menu button is aria-expanded while the menu is open, and Escape returns focus to it", () => {
+    renderUI(<TopBar />);
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(menuButton());
+    expect(menuButton().getAttribute("aria-expanded")).toBe("true");
+    screen.getByRole("button", { name: "Home" }).focus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(menuButton());
   });
 
   it("the Settings key and the menu's Settings both open Settings and close the menu", () => {
@@ -202,30 +216,32 @@ describe("the menu", () => {
     expect(screen.getByTestId("location").textContent).toBe("/");
   });
 
-  it("Home resets the game and goes Home (asking first once cards are out)", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+  it("Home resets the game and goes Home (asking first, in a dialog, once cards are out)", () => {
     const { gameActions } = renderUI(<TopBar />, { path: "/game", actions: { getPhase: () => GamePhases.PLAYER_TURN } });
     fireEvent.click(menuButton());
     fireEvent.click(screen.getByRole("button", { name: "Home" }));
-    expect(confirm).toHaveBeenCalledWith(expect.stringContaining("Leave game"));
+    const dialog = screen.getByRole("dialog", { name: "Leave game and return Home?" });
+    expect(within(dialog).getByText("Any bet in the circle will be lost.")).toBeTruthy();
     expect(gameActions.resetGame).not.toHaveBeenCalled();
-    confirm.mockReturnValue(true);
+    fireEvent.click(within(dialog).getByRole("button", { name: "Keep playing" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(gameActions.resetGame).not.toHaveBeenCalled();
     fireEvent.click(menuButton());
     fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Leave" }));
     expect(gameActions.resetGame).toHaveBeenCalledOnce();
     expect(screen.getByTestId("location").textContent).toBe("/");
-    confirm.mockRestore();
   });
 
-  it("Log out asks, then signs out and goes Home", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("Log out asks in a dialog, then signs out and goes Home", () => {
     const { playerCtx, gameActions } = renderUI(<TopBar />, { path: "/game" });
     fireEvent.click(menuButton());
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    expect(playerCtx.logout).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Log out?" })).getByRole("button", { name: "Log out" }));
     expect(playerCtx.logout).toHaveBeenCalledOnce();
     expect(gameActions.resetGame).toHaveBeenCalledOnce();
     expect(screen.getByTestId("location").textContent).toBe("/");
-    confirm.mockRestore();
   });
 
   it("the felt swatches are a radio group on the saved felt; a pick applies it, and a failed save is swallowed", async () => {

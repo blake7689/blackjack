@@ -26,7 +26,7 @@ All six table sounds (deal, flip, chip, shuffle, win, lose) are generated in cod
 
 ## Wordmark and favicon
 
-The "Blakejack" wordmark (`public/brand/`, `src/components/Wordmark/`) and `public/favicon.svg` are drawn for this project from plain paths; no font is involved.
+The "Blakejack" wordmark (`public/brand/`, `src/components/Wordmark/`), `public/favicon.svg` and the app icons (`public/icons/`, the wordmark on the dark ground) are drawn for this project from plain paths; no font is involved.
 
 ## SIL Open Font License, Version 1.1
 

@@ -19,10 +19,10 @@ function table() {
   document.body.innerHTML = `
     <div class="stage-in">
       <div class="discard"><div class="mouth"></div></div>
-      <div class="dealer-hand"><div class="fan-row"><div class="card" id="d1"><div class="cf"><img src="/cards/king.png" alt="king of hearts"></div></div></div></div>
+      <div class="dealer-hand"><div class="fan-row"><div class="card" id="d1"><div class="cf"><img src="/cards/king.webp" alt="king of hearts"></div></div></div></div>
       <div class="seats"><div class="fan-row">
         <div class="card" id="p1"><div class="cf"></div></div>
-        <div class="card" id="p2" style="rotate: 90deg"><div class="cf"><img src="/cards/five.png" alt="five of clubs"></div></div>
+        <div class="card" id="p2" style="rotate: 90deg"><div class="cf"><img src="/cards/five.webp" alt="five of clubs"></div></div>
       </div></div>
     </div>`;
   place(document.querySelector(".stage-in"), { left: 10, top: 20, width: 800, height: 500 });

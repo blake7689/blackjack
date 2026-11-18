@@ -8,11 +8,12 @@ import "./Header.css";
 // The page header of Home, Settings and Log in. The table has its own top bar (TopBar), so App does not show this one on /game. //
 export default function Header() {
   const { player } = usePlayer();
-  const { goHome, goSettings, logOut } = useNavActions();
+  const { goHome, goSettings, logOut, confirm } = useNavActions();
   const [open, setOpen] = useState(false);
   const loc = useLocation();
   const headerRef = useRef(null);
   const menuRef = useRef(null);
+  const userBtnRef = useRef(null);
   useCssVarHeight(headerRef, "--header-height");
 
   // Closing on logout too keeps menuRef mounted while the outside-click listener runs.
@@ -22,7 +23,7 @@ export default function Header() {
   useEffect(() => {
     if (!open) return;
     const onMouseDown = (e) => { if (!menuRef.current.contains(e.target)) setOpen(false); };
-    const onKeyDown = (e) => { if (e.key === "Escape") setOpen(false); };
+    const onKeyDown = (e) => { if (e.key === "Escape") { setOpen(false); userBtnRef.current.focus(); } };
     document.addEventListener("mousedown", onMouseDown);
     document.addEventListener("keydown", onKeyDown);
     return () => {
@@ -43,10 +44,11 @@ export default function Header() {
         <button className="nav-btn" onClick={() => goSettings()}>Settings</button>
       </div>
 
+      {confirm}
       <div className="bj-right">
         {player ? (
           <div className="user-menu" ref={menuRef}>
-            <button className="user-btn" onClick={() => setOpen((v) => !v)}>{player.userName}</button>
+            <button ref={userBtnRef} className="user-btn" aria-expanded={open} onClick={() => setOpen((v) => !v)}>{player.userName}</button>
             {open && (
               <div className="dropdown">
                 <button onClick={onLogout}>Log out</button>

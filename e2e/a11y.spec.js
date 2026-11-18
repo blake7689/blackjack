@@ -10,6 +10,53 @@ test('sign-in page has no serious accessibility violations (#120)', async ({ pag
   await expectNoSeriousA11y(page, 'sign-in');
 });
 
+test('Create an account has no serious accessibility violations, empty and with its errors showing (#87)', async ({ page }) => {
+  await stubApi(page);
+  await page.goto('/signup');
+  await expect(page.getByRole('heading', { level: 1, name: 'Create an account' })).toBeVisible();
+  await expectNoSeriousA11y(page, 'create an account');
+  await page.getByLabel('Username', { exact: true }).fill('ab');
+  await page.getByLabel('Email', { exact: true }).fill('nope');
+  await expect(page.getByText('Invalid email format.')).toBeVisible();
+  await expectNoSeriousA11y(page, 'create an account, with errors');
+});
+
+test('Home, signed out and signed in, and the Error screen have no serious accessibility violations (#87)', async ({ page }) => {
+  await stubApi(page, { meFailures: 1 });
+  await page.goto('/');
+  await expect(page.getByText('Please log in to start playing.')).toBeVisible();
+  await expectNoSeriousA11y(page, 'home, signed out');
+
+  await page.addInitScript(() => sessionStorage.setItem('bj.token', 'e2e-token'));
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Can\'t reach the table' })).toBeVisible();
+  await expectNoSeriousA11y(page, 'error screen');
+  await page.getByRole('button', { name: 'Try again' }).click();
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
+  await expect(page.getByText('Signed in as tester')).toBeVisible();
+  await expect(page.locator('.hero')).toHaveCSS('opacity', '1'); // the hero pops in: never scan it blended
+  await expectNoSeriousA11y(page, 'home, signed in');
+});
+
+test('the Table rules sheet has no serious accessibility violations, over the table and over Home (#87)', async ({ page }) => {
+  await stubApi(page);
+  await openTable(page);
+  await page.getByRole('button', { name: 'Table rules' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Table rules' });
+  await expect(sheet).toBeVisible();
+  await expect(sheet).toHaveCSS('opacity', '1'); // it fades up as it opens: never scan it mid-animation (colours blend and fail color-contrast)
+  await expectNoSeriousA11y(page, 'rules sheet, over the table');
+  await page.keyboard.press('Escape');
+
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
+  await page.getByRole('button', { name: 'Rules' }).click();
+  await expect(sheet).toHaveCSS('opacity', '1');
+  await expectNoSeriousA11y(page, 'rules sheet, over Home');
+});
+
 test('game board while betting has no serious accessibility violations (#120)', async ({ page }) => {
   await stubApi(page);
   await openTable(page);
@@ -77,12 +124,11 @@ test('the top bar, its menu and the dock keys are at least 44 px, in every face 
   await small('results');
 });
 
-test('the sign-in form and the header have 44 px targets (#85)', async ({ page }) => {
+test('the sign-in form has 44 px targets (#85)', async ({ page }) => {
   await stubApi(page);
   await page.goto('/login');
   await expect(page.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
   expect(await tooSmall(page.locator('main').getByRole('textbox').or(page.locator('main input')).or(page.locator('main').getByRole('button'))), 'sign-in').toEqual([]);
-  expect(await tooSmall(page.getByRole('banner').getByRole('button')), 'the header').toEqual([]);
 });
 
 // Settings is one page (#84): scan it closed, then once per section opened. Opening and the switches ease for a moment (chevron, switch track),

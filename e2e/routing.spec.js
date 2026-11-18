@@ -54,10 +54,12 @@ test('Table returns to the game, and Settings opens with every section closed ag
   await expect(section(page, 'Gameplay')).toHaveAttribute('aria-expanded', 'false');
 });
 
-test('the Table rules item of the table menu opens Settings on the Table rules section (#84)', async ({ page }) => {
+test('the Table rules item of the table menu opens the rules sheet, and Change rules goes to Settings on the Table rules section (#84, #87)', async ({ page }) => {
   await openGame(page);
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Table rules' }).click();
+  await expect(page.getByRole('dialog', { name: 'Table rules' })).toBeVisible();
+  await page.getByRole('link', { name: 'Change rules' }).click();
   await expect(page).toHaveURL(/\/settings#rules$/);
   await expect(section(page, 'Table rules')).toHaveAttribute('aria-expanded', 'true');
 });
@@ -84,7 +86,7 @@ test('Home from the menu stays on Home, the table is one click away, and nothing
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('button', { name: 'Home' }).click();
   await expect(page).toHaveURL(/\/$/);
-  const start = page.getByRole('button', { name: 'Start Game' });
+  const start = page.getByRole('link', { name: 'Play' });
   await expect(start).toBeVisible();
   await expect(page.getByText('Shuffling up...')).toHaveCount(0);
   await expect(start).toBeVisible(); // still Home a moment later: once per restore or sign-in, never on every visit to /

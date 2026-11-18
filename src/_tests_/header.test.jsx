@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import Header from "../components/Header/Header";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -32,22 +32,26 @@ describe("Header", () => {
     expect(location()).toBe("/");
   });
 
-  it("asks before leaving a round in play, and stays if declined", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  const leaveDialog = () => screen.queryByRole("dialog", { name: "Leave game and return Home?" });
+
+  it("asks in a dialog before leaving a round in play: Keep playing stays, Leave resets and goes Home", () => {
     const { gameActions } = renderUI(<Header />, { path: "/game", actions: { getPhase: () => GamePhases.PLAYER_TURN } });
     fireEvent.click(screen.getByText("Home"));
     expect(gameActions.resetGame).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Keep playing" }));
+    expect(leaveDialog()).toBeNull();
+    expect(gameActions.resetGame).not.toHaveBeenCalled();
     expect(location()).toBe("/game");
     fireEvent.click(screen.getByText("Home"));
-    expect(confirm).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole("button", { name: "Leave" }));
+    expect(gameActions.resetGame).toHaveBeenCalledOnce();
     expect(location()).toBe("/");
   });
 
   it.each([GamePhases.OFFERS, GamePhases.PEEK])("asks before leaving a table waiting at %s: the insured bet would be lost", (phase) => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     const { gameActions } = renderUI(<Header />, { path: "/game", actions: { getPhase: () => phase } });
     fireEvent.click(screen.getByText("Home"));
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(leaveDialog()).not.toBeNull();
     expect(gameActions.resetGame).not.toHaveBeenCalled();
     expect(location()).toBe("/game");
   });
@@ -63,15 +67,17 @@ describe("Header", () => {
     expect(screen.getByText("Log in").getAttribute("href")).toBe("/login");
   });
 
-  it("logs out from the user menu after confirming, closing the menu either way", () => {
-    vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  it("logs out from the user menu after the Log out? dialog, closing the menu either way", () => {
     const { playerCtx, gameActions } = renderUI(<Header />, { path: "/game" });
     fireEvent.click(screen.getByText("tester"));
     fireEvent.click(screen.getByText("Log out"));
+    expect(screen.getByRole("dialog", { name: "Log out?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Stay logged in" }));
     expect(playerCtx.logout).not.toHaveBeenCalled();
     expect(screen.queryByText("Log out")).toBeNull();
     fireEvent.click(screen.getByText("tester"));
     fireEvent.click(screen.getByText("Log out"));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Log out" }));
     expect(gameActions.resetGame).toHaveBeenCalled();
     expect(playerCtx.logout).toHaveBeenCalled();
     expect(location()).toBe("/");
@@ -91,6 +97,17 @@ describe("Header", () => {
     expect(screen.getByText("Log out")).toBeTruthy();
     fireEvent.mouseDown(document.body);
     expect(screen.queryByText("Log out")).toBeNull();
+  });
+
+  it("marks the user button aria-expanded, and Escape closes the menu and returns focus to that button", () => {
+    renderUI(<Header />);
+    const button = screen.getByRole("button", { name: "tester" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(button);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(button);
   });
 
   it("closes the user menu on Escape only", () => {

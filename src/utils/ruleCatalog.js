@@ -1,7 +1,7 @@
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 import { RESET_SETTINGS, SETTING_RANGES } from "./gameReducer";
-import { isEU } from "./blackjackLogic";
+import { isEU, bjPaysWithoutPeek } from "./blackjackLogic";
 import { edgeDelta } from "./houseEdge";
 
 // The table rules in plain language (#91, #84). This file is the ONLY home of rule wording (sentence case, the hand is "blackjack"): Settings
@@ -29,6 +29,11 @@ const modePatch = (mode, s) => ({
   ...(s.blackjackPaysImmediately === (s.dealerHoleBehaviour === US_PEEK) && { blackjackPaysImmediately: mode === US_PEEK }),
 });
 
+const HOLE_OPTIONS = [
+  { value: US_PEEK, label: "Peeks", hint: "The dealer checks for blackjack before you play." },
+  { value: US_NO_PEEK, label: "No peek", hint: "The dealer has a hole card but doesn't check it." },
+  { value: EU, label: "No second card", hint: "The dealer takes the second card after you play." },
+];
 const ON_OFF = [{ value: true, label: "On" }, { value: false, label: "Off" }];
 const surrenderText = { none: "No surrender", late: "Late surrender", early: "Early surrender", earlyNoAce: "Early surrender (not against an ace)" };
 
@@ -39,11 +44,7 @@ export const RULE_CATALOG = [
   // Off = no end-of-shoe shuffle (the shoe is dealt out, and a mid-round refill plays a short shuffle).
   { key: "includeCutCard", group: "Shoe", label: () => "Include cut card", input: "checkbox", hint: "Adds cut card to shoe" },
   // One choice, in the felt print's words: Peeks and No peek are the two US modes, No second card is the EU mode.
-  { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", input: "select", hint: "When the dealer checks for blackjack", options: [
-      { value: US_PEEK, label: "Peeks", hint: "The dealer checks for blackjack before you play." },
-      { value: US_NO_PEEK, label: "No peek", hint: "The dealer has a hole card but doesn't check it." },
-      { value: EU, label: "No second card", hint: "The dealer takes the second card after you play." },
-    ],
+  { key: "dealerHoleBehaviour", group: "Dealer", label: () => "Dealer's second card", input: "select", hint: "When the dealer checks for blackjack", options: HOLE_OPTIONS,
     patch: (v, s) => modePatch(v, s),
     summary: { line: 2, text: (v) => (v === EU ? "Dealt after you play" : v === US_NO_PEEK ? "Dealer doesn't check the hole card" : "Dealer peeks") } },
   { key: "dealerHitsSoft17", group: "Dealer", label: () => "Soft 17", input: "checkbox", hint: "Dealer's move on soft 17",
@@ -150,14 +151,57 @@ export function ruleSummary(settings) {
   return [1, 2].map((line) => parts.filter((rule) => rule.summary.line === line).map((rule) => rule.summary.text(settings[rule.key], settings)).join(" · "));
 }
 
+// The odds in words: "3 to 2" / "6 to 5" (the felt's payout line and the rules sheet).
+const blackjackOdds = (settings) => (settings.blackjackPayout === BlackjackPayouts.SIX_FIVE ? "6 to 5" : "3 to 2");
+
 // What the table's felt prints (#81, DESIGN section 5): `pay` (the payout line), `rules` (soft 17 and the hole-card mode, joined by " · ") and
 // `insurance` ("" when insurance is off). The same words as Settings' controls and the rules sheet: change them here only.
 const HOLE_PRINT = { [US_PEEK]: "Dealer peeks", [US_NO_PEEK]: "No peek", [EU]: "No second card" };
 export function feltPrint(settings) {
   return {
-    pay: `Blackjack Pays ${settings.blackjackPayout === BlackjackPayouts.SIX_FIVE ? "6 to 5" : "3 to 2"}`,
+    pay: `Blackjack Pays ${blackjackOdds(settings)}`,
     soft: settings.dealerHitsSoft17 ? "Dealer hits soft 17" : "Dealer stands on all 17s",
     mode: HOLE_PRINT[settings.dealerHoleBehaviour],
     insurance: settings.insurance ? "Insurance pays 2 to 1" : "",
   };
+}
+
+// The Table rules sheet (#87): [{ title, items }] for the groups Payouts, Dealer, Doubling, Splitting and Surrender, each line plain English and worked out
+// from `settings`. Where the catalog already has the words (the felt's, a rule's label or summary) they are reused; `showWhen` (through `hiddenKeys`)
+// leaves out a rule the mode makes meaningless; even money only when offered (`offersAtDeal`: insurance on, and a blackjack that is not paid at once).
+export function sheetGroups(settings) {
+  const shown = (key) => !hiddenKeys(settings).has(key);
+  const summaryOf = (key) => RULE_CATALOG.find((rule) => rule.key === key).summary.text(settings[key], settings);
+  const labelOf = (key) => APP_TOGGLES.find((toggle) => toggle.key === key).label();
+  const evenMoney = settings.insurance && (settings.dealerHoleBehaviour === US_PEEK || !bjPaysWithoutPeek(settings));
+  const { soft, mode } = feltPrint(settings);
+  const hole = HOLE_OPTIONS.find((option) => option.value === settings.dealerHoleBehaviour);
+  const groups = [
+    ["Payouts", [
+      `Blackjack pays ${blackjackOdds(settings)}`,
+      "Other wins pay 1 to 1",
+      settings.insurance ? "Insurance pays 2 to 1 when the dealer shows an ace" : "No insurance or even money",
+      evenMoney && "Even money on your blackjack against a dealer ace",
+    ]],
+    ["Dealer", [
+      `${summaryOf("deckCount")} in the shoe`,
+      soft,
+      `${mode}. ${hole.hint}`,
+      shown("noHoleCardLoss") && summaryOf("noHoleCardLoss"),
+    ]],
+    ["Doubling", [
+      summaryOf("doubleOn"),
+      settings.doubleAfterSplit ? "Double after a split" : "No double after a split",
+      settings.tripleDown && labelOf("tripleDown"),
+      settings.doubleFaceDown && labelOf("doubleFaceDown"),
+    ]],
+    ["Splitting", [
+      summaryOf("maxSplitHands"),
+      settings.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each",
+      shown("resplitAces") && (settings.resplitAces ? "Aces may be split again" : "Aces split once"),
+      settings.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it",
+    ]],
+    ["Surrender", [surrenderText[settings.surrender]]],
+  ];
+  return groups.map(([title, items]) => ({ title, items: items.filter(Boolean) }));
 }

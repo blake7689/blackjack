@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { screen, fireEvent, act } from "@testing-library/react";
+import { screen, fireEvent, act, within } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
 import Home from "../pages/Home";
 import Game from "../pages/Game";
 import Login from "../pages/Login";
 import App from "../App";
-import Header from "../components/Header/Header";
+import { LoadingScreen, ErrorScreen } from "../components/PageScreens/PageScreens";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { validateField } from "../utils/validation";
 
@@ -20,9 +20,73 @@ afterEach(() => {
 });
 
 describe("Home", () => {
-  it("asks a visitor to log in", () => {
-    renderUI(<Home />, { player: { player: null } });
-    expect(screen.getByText("Please log in to start playing.")).toBeTruthy();
+  describe("signed out", () => {
+    const visitor = () => renderUI(<Home />, { player: { player: null } });
+
+    it("asks a visitor to log in, with Log in, Create an account and Rules, and no Play", () => {
+      visitor();
+      expect(screen.getByText("Please log in to start playing.")).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login");
+      expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href")).toBe("/signup");
+      expect(screen.getByRole("button", { name: "Rules" })).toBeTruthy();
+      expect(screen.queryByRole("link", { name: "Play" })).toBeNull();
+      expect(screen.queryByText(/Signed in as/)).toBeNull();
+    });
+
+    it("Rules opens the Table rules sheet without a Change rules link, and Close puts focus back on Rules", () => {
+      visitor();
+      const rules = screen.getByRole("button", { name: "Rules" });
+      rules.focus();
+      fireEvent.click(rules);
+      const sheet = screen.getByRole("dialog", { name: "Table rules" });
+      expect(within(sheet).queryByRole("link", { name: "Change rules" })).toBeNull();
+      fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(document.activeElement).toBe(rules);
+    });
+  });
+
+  describe("signed in", () => {
+    it("has Play, Rules, Settings and 'Signed in as ... Log out'", () => {
+      renderUI(<Home />);
+      expect(screen.getByRole("link", { name: "Play" }).getAttribute("href")).toBe("/game");
+      expect(screen.getByRole("button", { name: "Rules" })).toBeTruthy();
+      expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
+      expect(screen.getByText(/Signed in as tester/)).toBeTruthy();
+      expect(screen.getByRole("button", { name: "Log out" })).toBeTruthy();
+      expect(screen.queryByText("Please log in to start playing.")).toBeNull();
+      expect(screen.queryByRole("link", { name: "Log in" })).toBeNull();
+    });
+
+    it("Play starts a game and opens the table", () => {
+      const { gameActions } = renderUI(<Home />);
+      fireEvent.click(screen.getByRole("link", { name: "Play" }));
+      expect(gameActions.startGame).toHaveBeenCalled();
+      expect(location()).toBe("/game");
+    });
+
+    it("Rules opens the sheet with a Change rules link to Settings", () => {
+      renderUI(<Home />);
+      fireEvent.click(screen.getByRole("button", { name: "Rules" }));
+      expect(within(screen.getByRole("dialog", { name: "Table rules" })).getByRole("link", { name: "Change rules" }).getAttribute("href")).toBe("/settings#rules");
+    });
+
+    it("Log out asks 'Log out?' with the safe button first and focused; Stay logged in keeps the session, Log out signs out", () => {
+      const { playerCtx, gameActions } = renderUI(<Home />);
+      fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+      const dialog = screen.getByRole("dialog", { name: "Log out?" });
+      const [safe, danger] = within(dialog).getAllByRole("button");
+      expect(safe.textContent).toBe("Stay logged in");
+      expect(danger.textContent).toBe("Log out");
+      expect(document.activeElement).toBe(safe);
+      fireEvent.click(safe);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(playerCtx.logout).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+      fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Log out" }));
+      expect(playerCtx.logout).toHaveBeenCalledOnce();
+      expect(gameActions.resetGame).toHaveBeenCalledOnce();
+    });
   });
 
   it("names the page Blakejack for screen readers and hides the drawn wordmark (#79)", () => {
@@ -31,27 +95,22 @@ describe("Home", () => {
     expect(container.querySelector("h1 svg").getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("shows Loading, not Home, while a saved session is restored or the table is about to start (DESIGN section 8)", () => {
-    const restoring = renderUI(<Home />, { player: { player: null, restoring: true } });
-    expect(screen.getByRole("status").textContent).toContain("Shuffling up...");
-    expect(screen.queryByText("Please log in to start playing.")).toBeNull();
-    expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
-    restoring.unmount();
+  it("hides the decorative hero from assistive tech and points its cards at the .webp faces", () => {
+    const { container } = renderUI(<Home />);
+    const hero = container.querySelector(".hero");
+    expect(hero.getAttribute("aria-hidden")).toBe("true");
+    expect([...hero.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual(["/cards/ace_of_spades.webp", "/cards/king_of_hearts.webp"]);
+  });
+
+  it("shows Loading, not Home, while the table is about to start (DESIGN section 8)", () => {
     renderUI(<Home />, { game: { starting: true } });
     expect(screen.getByRole("status").textContent).toContain("Shuffling up...");
-    expect(screen.queryByText("Start Game")).toBeNull();
+    expect(screen.queryByRole("link", { name: "Play" })).toBeNull();
   });
 
   it("has no status line once it is not loading", () => {
     renderUI(<Home />);
     expect(screen.queryByRole("status")).toBeNull();
-  });
-
-  it("starts a game and opens the table", () => {
-    const { gameActions } = renderUI(<Home />);
-    fireEvent.click(screen.getByText("Start Game"));
-    expect(gameActions.startGame).toHaveBeenCalled();
-    expect(location()).toBe("/game");
   });
 });
 
@@ -78,14 +137,30 @@ describe("Game", () => {
   });
 });
 
-describe("Login", () => {
+describe("Log in (/login)", () => {
+  const logInButton = () => screen.getByRole("button", { name: /^Log(ging)? in/ });
+
+  it("is a standalone screen: the wordmark, an h1 'Log in', labelled fields with placeholders, a Log in button and a link to Create an account", () => {
+    const { container } = renderUI(<Login />, { path: "/login", player: { player: null } });
+    expect(screen.getByRole("heading", { level: 1, name: "Log in" })).toBeTruthy();
+    expect(container.querySelector("svg.wm").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.getByLabelText("Username or email").getAttribute("placeholder")).toBe("Username or Email");
+    expect(screen.getByLabelText("Password").getAttribute("placeholder")).toBe("Password");
+    expect(logInButton().textContent).toBe("Log in");
+    expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href")).toBe("/signup");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
   it("logs in and goes home", async () => {
     const login = vi.fn().mockResolvedValue(testPlayer);
     renderUI(<Login />, { path: "/login", player: { login } });
     type("Username or Email", "tester");
     type("Password", "secret1");
-    fireEvent.click(screen.getByText("Log in"));
+    fireEvent.click(logInButton());
     expect(screen.getByText("Contacting server...")).toBeTruthy();
+    expect(logInButton().textContent).toBe("Logging in...");
+    expect(logInButton().disabled).toBe(true);
     await flush();
     expect(login).toHaveBeenCalledWith({ usernameOrEmail: "tester", password: "secret1" });
     expect(location()).toBe("/");
@@ -96,22 +171,22 @@ describe("Login", () => {
     let finish;
     const login = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
     renderUI(<Login />, { path: "/login", player: { login } });
-    fireEvent.click(screen.getByText("Log in"));
-    expect(screen.getByText("Contacting server...")).toBeTruthy();
+    fireEvent.click(logInButton());
+    expect(screen.getByRole("status").textContent).toBe("Contacting server...");
     act(() => { vi.advanceTimersByTime(5000); });
-    expect(screen.getByText(/may be waking up/)).toBeTruthy();
+    expect(screen.getByText(/waking up the table/i)).toBeTruthy();
     act(() => { vi.advanceTimersByTime(25000); });
-    expect(screen.getByText(/still waking up/)).toBeTruthy();
+    expect(screen.getByText(/still waking up/i)).toBeTruthy();
     // A cold start can take longer than 30 s (#75): still waiting at 31 s, no error, then it signs in.
     act(() => { vi.advanceTimersByTime(1000); });
-    expect(screen.getByText(/still waking up/)).toBeTruthy();
+    expect(screen.getByText(/still waking up/i)).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     await act(async () => finish(testPlayer));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(location()).toBe("/");
   });
 
-  it("shows the actual failure inline: network, server message, or a fallback", async () => {
+  it("shows one inline alert with the actual failure (network, server message, or a fallback) and marks both fields invalid", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
     const shown = [];
     const login = vi.fn()
@@ -120,9 +195,12 @@ describe("Login", () => {
       .mockRejectedValueOnce(new Error(""));
     renderUI(<Login />, { path: "/login", player: { login } });
     for (let i = 0; i < 3; i++) {
-      fireEvent.click(screen.getByText("Log in"));
+      fireEvent.click(logInButton());
       await flush();
       shown.push(screen.getByRole("alert").textContent);
+      expect(screen.getAllByRole("alert")).toHaveLength(1);
+      expect(screen.getByLabelText("Username or email").getAttribute("aria-invalid")).toBe("true");
+      expect(screen.getByLabelText("Password").getAttribute("aria-invalid")).toBe("true");
     }
     expect(alert).not.toHaveBeenCalled();
     expect(shown).toEqual([
@@ -133,33 +211,74 @@ describe("Login", () => {
     expect(location()).toBe("/login");
   });
 
-  it("signs up with the typed details; the server sets the starting balance", async () => {
-    const addPlayer = vi.fn().mockResolvedValue(testPlayer);
-    renderUI(<Login />, { path: "/login", player: { addPlayer } });
-    fireEvent.click(screen.getByText("Add player"));
-    expect(screen.queryByPlaceholderText("Starting credits")).toBeNull();
+  it("the fields are not invalid before an error, and the error clears when the next attempt starts", async () => {
+    const login = vi.fn().mockRejectedValueOnce(new Error("Nope")).mockResolvedValueOnce(testPlayer);
+    renderUI(<Login />, { path: "/login", player: { login } });
+    expect(screen.getByLabelText("Password").getAttribute("aria-invalid")).toBe("false");
+    fireEvent.click(logInButton());
+    await flush();
+    expect(screen.getByRole("alert")).toBeTruthy();
+    fireEvent.click(logInButton());
+    expect(screen.queryByRole("alert")).toBeNull();
+    await flush();
+    expect(location()).toBe("/");
+  });
+});
+
+describe("Create an account (/signup)", () => {
+  const createButton = () => screen.getByRole("button", { name: /^Creat/ });
+  const fillAll = () => {
     type("Username", "newbie");
     type("Email", "n@example.com");
     type("Password", "secret1");
     type("First name", "New");
     type("Last name", "Bie");
-    fireEvent.click(screen.getByText("Create & sign in"));
-    expect(screen.getByText("Creating…")).toBeTruthy();
+  };
+  const signup = (player = {}) => renderUI(<Login signup />, { path: "/signup", player: { player: null, ...player } });
+
+  it("has an h1 'Create an account', the five fields each with a real label, a disabled Create account button, and a link back to Log in", () => {
+    signup();
+    expect(screen.getByRole("heading", { level: 1, name: "Create an account" })).toBeTruthy();
+    for (const label of ["Username", "Email", "Password", "First name", "Last name"]) {
+      expect(screen.getByLabelText(label), label).toBeTruthy();
+      expect(screen.getByLabelText(label).getAttribute("placeholder"), label).toBe(label);
+    }
+    expect(screen.getByLabelText("Password").getAttribute("type")).toBe("password");
+    expect(createButton().textContent).toBe("Create account");
+    expect(createButton().disabled).toBe(true);
+    expect(screen.getByText(/Have an account\?/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login");
+    expect(screen.queryByLabelText("Username or email")).toBeNull();
+  });
+
+  it("signs up with the typed details; the server sets the starting balance", async () => {
+    const addPlayer = vi.fn().mockResolvedValue(testPlayer);
+    signup({ addPlayer });
+    expect(screen.queryByPlaceholderText("Starting credits")).toBeNull();
+    fillAll();
+    expect(createButton().disabled).toBe(false);
+    fireEvent.click(createButton());
+    expect(createButton().textContent).toBe("Creating account...");
     await flush();
     expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret1", email: "n@example.com", firstName: "New", lastName: "Bie" });
     expect(location()).toBe("/");
   });
 
-  it("shows each signup field's error and blocks the form until it is valid", () => {
+  it("shows each field's error (linked with aria-describedby) once touched, and blocks the form until it is valid", () => {
     const addPlayer = vi.fn();
-    renderUI(<Login />, { path: "/login", player: { addPlayer } });
-    fireEvent.click(screen.getByText("Add player"));
-    const button = screen.getByText("Create & sign in");
+    signup({ addPlayer });
+    const button = createButton();
     expect(button.disabled).toBe(true);
     expect(screen.queryByText(/is required/)).toBeNull(); // nothing shown before the player touches a field
 
     type("Username", "ab");
     expect(screen.getByText("Username must be at least 3 characters.")).toBeTruthy();
+    expect(screen.getByLabelText("Username").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByLabelText("Username").getAttribute("aria-describedby")).toBe(screen.getByText("Username must be at least 3 characters.").id);
+    type("Username", "abc");
+    expect(screen.queryByText(/Username must/)).toBeNull();
+    expect(screen.getByLabelText("Username").getAttribute("aria-invalid")).toBe("false");
+    expect(screen.getByLabelText("Username").hasAttribute("aria-describedby")).toBe(false);
     type("Email", "not-an-email");
     expect(screen.getByText("Invalid email format.")).toBeTruthy();
     type("Password", "123");
@@ -172,26 +291,21 @@ describe("Login", () => {
     // Enter still submits a form: it shows every problem instead of signing up.
     fireEvent.submit(button.closest("form"));
     expect(screen.getByText("Last name is required.")).toBeTruthy();
-    expect(screen.getByPlaceholderText("Last name").getAttribute("aria-invalid")).toBe("true");
+    expect(screen.getByLabelText("Last name").getAttribute("aria-invalid")).toBe("true");
     expect(addPlayer).not.toHaveBeenCalled();
     expect(button.disabled).toBe(true);
   });
 
-  it("shows a failed signup inline", async () => {
+  it("shows a failed signup inline as one alert, with a link back to Log in", async () => {
     const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
-    renderUI(<Login />, { path: "/login", player: { addPlayer: vi.fn().mockRejectedValue(new Error("")) } });
-    fireEvent.click(screen.getByText("Add player"));
-    type("Username", "newbie");
-    type("Email", "n@example.com");
-    type("Password", "secret1");
-    type("First name", "New");
-    type("Last name", "Bie");
-    fireEvent.submit(screen.getByText("Create & sign in").closest("form"));
+    signup({ addPlayer: vi.fn().mockRejectedValue(new Error("")) });
+    fillAll();
+    fireEvent.submit(createButton().closest("form"));
     await flush();
     expect(screen.getByRole("alert").textContent).toBe("Signup failed");
     expect(alert).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByText("Login"));
-    expect(screen.getByPlaceholderText("Username or Email")).toBeTruthy();
+    fireEvent.click(screen.getByRole("link", { name: "Log in" }));
+    expect(location()).toBe("/login");
   });
 });
 
@@ -213,9 +327,85 @@ describe("validateField", () => {
 });
 
 describe("App", () => {
-  it("renders the header and the routed page", () => {
-    renderUI(<App />, { path: "/" });
-    expect(screen.getByText("Blakejack")).toBeTruthy();
-    expect(screen.getByText("Home")).toBeTruthy();
+  const banner = () => screen.queryByRole("button", { name: "Home" }); // the app Header's Home button (Settings has its own, separate heading)
+
+  it("Home is a standalone screen with no header; Settings keeps the header", () => {
+    const view = renderUI(<App />, { path: "/" });
+    expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
+    expect(banner()).toBeNull();
+    view.unmount();
+    renderUI(<App />, { path: "/settings" });
+    expect(banner()).toBeTruthy();
+  });
+
+  it("routes /login to Log in and /signup to Create an account", () => {
+    const view = renderUI(<App />, { path: "/login", player: { player: null } });
+    expect(screen.getByRole("heading", { level: 1, name: "Log in" })).toBeTruthy();
+    expect(banner()).toBeNull();
+    view.unmount();
+    renderUI(<App />, { path: "/signup", player: { player: null } });
+    expect(screen.getByRole("heading", { level: 1, name: "Create an account" })).toBeTruthy();
+  });
+
+  it("swapping /login for /signup shows a fresh form, not the typed login", () => {
+    const view = renderUI(<App />, { path: "/login", player: { player: null } });
+    type("Username or Email", "typed");
+    fireEvent.click(screen.getByRole("link", { name: "Create an account" }));
+    expect(location()).toBe("/signup");
+    expect(screen.getByRole("heading", { level: 1, name: "Create an account" })).toBeTruthy();
+    expect(screen.getByLabelText("Username").value).toBe("");
+    view.unmount();
+  });
+
+  it("shows Loading on every page while a saved session is restored, never a page that thinks you are signed out", () => {
+    for (const path of ["/", "/game", "/settings", "/login"]) {
+      const view = renderUI(<App />, { path, player: { player: null, restoring: true } });
+      expect(screen.getByRole("status").textContent, path).toContain("Shuffling up...");
+      expect(screen.queryByText("Please log in to start playing."), path).toBeNull();
+      expect(banner(), path).toBeNull();
+      view.unmount();
+    }
+  });
+
+  it("shows the Error screen when the restore failed: Try again asks for the restore again, Home skips it", () => {
+    const retryRestore = vi.fn();
+    const skipRestore = vi.fn();
+    renderUI(<App />, { path: "/", player: { player: null, restoreFailed: true, retryRestore, skipRestore } });
+    expect(screen.getByRole("heading", { level: 1, name: "Can't reach the table" })).toBeTruthy();
+    expect(screen.queryByText("Please log in to start playing.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retryRestore).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(skipRestore).toHaveBeenCalledOnce();
+    expect(location()).toBe("/");
+  });
+
+  it("the Error screen wins over Loading", () => {
+    renderUI(<App />, { player: { player: null, restoring: true, restoreFailed: true } });
+    expect(screen.getByRole("heading", { name: "Can't reach the table" })).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("the Loading and Error screens (#87)", () => {
+  it("Loading is one status line with the decorative dealing cards hidden and the wordmark first", () => {
+    const { container } = renderUI(<LoadingScreen />);
+    const status = screen.getByRole("status");
+    expect(status.textContent).toBe("Shuffling up...");
+    expect(status.querySelector(".deal-load").getAttribute("aria-hidden")).toBe("true");
+    expect(container.querySelector("main > svg.wm")).toBeTruthy();
+  });
+
+  it("Error names itself, says the balance is safe, and offers Try again and Home", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    renderUI(<ErrorScreen onRetry={onRetry} onHome={onHome} />, { path: "/settings" });
+    expect(screen.getByText(/Your balance is safe/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    expect(onHome).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
+    expect(location()).toBe("/");
   });
 });

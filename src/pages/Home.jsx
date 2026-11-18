@@ -1,43 +1,61 @@
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
+import { useNavActions } from "../hooks/useNavActions";
+import { Chip } from "../components/Chip/Chip";
+import RulesSheet from "../components/RulesSheet/RulesSheet";
 import Wordmark from "../components/Wordmark/Wordmark";
-import "./pages.css";
+import { LoadingScreen, Page } from "../components/PageScreens/PageScreens";
 
+// Two cards lying flat and a chip on the felt (DESIGN section 8): decorative.
+const Hero = () => (
+  <div className="hero" aria-hidden="true">
+    <span className="hc" style={{ transform: "translate(-78px, -54px)" }}><img src="/cards/ace_of_spades.webp" alt="" /></span>
+    <span className="hc" style={{ transform: "translate(-32px, -54px)" }}><img src="/cards/king_of_hearts.webp" alt="" /></span>
+    <span className="hchip" style={{ transform: "translate(52px, 4px)" }}><Chip value={25} /></span>
+  </div>
+);
+
+// Home (DESIGN section 8). Signed in: Play starts the table, then Rules, Settings and "Signed in as ... · Log out". Signed out: Log in, Create an account, Rules.
+// A player just signed in whose table is about to start sees Loading, never a flash of Home: a signed-in player opens on the table and reaches Home from its menu. //
 export default function Home() {
-  const { player, restoring } = usePlayer();
-  const { starting } = useGameState();
+  const { player } = usePlayer();
+  const { starting, settings } = useGameState();
   const { startGame } = useGameActions();
-  const nav = useNavigate();
+  const { logOut, confirm } = useNavActions();
+  const [rules, setRules] = useState(false);
 
-  const onStart = () => {
-    startGame();
-    nav("/game");
-  };
-
-  // A saved session being restored (up to a cold API start), or a player just signed in whose table is about to start (DESIGN section 8):
-  // Loading, never a flash of Home. A signed-in player opens on the table; Home is reached from its menu. //
-  const loading = restoring || starting;
+  if (starting) return <LoadingScreen />;
 
   return (
-    <div className="page-bg">
-      <div className="page-body">
-        <div className="home-center" role={loading ? "status" : undefined}>
-          <h1>
-            <Wordmark className="home-wordmark" />
-            <span className="sr-only">Blakejack</span>
-          </h1>
-          {loading ? (
-            <p>Shuffling up...</p>
-          ) : !player ? (
-            <p>Please log in to start playing.</p>
-          ) : (
-            <button onClick={onStart} className="start-btn">
-              Start Game
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
+    <Page>
+      <h1>
+        <Wordmark className="wm" />
+        <span className="sr-only">Blakejack</span>
+      </h1>
+      <Hero />
+      {player ? (
+        <>
+          <div className="btn-col">
+            <Link className="btn primary" to="/game" onClick={startGame}>Play</Link>
+            <button type="button" className="btn" onClick={() => setRules(true)}>Rules</button>
+            <Link className="btn" to="/settings">Settings</Link>
+          </div>
+          <p className="signed">Signed in as {player.userName} · <button type="button" onClick={logOut}>Log out</button></p>
+        </>
+      ) : (
+        <>
+          <p className="signed">Please log in to start playing.</p>
+          <div className="btn-col">
+            <Link className="btn primary" to="/login">Log in</Link>
+            <Link className="btn" to="/signup">Create an account</Link>
+            <button type="button" className="btn" onClick={() => setRules(true)}>Rules</button>
+          </div>
+        </>
+      )}
+      {rules && <RulesSheet settings={settings} onClose={() => setRules(false)} />}
+      {confirm}
+    </Page>
   );
 }

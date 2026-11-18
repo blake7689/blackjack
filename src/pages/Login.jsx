@@ -1,26 +1,28 @@
 import "./pages.css";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { validateField } from "../utils/validation";
+import Wordmark from "../components/Wordmark/Wordmark";
+import { Page } from "../components/PageScreens/PageScreens";
 
 const NETWORK_ERROR = /failed to fetch|network|timeout/i;
 
 const SIGNUP_FIELDS = [
-  { name: "userName", placeholder: "Username" },
-  { name: "email", placeholder: "Email" },
-  { name: "password", placeholder: "Password", type: "password" },
-  { name: "firstName", placeholder: "First name" },
-  { name: "lastName", placeholder: "Last name" },
+  { name: "userName", label: "Username", autoComplete: "username" },
+  { name: "email", label: "Email", autoComplete: "email" },
+  { name: "password", label: "Password", type: "password", autoComplete: "new-password" },
+  { name: "firstName", label: "First name", autoComplete: "given-name" },
+  { name: "lastName", label: "Last name", autoComplete: "family-name" },
 ];
 
 // Same rules as Settings; unlike Settings, a new account must choose a password.
 const signupError = (name, value) => (name === "password" && !value ? "Password is required." : validateField(name, value));
 
-export default function Login() {
+// Log in (/login) and Create an account (/signup): two screens, one component (DESIGN section 8). //
+export default function Login({ signup: creating = false }) {
   const { login, addPlayer } = usePlayer();
   const nav = useNavigate();
-  const [tab, setTab] = useState("login");
   const [form, setForm] = useState({
     usernameOrEmail: "", password: "",
     userName: "", email: "", firstName: "", lastName: ""
@@ -47,8 +49,8 @@ export default function Login() {
     setError(null);
     setStatusMsg("Contacting server...");
     const timers = [
-      setTimeout(() => setStatusMsg("Server may be waking up… this can take ~30s."), 5000),
-      setTimeout(() => setStatusMsg("Server is still waking up... Please wait or try again in a minute."), 30000),
+      setTimeout(() => setStatusMsg("Waking up the table. The first log-in can take up to 30 seconds."), 5000),
+      setTimeout(() => setStatusMsg("Still waking up the table. Please wait or try again in a minute."), 30000),
     ];
     try {
       await work();
@@ -85,49 +87,41 @@ export default function Login() {
     lastName: form.lastName
   }), "Signup failed");
 
-  const status = loading && (
-    <div className="load-status">
-      <span className="spinner" /> {statusMsg}
-    </div>
-  );
 
   return (
-    <div className="page-bg">
-      <div className="page-body">
-        <div className="login-panel">
-          <div className="tabs">
-            <button onClick={() => setTab("login")} className={`tab-btn${tab === "login" ? " active" : ""}`}>Login</button>
-            <button onClick={() => setTab("signup")} className={`tab-btn${tab === "signup" ? " active" : ""}`}>Add player</button>
-          </div>
-
-          {tab === "login" ? (
-            <form onSubmit={handleLogin} className="stack-form">
-              <input name="usernameOrEmail" placeholder="Username or Email" value={form.usernameOrEmail} onChange={onChange} />
-              <input type="password" name="password" placeholder="Password" value={form.password} onChange={onChange} />
-              <button type="submit" disabled={loading}>
-                {loading ? <><span className="spinner" /> Logging in…</> : "Log in"}
-              </button>
-              {status}
-              {error && <div role="alert" className="notice error">{error}</div>}
-            </form>
-          ) : (
-            <form onSubmit={handleSignup} className="stack-form">
-              {SIGNUP_FIELDS.map(({ name, placeholder, type }) => (
-                <div key={name}>
-                  <input name={name} type={type} placeholder={placeholder} value={form[name]} onChange={onChange} onBlur={onBlur}
-                    aria-invalid={Boolean(touched[name] && signupErrors[name])} className="full-width" />
-                  {touched[name] && signupErrors[name] && <div className="field-error">{signupErrors[name]}</div>}
-                </div>
-              ))}
-              <button type="submit" disabled={loading || signupInvalid}>
-                {loading ? <><span className="spinner" /> Creating…</> : "Create & sign in"}
-              </button>
-              {status}
-              {error && <div role="alert" className="notice error">{error}</div>}
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
+    <Page>
+      <Wordmark className="wm" />
+      <h1>{creating ? "Create an account" : "Log in"}</h1>
+      {loading && <div className="waking" role="status"><span className="spin" aria-hidden="true" /><span>{statusMsg}</span></div>}
+      {error && <p className="alert" role="alert">{error}</p>}
+      {creating ? (
+        <form onSubmit={handleSignup} className="form" noValidate>
+          {SIGNUP_FIELDS.map(({ name, label, type, autoComplete }) => {
+            const message = touched[name] && signupErrors[name];
+            return (
+              <div key={name}>
+                <label>{label}
+                  <input name={name} type={type} placeholder={label} autoComplete={autoComplete} value={form[name]} onChange={onChange} onBlur={onBlur}
+                    aria-invalid={Boolean(message)} aria-describedby={message ? `su-${name}` : undefined} />
+                </label>
+                {message && <span className="ferr" id={`su-${name}`}>{message}</span>}
+              </div>
+            );
+          })}
+          <button type="submit" className="btn primary" disabled={loading || signupInvalid}>{loading ? "Creating account..." : "Create account"}</button>
+        </form>
+      ) : (
+        <form onSubmit={handleLogin} className="form" noValidate>
+          <label>Username or email
+            <input name="usernameOrEmail" placeholder="Username or Email" autoComplete="username" value={form.usernameOrEmail} onChange={onChange} aria-invalid={Boolean(error)} />
+          </label>
+          <label>Password
+            <input type="password" name="password" placeholder="Password" autoComplete="current-password" value={form.password} onChange={onChange} aria-invalid={Boolean(error)} />
+          </label>
+          <button type="submit" className="btn primary" disabled={loading}>{loading ? "Logging in..." : "Log in"}</button>
+        </form>
+      )}
+      <p className="signed">{creating ? <>Have an account? <Link to="/login">Log in</Link></> : <Link to="/signup">Create an account</Link>}</p>
+    </Page>
   );
 }

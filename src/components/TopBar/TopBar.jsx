@@ -105,22 +105,23 @@ function Count() {
 
 // The table's top bar (#81, DESIGN section 5): one quiet row in three columns with equal outer ones, so the balance sits on the bar's centre.
 // Left: the menu (Home, Table rules, Analytics soon, Settings, felt swatches, Log out) and the wordmark. Right: the count and Settings. //
-export default function TopBar({ tapEnabled = false }) {
+export default function TopBar({ tapEnabled = false, onRules }) {
   const { player } = usePlayer();
   const { settings } = useGameState();
   const { changeSettings } = useGameActions();
-  const { goHome, goSettings, logOut } = useNavActions();
+  const { goHome, goSettings, logOut, confirm } = useNavActions();
   const loc = useLocation();
   const [open, setOpen] = useState(false);
   const menuId = useId();
   const feltLabel = useId();
   const barRef = useRef(null);
+  const menuBtnRef = useRef(null);
 
   useEffect(() => setOpen(false), [loc.pathname]);
   useEffect(() => {
     if (!open) return;
     const onPointer = (e) => { if (!barRef.current.querySelector(".bar-l").contains(e.target)) setOpen(false); };
-    const onKey = (e) => { if (e.key === "Escape") { setOpen(false); barRef.current.querySelector(".menu-btn").focus(); } };
+    const onKey = (e) => { if (e.key === "Escape") { setOpen(false); menuBtnRef.current.focus(); } };
     document.addEventListener("mousedown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -129,21 +130,22 @@ export default function TopBar({ tapEnabled = false }) {
     };
   }, [open]);
 
-  const pick = (action) => () => { setOpen(false); action(); };
+  const pick = (action) => () => { setOpen(false); menuBtnRef.current.focus(); action(); }; // the menu is closing: any dialog it opens gives focus back to the menu button, not to a hidden item
   const setFelt = (feltTheme) => () => { changeSettings({ feltTheme }).catch(() => {}); }; // a failed save keeps the felt the player picked
 
   return (
     <header className="top" ref={barRef}>
+      {confirm}
       <div className="top-in">
         <div className="bar-l">
-          <button type="button" className="icon-btn menu-btn" aria-label="Menu" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen((v) => !v)}>
+          <button ref={menuBtnRef} type="button" className="icon-btn menu-btn" aria-label="Menu" aria-expanded={open} aria-controls={menuId} onClick={() => setOpen((v) => !v)}>
             <Icon id="i-menu" />
           </button>
           <Wordmark className="wm top-wm" />
           <span className="sr-only">Blakejack</span>
           <nav id={menuId} className="menu" aria-label="Menu" hidden={!open}>
             <button type="button" className="menu-i" onClick={pick(goHome)}><Icon id="i-back" />Home</button>
-            <button type="button" className="menu-i" onClick={pick(() => goSettings("rules"))}><Icon id="i-rules" />Table rules</button>
+            <button type="button" className="menu-i" onClick={pick(onRules)}><Icon id="i-rules" />Table rules</button>
             <button type="button" className="menu-i" aria-disabled="true"><Icon id="i-chart" />Analytics <small>Soon</small></button>
             <button type="button" className="menu-i" onClick={pick(() => goSettings())}><Icon id="i-settings" />Settings</button>
             <hr />

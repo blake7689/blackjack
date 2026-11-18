@@ -43,7 +43,7 @@ export default function Settings() {
   const { player, updatePlayer, changePassword, deletePlayer } = usePlayer();
   const { settings, phase } = useGameState();
   const { changeSettings, resetGame } = useGameActions();
-  const { logOut } = useNavActions();
+  const { logOut, confirm } = useNavActions();
   const nav = useNavigate();
   const { hash } = useLocation();
   const [edits, setEdits] = useState({}); // only unsaved edits, so settings that load after the page opens (#36) still show
@@ -284,6 +284,7 @@ export default function Settings() {
         </div>
       )}
 
+      {confirm}
       {asking?.kind === "leave" && (
         <ConfirmDialog title="Discard your changes?" body="You have changes in Settings that aren't saved." safe="Keep editing" danger="Discard and leave"
           onSafe={() => setAsking(null)} onDanger={() => { discard(); setAsking(null); asking.go(); }} />

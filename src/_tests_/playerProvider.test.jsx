@@ -1251,3 +1251,91 @@ describe("insurance bets in the ledger (#91)", () => {
     expect(ctx.getCredits()).toBe(1000);
   });
 });
+
+describe("a restore that gets no answer (#87)", () => {
+  it.each([["a network failure", new Error("Failed to fetch")], ["a 5xx", refusal(503)], ["a timeout", Object.assign(new Error("timeout"), { name: "TimeoutError" })]])(
+    "%s sets restoreFailed, leaves the player signed out and no longer restoring",
+    async (_name, failure) => {
+      api.getToken.mockReturnValue("tok");
+      engine.getMe.mockRejectedValueOnce(failure);
+      const { ctx } = setup();
+      expect(ctx.restoring).toBe(true);
+      expect(ctx.restoreFailed).toBe(false);
+      await settleQueue();
+      expect(ctx.restoreFailed).toBe(true);
+      expect(ctx.restoring).toBe(false);
+      expect(ctx.player).toBeNull();
+    },
+  );
+
+  it("an expired token (401, which api.js clears) is just signed out: no Error screen", async () => {
+    api.getToken.mockReturnValueOnce("tok").mockReturnValueOnce("tok").mockReturnValue(null); // the 401 handler clears the token before the catch runs (1st read: restoring state, 2nd: the restore)
+    engine.getMe.mockRejectedValueOnce(refusal(401));
+    const { ctx } = setup();
+    await settleQueue();
+    expect(ctx.restoreFailed).toBe(false);
+    expect(ctx.restoring).toBe(false);
+    expect(ctx.player).toBeNull();
+  });
+
+  it("a failure that arrives after logging out meanwhile is ignored", async () => {
+    api.getToken.mockReturnValue("tok");
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    const { ctx } = setup();
+    api.getToken.mockReturnValue(null);
+    await act(async () => { me.reject(new Error("Failed to fetch")); });
+    expect(ctx.restoreFailed).toBe(false);
+    expect(ctx.restoring).toBe(false);
+  });
+
+  it("Try again (retryRestore) asks getMe once more with the cold-start timeout: it clears the failure, shows restoring, then signs in", async () => {
+    api.getToken.mockReturnValue("tok");
+    engine.getMe.mockRejectedValueOnce(new Error("Failed to fetch"));
+    const { ctx } = setup();
+    await settleQueue();
+    expect(ctx.restoreFailed).toBe(true);
+    const again = deferred();
+    engine.getMe.mockReturnValueOnce(again.promise);
+    act(() => { ctx.retryRestore(); });
+    expect(ctx.restoreFailed).toBe(false);
+    expect(ctx.restoring).toBe(true);
+    expect(engine.getMe).toHaveBeenCalledTimes(2);
+    expect(engine.getMe).toHaveBeenLastCalledWith(90000);
+    await act(async () => { again.resolve(player); });
+    expect(ctx.player).toEqual(player);
+    expect(ctx.restoring).toBe(false);
+    expect(ctx.restoreFailed).toBe(false);
+  });
+
+  it("Try again can fail again, back to the Error screen", async () => {
+    api.getToken.mockReturnValue("tok");
+    engine.getMe.mockRejectedValue(new Error("Failed to fetch"));
+    const { ctx } = setup();
+    await settleQueue();
+    act(() => { ctx.retryRestore(); });
+    await settleQueue();
+    expect(engine.getMe).toHaveBeenCalledTimes(2);
+    expect(ctx.restoreFailed).toBe(true);
+    expect(ctx.restoring).toBe(false);
+  });
+
+  it("Home (skipRestore) clears the failure without asking again or dropping the saved token", async () => {
+    api.getToken.mockReturnValue("tok");
+    engine.getMe.mockRejectedValueOnce(new Error("Failed to fetch"));
+    const { ctx } = setup();
+    await settleQueue();
+    act(() => { ctx.skipRestore(); });
+    expect(ctx.restoreFailed).toBe(false);
+    expect(ctx.player).toBeNull();
+    expect(engine.getMe).toHaveBeenCalledTimes(1);
+  });
+
+  it("retryRestore with no saved token does nothing", async () => {
+    const { ctx } = setup();
+    act(() => { ctx.retryRestore(); });
+    await settleQueue();
+    expect(engine.getMe).not.toHaveBeenCalled();
+    expect(ctx.restoring).toBe(false);
+  });
+});

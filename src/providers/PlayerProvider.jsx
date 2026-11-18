@@ -23,6 +23,8 @@ export function PlayerProvider({ children }) {
   const [reconnecting, setReconnecting] = useState(false);
   // A saved session is being restored (up to a cold API start): the table shows Loading, not Home, until it is answered.
   const [restoring, setRestoring] = useState(() => !!getToken());
+  // The restore got no answer (network, timeout, 5xx): the app shows its Error screen (Try again / Home) instead of acting signed out (#87).
+  const [restoreFailed, setRestoreFailed] = useState(false);
 
   const signIn = useCallback((p) => {
     playerRef.current = p;
@@ -38,13 +40,19 @@ export function PlayerProvider({ children }) {
     setPlayer(playerRef.current);
   }, []);
 
-  // Restore a session after a page refresh; an expired token (401) just leaves you signed out.
-  // Ignore a late answer if you logged out or in as someone else meanwhile (the token changed).
-  useEffect(() => {
+  // Restore a session after a page refresh; an expired token (401, which clears it) just leaves you signed out; any other failure keeps the token and
+  // sets `restoreFailed`. Ignore a late answer if you logged out or in as someone else meanwhile (the token changed).
+  const restore = useCallback(() => {
     const token = getToken();
     if (!token) return;
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }).catch(() => {}).finally(() => setRestoring(false));
+    setRestoring(true);
+    setRestoreFailed(false);
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); })
+      .catch(() => { if (getToken() === token) setRestoreFailed(true); })
+      .finally(() => setRestoring(false));
   }, [signIn]);
+  useEffect(restore, [restore]);
+  const skipRestore = useCallback(() => setRestoreFailed(false), []);
 
   // Any signed-in request that gets 401 signs you out here.
   useEffect(() => {
@@ -196,8 +204,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, restoring, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, restoring, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
