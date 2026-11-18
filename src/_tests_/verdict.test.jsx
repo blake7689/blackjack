@@ -5,6 +5,8 @@ import GameBoard from "../components/GameBoard/GameBoard";
 import CenterMessage from "../components/CenterMessage/CenterMessage";
 import { playRound } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
+import { initialGameState } from "../utils/gameReducer";
+import { resultsLine } from "../utils/verdict";
 
 // The round's verdict (#83, DESIGN section 5): one word on the felt, never over a card (it takes the message line's place); one hand shows it (and how the
 // insurance went) and no tags; two or more hands show the net as the verdict and a tag under each circle.
@@ -99,5 +101,54 @@ describe("CenterMessage: what takes the line", () => {
     expect(view({ notice: "Not enough credits", verdict: win }).textContent).toBe("Not enough credits");
     expect(view({ reconnecting: true, notice: "x" }).textContent).toBe("Reconnecting...");
     expect(view({ waiting: true, shuffling: true }).textContent).toBe("Waiting for the server...");
+  });
+});
+
+describe("results for a screen reader (#85): one polite live region, resultsLine in it", () => {
+  const live = () => document.querySelector(".msg");
+  const heard = () => live().querySelector(".sr-only")?.textContent;
+  const say = (round, showTotals = true) => resultsLine(round.state.hands, round.state.dealer, showTotals);
+
+  it("each hand's outcome and total, then the dealer's", () => {
+    expect(say(playRound({ cards: ["10", "10", "9", "7"] }))).toBe("Hand 1: win, 19. Dealer: 17.");
+    expect(say(playRound({ cards: ["10", "10", "7", "9"] }))).toBe("Hand 1: lose, 17. Dealer: 19.");
+    expect(say(playRound({ cards: ["10", "10", "8", "8"] }))).toBe("Hand 1: push, 18. Dealer: 18.");
+    expect(say(playRound({ cards: ["10", "10", "6", "7", "K"], actions: ["hit"] }))).toBe("Hand 1: bust, 26. Dealer: 17.");
+  });
+
+  it("a split round names every hand", () => {
+    const round = playRound({ cards: ["8", "10", "8", "7", "3", "10", "9"], actions: ["split", "stand", "stand"] });
+    expect(say(round)).toBe("Hand 1: lose, 11. Hand 2: win, 18. Dealer: 17.");
+  });
+
+  it("a blackjack is said as blackjack, the dealer's too, instead of 21", () => {
+    expect(say(playRound({ cards: ["A", "9", "K", "8"] }))).toBe("Hand 1: blackjack. Dealer: 17.");
+    expect(say(playRound({ cards: ["10", "A", "9", "K"] }))).toBe("Hand 1: lose, 19. Dealer: blackjack.");
+  });
+
+  it("with Show hand totals off the totals are left out, but blackjack stays", () => {
+    expect(say(playRound({ cards: ["10", "10", "9", "7"] }), false)).toBe("Hand 1: win.");
+    expect(say(playRound({ cards: ["A", "9", "K", "8"] }), false)).toBe("Hand 1: blackjack.");
+    expect(say(playRound({ cards: ["10", "A", "9", "K"] }), false)).toBe("Hand 1: lose. Dealer: blackjack.");
+  });
+
+  it("the board announces it inside the one aria-live line, once the round is settled", () => {
+    board(playRound({ cards: ["10", "10", "9", "7"] }));
+    expect(live().getAttribute("aria-live")).toBe("polite");
+    expect(heard()).toBe("Hand 1: win, 19. Dealer: 17.");
+    expect(live().textContent).toContain("WIN+$10"); // the visible verdict rides in the same line
+    expect(document.querySelectorAll("[aria-live]")).toHaveLength(1);
+  });
+
+  it("the board follows Show hand totals", () => {
+    renderUI(<GameBoard />, { game: { ...playRound({ cards: ["10", "10", "9", "7"] }).state, seenIds: ["seen"], settings: { ...initialGameState.settings, showTotals: false } } });
+    expect(heard()).toBe("Hand 1: win.");
+  });
+
+  it("says nothing before the round is settled, and still only one live region", () => {
+    const round = playRound({ cards: ["10", "10", "9", "7"] });
+    renderUI(<GameBoard />, { game: { ...round.state, seenIds: ["seen"], phase: GamePhases.PLAYER_TURN, hands: round.state.hands.map((h) => ({ ...h, result: "none" })) } });
+    expect(heard()).toBeUndefined();
+    expect(document.querySelectorAll("[aria-live]")).toHaveLength(1);
   });
 });

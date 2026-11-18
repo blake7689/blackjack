@@ -214,5 +214,13 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   reducer step; a dealer blackjack's hole face stays out of the DOM until the check ends. Per-hand `.tag.*` only with 2+ hands (one hand: the `.verdict.<kind>`). The balance badge
   shows every real change and a settled loss clears it; the count-up is display only and never delays settle. Reduced motion: no flights, flips, sweeps, shuffle or holds.
 
+- Heavy SVG (the chip `Sprite`) is memoized and must stay so: rebuilding it on a route change raced the post-login redirect on slow CI runners (#142, 77ecfd3). Keep new render-heavy work off the login/redirect path.
+- Keyboard and screen reader (#85, DESIGN section 8): every key in `Dock` is registered with `bind(hotkey, off, run)`, which gives the button its `aria-keyshortcuts` and `<kbd>` hint and the keyboard the same `off` flag and action, so a dimmed or absent key does
+  nothing (add a key through `bind`, never a second handler). One `document` keydown listener lives while the Dock is mounted (the table only: Settings and Home have no Dock); it ignores `e.repeat`, ctrl/meta/alt, input / textarea / select /
+  dialog / contenteditable targets, and any open `[role=dialog]` or open `.menu`; Space and Enter are one key (Deal, Next hand) and keep their own action on a focused button, link or `[role=button]`. 1-9 keep the "same number twice adds" rule
+  (`lastKey`: any other key, even an ignored one, starts over). The board has ONE polite live region, the `.msg` line: at the results CenterMessage carries `resultsLine` (utils/verdict.js: each hand's outcome and total, then the dealer's; totals
+  leave it with Show hand totals off, "blackjack" stays) in a hidden span. Never add a second `aria-live` or a hidden duplicate of the line: Playwright's strict `getByText` and the jsdom `getByText` queries would find two. Focus moves per phase in
+  Dock's effect (deps `phase`, `openOffers`, `busy`), only from nothing or the dock. Targets are 44 px (inline links get it from an ::after or padding, never a visible change); the 12 px text floor and the `--tx-3` / accent-text tokens follow DESIGN section 3.
+
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

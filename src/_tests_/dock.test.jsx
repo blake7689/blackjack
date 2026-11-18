@@ -99,7 +99,8 @@ describe("Dock", () => {
   const maybe = (name) => screen.queryByRole("button", { name });
   const dimmed = (name) => key(name).getAttribute("aria-disabled") === "true";
   const face = (container) => container.querySelector(".dock-in").getAttribute("data-face");
-  const names = (container) => [...container.querySelectorAll(".dock button")].map((b) => b.textContent);
+  const words = (b) => b.textContent; // a key's words; its shortcut hint is generated content (kbd[data-text]), not text (#85)
+  const names = (container) => [...container.querySelectorAll(".dock button")].map(words);
   const OFFER_INSURANCE = { insurance: true, evenMoney: false, surrender: false, peek: true };
   const offering = (offers, bet = 10) => ({ phase: OFFERS, offers, hands: [hand(["10", "6"], { bet })] });
 
@@ -431,7 +432,7 @@ describe("Dock", () => {
         expect([...container.querySelectorAll(".dock-row")[1].querySelectorAll("button")].map((b) => b.getAttribute("aria-label") ?? b.textContent.replace(/[A-Z]$/, "")))
           .toEqual(["Undo", "Clear", "Rebet", "Double every bet", "Deal"]);
         expect(container.querySelector(".glyph").getAttribute("data-text")).toBe("2x");
-        expect([...container.querySelectorAll("kbd")].map((k) => k.textContent)).toEqual(["U", "C", "B", "X"]);
+        expect([...container.querySelectorAll("kbd")].map((k) => k.getAttribute("data-text"))).toEqual(["U", "C", "B", "X", "Space"]);
         expect(container.querySelector("kbd").getAttribute("aria-hidden")).toBe("true");
       });
     });
@@ -570,7 +571,7 @@ describe("Dock", () => {
 
   describe("offers", () => {
     const group = () => within(screen.getByRole("group", { name: "Offers" }));
-    const keys = () => group().getAllByRole("button").map((b) => b.textContent);
+    const keys = () => group().getAllByRole("button").map(words);
 
     it("insurance: 'Insurance $5' and 'No thanks', in a group named Offers that the busy board can find", () => {
       const { container } = show(offering(OFFER_INSURANCE));
@@ -784,6 +785,278 @@ describe("Dock", () => {
       const { container } = show({ phase: PRE_DEAL, settings: on, betCircle: 10, autoDealPending: true });
       expect(pauseKey("Pause auto deal")).not.toBeNull();
       expect(container.textContent).not.toMatch(/countdown|dealing in|seconds/i);
+    });
+  });
+
+  describe("keyboard (#85, DESIGN 8)", () => {
+    const press = (k, init = {}, target = document.body) => fireEvent.keyDown(target, { key: k, ...init }); // false when the handler called preventDefault
+    const openOffers = { insurance: true, evenMoney: true, surrender: true, peek: true };
+    const rules = settings({ tripleDown: true });
+    const pairInPlay = (extra = {}) => playing(["8", "8"], {}, { settings: rules, ...extra });
+    const addOutside = (tag, attrs = {}) => { const el = document.createElement(tag); Object.entries(attrs).forEach(([k, v]) => el.setAttribute(k, v)); document.body.append(el); return el; };
+    const all = (gameActions) => Object.values(gameActions).filter((fn) => fn.mock);
+    const stray = [];
+    const outside = (...args) => { const el = addOutside(...args); stray.push(el); return el; };
+    afterEach(() => { stray.splice(0).forEach((el) => el.remove()); });
+
+    describe("your move", () => {
+      it("H hits, S stays, D doubles, P splits, R surrenders, T triples: the hand in play, either case", () => {
+        const { gameActions } = show(pairInPlay({ selectedHandIndex: 0 }));
+        for (const k of ["h", "S", "d", "P", "r", "T"]) press(k);
+        for (const act of ["hit", "stand", "double", "split", "surrender", "triple"]) expect(gameActions[act].mock.calls, act).toEqual([[0]]);
+      });
+
+      it("acts on the selected hand of a split round", () => {
+        const { gameActions } = show(playing(["8", "8"], {}, { selectedHandIndex: 1, hands: [hand(["10", "9"], { status: HandStatus.DONE }), hand(["8", "8"])] }));
+        press("h");
+        expect(gameActions.hit.mock.calls).toEqual([[1]]);
+      });
+
+      it("a key the rules hide does nothing: R with Surrender none, T with Triple off", () => {
+        const { gameActions } = show(playing(["8", "8"], {}, { settings: settings({ surrender: "none", tripleDown: false }) }));
+        expect(maybe("Surrender")).toBeNull();
+        expect(maybe("Triple")).toBeNull();
+        press("r");
+        press("t");
+        expect(gameActions.surrender).not.toHaveBeenCalled();
+        expect(gameActions.triple).not.toHaveBeenCalled();
+      });
+
+      it("a dimmed key does nothing: D, P, T and R on three cards, H on a split ace", () => {
+        const three = show(playing(["10", "6", "2"], {}, { settings: rules }));
+        for (const k of ["d", "p", "t", "r"]) press(k);
+        for (const act of ["double", "split", "triple", "surrender"]) expect(three.gameActions[act], act).not.toHaveBeenCalled();
+        press("s"); // Stay is still live
+        expect(three.gameActions.stand).toHaveBeenCalledOnce();
+        cleanup();
+        const ace = show(playing(["A", "5"], { isSplit: true }));
+        press("h");
+        expect(ace.gameActions.hit).not.toHaveBeenCalled();
+      });
+
+      it("nothing acts while a card flies, off your turn, on a finished hand or on a hand waiting for its card", () => {
+        const waits = [
+          [pairInPlay(), { busy: true }],
+          [{ ...pairInPlay(), phase: DEALER_TURN }, {}],
+          [{ ...pairInPlay(), phase: PEEK }, {}],
+          [playing(["8", "8"], { status: HandStatus.DONE }, { settings: rules }), {}],
+          [playing(["8"], { awaitingCard: true }, { settings: rules }), {}],
+        ];
+        for (const [game, opts] of waits) {
+          const { gameActions, unmount } = show(game, opts);
+          for (const k of ["h", "s", "d", "p", "r", "t"]) press(k);
+          for (const fn of all(gameActions)) expect(fn).not.toHaveBeenCalled();
+          unmount();
+        }
+      });
+
+      it("a handled key is kept from the page (preventDefault); an unbound key is not", () => {
+        show(pairInPlay());
+        expect(press("h")).toBe(false);
+        expect(press("q")).toBe(true);
+        expect(press("1")).toBe(true); // digits are for betting only
+      });
+
+      it("Space and Enter do nothing on your turn", () => {
+        const { gameActions } = show(pairInPlay());
+        press(" ");
+        press("Enter");
+        for (const fn of all(gameActions)) expect(fn).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("offers", () => {
+      it("I takes insurance, E even money, R surrenders hand 0, N says no thanks", () => {
+        const { gameActions } = show(offering(openOffers));
+        for (const k of ["i", "E", "r", "N"]) press(k);
+        expect(gameActions.takeInsurance).toHaveBeenCalledOnce();
+        expect(gameActions.evenMoney).toHaveBeenCalledOnce();
+        expect(gameActions.surrender.mock.calls).toEqual([[0]]);
+        expect(gameActions.declineOffers).toHaveBeenCalledOnce();
+      });
+
+      it("an offer that is not open (or already taken) has no key: I, E and R do nothing, N still works", () => {
+        const { gameActions } = show(offering({ insurance: false, evenMoney: false, surrender: false, peek: true }));
+        for (const k of ["i", "e", "r", "h", "s"]) press(k);
+        for (const fn of all(gameActions)) expect(fn).not.toHaveBeenCalled();
+        press("n");
+        expect(gameActions.declineOffers).toHaveBeenCalledOnce();
+      });
+
+      it("while cards fly the offer keys do nothing", () => {
+        const { gameActions } = show(offering(openOffers), { busy: true });
+        for (const k of ["i", "e", "r", "n"]) press(k);
+        for (const fn of all(gameActions)) expect(fn).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("Space and Enter", () => {
+      it("deal while betting, and take the next hand at the results, from the page or the document", () => {
+        const betting = show({ phase: PRE_DEAL, betCircle: 10 });
+        expect(press(" ")).toBe(false);
+        press("Enter");
+        fireEvent.keyDown(document, { key: " " }); // an event whose target has no closest()
+        expect(betting.gameActions.deal).toHaveBeenCalledTimes(3);
+        cleanup();
+        const results = show({ phase: POST_ROUND, hands: [hand(["10", "9"], { payout: 20 })] });
+        press(" ");
+        press("Enter");
+        expect(results.gameActions.continueRound).toHaveBeenCalledTimes(2);
+        cleanup();
+        const end = show({ phase: END_ROUND, hands: [hand(["10", "9"], { payout: 20 })] });
+        press(" ");
+        expect(end.gameActions.continueRound).toHaveBeenCalledOnce();
+      });
+
+      it("do not deal with no bet down, with no player, or while the shuffle plays", () => {
+        const empty = show({ phase: PRE_DEAL, betCircle: 0 });
+        press(" ");
+        expect(empty.gameActions.deal).not.toHaveBeenCalled();
+        cleanup();
+        const out = show({ phase: PRE_DEAL, betCircle: 10 }, { player: null });
+        press("Enter");
+        expect(out.gameActions.deal).not.toHaveBeenCalled();
+        cleanup();
+        const shuffling = show({ phase: PRE_DEAL, betCircle: 10 }, { props: { shuffling: true } });
+        press(" ");
+        expect(shuffling.gameActions.deal).not.toHaveBeenCalled();
+      });
+
+      it("on a focused button, link, summary or role=button, Space keeps that control's own action: the table does not deal", () => {
+        const { gameActions } = show({ phase: PRE_DEAL, betCircle: 10 });
+        const own = [outside("button"), outside("a", { href: "#x" }), outside("summary"), outside("div", { role: "button" }), key("Undo")];
+        for (const el of own) expect(press(" ", {}, el), el.tagName).toBe(true); // not prevented: the control's click goes ahead
+        expect(gameActions.deal).not.toHaveBeenCalled();
+        press(" ", {}, outside("span")); // a plain element is still the table
+        expect(gameActions.deal).toHaveBeenCalledOnce();
+      });
+
+      it("the letter keys still work with a button focused (only Space and Enter are the button's own)", () => {
+        const { gameActions } = show(pairInPlay());
+        press("h", {}, key("Stay"));
+        expect(gameActions.hit).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe("digits 1-9", () => {
+      it("do nothing outside betting: playing, offers, results", () => {
+        for (const game of [pairInPlay(), offering(openOffers), { phase: POST_ROUND, hands: [hand(["10", "9"], { payout: 20 })] }]) {
+          const { gameActions, unmount } = show(game, { props: { chip: 5 } });
+          for (const k of ["1", "2", "9"]) press(k);
+          expect(gameActions.addBet).not.toHaveBeenCalled();
+          unmount();
+        }
+      });
+
+      it("the same digit twice selects then adds that chip; a different key between starts over", () => {
+        const onChip = vi.fn();
+        const { gameActions, rerender } = show({ phase: PRE_DEAL, betCircle: 5, betHistory: [5] }, { props: { chip: 1, onChip } });
+        press("3"); // $10
+        expect(onChip.mock.calls).toEqual([[10]]);
+        rerender(<Dock busy={false} chip={10} onChip={onChip} />); // the board applied the pick
+        press("3");
+        expect(gameActions.addBet.mock.calls).toEqual([[10]]);
+        press("3");
+        rerender(<Dock busy={false} chip={10} onChip={onChip} />);
+        press("c"); // clears, and breaks the pair
+        press("3");
+        expect(gameActions.addBet).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe("guards", () => {
+      it("a held key does nothing, and neither do Ctrl, Alt or Meta chords", () => {
+        const { gameActions } = show(pairInPlay());
+        press("h", { repeat: true });
+        for (const mod of ["ctrlKey", "altKey", "metaKey"]) press("h", { [mod]: true });
+        expect(gameActions.hit).not.toHaveBeenCalled();
+        press("h", { shiftKey: true }); // shift alone is just a capital
+        expect(gameActions.hit).toHaveBeenCalledOnce();
+      });
+
+      it("typing in an input, textarea, select or editable element does nothing", () => {
+        const { gameActions } = show(pairInPlay());
+        for (const el of [outside("input"), outside("textarea"), outside("select"), outside("div", { contenteditable: "true" })]) {
+          press("h", {}, el);
+          press("s", {}, el);
+        }
+        expect(gameActions.hit).not.toHaveBeenCalled();
+        expect(gameActions.stand).not.toHaveBeenCalled();
+      });
+
+      it("a dialog: keys from inside it, and from anywhere while one is open, do nothing", () => {
+        const { gameActions } = show(pairInPlay());
+        const dialog = outside("div", { role: "dialog" });
+        const inner = document.createElement("button");
+        dialog.append(inner);
+        press("h", {}, inner);
+        press("h"); // focus has slipped to the page behind it
+        expect(gameActions.hit).not.toHaveBeenCalled();
+        dialog.remove();
+        press("h");
+        expect(gameActions.hit).toHaveBeenCalledOnce();
+      });
+
+      it("an open menu stops the keys; a closed (hidden) one does not", () => {
+        const { gameActions } = show(pairInPlay());
+        const menu = outside("nav", { class: "menu" });
+        menu.hidden = true;
+        press("h");
+        expect(gameActions.hit).toHaveBeenCalledOnce();
+        menu.hidden = false;
+        press("h");
+        press("Enter");
+        expect(gameActions.hit).toHaveBeenCalledOnce();
+      });
+    });
+
+    describe("hints", () => {
+      const shortcuts = (container) => [...container.querySelectorAll(".dock button")].map((b) => [words(b), b.getAttribute("aria-keyshortcuts")]);
+
+      it("every key that has one says it: aria-keyshortcuts, and a kbd hint the screen reader skips", () => {
+        const { container } = show(pairInPlay());
+        expect(shortcuts(container)).toEqual([["Double", "D"], ["Split", "P"], ["Surrender", "R"], ["Triple", "T"], ["Stay", "S"], ["Hit", "H"]]);
+        for (const k of container.querySelectorAll("kbd")) expect(k.getAttribute("aria-hidden")).toBe("true");
+        cleanup();
+        const offers = show(offering(openOffers));
+        expect(shortcuts(offers.container)).toEqual([["Insurance $5", "I"], ["Even money", "E"], ["Surrender$5 back", "R"], ["No thanks", "N"]]);
+        cleanup();
+        const betting = show({ phase: PRE_DEAL, betCircle: 10 });
+        expect(shortcuts(betting.container).slice(-5)).toEqual([["Undo", "U"], ["Clear", "C"], ["Rebet", "B"], ["", "X"], ["Deal", "Space"]]);
+        cleanup();
+        const results = show({ phase: POST_ROUND, hands: [hand(["10", "9"], { payout: 20 })] });
+        expect(shortcuts(results.container)).toEqual([["Next hand", "Space"]]);
+      });
+
+      it("keys with no shortcut (the chips, Pause) say none", () => {
+        const { container } = show({ phase: PRE_DEAL, betCircle: 10, settings: settings({ resetInitialBet: true, autoDeal: true }) });
+        expect(key("Pause auto deal").hasAttribute("aria-keyshortcuts")).toBe(false);
+        expect(container.querySelector(".rc").hasAttribute("aria-keyshortcuts")).toBe(false);
+      });
+    });
+
+    describe("focus once the cards have landed", () => {
+      it("your move: Hit takes focus when busy clears, if focus was on nothing or in the dock", () => {
+        const { rerender } = show(playing(), { busy: true });
+        key("Stay").focus();
+        rerender(<Dock busy={false} />);
+        expect(document.activeElement).toBe(key("Hit"));
+      });
+
+      it("offers: the first offer takes focus when busy clears", () => {
+        const { rerender } = show(offering(openOffers), { busy: true });
+        key("No thanks").focus();
+        rerender(<Dock busy={false} />);
+        expect(document.activeElement).toBe(screen.getByRole("button", { name: /^Insurance/ }));
+      });
+
+      it("busy clearing never takes focus from a control outside the dock", () => {
+        const { rerender } = show(playing(), { busy: true });
+        const el = outside("button");
+        el.focus();
+        rerender(<Dock busy={false} />);
+        expect(document.activeElement).toBe(el);
+      });
     });
   });
 
