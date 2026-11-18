@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
+import { playSound, setSoundPrefs, vibrate } from "../../utils/sound";
 import { MOOD, resultsLine, verdictOf } from "../../utils/verdict";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandResult } from "../../utils/constants/handResult";
@@ -30,6 +31,7 @@ import "./GameBoard.css";
 
 // Mirrors the API's "balance under 100" top-up guard; the API is the authority.
 const TOP_UP_BELOW = 100;
+const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "lose", surrender: "lose" }; // verdict kind -> sound and buzz (a push has neither)
 
 export default function GameBoard() {
   const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound,
@@ -37,6 +39,7 @@ export default function GameBoard() {
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const navigate = useNavigate();
+  setSoundPrefs(settings); // in render: the seats' own effects (an automatic rebet on mount) run before any effect here
   const seatsRef = useRef(null);
   const layerRef = useRef(null);
   const stageInRef = useRef(null);
@@ -92,6 +95,14 @@ export default function GameBoard() {
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
   const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
+  // The round's one win or lose sound and buzz, when the verdict first shows (a push has neither).
+  const kind = phase === GamePhases.RESULTS ? verdict?.kind : null;
+  useEffect(() => {
+    const result = ROUND_SOUND[kind];
+    if (!result) return;
+    playSound(result);
+    vibrate(result);
+  }, [kind]);
   const shownDiscard = shuf && !shuf.emptied ? shuf.pile : discard;
 
   // The seats: the hands, or (before the deal) one empty seat holding the chips in the circle. Keyed by tag, never by index.

@@ -26,16 +26,17 @@ import "./pages.css";
 // change count and Save / Discard. Save sends only the keys that changed, the profile first (its failure never blocks the settings), and
 // a changed RESET_SETTINGS key asks "Start a new shoe?" first during a round. A dirty draft asks "Discard your changes?" before leaving.
 
-const SECTIONS = ["rules", "play", "chips", "look", "account"];
+const SECTIONS = ["rules", "play", "chips", "look", "sound", "account"];
 const PROFILE = ["userName", "email", "firstName", "lastName"];
 const PROFILE_FIELDS = { userName: ["Username", "username"], email: ["Email", "email"], firstName: ["First name", "given-name"], lastName: ["Last name", "family-name"] };
 const PLAY_KEYS = ["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay"];
 const LOOK_KEYS = ["feltTheme", "accent", "mode"];
+const SOUND_KEYS = ["soundOn", "soundVolume", "hapticsOn"];
 const MODES = [["dark", "Dark"], ["light", "Light"], ["system", "Device"]];
 const FAILED_SAVE = "Couldn't save your settings to your account. They apply here until you reload.";
 
 // The section a key belongs to: every key that is not listed is a table rule (or a House variation).
-const sectionOf = (key) => (PROFILE.includes(key) ? "account" : key === "chipValues" ? "chips" : LOOK_KEYS.includes(key) ? "look" : PLAY_KEYS.includes(key) ? "play" : "rules");
+const sectionOf = (key) => (PROFILE.includes(key) ? "account" : key === "chipValues" ? "chips" : LOOK_KEYS.includes(key) ? "look" : SOUND_KEYS.includes(key) ? "sound" : PLAY_KEYS.includes(key) ? "play" : "rules");
 const on = (v) => (v ? "on" : "off");
 
 export default function Settings() {
@@ -158,9 +159,10 @@ export default function Settings() {
     play: `${speedName(draft.playTimeout)} speed · totals ${on(draft.showTotals)} · count ${on(draft.showCardCount)}${draft.autoDeal ? " · auto deal" : ""}`,
     chips: `${chosenChips.length} of ${ALLOWED_CHIPS.length} chips`,
     look: `${FELTS.find(([k]) => k === draft.feltTheme)[1]} felt · ${ACCENTS.find(([k]) => k === draft.accent)[1]} · ${MODES.find(([k]) => k === draft.mode)[1]}`,
+    sound: `Sound ${on(draft.soundOn)}${draft.soundOn ? ` ${draft.soundVolume}%` : ""} · vibration ${on(draft.hapticsOn)}`,
     account: `${draft.firstName} ${draft.lastName}`.trim() || "No name",
   };
-  const titles = { rules: RULES_TITLE, play: "Gameplay", chips: "Chips", look: "Appearance", account: "Account" };
+  const titles = { rules: RULES_TITLE, play: "Gameplay", chips: "Chips", look: "Appearance", sound: "Sound & haptics", account: "Account" };
   const dirtyIn = new Set(changed.map(sectionOf));
   const section = (id, children) => (
     <Section id={id} title={titles[id]} summary={summary[id]} dirty={dirtyIn.has(id)} open={open === id} onToggle={toggleSection(id)}>{children}</Section>
@@ -226,6 +228,13 @@ export default function Settings() {
           <Row id="mode" label={text("mode").label} hint={text("mode").hint} layout="look">
             {MODES.map(([key, name]) => <Radio key={key} checked={draft.mode === key} data-pick-mode={key} onClick={() => edit({ mode: key })}><span>{name}</span></Radio>)}
           </Row>
+        </>)}
+
+        {section("sound", <>
+          {flag("soundOn")}
+          <Slider id="soundVolume" label={text("soundVolume").label} hint={text("soundVolume").hint} min={SETTING_RANGES.soundVolume[0]} max={SETTING_RANGES.soundVolume[1]}
+            step={5} value={draft.soundVolume} text={`${draft.soundVolume}%`} disabled={!draft.soundOn} onChange={(v) => edit({ soundVolume: v })} />
+          {flag("hapticsOn")}
         </>)}
 
         {section("account", <>

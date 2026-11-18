@@ -92,7 +92,7 @@ describe("ruleCatalog (#91, #84)", () => {
   });
 
   it("Gameplay keeps its settings: names, the Show hand totals subtitle, and the Auto deal 'Needs Rebet' subtitle", () => {
-    expect(Object.keys(APP_SETTINGS)).toEqual(["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "chipValues", "feltTheme", "accent", "mode"]);
+    expect(Object.keys(APP_SETTINGS)).toEqual(["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "soundOn", "soundVolume", "hapticsOn", "chipValues", "feltTheme", "accent", "mode"]);
     expect(APP_SETTINGS.playTimeout.label).toBe("Game speed");
     expect(APP_SETTINGS.showTotals).toMatchObject({ label: "Show hand totals", sub: "Yours and the dealer's" });
     expect(APP_SETTINGS.autoDeal).toMatchObject({ label: "Auto deal", sub: "Needs Rebet" });

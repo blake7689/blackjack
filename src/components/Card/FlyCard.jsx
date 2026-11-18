@@ -1,6 +1,7 @@
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
 import { EASING, FLIP_EASING, GLIDE, SIDE_ROOM, TURN_AT, flightFrames, hold, markLanded, queue, reducedMotion, reserve, spots } from "../../utils/cardAnimation";
+import { playSound } from "../../utils/sound";
 import "./Card.css";
 
 // A card on the table (#81): `.fan-slot` (carries the hand's step and `data-fk`, the key useSmoothRow reads) > `.card` >
@@ -81,6 +82,7 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     };
     const t1 = setTimeout(() => {
       copy.style.visibility = "visible";
+      playSound("deal");
       anim = copy.animate(flightFrames(dx, dy, sideways ? 90 : 0), { duration: timing.slide, easing: EASING, fill: "forwards" });
       if (!faced) anim.onfinish = done;
       tick();
@@ -104,6 +106,7 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     if (!faceId || flipped || !shown) return;
     if (reducedMotion()) { setFlipped(true); return; }
     const undo = reserve(performance.now() + timing.flip + timing.gap);
+    playSound("flip");
     setTurning(true);
     const an = innerRef.current.animate([{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }],
       { duration: timing.flip, easing: FLIP_EASING, fill: "forwards" });

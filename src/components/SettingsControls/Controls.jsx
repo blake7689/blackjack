@@ -121,16 +121,16 @@ export function Switch({ id, label, sub, hint, checked, disabled, onChange }) {
 }
 
 // A range with its label, a live value and, optionally, named stops under the track (`stops`: [[value, name, position out of 1000]], `tail` the
-// last name, `current` the name of the stop that is on). //
-export function Slider({ id, label, hint, min, max, step, value, text, onChange, stops, tail, current }) {
+// last name, `current` the name of the stop that is on). `disabled` greys it out (grey, never the accent). //
+export function Slider({ id, label, hint, min, max, step, value, text, onChange, stops, tail, current, disabled }) {
   return (
-    <div className="slider">
+    <div className={`slider${disabled ? " off" : ""}`}>
       <div className="top-l">
         <label htmlFor={`in-${id}`}>{label}<HintI id={hintId(id)} text={hint} /></label>
         <output htmlFor={`in-${id}`}>{text}</output>
       </div>
       <HintText id={hintId(id)} text={hint} />
-      <input id={`in-${id}`} type="range" min={min} max={max} step={step} value={value} aria-describedby={hint ? hintId(id) : undefined}
+      <input id={`in-${id}`} type="range" min={min} max={max} step={step} value={value} disabled={disabled} aria-describedby={hint ? hintId(id) : undefined}
         style={{ "--pct": `${((value - min) / (max - min)) * 100}%` }} onChange={(e) => onChange(Number(e.target.value))} />
       {stops && (
         <div className="stops" aria-hidden="true">

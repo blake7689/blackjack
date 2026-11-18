@@ -11,6 +11,7 @@ import { handLabel } from "../../utils/handDisplay";
 import { cents } from "../../utils/blackjackLogic";
 import { money } from "../../utils/money";
 import { tagOf } from "../../utils/verdict";
+import { playSound } from "../../utils/sound";
 import "./PlayerHand.css";
 import { GamePhases } from "../../utils/constants/gamePhases";
 
@@ -69,13 +70,18 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
   // same motion, and none of it reserves or holds the board (a tap must never delay the dock).
   const motion = enabled && !reducedMotion();
   const mainShown = useArrival(hand.bet - dbl, motion && betting, (d) => {
+    if (betting && d > 0) playSound("chip");
     if (!motion || !betting) return 0;
     const spot = seatRef.current.querySelector(".spot");
     if (d > 0) return chipsToSpot(spot, d);
     stackBack(spot, -d);
     return 0;
   });
-  const side = (kind) => (d) => (motion && d > 0 && seatRef.current.querySelector(`.side-spot.${kind}`) ? stackToSide(seatRef.current.querySelector(`.side-spot.${kind}`), d) : 0);
+  const side = (kind) => (d) => {
+    if (d > 0) playSound("chip");
+    const spot = motion && d > 0 && seatRef.current.querySelector(`.side-spot.${kind}`);
+    return spot ? stackToSide(spot, d) : 0;
+  };
   const dblShown = useArrival(dbl, false, side("dbl"));
   const insShown = useArrival(ins, false, side("ins"));
 

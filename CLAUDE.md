@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
@@ -221,6 +221,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (`lastKey`: any other key, even an ignored one, starts over). The board has ONE polite live region, the `.msg` line: at the results CenterMessage carries `resultsLine` (utils/verdict.js: each hand's outcome and total, then the dealer's; totals
   leave it with Show hand totals off, "blackjack" stays) in a hidden span. Never add a second `aria-live` or a hidden duplicate of the line: Playwright's strict `getByText` and the jsdom `getByText` queries would find two. Focus moves per phase in
   Dock's effect (deps `phase`, `openOffers`, `busy`), only from nothing or the dock. Targets are 44 px (inline links get it from an ::after or padding, never a visible change); the 12 px text floor and the `--tx-3` / accent-text tokens follow DESIGN section 3.
+- Sound (#86): settings `soundOn` / `hapticsOn` / `soundVolume`; every sound is synthesized in `src/utils/sound.js` (no audio files). `setSoundPrefs` is called from GameBoard; deal/flip play in `FlyCard`, chip in `PlayerHand`, shuffle in `useShuffle`, win/lose in GameBoard. `sound.js` must never use `Math.random` (its noise uses a local LCG; the e2e seeds depend on the draw count). The disabled Volume slider dims only the input (`.slider.off input`) and keeps `--tx-2` on its output, or axe color-contrast fails.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

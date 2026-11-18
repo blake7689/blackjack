@@ -44,6 +44,9 @@ export const initialGameState = {
     accent: "emerald",
     mode: "dark", // "system" follows the device
     showTotals: true,
+    soundOn: false, // table sounds and vibration (#86, utils/sound.js): display settings, not rules
+    soundVolume: 50, // 0-100
+    hapticsOn: false,
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -77,7 +80,7 @@ export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehavio
   "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance", "splitDeal"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
-export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000] };
+export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000], soundVolume: [0, 100] };
 
 // Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender, version 4
 // insurance, version 5 splitDeal; every save before that is `v: 1`. A missing rule key in an older object gets today's behaviour from
