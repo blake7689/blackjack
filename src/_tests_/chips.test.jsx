@@ -118,7 +118,7 @@ describe("ChipSymbols (the sprite's chips)", () => {
   const sprite = () => render(<svg><ChipSymbols /></svg>).container;
   const face = (c, v, plain = false) => c.querySelector(`symbol[id="chip-${v}${plain ? "-p" : ""}"]`);
   const colour = (c, v) => ({ body: face(c, v).querySelector("circle").getAttribute("fill"), ink: face(c, v).querySelector("text")?.getAttribute("fill") });
-  const BODY = { 1: "#ebe8e1", 5: "#a5222b", 10: "#1f4a96", 25: "#1e6a45", 50: "#c8682a", 100: "#1c1c21", 1000: "#d6a92c", 5000: "#5e3a24", 10000: "#d4709a", 20000: "#7fb6dc", 50000: "#5b3a8f", 100000: "#8d9296" };
+  const BODY = { 1: "#ebe8e1", 5: "#a5222b", 10: "#1f4a96", 25: "#1e6a45", 50: "#a8521a", 100: "#1c1c21", 1000: "#d6a92c", 5000: "#5e3a24", 10000: "#d4709a", 20000: "#7fb6dc", 50000: "#5b3a8f", 100000: "#8d9296" };
   const INK = { 1: "#1f3473", 5: "#f6f1e7", 10: "#f6f1e7", 25: "#f6f1e7", 50: "#fff6ea", 100: "#f2ecdf", 1000: "#2a2414", 5000: "#f4e6c8", 10000: "#3a0f22", 20000: "#0c2538", 50000: "#f6f0ff", 100000: "#121517" };
   const LABEL = { 1: "1", 5: "5", 10: "10", 25: "25", 50: "50", 100: "100", 1000: "1K", 5000: "5K", 10000: "10K", 20000: "20K", 50000: "50K", 100000: "100K" };
 
@@ -158,14 +158,8 @@ describe("ChipSymbols (the sprite's chips)", () => {
   const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * lin(n >> 16) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255); };
   const ratio = (a, b) => (Math.max(lum(a), lum(b)) + 0.05) / (Math.min(lum(a), lum(b)) + 0.05);
 
-  it.each(ALLOWED_CHIPS.filter((v) => v !== 50))("the $%i chip's numeral passes AA contrast on its face", (v) => {
+  it.each(ALLOWED_CHIPS)("the $%i chip's numeral passes AA contrast on its face", (v) => {
     expect(ratio(BODY[v], INK[v])).toBeGreaterThanOrEqual(4.5);
-  });
-
-  // KNOWN FAILURE (reported on #82): the colours are the approved table's, and the $50 numeral (#fff6ea on #c8682a) is 3.6:1. `it.fails` keeps the suite
-  // green while it is open and goes red the day it is fixed (then turn it into the plain test above and drop it from the filter).
-  it.fails("the $50 chip's numeral passes AA contrast on its face", () => {
-    expect(ratio(BODY[50], INK[50])).toBeGreaterThanOrEqual(4.5);
   });
 });
 

@@ -8,7 +8,7 @@ const CHIP_COLOURS = {
   5: { body: "#a5222b", print: "#f1ebe0", mid: "#9a1f27", ink: "#f6f1e7", side: "#7b161d" },
   10: { body: "#1f4a96", print: "#f1ebe0", mid: "#1c4389", ink: "#f6f1e7", side: "#143672" },
   25: { body: "#1e6a45", print: "#f1ebe0", mid: "#1b603f", ink: "#f6f1e7", side: "#134d31" },
-  50: { body: "#c8682a", print: "#1d2b4d", mid: "#bf6227", ink: "#fff6ea", side: "#9a4b19" },
+  50: { body: "#a8521a", print: "#1d2b4d", mid: "#a04d18", ink: "#fff6ea", side: "#7e3d12" },
   100: { body: "#1c1c21", print: "#e9e2d2", mid: "#232329", ink: "#f2ecdf", side: "#0b0b0d" },
   1000: { body: "#d6a92c", print: "#22201a", mid: "#cfa128", ink: "#2a2414", side: "#a8831a" },
   5000: { body: "#5e3a24", print: "#ead8b2", mid: "#56351f", ink: "#f4e6c8", side: "#3e2615" },
