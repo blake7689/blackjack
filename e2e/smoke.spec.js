@@ -15,7 +15,7 @@ test('the tab is titled Blakejack and <html> carries the default theme (#79)', a
 test('cold-start sign-in waits out a slow API (#75)', async ({ page }) => {
   const api = await stubApi(page, { loginDelayMs: 15_000, meDelayMs: 11_000 }); // both past the old 10 s limit
   await submitLogin(page);
-  await expect(page.getByText(/waking up/)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/waking up/i)).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 35_000 }); // a signed-in player lands on the table
   expect(api.failed).toEqual([]); // no request was aborted early
 });

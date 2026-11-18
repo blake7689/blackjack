@@ -692,7 +692,6 @@ describe("Settings: the unsaved-changes guard", () => {
   });
 
   it("the header's Home, Settings and Log out each ask first, and carry on after Discard and leave", () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
     const { gameActions, playerCtx } = renderUI(<><Header /><Settings /></>, { path: "/settings" });
     dirty();
     fireEvent.click(screen.getByRole("button", { name: "Home" }));
@@ -710,6 +709,7 @@ describe("Settings: the unsaved-changes guard", () => {
     expect(screen.getByRole("dialog", { name: "Discard your changes?" })).toBeTruthy();
     expect(playerCtx.logout).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Log out?" })).getByRole("button", { name: "Log out" }));
     expect(playerCtx.logout).toHaveBeenCalledTimes(1);
     expect(location()).toBe("/");
   });
@@ -732,28 +732,28 @@ describe("Settings: the unsaved-changes guard", () => {
     expect(location()).toBe("/settings");
   });
 
-  it("the page's own Log out asks first too, then asks 'Log out?'", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+  it("the page's own Log out asks first too, then asks 'Log out?' in its own dialog", () => {
     const { playerCtx } = open();
     dirty();
     show("Account");
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
     expect(screen.getByRole("dialog", { name: "Discard your changes?" })).toBeTruthy();
-    expect(confirm).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
-    expect(confirm).toHaveBeenCalledWith("Log out?");
+    expect(playerCtx.logout).not.toHaveBeenCalled();
+    fireEvent.click(within(screen.getByRole("dialog", { name: "Log out?" })).getByRole("button", { name: "Log out" }));
     expect(playerCtx.logout).toHaveBeenCalled();
   });
 
-  it("with nothing changed, the page's Log out goes straight to its own confirm; declining stays signed in", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+  it("with nothing changed, the page's Log out goes straight to its own Log out? dialog; Stay logged in keeps the session", () => {
     const { playerCtx, gameActions } = open();
     show("Account");
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    expect(screen.getByRole("dialog", { name: "Log out?" })).toBeTruthy(); // not "Discard your changes?": nothing was changed
+    fireEvent.click(screen.getByRole("button", { name: "Stay logged in" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(playerCtx.logout).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Log out" }));
-    expect(confirm).toHaveBeenCalledTimes(2);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Log out" }));
     expect(playerCtx.logout).toHaveBeenCalledTimes(1);
     expect(gameActions.resetGame).toHaveBeenCalled();
     expect(location()).toBe("/");

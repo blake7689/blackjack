@@ -75,7 +75,7 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     const land = () => { cancelAnimationFrame(raf); follow(); setShown(true); };
     const done = () => { land(); if (faced) setFlipped(true); }; // the turn is over: the real card is face up
     const turnOver = () => {
-      copy.querySelector(".cf").innerHTML = `<img src="/cards/${card.rank}_of_${card.suit}.png" alt="" draggable="false">`;
+      copy.querySelector(".cf").innerHTML = `<img src="/cards/${card.rank}_of_${card.suit}.webp" alt="" draggable="false">`;
       turn = copy.firstChild.animate([{ transform: "rotateY(0deg)" }, { transform: "rotateY(180deg)" }], { duration: timing.flip, easing: FLIP_EASING, fill: "forwards" });
       lift = copy.animate([{ scale: 1 }, { scale: 1.07, offset: 0.5 }, { scale: 1 }], { duration: timing.flip, easing: FLIP_EASING }); // rises 7 % edge-on
       turn.onfinish = done;
@@ -128,7 +128,7 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
       <div ref={ref} className={`card fly-card ${flipped ? "up" : turning ? "turning" : "down"}`} style={shown ? undefined : { visibility: "hidden" }}>
         <div ref={innerRef} className="cin fly-inner">
           <div className="cf">
-            {card && shown && <img className="fly-front" src={`/cards/${card.rank}_of_${card.suit}.png`} alt={`${card.rank} of ${card.suit}`} draggable={false} />}
+            {card && shown && <img className="fly-front" src={`/cards/${card.rank}_of_${card.suit}.webp`} alt={`${card.rank} of ${card.suit}`} draggable={false} />}
           </div>
           <div className="cb fly-back" aria-hidden="true"><svg viewBox="0 0 250 363" focusable="false"><use href="#cardback" /></svg></div>
         </div>

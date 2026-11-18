@@ -20,9 +20,11 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
 // loginError: { status, message } makes POST /auth/login fail with it (a sign-in refusal).
+// meFailures: how many GET /player/me calls answer 503 before it answers normally (a restore that gets no answer: the Error screen, #87).
 // settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real).
-export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDelayMs = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
+export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
+  let meFailuresLeft = meFailures;
   const replies = [...topUps];
   const stub = { bets: [], settles: [], topups: [], saves: [], failed: [], unknown: [] };
   stubs.set(page, stub);
@@ -40,6 +42,7 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDel
         return json({ accessToken: 'e2e-token' });
       case 'GET /player/me':
         await hold(meDelayMs);
+        if (meFailuresLeft-- > 0) return json({ message: 'e2e stub: the API is unavailable' }, 503);
         return json({ ...PLAYER, credits });
       case 'GET /player/me/settings':
         return json(settings);

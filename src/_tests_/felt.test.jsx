@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { useRef } from "react";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import FeltPrint from "../components/FeltPrint/FeltPrint";
 import Shoe from "../components/Shoe/Shoe";
@@ -148,12 +148,27 @@ describe("Shoe (#81)", () => {
 describe("the table's felt (#81)", () => {
   const playing = { phase: GamePhases.PLAYER_TURN, dealer: { cards: stackedShoe(["6"]), dealerDisplayTotal: 6 } };
 
-  it("has the felt, its rail, the shoe and the print on the stage, and the print opens the rules in Settings", () => {
+  it("has the felt, its rail, the shoe and the print on the stage, and the print opens the Table rules sheet, which Escape closes", () => {
     const { container } = renderUI(<GameBoard />, { game: playing });
     expect(container.querySelector(".room > .felt > .rail")).not.toBeNull();
     expect(container.querySelector(".felt .main-area.stage .stage-in .shoe .deck-stack")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Table rules" }));
-    expect(screen.getByTestId("location").textContent).toBe("/settings#rules");
+    expect(screen.getByRole("dialog", { name: "Table rules" })).toBeTruthy();
+    expect(screen.getByTestId("location").textContent).toBe("/"); // stays on the table
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("the menu's Table rules opens the same sheet over the table, and closing it puts focus back on the menu button", () => {
+    renderUI(<GameBoard />, { game: playing });
+    const menuButton = screen.getByRole("button", { name: "Menu" });
+    fireEvent.click(menuButton);
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Menu" })).getByRole("button", { name: "Table rules" }));
+    expect(screen.getByRole("dialog", { name: "Table rules" })).toBeTruthy();
+    expect(screen.getByTestId("location").textContent).toBe("/");
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(menuButton);
   });
 
   it("the discard pile counts what was dealt and has left the table", () => {

@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
@@ -23,6 +22,7 @@ import TopBar from "../TopBar/TopBar";
 import DealerArea from "../DealerArea/DealerArea";
 import Shoe from "../Shoe/Shoe";
 import FeltPrint from "../FeltPrint/FeltPrint";
+import RulesSheet from "../RulesSheet/RulesSheet";
 import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
 import Dock from "../Dock/Dock";
@@ -38,7 +38,7 @@ export default function GameBoard() {
     seenIds, shoeSeq, shoeMid, nextHandTag } = useGameState();
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
-  const navigate = useNavigate();
+  const [rules, setRules] = useState(false); // the Table rules sheet (#87)
   setSoundPrefs(settings); // in render: the seats' own effects (an automatic rebet on mount) run before any effect here
   const seatsRef = useRef(null);
   const layerRef = useRef(null);
@@ -123,7 +123,7 @@ export default function GameBoard() {
     <FlightContext.Provider value={flight}>
     <div className={`board table-screen${busy ? " busy" : ""}`}>
       <ShuffleFx set={setShuf} seq={shoeSeq} mid={shoeMid} speed={speed} enter={phase === GamePhases.PRE_DEAL && seenIds.length === 0} pile={discard + onTable} />
-      <TopBar tapEnabled={tapEnabled} />
+      <TopBar tapEnabled={tapEnabled} onRules={() => setRules(true)} />
 
       {/* THE FELT (#81): the cloth, its rail, and the table on it */}
       <div className="room">
@@ -140,7 +140,7 @@ export default function GameBoard() {
             {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}
           </div>
 
-          <FeltPrint settings={settings} onOpen={() => navigate("/settings#rules")} onDraw={centrePrint} />
+          <FeltPrint settings={settings} onOpen={() => setRules(true)} onDraw={centrePrint} />
           <div className="mid">
             <CenterMessage
               gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}
@@ -184,6 +184,7 @@ export default function GameBoard() {
 
       <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} />
       <div className="flight-layer" ref={layerRef} />
+      {rules && <RulesSheet settings={settings} onClose={() => setRules(false)} />}
     </div>
     </FlightContext.Provider>
   );

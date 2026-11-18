@@ -1,0 +1,18 @@
+/* The Table rules sheet (#87): a bottom sheet on phones, a centred panel from 720 px (the mockup's #rulesDlg). Same overlay as the confirms (.dlg-overlay). */
+.sheet-overlay { position: fixed; inset: 0; z-index: 2000; display: flex; align-items: flex-end; justify-content: center; background: var(--scrim); backdrop-filter: blur(3px); }
+.sheet { box-sizing: border-box; width: 100%; max-width: 560px; max-height: min(86dvh, 760px); display: flex; border-radius: var(--r5) var(--r5) 0 0; background: var(--surf); color: var(--tx); box-shadow: 0 -20px 60px rgb(0 0 0 / .5); padding-bottom: env(safe-area-inset-bottom, 0px); animation: sheetUp var(--t-state) var(--e-out); }
+@media (min-width: 720px) { .sheet-overlay { align-items: center; } .sheet { border-radius: var(--r5); } }
+.sheet-in { box-sizing: border-box; width: 100%; padding: 8px 20px 20px; overflow-y: auto; }
+.sheet-grab { width: 40px; height: 4px; border-radius: 2px; background: var(--line-2); margin: 4px auto 12px; }
+.sheet-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sheet-h h2 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 22px; }
+.sheet-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 6px 0 4px; font-size: 13px; color: var(--tx-2); }
+.sheet-meta b { color: var(--tx); font-weight: 700; }
+.sheet-meta .chiplet { padding: 2px 10px; border-radius: 99px; background: var(--surf-3); color: var(--tx); font-weight: 700; font-size: 13px; }
+.sheet-grp { margin-top: 14px; }
+.sheet-grp h3 { margin: 0 0 4px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--tx-3); }
+.sheet-grp ul { margin: 0; padding: 0; list-style: none; }
+.sheet-grp li { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.sheet-act { display: flex; justify-content: flex-end; margin-top: 18px; }
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet .icon-btn:hover { background: var(--surf-2); }
