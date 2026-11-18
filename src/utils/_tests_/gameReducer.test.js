@@ -493,6 +493,25 @@ describe("saved settings (#36)", () => {
       .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
   });
 
+  it("sound and haptics (#86) default to off, at volume 50, and are not table rules", () => {
+    expect(defaults).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings(undefined)).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings({ v: 1 })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false }); // an old save has no legacy value to restore
+    expect(SETTING_RANGES.soundVolume).toEqual([0, 100]);
+    for (const key of ["soundOn", "soundVolume", "hapticsOn"]) expect(RESET_SETTINGS).not.toContain(key); // changing them never deals a new shoe
+  });
+
+  it("keeps valid sound settings, clamps the volume and rounds it, and drops wrong types to the defaults (#86)", () => {
+    expect(sanitizeSettings({ soundOn: true, soundVolume: 80, hapticsOn: true })).toMatchObject({ soundOn: true, soundVolume: 80, hapticsOn: true });
+    expect(sanitizeSettings({ soundVolume: 0 }).soundVolume).toBe(0); // 0 is a real volume, not "missing"
+    expect(sanitizeSettings({ soundVolume: 100 }).soundVolume).toBe(100);
+    expect(sanitizeSettings({ soundVolume: 250 }).soundVolume).toBe(100);
+    expect(sanitizeSettings({ soundVolume: -20 }).soundVolume).toBe(0);
+    expect(sanitizeSettings({ soundVolume: 33.6 }).soundVolume).toBe(34);
+    expect(sanitizeSettings({ soundOn: "true", soundVolume: "80", hapticsOn: 1 })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings({ soundOn: null, soundVolume: null, hapticsOn: [true] })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+  });
+
   it("between rounds deals a new shoe when a table setting changed, otherwise just applies", () => {
     const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
     const fresh = stackedShoe(["4", "5", "6"]);

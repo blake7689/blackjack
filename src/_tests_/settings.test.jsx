@@ -10,7 +10,7 @@ import { leaveGuard } from "../utils/leaveGuard";
 import { DEFAULT_CHIP_VALUES } from "../utils/chips";
 
 // The Settings page (#84): one page, an accordion of sections, one draft, one sticky Save / Discard bar.
-const SECTION_NAMES = ["Table rules", "Gameplay", "Chips", "Appearance", "Account"];
+const SECTION_NAMES = ["Table rules", "Gameplay", "Chips", "Appearance", "Sound & haptics", "Account"];
 const location = () => screen.getByTestId("location").textContent;
 const flush = async () => { for (let i = 0; i < 4; i++) await act(async () => {}); };
 const sectionButton = (name) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
@@ -58,12 +58,12 @@ describe("Settings: the page", () => {
     expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
   });
 
-  it("has a Table button, a title, five sections and no tabs; nothing is changed, so there is no Save bar", () => {
+  it("has a Table button, a title, six sections and no tabs; nothing is changed, so there is no Save bar", () => {
     open();
     expect(screen.getByRole("button", { name: "Table" })).toBeTruthy();
     expect(screen.queryByText("Back to game")).toBeNull();
     expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
-    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent.replace(/\s*(Vegas|Normal|\d+ of|Green|Test).*$/, ""))).toEqual(SECTION_NAMES);
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent.replace(/\s*(Vegas|Normal|\d+ of|Green|Sound o|Test).*$/, ""))).toEqual(SECTION_NAMES);
     expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByText("Dev")).toBeNull();
@@ -91,7 +91,7 @@ describe("Settings: the page", () => {
     expect(expanded()).toEqual([]);
   });
 
-  it.each([["rules", "Table rules"], ["play", "Gameplay"], ["chips", "Chips"], ["look", "Appearance"], ["account", "Account"]])("the link /settings#%s opens %s", (hash, name) => {
+  it.each([["rules", "Table rules"], ["play", "Gameplay"], ["chips", "Chips"], ["look", "Appearance"], ["sound", "Sound & haptics"], ["account", "Account"]])("the link /settings#%s opens %s", (hash, name) => {
     renderUI(<Settings />, { path: `/settings#${hash}` });
     expect(expanded()).toEqual([name]);
   });
@@ -110,6 +110,7 @@ describe("Settings: the page", () => {
     expect(sectionButton("Gameplay").textContent).toContain("Normal speed · totals on · count on");
     expect(sectionButton("Chips").textContent).toContain("12 of 12 chips");
     expect(sectionButton("Appearance").textContent).toContain("Green felt · Emerald · Dark");
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound off · vibration off");
     expect(sectionButton("Account").textContent).toContain("Test Er");
   });
 
@@ -1102,10 +1103,122 @@ describe("Settings: Delete profile", () => {
   });
 });
 
+describe("Settings: Sound & haptics (#86)", () => {
+  const volume = () => screen.getByRole("slider", { name: "Volume" });
+  const soundSwitch = () => screen.getByRole("switch", { name: /^Sound/ });
+  const hapticsSwitch = () => screen.getByRole("switch", { name: /^Vibration/ });
+
+  it("the header sums it up in both states: Sound and Vibration off, then Sound on with its volume and Vibration on", () => {
+    open();
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound off · vibration off");
+    cleanup();
+    open(withSettings({ soundOn: true, soundVolume: 80, hapticsOn: true }));
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound on 80% · vibration on");
+    cleanup();
+    open(withSettings({ soundOn: true, soundVolume: 0, hapticsOn: false }));
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound on 0% · vibration off"); // a volume of 0 is shown, not hidden
+  });
+
+  it("the summary follows the draft", () => {
+    open();
+    show("Sound & haptics");
+    fireEvent.click(soundSwitch());
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound on 50% · vibration off");
+    fireEvent.change(volume(), { target: { value: "75" } });
+    fireEvent.click(hapticsSwitch());
+    expect(sectionButton("Sound & haptics").textContent).toContain("Sound on 75% · vibration on");
+  });
+
+  it("holds Sound, Volume and Vibration, all off by default, with the volume at 50%", () => {
+    open();
+    show("Sound & haptics");
+    expect(soundSwitch().checked).toBe(false);
+    expect(hapticsSwitch().checked).toBe(false);
+    expect(volume().value).toBe("50");
+    expect([volume().min, volume().max, volume().step]).toEqual(["0", "100", "5"]);
+    expect(screen.getByText("50%").tagName).toBe("OUTPUT");
+  });
+
+  it("Volume is disabled and greyed while Sound is off, and works once Sound is on (and greys again when it is turned off)", () => {
+    open();
+    show("Sound & haptics");
+    expect(volume().disabled).toBe(true);
+    expect(volume().closest(".slider").classList.contains("off")).toBe(true);
+    fireEvent.click(soundSwitch());
+    expect(volume().disabled).toBe(false);
+    expect(volume().closest(".slider").classList.contains("off")).toBe(false);
+    fireEvent.change(volume(), { target: { value: "20" } });
+    expect(volume().value).toBe("20");
+    expect(screen.getByText("20%")).toBeTruthy();
+    fireEvent.click(soundSwitch());
+    expect(volume().disabled).toBe(true);
+    expect(volume().value).toBe("20"); // kept, only greyed
+  });
+
+  it("Vibration does not depend on Sound", () => {
+    open();
+    show("Sound & haptics");
+    fireEvent.click(hapticsSwitch());
+    expect(hapticsSwitch().checked).toBe(true);
+    expect(volume().disabled).toBe(true);
+  });
+
+  it("each control has its label, its hint as the accessible description, and an aria-hidden 'i'", () => {
+    open();
+    show("Sound & haptics");
+    for (const [control, id, hint] of [[soundSwitch(), "soundOn", "Table sounds"], [volume(), "soundVolume", "Sound level"], [hapticsSwitch(), "hapticsOn", "Buzz on key moments"]]) {
+      expect(control.getAttribute("aria-describedby")).toBe(`hd-${id}`);
+      expect(document.getElementById(`hd-${id}`).textContent).toBe(hint);
+      const mark = document.querySelector(`.hint-i[data-for="hd-${id}"]`);
+      expect(mark.dataset.hint).toBe(hint);
+      expect(mark.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
+  it("a header shows its dot, spoken as 'unsaved changes', for a sound change only; Discard clears it and the controls", () => {
+    open();
+    show("Sound & haptics");
+    fireEvent.click(soundSwitch());
+    expect(screen.getByRole("button", { name: /^Sound & haptics, unsaved changes/ })).toBeTruthy();
+    for (const name of ["Table rules", "Gameplay", "Chips", "Appearance", "Account"]) expect(sectionButton(name).textContent, name).not.toMatch(/unsaved/);
+    expect(document.querySelectorAll(".sec-dot")).toHaveLength(1);
+    fireEvent.click(discardButton());
+    expect(document.querySelectorAll(".sec-dot")).toHaveLength(0);
+    expect(soundSwitch().checked).toBe(false);
+  });
+
+  it("Save sends only the sound keys that changed, in one changeSettings, and the controls keep the saved values", async () => {
+    const { gameActions } = openLive();
+    show("Sound & haptics");
+    fireEvent.click(soundSwitch());
+    fireEvent.change(volume(), { target: { value: "70" } });
+    fireEvent.click(saveButton());
+    await flush();
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ soundOn: true, soundVolume: 70 }]]);
+    expect(note().textContent).toBe("Saved");
+    expect(soundSwitch().checked).toBe(true);
+    expect(volume().value).toBe("70");
+    fireEvent.click(hapticsSwitch());
+    fireEvent.click(saveButton());
+    await flush();
+    expect(gameActions.changeSettings.mock.calls[1]).toEqual([{ hapticsOn: true }]);
+  });
+
+  it("a sound change is a display setting: saved mid-round it never asks 'Start a new shoe?'", async () => {
+    const { gameActions } = openLive({ phase: GamePhases.PLAYER_TURN });
+    show("Sound & haptics");
+    fireEvent.click(soundSwitch());
+    fireEvent.click(saveButton());
+    await flush();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ soundOn: true }]]);
+  });
+});
+
 describe("Settings: hints", () => {
   const controls = () => [...screen.queryAllByRole("radiogroup"), ...screen.queryAllByRole("switch"), ...screen.queryAllByRole("slider"), ...screen.queryAllByRole("group")];
 
-  it.each(["Table rules", "Gameplay", "Chips", "Appearance"])("every setting in %s has its 'i', and the same words are its accessible description", (name) => {
+  it.each(["Table rules", "Gameplay", "Chips", "Appearance", "Sound & haptics"])("every setting in %s has its 'i', and the same words are its accessible description", (name) => {
     open(withSettings({ resetInitialBet: true, autoDeal: true }));
     show(name);
     const found = controls().filter((c) => c.getAttribute("aria-describedby")?.startsWith("hd-"));

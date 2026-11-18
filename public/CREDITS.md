@@ -20,6 +20,10 @@ The CSS names them `--font-display`, `--font-ui`, `--font-print-caps` and `--fon
 
 Clash Display and Satoshi (Fontshare / Indian Type Foundry), the faces the design mockup was drawn with, are **not used**: their licence forbids redistributing the font files, which includes committing them to a public repository. Figtree and Familjen Grotesk stand in for them.
 
+## Sounds
+
+All six table sounds (deal, flip, chip, shuffle, win, lose) are generated in code with the Web Audio API (oscillators and filtered noise) in `src/utils/sound.js`. There are no audio files and no third-party assets, so no licence or attribution applies.
+
 ## Wordmark and favicon
 
 The "Blakejack" wordmark (`public/brand/`, `src/components/Wordmark/`) and `public/favicon.svg` are drawn for this project from plain paths; no font is involved.

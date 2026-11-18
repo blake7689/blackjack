@@ -25,12 +25,13 @@ const preset = (page) => page.getByRole('button', { name: /^Preset/ });
 test('every section starts closed, one opens at a time, and each header sums up its values (#84)', async ({ page }) => {
   await stubApi(page);
   await openSettings(page, null);
-  const names = ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Account'];
+  const names = ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Sound & haptics', 'Account'];
   for (const name of names) await expect(section(page, name)).toHaveAttribute('aria-expanded', 'false');
   await expect(section(page, 'Table rules')).toContainText('Vegas');
   await expect(section(page, 'Table rules')).toContainText('house edge');
   await expect(section(page, 'Chips')).toContainText('12 of 12 chips');
   await expect(section(page, 'Appearance')).toContainText('Green felt');
+  await expect(section(page, 'Sound & haptics')).toContainText('Sound off · vibration off');
   await expect(page.getByRole('tab')).toHaveCount(0);
 
   await section(page, 'Table rules').click();
@@ -363,8 +364,8 @@ test('on a phone the page does not scroll sideways and every control is at least
   };
 
   const headers = await tooSmall(page.locator('.settings-screen .sec-h'));
-  expect(headers).toEqual({ count: 5, found: [] });
-  for (const name of ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Account']) {
+  expect(headers).toEqual({ count: 6, found: [] });
+  for (const name of ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Sound & haptics', 'Account']) {
     await section(page, name).click();
     await expect(section(page, name)).toHaveAttribute('aria-expanded', 'true');
     const [docScroll, docClient, screenScroll, screenClient] = await overflow();
@@ -373,6 +374,7 @@ test('on a phone the page does not scroll sideways and every control is at least
     const controls = await tooSmall(page.locator('.settings-screen .sec-b:not([hidden]) :is([data-rule], .sw, .pdd-b, .cp, .fs, .ac, [data-pick-mode], .btn, input:not([type=checkbox]):not([type=range]))'));
     expect(controls.found, `${name}: controls under 44px`).toEqual([]);
     if (name === 'Table rules') expect(controls.count).toBeGreaterThan(30);
+    if (name === 'Sound & haptics') expect((await page.getByRole('slider', { name: 'Volume' }).boundingBox()).height, 'Volume slider height').toBeGreaterThanOrEqual(44); // ranges are not in the selector above
   }
   await section(page, 'Table rules').click();
   await preset(page).click();

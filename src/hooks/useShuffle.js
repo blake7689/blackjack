@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { hold, reducedMotion, reserve, speedK } from "../utils/cardAnimation";
+import { playSound } from "../utils/sound";
 
 // The shuffle (#83, DESIGN section 3), in the centre, in order, nothing fading: the shoe slides away (the discard pile with it, emptied), the deck comes
 // down into the centre, riffles, goes back up off the top, then the shoe slides back. Lengths x k (Rate of Play / 1000, 0.33-1.2): shoe 780, down 620,
@@ -29,6 +30,7 @@ export function useShuffle({ set: setShuf, seq, mid, speed, enter, pile }) {
     if (!stage) return;
     const k = mid ? MID_K : speedK(speed);
     const total = (AWAY + DOWN + RIFFLE + UP + BACK) * k;
+    playSound("shuffle");
     const undo = reserve(performance.now() + total + 100, true);
     const release = hold(total + 1500);
     let skipped = false, ended = false, box = null;

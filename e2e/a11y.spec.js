@@ -104,7 +104,7 @@ test.describe('settings', () => {
     await expectNoSeriousA11y(page, 'settings, closed');
   });
 
-  for (const name of ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Account']) {
+  for (const name of ['Table rules', 'Gameplay', 'Chips', 'Appearance', 'Sound & haptics', 'Account']) {
     test(`Settings with ${name} open has no serious accessibility violations (#84)`, async ({ page }) => {
       await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
       await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-expanded', 'true');
@@ -112,6 +112,14 @@ test.describe('settings', () => {
       await expectNoSeriousA11y(page, `settings, ${name} open`);
     });
   }
+
+  test('Settings with Sound & haptics open and Sound on (Volume enabled) has no serious accessibility violations (#86)', async ({ page }) => {
+    await page.getByRole('button', { name: /^Sound & haptics/ }).click();
+    await page.locator('label.sw', { hasText: 'Sound' }).click(); // the checkbox sits under its track: tap the row
+    await expect(page.getByRole('slider', { name: 'Volume' })).toBeEnabled();
+    await settled(page);
+    await expectNoSeriousA11y(page, 'settings, Sound & haptics open, Sound on');
+  });
 
   test('Settings with unsaved changes and the Save bar has no serious accessibility violations (#84)', async ({ page }) => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
