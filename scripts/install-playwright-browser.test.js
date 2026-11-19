@@ -41,8 +41,9 @@ describe.skipIf(!bashWithTimeout)('install-playwright-browser.sh', () => {
     // A pkill that does nothing, in a dir of its own that only the lock-never-clears test puts on PATH.
     mkdirSync(file('nokill'));
     stub(join(file('nokill'), 'pkill'), 'exit 0');
-    // A leftover "apt": a copy of sleep with a process name of its own, which PW_LOCK_PATTERN points at.
-    if (hasPgrep) spawnSync('bash', ['-c', 'cp "$(command -v sleep)" "$1/fakeapt"', '_', posix(dir)]);
+    // A leftover "apt": a copy of bash (not sleep: coreutils may be one multi-call binary that fails under another
+    // name) whose process name is fakeapt, which PW_LOCK_PATTERN points at. It runs `sleep` as a child.
+    if (hasPgrep) spawnSync('bash', ['-c', 'cp "$(command -v bash)" "$1/fakeapt"', '_', posix(dir)]);
   });
 
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -118,7 +119,8 @@ fi
     afterEach(() => spawnSync('bash', ['-c', 'pkill -x fakeapt']));
 
     it('stops the leftover, repairs dpkg once, and retries into a free lock', () => {
-      lockScript(`${posix(dir)}/fakeapt 30`);
+      // The trailing `; :` stops bash exec-ing sleep directly, which would rename the process to sleep.
+      lockScript(`${posix(dir)}/fakeapt -c 'sleep 30; :'`);
       const r = runLock();
       expect(r.status).toBe(0);
       expect(installs()).toBe(2);
@@ -127,7 +129,8 @@ fi
     }, 30000);
 
     it('waits for a leftover that ignores TERM to exit by itself, then retries', () => {
-      lockScript(`(trap '' TERM; exec ${posix(dir)}/fakeapt 2)`);
+      // `trap ''` is inherited by the sleep child, so the whole leftover ignores TERM and exits after 2 s.
+      lockScript(`${posix(dir)}/fakeapt -c "trap '' TERM; sleep 2; :"`);
       const r = runLock();
       expect(r.status).toBe(0);
       expect(r.elapsed).toBeGreaterThanOrEqual(1500);
@@ -136,7 +139,7 @@ fi
     }, 30000);
 
     it('gives up without a second attempt when the lock never clears', () => {
-      lockScript(`${posix(dir)}/fakeapt 20`);
+      lockScript(`${posix(dir)}/fakeapt -c 'sleep 20; :'`);
       const r = runLock({ PW_LOCK_WAIT: '2' }, [file('nokill')]);
       expect(r.status).toBe(1);
       expect(r.stdout).toContain('::error::apt/dpkg is still running');
