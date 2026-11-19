@@ -27,6 +27,7 @@ import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
 import Dock from "../Dock/Dock";
 import ShuffleFx from "./ShuffleFx";
+import CardWidthSync from "./CardWidthSync";
 import "./GameBoard.css";
 
 // Mirrors the API's "balance under 100" top-up guard; the API is the authority.
@@ -55,7 +56,9 @@ export default function GameBoard() {
   const [picked, setPicked] = useState(DEFAULT_CHIP);
   const chips = visibleChips(settings.chipValues, player ? player.credits : 0);
   const chip = effectiveChip(chips, picked);
-  const canBet = !!player && chips.length > 0;
+  // No bet while the table shuffles (#147; the mockup's circle is disabled then, and Dock dims the rack and keys): the circle is idle, not open.
+  const [shuf, setShuf] = useState(null); // the shuffle in progress (ShuffleFx, below): { away, emptied, pile }, null when none
+  const canBet = !!player && chips.length > 0 && !shuf;
   // Cards on the board's first render never fly (returning from Settings): they read `enabled` while it is still false.
   const [enabled, setEnabled] = useState(false);
   useEffect(() => setEnabled(true), []);
@@ -83,7 +86,6 @@ export default function GameBoard() {
   // Motion (#83). The shuffle (ShuffleFx, below): the shoe and the pile slide off while it plays, the pile still shows what it held until it is emptied.
   // The peek check: a blackjack's hole card keeps its face down until the check is over. The sweep: Next hand sends every card to the pile (the real cards
   // go with the round's state a moment later). The light follows the hand in play; the verdict and the result light show once the hands are settled.
-  const [shuf, setShuf] = useState(null);
   const speed = Number(settings.playTimeout);
   const { peek, hideHole } = usePeek({ phase, dealer, dealerHole, settings, round: nextHandTag, speed });
   useLayoutEffect(() => {
@@ -135,6 +137,7 @@ export default function GameBoard() {
          {/* .stage-in holds --cw / --ch / --step / --room; its probe is the one element whose width is the formula's result */}
          <div className={stageClass} ref={stageInRef} style={{ "--n": seats.length }}>
           <div className="cw-probe" ref={probeRef} aria-hidden="true" />
+          <CardWidthSync stageRef={stageInRef} probeRef={probeRef} seats={seats.length} />
           <Shoe discard={shownDiscard} cutOut={cutCardFound} away={!!shuf?.away} />
           <div className="dealer-container">
             {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}

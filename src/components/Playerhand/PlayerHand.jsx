@@ -69,10 +69,14 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
   // Chips arriving and leaving. The flights are state-driven: whoever changed the bet (a tap, a key, Rebet, 2x, the automatic rebet, a double, insurance) gets the
   // same motion, and none of it reserves or holds the board (a tap must never delay the dock).
   const motion = enabled && !reducedMotion();
-  const mainShown = useArrival(hand.bet - dbl, motion && betting, (d) => {
-    if (betting && d > 0) playSound("chip");
-    if (!motion || !betting) return 0;
+  // A split-off hand (its first card is the one that changed hands) comes into being mid-round: its stake comes up from the dock to its circle (#147).
+  const splitOff = !!hand.cards[0]?.moved && hand.bet > 0;
+  const mainShown = useArrival(hand.bet - dbl, motion && (betting || splitOff), (d) => {
+    const stake = !betting && splitOff && d === hand.bet; // only its first arrival: a later double on it is one instant stack
+    if ((betting || stake) && d > 0) playSound("chip");
+    if (!motion || !(betting || stake)) return 0;
     const spot = seatRef.current.querySelector(".spot");
+    if (stake) return stackToSide(spot, d);
     if (d > 0) return chipsToSpot(spot, d);
     stackBack(spot, -d);
     return 0;
@@ -88,6 +92,7 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
   // The results: the stacks leave. Not again on a seat that mounts after them (the board redrawn, returning from Settings).
   const [paid, setPaid] = useState(gamePhase === GamePhases.POST_ROUND || gamePhase === GamePhases.END_ROUND);
   const fx = useRef(null);
+  const paidTimer = useRef(0);
   const results = gamePhase === GamePhases.RESULTS;
   useLayoutEffect(() => {
     if (!results) return;
@@ -98,13 +103,14 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
     const undo = reserve(performance.now() + delay + Math.max(PAYOUT_MS[payoutKind(stake, ret)], ins > 0 ? 1000 : 0) + 100);
     const timer = setTimeout(() => {
       fx.current = payoutFx(seatRef.current, { stake, ret, insured: ins > 0, insurancePaid: hand.insurancePayout > 0 });
-      setPaid(true);
+      // The "$25" label stays and the circle shows no BET until the chips have gone (the mockup zeroes the bet after its payout, #147).
+      paidTimer.current = setTimeout(() => setPaid(true), fx.current?.ms ?? 0);
     }, delay);
     return () => { undo(); clearTimeout(timer); };
     // Once per round's results: the hand is settled and does not change while they show.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [results]);
-  useLayoutEffect(() => () => fx.current?.cancel(), []);
+  useLayoutEffect(() => () => { clearTimeout(paidTimer.current); fx.current?.cancel(); }, []);
 
   const tag = multi && settled && done ? tagOf(hand) : null;
 

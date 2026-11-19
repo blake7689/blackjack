@@ -5,6 +5,7 @@ import { animations } from "./setup";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import { BET_MS, PAYOUT_MS } from "../utils/chipFlight";
 import { queue } from "../utils/cardAnimation";
+import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -142,6 +143,43 @@ describe("PlayerHand: chips arriving and leaving", () => {
   });
 });
 
+describe("PlayerHand: a split-off hand's stake (#147)", () => {
+  const [moved] = stackedShoe(["8"]);
+  const splitHand = (bet = 10, extra = {}) => mkHand({ cards: [{ ...moved, moved: true }], bet, tag: "split-off", ...extra });
+  const onTurn = { gamePhase: PLAYER_TURN };
+
+  it("comes up from the dock to its circle as one ghost, the stack shows after BET_MS, and nothing reserves or holds the board", () => {
+    const { container } = mount({ ...onTurn, hand: splitHand() });
+    expect(ghosts()).toHaveLength(1);
+    expect(chipsIn(spotStack(container))).toEqual([]); // still in the air
+    expect(queue.holds.size).toBe(0);
+    expect(queue.free).toBe(0);
+    advance(BET_MS - 1);
+    expect(chipsIn(spotStack(container))).toEqual([]);
+    advance(1);
+    expect(chipsIn(spotStack(container))).toEqual(["#chip-10"]);
+    expect(queue.holds.size).toBe(0);
+    expect(queue.free).toBe(0);
+  });
+
+  it("a later bet increase on it (a double) flies nothing: the new amount shows at once", () => {
+    const view = mount({ ...onTurn, hand: splitHand() });
+    advance(BET_MS + 200); // landed, and the first ghost has gone
+    view.again({ ...onTurn, hand: splitHand(30, { tag: "split-off" }) });
+    expect(ghosts()).toHaveLength(0);
+    expect(chipsIn(spotStack(view.container))).toEqual(["#chip-5"]); // $30 = $25 + $5, the top chip carries the numeral
+  });
+
+  it("a hand with a first card that did not change hands flies no stake, and neither does a split-off one under reduced motion", () => {
+    mount({ ...onTurn, hand: mkHand({ cards: [moved], bet: 10 }) });
+    expect(ghosts()).toHaveLength(0);
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    const view = mount({ ...onTurn, hand: splitHand() });
+    expect(ghosts()).toHaveLength(0);
+    expect(chipsIn(spotStack(view.container))).toEqual(["#chip-10"]);
+  });
+});
+
 describe("PlayerHand: the results (the settle handoff)", () => {
   const settled = (extra = {}) => mkHand({ bet: 10, baseStake: 10, status: HandStatus.DONE, result: HandResult.WIN, payout: 20, ...extra });
   const results = (hand, props = {}) => mount({ gamePhase: PLAYER_TURN, hand, ...props });
@@ -159,8 +197,48 @@ describe("PlayerHand: the results (the settle handoff)", () => {
     advance(1);
     expect(lifted()).toHaveLength(1); // the copy is on show ...
     expect(spotStack(view.container).style.visibility).toBe("hidden"); // ... in the very call that hid the real stack
-    expect(seat.classList.contains("paid")).toBe(true);
+    expect(seat.classList.contains("paid")).toBe(false); // the seat is paid when the chips have gone (#147: the "$25" stays, no BET yet)
     expect(lifted()[0].querySelector("svg").outerHTML).toBe(spotStack(view.container).querySelector("svg").outerHTML);
+    advance(PAYOUT_MS.win);
+    expect(seat.classList.contains("paid")).toBe(true);
+  });
+
+  it("the seat is not paid, and its stake label stays, until the chips have gone (PAYOUT_MS of its kind); then it is paid (the bare circle says BET again)", () => {
+    for (const [kind, extra] of [["win", {}], ["lose", { result: HandResult.LOSE, payout: 0 }], ["push", { result: HandResult.PUSH, payout: 10 }]]) {
+      const view = results(settled(extra));
+      advance(BET_MS);
+      toResults(view, settled(extra));
+      const seat = view.container.querySelector(".seat");
+      advance(520); // the chips lift
+      advance(PAYOUT_MS[kind] - 1);
+      expect(seat.classList.contains("paid"), kind).toBe(false);
+      expect(view.container.querySelector(".amt .num").textContent, kind).toBe("$10"); // the stake is still shown
+      advance(1);
+      expect(seat.classList.contains("paid"), kind).toBe(true);
+      expect(view.container.querySelector(".spot.has .bet-lbl"), kind).not.toBeNull();
+      view.unmount();
+    }
+  });
+
+  it("leaving before the chips have gone cancels the paid timer (the seat never turns paid)", () => {
+    const view = results(settled());
+    advance(BET_MS);
+    toResults(view, settled());
+    const seat = view.container.querySelector(".seat");
+    advance(520 + 100); // the chips are in the air
+    view.unmount();
+    advance(PAYOUT_MS.win);
+    expect(seat.classList.contains("paid")).toBe(false);
+  });
+
+  it("when the chips cannot fly (no felt to measure from) the seat is still paid, right after the verdict", () => {
+    const view = renderUI(<Flight><PlayerHand {...base} gamePhase={PLAYER_TURN} hand={settled()} /></Flight>);
+    advance(BET_MS);
+    view.rerender(<Flight><PlayerHand {...base} gamePhase={RESULTS} hand={settled()} /></Flight>);
+    advance(520);
+    expect(view.container.querySelector(".seat").classList.contains("paid")).toBe(false); // not before the verdict has been on show
+    advance(1);
+    expect(view.container.querySelector(".seat").classList.contains("paid")).toBe(true);
   });
 
   it("reserves the board's time for the whole payout, so the next step waits (and never holds)", () => {

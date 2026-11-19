@@ -56,6 +56,7 @@
 .tag.bj { background: var(--accent); color: var(--accent-ink); }
 /* the results (#83): the stacks have gone to the dealer or the dock (their moving copies are in the flight layer), so the circle is bare */
 .seat.paid .stack, .seat.paid .side-spot, .seat.paid .amt .num { visibility: hidden; }
+.seat.paid .spot.has .bet-lbl { display: grid; } /* #147: `paid` is set when the chips have gone, so the bare circle says BET again */
 
 /* landscape phones and wide desktops: the bet circle beside the hand, the total in its own column on the other side */
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
