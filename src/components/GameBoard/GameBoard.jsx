@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { FlightContext } from "../../context/FlightContext";
-import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
+import { cardTiming, clearLanded, landed, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
 import { playSound, setSoundPrefs, vibrate } from "../../utils/sound";
 import { MOOD, resultsLine, verdictOf } from "../../utils/verdict";
@@ -34,6 +34,7 @@ import "./GameBoard.css";
 const TOP_UP_BELOW = 100;
 // FeltPrint calls centrePrint (layout reads) after every one of its own renders; memoized, that is when its settings or box change, not on every board render (#140).
 const FeltPrint = memo(FeltPrintBase);
+const subscribeLanded = (l) => { landed.listeners.add(l); return () => landed.listeners.delete(l); };
 const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "lose", surrender: "lose" }; // verdict kind -> sound and buzz (a push has neither)
 
 export default function GameBoard() {
@@ -113,8 +114,11 @@ export default function GameBoard() {
 
   // Layout reads (#140): useSeatsScroll's overflow check and useCentrePrint measure boxes only when this string changes (a re-render that changes none of
   // what sizes a box reads nothing). It lists what sizes them: each seat's cards, bet, result tag and side stakes; the dealer's cards; the phase, the
-  // message line's state, the shuffle and the totals switch.
+  // message line's state, the shuffle and the totals switch, and how many of each seat's cards have landed (#161: the pill, which can widen to
+  // "Blackjack!" or "7/17", changes only when a card lands; the string snapshot re-renders the board only when a count changes).
+  const landedCounts = useSyncExternalStore(subscribeLanded, () => seats.map((h) => h.cards.filter((c) => landed.ids.has(c.id)).length).join("."));
   const layoutKey = [
+    landedCounts,
     seats.map((h) => [h.tag, h.cards.length, h.hiddenCards.length, h.bet, h.result, h.isDouble ? 1 : 0, h.baseStake ?? 0, h.insurance ?? 0, h.insurancePayout ?? 0].join(".")).join("|"),
     dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!notice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
   ].join(",");

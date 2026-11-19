@@ -4,7 +4,7 @@ import { act, render } from "@testing-library/react";
 import { renderUI } from "./testUtils";
 import GameBoard from "../components/GameBoard/GameBoard";
 import { useSeatsScroll } from "../hooks/useSeatsScroll";
-import { queue } from "../utils/cardAnimation";
+import { clearLanded, landed, markLanded, queue } from "../utils/cardAnimation";
 import { mirrorCheck, PEEK as PEEK_MS } from "../utils/cardFx";
 import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -137,6 +137,46 @@ describe("#140 layout reads only when the layout changed", () => {
     rerender(<GameBoard />);
     expect(reads(spy).print).toBeGreaterThan(0);
     expect(reads(spy).seats).toBe(0);
+  });
+
+  describe("#161 a card landing re-measures the seats (the pill widens only then)", () => {
+    afterEach(() => clearLanded());
+
+    it("landing a card in a seat reads the seats; a repeat landing, a card in no seat and a bare notice read nothing", () => {
+      vi.useRealTimers();
+      size(400, 82);
+      const spy = vi.spyOn(Element.prototype, "getBoundingClientRect");
+      const hands = [hand(), hand()];
+      renderUI(<GameBoard />, { game: table(hands) });
+      act(() => clearLanded()); // jsdom lands every card at mount; take that back so one can land now
+      spy.mockClear();
+      act(() => markLanded(hands[1].cards[0].id));
+      expect(reads(spy).seats).toBeGreaterThan(0);
+      expect(reads(spy).print).toBeGreaterThan(0);
+      spy.mockClear();
+      act(() => markLanded(hands[1].cards[0].id)); // already landed: no notice
+      act(() => markLanded("in-no-seat")); // a notice, but no seat's count changes
+      act(() => landed.listeners.forEach((l) => l())); // a notice with nothing changed
+      expect(reads(spy)).toEqual({ seats: 0, print: 0 });
+    });
+
+    it("a spill that exists only once the card has landed switches the row to scrolling", () => {
+      vi.useRealTimers();
+      size(400, 82);
+      const hands = [hand(), hand()];
+      let spills = false;
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function box() {
+        const wide = spills && this.classList?.contains("hand") && landed.ids.has(hands[0].cards[0].id); // the landed pill is what pushes the hand past the row
+        return { left: 0, top: 0, bottom: 10, width: 50, height: 10, right: wide ? 9999 : 100 };
+      });
+      const { container } = renderUI(<GameBoard />, { game: table(hands) });
+      act(() => clearLanded()); // jsdom lands every card at mount; take that back so one can land now
+      const seats = container.querySelector(".seats");
+      expect(seats.classList.contains("scroll")).toBe(false);
+      spills = true;
+      act(() => markLanded(hands[0].cards[0].id));
+      expect(seats.classList.contains("scroll")).toBe(true);
+    });
   });
 });
 
