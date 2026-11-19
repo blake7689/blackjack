@@ -19,29 +19,27 @@ export function usePeek({ phase, dealer, dealerHole, settings, round, speed }) {
   const [peek, setPeek] = useState(null);
   // The round whose check is over: from then on a blackjack's hole card may show its face. A board that opens after the deal has nothing to wait for.
   const [over, setOver] = useState(() => (phase === GamePhases.DEALING ? null : round));
-  // The phase before this one, kept as state so a render sees the change (a ref would not survive StrictMode's second effect run).
-  const [track, setTrack] = useState({ phase, from: null });
-  if (track.phase !== phase) setTrack({ phase, from: track.phase });
-
   const up = dealer.cards[0];
   const looks = settings.dealerHoleBehaviour === DealerHoleOptions.US_PEEK && !!up && (up.rank === "ace" || up.value === 10);
   const bj = looks && dealer.cards.length + dealerHole.cards.length === 2 && isTotalBlackjack(getHandTotals([...dealer.cards, ...dealerHole.cards]).total);
   const turn = phase === GamePhases.PLAYER_TURN || phase === GamePhases.DEALER_TURN;
+  // The phase before this one, kept as state so a render sees the change (a ref would not survive StrictMode's second effect run), with what the effect
+  // reads: what the table showed when the phase began. The effect is keyed on `track` alone, so it fires once per phase change and never again.
+  const [track, setTrack] = useState({ phase, from: null, looks, bj, turn, speed, round });
+  if (track.phase !== phase) setTrack({ phase, from: track.phase, looks, bj, turn, speed, round });
 
   useLayoutEffect(() => {
-    if (!looks || !(phase === GamePhases.PEEK || (turn && track.from === GamePhases.DEALING))) return;
-    const fx = reducedMotion() ? null : mirrorCheck(speedK(speed));
-    if (!fx) { setOver(round); return; }
+    if (!track.looks || !(track.phase === GamePhases.PEEK || (track.turn && track.from === GamePhases.DEALING))) return;
+    const fx = reducedMotion() ? null : mirrorCheck(speedK(track.speed));
+    if (!fx) { setOver(track.round); return; }
     const reveal = fx.ms + AFTER_CHECK;
-    const total = reveal + (bj ? 0 : SHOW_CLEAR);
+    const total = reveal + (track.bj ? 0 : SHOW_CLEAR);
     const undo = reserve(performance.now() + total + 100);
     const release = hold(total + 1500);
     setPeek("checking");
-    const t1 = setTimeout(() => { setOver(round); setPeek(bj ? null : "clear"); }, reveal);
+    const t1 = setTimeout(() => { setOver(track.round); setPeek(track.bj ? null : "clear"); }, reveal);
     const t2 = setTimeout(() => { setPeek(null); release(); }, total);
     return () => { clearTimeout(t1); clearTimeout(t2); fx.cancel(); undo(); release(); setPeek(null); };
-    // Once per phase change: what it reads is what the table showed when the phase began.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track]);
 
   return { peek, hideHole: bj && dealer.cards.length === 2 && over !== round };
