@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
@@ -21,7 +21,7 @@ import { DEFAULT_CHIP, effectiveChip, visibleChips } from "../../utils/chips";
 import TopBar from "../TopBar/TopBar";
 import DealerArea from "../DealerArea/DealerArea";
 import Shoe from "../Shoe/Shoe";
-import FeltPrint from "../FeltPrint/FeltPrint";
+import FeltPrintBase from "../FeltPrint/FeltPrint";
 import RulesSheet from "../RulesSheet/RulesSheet";
 import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
@@ -32,6 +32,8 @@ import "./GameBoard.css";
 
 // Mirrors the API's "balance under 100" top-up guard; the API is the authority.
 const TOP_UP_BELOW = 100;
+// FeltPrint calls centrePrint (layout reads) after every one of its own renders; memoized, that is when its settings or box change, not on every board render (#140).
+const FeltPrint = memo(FeltPrintBase);
 const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "lose", surrender: "lose" }; // verdict kind -> sound and buzz (a push has neither)
 
 export default function GameBoard() {
@@ -40,6 +42,7 @@ export default function GameBoard() {
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const [rules, setRules] = useState(false); // the Table rules sheet (#87)
+  const openRules = useCallback(() => setRules(true), []);
   setSoundPrefs(settings); // in render: the seats' own effects (an automatic rebet on mount) run before any effect here
   const seatsRef = useRef(null);
   const layerRef = useRef(null);
@@ -48,8 +51,6 @@ export default function GameBoard() {
   const probeRef = useRef(null);
   useCardWidth(stageInRef, probeRef);
   useDealerRoom(stageInRef, probeRef);
-  useCentrePrint(stageInRef);
-  const scroll = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1);
   const tight = useTightSeats(seatsRef, stageInRef, Math.max(1, hands.length));
   // The chip picked in the rack (#82) is UI state, not round state: the rack picks it, the bet circle bets it. What is shown is always a chip the
   // rack offers (the balance fell below it: the largest one below it).
@@ -110,6 +111,16 @@ export default function GameBoard() {
   // The seats: the hands, or (before the deal) one empty seat holding the chips in the circle. Keyed by tag, never by index.
   const seats = hands.length ? hands : [{ tag: "bet", cards: [], hiddenCards: [], bet: betCircle, result: HandResult.NONE }];
 
+  // Layout reads (#140): useSeatsScroll's overflow check and useCentrePrint measure boxes only when this string changes (a re-render that changes none of
+  // what sizes a box reads nothing). It lists what sizes them: each seat's cards, bet, result tag and side stakes; the dealer's cards; the phase, the
+  // message line's state, the shuffle and the totals switch.
+  const layoutKey = [
+    seats.map((h) => [h.tag, h.cards.length, h.hiddenCards.length, h.bet, h.result, h.isDouble ? 1 : 0, h.baseStake ?? 0, h.insurance ?? 0, h.insurancePayout ?? 0].join(".")).join("|"),
+    dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!notice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
+  ].join(",");
+  const scroll = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1, layoutKey);
+  useCentrePrint(stageInRef, `${layoutKey},${scroll},${tight}`); // scroll and tight change the seats' boxes too
+
   // A click on the felt moves on from the results (the dock has its own Next hand key) //
   const handleFeltClick = () => {
     if (phase === GamePhases.POST_ROUND) continueRound();
@@ -143,7 +154,7 @@ export default function GameBoard() {
             {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}
           </div>
 
-          <FeltPrint settings={settings} onOpen={() => setRules(true)} onDraw={centrePrint} />
+          <FeltPrint settings={settings} onOpen={openRules} onDraw={centrePrint} />
           <div className="mid">
             <CenterMessage
               gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}
