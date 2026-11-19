@@ -16,7 +16,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); delete Element.pr
 
 describe("the betting seat", () => {
   it("is one empty seat with a printed circle that says BET, active between rounds", () => {
-    const { container } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0 } });
+    const { container } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0, seenIds: ["x"] } }); // seenIds: no opening shuffle (no bet during it, #147)
     const seats = container.querySelectorAll(".seat");
     expect(seats).toHaveLength(1);
     expect(seats[0].classList.contains("nocards")).toBe(true);
@@ -34,7 +34,7 @@ describe("the betting seat", () => {
   });
 
   it("the circle is a button that bets the selected chip (the default is the $25 chip)", () => {
-    const { gameActions } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0 } });
+    const { gameActions } = renderUI(<GameBoard />, { game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0, seenIds: ["x"] } });
     const spot = screen.getByRole("button", { name: "Bet spot 1, $0. Adds a $25 chip" });
     fireEvent.click(spot);
     expect(gameActions.addBet).toHaveBeenCalledWith(25);

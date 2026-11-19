@@ -143,10 +143,12 @@ describe("totals count only cards that have landed", () => {
 describe("useSmoothRow", () => {
   const [a, b] = stackedShoe(["5", "6"]);
   const lefts = {};
+  const tops = {};
   beforeEach(() => {
     Object.keys(lefts).forEach((k) => delete lefts[k]);
+    Object.keys(tops).forEach((k) => delete tops[k]);
     vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
-      return { left: lefts[this.dataset?.fk] ?? 0, top: 0, width: 50, height: 70 };
+      return { left: lefts[this.dataset?.fk] ?? 0, top: tops[this.dataset?.fk] ?? 0, width: 50, height: 70 };
     });
   });
   const ui = (cards, flight) => <Flight {...flight}><PlayerHand {...handProps} hand={mkHand(cards, { tag: "row" })} /></Flight>;
@@ -160,9 +162,37 @@ describe("useSmoothRow", () => {
     lefts[a.id] = 60; // the row re-centres around the new card
     rerender(ui([a, b]));
     expect(glides()).toHaveLength(1);
-    expect(glides()[0].frames).toEqual([{ translate: "40px 0" }, { translate: "0 0" }]);
+    expect(glides()[0].frames).toEqual([{ translate: "40px 0px" }, { translate: "0 0" }]);
     expect(glides()[0].options).toEqual({ duration: GLIDE, easing: EASING });
     expect(glides()[0].el.dataset.fk).toBe(a.id); // the new card does not glide: it flies
+  });
+
+  it("glides in y too (#147): a card that moved up or down as the row changed glides from where it was, x and y together", () => {
+    lefts[a.id] = 100; tops[a.id] = 200;
+    const { rerender } = renderUI(ui([a]));
+    settleDeal();
+    rerender(ui([a])); // measured at its settled place
+    expect(glides()).toHaveLength(0);
+    lefts[a.id] = 100; tops[a.id] = 150; // only y changed (the count changed: a card joined)
+    rerender(ui([a, b]));
+    expect(glides()).toHaveLength(1);
+    expect(glides()[0].frames).toEqual([{ translate: "0px 50px" }, { translate: "0 0" }]);
+    lefts[a.id] = 90; tops[a.id] = 170;
+    rerender(ui([a, b, b]));
+    expect(glides().at(-1).frames).toEqual([{ translate: "10px -20px" }, { translate: "0 0" }]);
+  });
+
+  it("no glide in y when the count has not changed (a scroll or resize moved the row), or the move is a pixel or less", () => {
+    lefts[a.id] = 100; tops[a.id] = 200;
+    const { rerender } = renderUI(ui([a]));
+    settleDeal();
+    rerender(ui([a]));
+    tops[a.id] = 120; // moved, but no card joined
+    rerender(ui([a]));
+    expect(glides()).toHaveLength(0);
+    tops[a.id] = 120.5; // a card joined, but y moved half a pixel and x not at all
+    rerender(ui([a, b]));
+    expect(glides()).toHaveLength(0);
   });
 
   it("does not glide when the row moves between renders but no card joined (a scroll or resize)", () => {

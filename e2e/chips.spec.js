@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, VEGAS, placeBet } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, submitLogin, VEGAS, placeBet } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -236,4 +236,57 @@ test('Undo takes the armed auto deal back, and the round is not dealt (#88)', as
   await expect(key(page, 'Deal')).not.toContainText('auto'); // disarmed
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible(); // and it stays there: no deal follows
   expect(api.bets, 'only round 1 reached the ledger').toHaveLength(1);
+});
+
+// #147: the table opens with its shuffle and nothing bets while it plays. A slow Rate of Play (5 s: the shuffle is about 5.4 s) leaves time to look; no test
+// here taps the felt to skip it. A click anywhere on the dock (even on a dimmed chip) skips the shuffle, so the keys are tried first, then the taps.
+test('no bet while the table shuffles: the rack is dimmed, a chip tap, the keys and the circle place nothing; when it is over a tap bets (#147)', async ({ page }) => {
+  const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 5000 } });
+  const settingsLoaded = page.waitForResponse('**/player/me/settings');
+  await submitLogin(page);
+  await (await settingsLoaded).finished();
+  const rack = page.locator('.rack-wrap');
+  await expect(rack).toHaveClass(/off/); // the shuffle is on
+  for (const v of [5, 10, 25]) await dimmed(chip(page, v));
+  await expect(key(page, 'Shuffling')).toBeVisible();
+  await dimmed(key(page, 'Shuffling'));
+  await expect(spot(page)).toBeDisabled();
+  await expect(page.getByText('Shuffling', { exact: true }).first()).toBeVisible();
+  for (const k of ['3', '3', 'b', 'x']) await page.keyboard.press(k); // none of them bets (the key listener may not be attached yet: the taps below check it too)
+  await expect(rack).toHaveClass(/off/); // still shuffling: the keys did not skip it
+  await expect(balance(page)).toHaveText('$1,000');
+  // One click only: it skips the shuffle (a tap on the dock does), and the dimmed chip it lands on neither bets nor selects. The shuffle is over right after, so a second would bet.
+  await chip(page, 10).dispatchEvent('click');
+  await expect(chip(page, 25)).toHaveAttribute('aria-pressed', 'true');
+
+  // over: everything is live again, and a tap bets
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(balance(page)).toHaveText('$1,000');
+  await expect(page.getByRole('button', { name: /^Bet spot 1, \$0/ })).toBeVisible();
+  await expect(rack).not.toHaveClass(/off/);
+  for (const v of [5, 10, 25]) await lit(chip(page, v));
+  await expect(spot(page)).toBeEnabled();
+  await placeBet(page, 10);
+  await expect(page.getByRole('button', { name: /^Bet spot 1, \$10/ })).toBeVisible();
+  await expect(balance(page)).toHaveText('$990');
+  expect(api.bets, 'a bet on the table is not a ledger bet until the deal').toEqual([]);
+});
+
+// Seed 183: a push. Once the chips have gone the bare circle says BET again (#147: the seat is `paid`; the circle keeps its bet but not its label until then).
+test('at the results the circle says BET once the chips have gone, and the rack is live again at the next hand (#147)', async ({ page }) => {
+  await stubApi(page);
+  await seedRandom(page, 183);
+  await login(page);
+  await placeBet(page, 10);
+  await key(page, 'Deal').click();
+  await page.getByRole('button', { name: 'Hit', exact: true }).click({ timeout: 15_000 });
+  await expect(page.getByRole('img', { name: '5 of hearts' })).toBeVisible();
+  await page.getByRole('button', { name: 'Stay', exact: true }).click({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('.seat.paid .spot.has .bet-lbl')).toBeVisible();
+  await expect(page.locator('.seat.paid .spot.has .bet-lbl')).toHaveText('BET');
+  await page.getByRole('button', { name: 'Next hand' }).click();
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible();
+  await expect(page.locator('.rack-wrap')).not.toHaveClass(/off/);
+  await lit(chip(page, 10));
 });

@@ -106,7 +106,7 @@ describe("Dock", () => {
 
   it("is a labelled footer, and one face per phase", () => {
     const faces = {
-      [PRE_DEAL]: "betting", [POST_ROUND]: "results", [END_ROUND]: "results", [NONE]: "play", [DEALING]: "play", [PEEK]: "play",
+      [PRE_DEAL]: "betting", [POST_ROUND]: "results", [END_ROUND]: "betting", [NONE]: "play", [DEALING]: "play", [PEEK]: "play",
       [PLAYER_TURN]: "play", [DEALER_TURN]: "play", [SETTLING_HANDS]: "play", [RESULTS]: "play",
     };
     for (const [phase, expected] of Object.entries(faces)) {
@@ -715,7 +715,7 @@ describe("Dock", () => {
     });
 
     it("an even round has no sign and no colour", () => {
-      const { container } = show(settled([hand(["10", "9"], { payout: 10 })], { phase: END_ROUND }));
+      const { container } = show(settled([hand(["10", "9"], { payout: 10 })], { phase: POST_ROUND }));
       const s = summary(container);
       expect([s.label, s.net.textContent, s.net.className]).toEqual(["Even round", "$0", ""]);
     });
@@ -904,8 +904,9 @@ describe("Dock", () => {
         expect(results.gameActions.continueRound).toHaveBeenCalledTimes(2);
         cleanup();
         const end = show({ phase: END_ROUND, hands: [hand(["10", "9"], { payout: 20 })] });
-        press(" ");
-        expect(end.gameActions.continueRound).toHaveBeenCalledOnce();
+        press(" "); // the sweep: the betting face is up and its Deal key is dimmed (#147)
+        expect(end.gameActions.continueRound).not.toHaveBeenCalled();
+        expect(end.gameActions.deal).not.toHaveBeenCalled();
       });
 
       it("do not deal with no bet down, with no player, or while the shuffle plays", () => {

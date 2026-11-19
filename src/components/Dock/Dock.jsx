@@ -39,7 +39,7 @@ function Key({ label, name, sub, kind = "", off = false, focus = false, icon, ho
 // The chip rack (#82, DESIGN section 5): the enabled chips the balance covers, whole chips only. Evenly spaced when they fit; otherwise it scrolls by
 // whole chips (its width holds k chips exactly, the fades sit in the padding) with a chevron toward more, so a chip at rest is never cut. A tap selects
 // a chip (accent ring, aria-pressed). The scroll classes and --rgap / --rpad are set here by hand, not through React, so a render never undoes them. //
-function ChipRack({ chips, chip, onTap }) {
+function ChipRack({ chips, chip, onTap, off }) {
   const wrapRef = useRef(null);
   const rackRef = useRef(null);
   const list = chips.join();
@@ -74,10 +74,10 @@ function ChipRack({ chips, chip, onTap }) {
     return () => { rack.removeEventListener("scroll", more); observer?.disconnect(); window.removeEventListener("resize", fit); };
   }, [list]);
   return (
-    <div className="rack-wrap" ref={wrapRef}>
+    <div className={`rack-wrap${off ? " off" : ""}`} ref={wrapRef}>
       <div className="rack" role="group" aria-label="Chips" ref={rackRef}>
         {chips.map((v, i) => (
-          <button key={v} type="button" className="rc" data-chip={v} data-key={i < 9 ? i + 1 : undefined} aria-pressed={v === chip} aria-label={`${money(v)} chip`} onClick={() => onTap(v)}>
+          <button key={v} type="button" className="rc" data-chip={v} data-key={i < 9 ? i + 1 : undefined} aria-pressed={v === chip} aria-disabled={off || undefined} aria-label={`${money(v)} chip`} onClick={off ? undefined : () => onTap(v)}>
             <Chip value={v} />
           </button>
         ))}
@@ -92,14 +92,19 @@ function ChipRack({ chips, chip, onTap }) {
 // Betting (#82): the chip rack, then Undo, Clear, Rebet, 2x and Deal. `chip` is the selected chip (GameBoard holds it: the bet circle bets it too) and
 // `onChip` picks one. A tap on a chip selects it; a second tap on it within 400 ms (timed by hand: a touch fires no dblclick) bets it on the first
 // circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. `shuffling` (#83): the Deal key says
-// "Shuffling" and the betting keys wait; a tap on the dock skips the shuffle (useShuffle listens for it), the chips still take it. //
+// "Shuffling" and the betting keys wait; a tap on the dock skips the shuffle (useShuffle listens for it); the rack and keys are dimmed and refuse bets (#147). //
 export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false }) {
   const { player } = usePlayer();
-  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPending, autoDealPaused } = useGameState();
+  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPending, autoDealPaused, cutCardFound } = useGameState();
   const actions = useGameActions();
   const ref = useRef(null);
   const credits = player ? player.credits : 0; // a signed-out player has nothing to bet or double with
-  const betting = phase === GamePhases.PRE_DEAL;
+  // The betting face is up from the first moment of Next hand (#147), but nothing bets while the table shuffles or the cards are swept (END_ROUND): `wait`.
+  // It is the one place that refuses a bet, so the rack, the keys 1-9, a double tap, Rebet and 2x all obey it (the bet circle gets `canBet` from GameBoard).
+  const ending = phase === GamePhases.END_ROUND;
+  const betting = phase === GamePhases.PRE_DEAL || ending;
+  const wait = shuffling || ending;
+  const shuffleWord = shuffling || (ending && cutCardFound); // the cut card was out: the table shuffles next
   const chips = visibleChips(settings.chipValues, credits);
   const chip = effectiveChip(chips, picked);
   const lastTap = useRef({ chip: 0, at: 0 });
@@ -115,9 +120,10 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   // (a dimmed or absent key does nothing) and gives the button its props. Space and Enter are one key (Deal, Next hand).
   const keys = {};
   const bind = (hotkey, off, run) => { keys[hotkey.toLowerCase()] = { off, run }; return { hotkey, off, onClick: run }; };
-  // The listener is attached once and calls the latest handler through a ref, so a render never unbinds it between two key presses.
+  // The listener is attached once and calls the latest handler through a ref, so a render never unbinds it between two key presses. The ref is set in a
+  // layout effect, not a passive one: a key pressed in the gap between a commit and its passive effects (the shuffle's end) must see the new `wait` (#147).
   const onKey = useRef(null);
-  useEffect(() => {
+  useLayoutEffect(() => {
     onKey.current = (e) => {
       if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.target.closest?.(NOT_FOR_THE_TABLE) || document.querySelector(OPEN_LAYER)) return;
       const k = e.key === " " || e.key === "Enter" ? "space" : e.key.toLowerCase();
@@ -125,7 +131,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
       lastKey.current = k;
       if (betting && /^[1-9]$/.test(k)) {
         const v = chips[Number(k) - 1];
-        if (v === undefined) return;
+        if (v === undefined || wait) return;
         if (prev === k && chip === v) { lastKey.current = ""; actions.addBet(v); } else onChip(v);
         return;
       }
@@ -161,17 +167,17 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     face = "betting";
     // Out of credits: the rack is a note and nothing that bets is live (the hidden top-up is the only way on). Chips still in the circle keep the rack.
     rowA = chips.length || betCircle > 0
-      ? <ChipRack chips={chips} chip={chip} onTap={tapChip} />
+      ? <ChipRack chips={chips} chip={chip} onTap={tapChip} off={wait} />
       : <div className="dock-note"><Icon id="i-info" /><span>Out of credits. Your balance is {money(credits)}.</span></div>;
     rowB = (
       <>
-        <Key label="Undo" icon="i-undo" {...bind("U", shuffling || betHistory.length === 0, actions.undoBet)} />
-        <Key label="Clear" icon="i-clear" {...bind("C", shuffling || betCircle === 0, actions.clearBet)} />
-        <Key label="Rebet" icon="i-rebet" {...bind("B", shuffling || betCircle > 0 || initialBet <= 0 || credits < initialBet, () => actions.addBet(initialBet))} />
-        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", shuffling || betCircle === 0 || credits < betCircle, () => actions.addBet(betCircle))} />
+        <Key label="Undo" icon="i-undo" {...bind("U", wait || betHistory.length === 0, actions.undoBet)} />
+        <Key label="Clear" icon="i-clear" {...bind("C", wait || betCircle === 0, actions.clearBet)} />
+        <Key label="Rebet" icon="i-rebet" {...bind("B", wait || betCircle > 0 || initialBet <= 0 || credits < initialBet, () => actions.addBet(initialBet))} />
+        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", wait || betCircle === 0 || credits < betCircle, () => actions.addBet(betCircle))} />
         {pause}
-        <Key label={shuffling ? "Shuffling" : "Deal"} name={shuffling ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffling ? "auto" : undefined}
-          {...bind("Space", shuffling || betCircle === 0 || !player, actions.deal)} />
+        <Key label={shuffleWord ? "Shuffling" : "Deal"} name={shuffleWord ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffleWord ? "auto" : undefined}
+          {...bind("Space", wait || betCircle === 0 || !player, actions.deal)} />
       </>
     );
   } else if (phase === GamePhases.OFFERS) {
@@ -185,7 +191,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     ].filter(Boolean);
     rowA = open.map((o, i) => <Key key={o.id} label={o.label} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy, o.run)} />);
     rowB = <Key label="No thanks" kind="solid big" {...bind("N", busy, actions.declineOffers)} />;
-  } else if (phase === GamePhases.POST_ROUND || phase === GamePhases.END_ROUND) {
+  } else if (phase === GamePhases.POST_ROUND) {
     face = "results";
     const net = roundNet(hands);
     rowA = (
@@ -229,7 +235,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   // .options-wrap: the hook for "the keys that act wait while cards fly" (the e2e tests watch it; .board.busy .options-wrap is inert).
   return (
     <footer className="dock" aria-label="Controls">
-      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face} data-shuffling={shuffling || undefined}
+      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face} data-shuffling={shuffleWord || undefined}
         role={face === "offers" ? "group" : undefined} aria-label={face === "offers" ? "Offers" : undefined}>
         <div className="dock-row">{rowA}</div>
         <div className="dock-row">{rowB}</div>

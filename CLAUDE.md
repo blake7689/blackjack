@@ -167,7 +167,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   were picked for that order. A change to when shoes are built, or to the fixture's deck count, means re-picking them (the card assertions fail first).
 - Dock and message line (#80): `components/Dock` is the one bottom bar, a fixed height per mode (`--dock`, `--rowA/B` in GameBoard.css; never let it resize). Its face follows
   the phase: betting (PRE_DEAL), offers (`role="group"` "Offers", one key per open offer + No thanks), your move (every other phase; the keys are dimmed with `aria-disabled`
-  until it is your turn on `selectedHandIndex`, and while a card flies), results (POST_ROUND / END_ROUND: net, balance, Next hand). Hidden-by-setting keys (Surrender "none",
+  until it is your turn on `selectedHandIndex`, and while a card flies), results (POST_ROUND: net, balance, Next hand; END_ROUND, the sweep, already shows the betting face with the rack and every key dimmed, #147). Hidden-by-setting keys (Surrender "none",
   Triple off) are absent; possible-but-not-now keys are dimmed. What a hand may do is `handActions` in blackjackLogic.js, never computed in the component. Focus moves on a
   phase change (first offer, Hit, Next hand) only when it was on nothing or inside the dock. A click on the felt (`.main-area`, not the whole board) still continues from the
   results. `CenterMessage` is the one 48 px line (a reconnecting or refused-bet notice replaces the phase wording); keep its height fixed. `.tip-line` is 0 px while empty.
@@ -218,6 +218,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   a parse error); a new static folder goes in that exclude list.
 
 - Motion (#83, DESIGN section 3): bet chip flights never `reserve`/`hold` (taps must not delay the dock); payout, sweep and discard flights `reserve`; the shuffle
+- Motion gaps (#147): no bet is accepted while the table shuffles or sweeps: `Dock` computes `wait` (shuffling or END_ROUND) once and it dims the rack (`.rack-wrap.off`, chips `aria-disabled`), the keys 1-9 and the betting keys, and GameBoard disables the bet circle (`canBet` needs no `shuf`); never add a bet path that skips it. A split-off hand (`cards[0].moved`) flies its stake in once (`stackToSide`). `useSmoothRow` glides x and y. `paid` (PlayerHand) is set when the payout flight ends, so the "$25" label stays and the empty circle then shows BET.
   and the peek `reserve(end, true)` and `hold(maxMs)` (released on finish, a skip tap or the timeout, so a background tab never leaves the board busy). The shuffle
   plays when `shoeSeq` changes (bumped in `countSeen`'s `reset` branch; `shoeMid` = mid-round refill, short) and on the board's first render in `PRE_DEAL` with empty `seenIds`
   (tests that mount `GameBoard` there pass `seenIds: ["x"]`). The peek check on a round that offers nothing is a display hold in `usePeek` (DEALING to the turn), never a
