@@ -7,6 +7,7 @@ import { cardTiming } from "../utils/cardAnimation";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { PlayerContext } from "../context/PlayerContext";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
+import { useNavActions } from "../hooks/useNavActions";
 import { initialGameState } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
 
@@ -85,4 +86,10 @@ export function settleDeal(ms = 10_000) {
   act(() => { vi.advanceTimersByTime(ms); });
   finishAnimations();
   act(() => { vi.advanceTimersByTime(ms); });
+}
+
+// The three moves useNavActions gives Home, Settings and the table's menu (the global Header is gone, L1-12), as plain buttons with its confirm dialog.
+export function NavButtons() {
+  const { goHome, goSettings, logOut, confirm } = useNavActions();
+  return <><button onClick={goHome}>Nav Home</button><button onClick={() => goSettings()}>Nav Settings</button><button onClick={logOut}>Nav Log out</button>{confirm}</>;
 }

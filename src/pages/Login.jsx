@@ -1,6 +1,6 @@
 import "./pages.css";
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { validateField } from "../utils/validation";
 import Wordmark from "../components/Wordmark/Wordmark";
@@ -21,7 +21,7 @@ const signupError = (name, value) => (name === "password" && !value ? "Password 
 
 // Log in (/login) and Create an account (/signup): two screens, one component (DESIGN section 8). //
 export default function Login({ signup: creating = false }) {
-  const { login, addPlayer } = usePlayer();
+  const { player, login, addPlayer } = usePlayer();
   const nav = useNavigate();
   const [form, setForm] = useState({
     usernameOrEmail: "", password: "",
@@ -61,9 +61,9 @@ export default function Login({ signup: creating = false }) {
         : err.message || failure;
       setStatusMsg(msg);
       setError(msg);
+      setLoading(false); // not after success: the page is going home, and a signed-in Login that is not loading redirects away
     } finally {
       timers.forEach(clearTimeout);
-      setLoading(false);
     }
   };
 
@@ -87,6 +87,9 @@ export default function Login({ signup: creating = false }) {
     lastName: form.lastName
   }), "Signup failed");
 
+
+  // Already signed in (a bookmark, the back button): nothing to do here. Not while this form's own submit is in flight, which goes home itself.
+  if (player && !loading) return <Navigate to="/game" replace />;
 
   return (
     <Page>

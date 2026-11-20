@@ -1,15 +1,15 @@
 /* Settings (#84), ported from the mockup (mockup.css "settings", "buttons", "overlays") onto the app's tokens: one calm list of accordion cards,
    small group labels, one row per setting. No entry animation (axe must never scan mid-animation); only the chevron and the switches ease. */
 
-.settings-screen { height: calc(var(--app-vh) - var(--header-height)); overflow-y: auto; -webkit-overflow-scrolling: touch; box-sizing: border-box; background: var(--bg); color: var(--tx); padding-bottom: 120px; }
-.s-head { position: sticky; top: 0; z-index: var(--z-head); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; padding: 6px max(12px, var(--safe-l)) 0; column-gap: 8px; }
+.settings-screen { height: var(--app-vh); overflow-y: auto; -webkit-overflow-scrolling: touch; box-sizing: border-box; background: var(--bg); color: var(--tx); padding-bottom: 120px; }
+.s-head { position: sticky; top: 0; z-index: var(--z-head); background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--line); display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; padding: calc(6px + var(--safe-t)) max(12px, var(--safe-l)) 0; column-gap: 8px; } /* the sticky head is the page's only bar (the global Header is gone, L1-12): it clears the top safe area */
 .back { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px 0 6px; border: 0; border-radius: var(--r2); background: none; font-size: 15px; font-weight: 700; color: var(--tx); }
 .back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 .back:hover { background: var(--surf); }
 .s-title { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 20px; letter-spacing: .02em; }
 .s-note { grid-column: 1 / -1; padding: 2px 6px 8px; font-size: 14px; font-weight: 600; color: var(--win-tx); }
 .s-note.error { color: var(--err-tx); }
-.s-body { max-width: 680px; margin: 0 auto; padding: 0 16px; }
+.s-body { box-sizing: border-box; max-width: 680px; margin: 0 auto; padding: 0 16px; } /* border-box as in the mockup: the column is 680 px with its gutters, 648 px of cards (L1-21) */
 @media (min-width: 1100px) { .s-head { padding: 10px 32px 8px; } }
 
 /* sections are cards: a raised header (surface, display weight), an inset body a step darker (lighter in light mode) under a divider */

@@ -26,7 +26,7 @@
 .felt {
   --lx: 50%; --ly: 52%; --lamp: 1;
   position: relative; overflow: hidden; width: 100%; max-width: var(--col); justify-self: center; min-height: 0;
-  color: #fff;
+  color: #eef2ef; /* the dark mode's --tx (the mockup's base ink): the felt stays dark in every mode, so --tx would turn dark in light mode */
   background: radial-gradient(130% 95% at 50% 55%, var(--felt-hi) 0%, var(--felt) 42%, var(--felt-lo) 100%);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / .03);
 }

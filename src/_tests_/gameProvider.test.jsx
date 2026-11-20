@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act, cleanup } from "@testing-library/react";
-import { MemoryRouter, useNavigate, useLocation } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { GameProvider } from "../providers/GameProvider";
+import Game from "../pages/Game";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { PlayerContext } from "../context/PlayerContext";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -13,6 +14,9 @@ import { queue } from "../utils/cardAnimation";
 const remote = vi.hoisted(() => ({ getSettings: vi.fn(), saveSettings: vi.fn(), token: null }));
 vi.mock("../utils/playerEngine", () => ({ getSettings: remote.getSettings, saveSettings: remote.saveSettings }));
 vi.mock("../utils/api", () => ({ getToken: () => remote.token }));
+
+// The table itself is not under test here: Game decides whether to show it.
+vi.mock("../components/GameBoard/GameBoard", () => ({ default: () => <div>the table</div> }));
 
 // Every new shoe comes from the next stacked list, so rounds are scripted.
 const shoes = [];
@@ -513,7 +517,7 @@ describe("GameProvider auto deal (#88)", () => {
       tick(); // CONTINUE
       tick(); // END_ROUND: 0 < $1,000
       expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: true });
-      expect(ctx.state.notice).toBe(`Not enough credits to rebet $${(1000).toLocaleString()}: auto deal paused`);
+      expect(ctx.state.notice).toBe("Not enough credits to rebet $1,000: auto deal paused");
       expect(vi.getTimerCount()).toBe(0);
       advance(60_000);
       expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
@@ -755,6 +759,31 @@ describe("GameProvider auto deal (#88)", () => {
       expect(saved).toMatchObject({ v: 5, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
       expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
       expect(cards.createShoe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the remembered look (no flash before the saved settings load)", () => {
+    const html = document.documentElement;
+
+    it("remembers the look it applies, and starts with it on the next load, signed out or not yet loaded", () => {
+      const first = setup();
+      act(() => { first.ctx.actions.changeSettings({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false }); });
+      expect(JSON.parse(localStorage.getItem("bj.look"))).toEqual({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false });
+      cleanup();
+      const second = setup();
+      expect(second.ctx.state.settings).toMatchObject({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false });
+      expect(html.dataset).toMatchObject({ felt: "red", accent: "ember", mode: "light" });
+      expect(html.classList.contains("no-totals")).toBe(true);
+    });
+
+    it("a saved look that arrives with the settings replaces it and is remembered", async () => {
+      localStorage.setItem("bj.look", JSON.stringify({ feltTheme: "red" }));
+      remote.getSettings.mockResolvedValue({ v: 5, feltTheme: "blue" });
+      const { ctx } = setup({ signedIn: true });
+      expect(ctx.state.settings.feltTheme).toBe("red"); // the stored look until the load answers
+      await flush();
+      expect(ctx.state.settings.feltTheme).toBe("blue");
+      expect(JSON.parse(localStorage.getItem("bj.look")).feltTheme).toBe("blue");
     });
   });
 });
@@ -1315,5 +1344,62 @@ describe("the signed-in start on the table (DESIGN section 8)", () => {
     swap(rerender, ctx, null);
     await flush();
     expect(ctx.state.phase).toBe(GamePhases.NONE);
+  });
+});
+
+// L1-14: a reload on /game while signed in. The player is restored, the table is not started until the saved settings come back, and Game must wait for it
+// instead of redirecting to "/" (which GameProvider's start, running on an older pathname, would then leave in place: Home instead of the table).
+describe("a reload on /game while signed in (L1-14)", () => {
+  const visited = [];
+  function Pages({ ctx }) {
+    const at = useLocation().pathname;
+    if (visited.at(-1) !== at) visited.push(at);
+    return (
+      <>
+        <Probe ctx={ctx} />
+        <Routes><Route path="/game" element={<Game />} /><Route path="/" element={<div>home</div>} /></Routes>
+      </>
+    );
+  }
+  const reload = () => {
+    visited.length = 0;
+    const ctx = {};
+    const utils = render(
+      <MemoryRouter initialEntries={["/game"]}>
+        <PlayerContext.Provider value={{ player: { userName: "alice" }, getCredits: () => 0, applyCreditEvent: () => {} }}>
+          <GameProvider><Pages ctx={ctx} /></GameProvider>
+        </PlayerContext.Provider>
+      </MemoryRouter>
+    );
+    return { ctx, ...utils };
+  };
+
+  it("shows Loading while the settings load, then the table, and never leaves /game", async () => {
+    let answer;
+    remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const { ctx, container } = reload();
+    expect(container.textContent).toContain("Shuffling up...");
+    expect(ctx.pathname).toBe("/game");
+    answer({});
+    await flush();
+    expect(container.textContent).toContain("the table");
+    expect(visited).toEqual(["/game"]);
+  });
+
+  it("lands on the table when the settings answer at once", async () => {
+    remote.getSettings.mockResolvedValue({});
+    const { ctx, container } = reload();
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(container.textContent).toContain("the table");
+    expect(visited).toEqual(["/game"]);
+  });
+
+  it("lands on the table when the settings cannot be loaded", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx, container } = reload();
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(container.textContent).toContain("the table");
   });
 });

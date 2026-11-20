@@ -13,13 +13,13 @@ const MESSAGES = {
 // The offer still open asks itself, one question at a time: even money, then insurance, then surrender. //
 const offerMessage = ({ evenMoney, insurance }) => (evenMoney ? "Even money?" : insurance ? "Insurance?" : "Surrender?");
 
-// Between rounds: auto deal says it is about to deal, else a bet on the table says to tap Deal. //
-const bettingMessage = (bet, autoDealing) => (autoDealing ? "Dealing soon" : bet > 0 ? "Tap Deal" : "Place your bets");
+// Between rounds: auto deal says it is about to deal, else a bet on the table says to tap Deal; with nothing on the table and no chip the balance covers (`broke`), it says so. //
+const bettingMessage = (bet, autoDealing, broke) => (autoDealing ? "Dealing soon" : bet > 0 ? "Tap Deal" : broke ? "Out of credits" : "Place your bets");
 
 // What the one line says for a phase. `lastHand`: the cut card is out, so this is the last hand before the shuffle. //
-function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand }) {
+function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand, broke }) {
   switch (gamePhase) {
-    case GamePhases.PRE_DEAL: return bettingMessage(bet, autoDealing);
+    case GamePhases.PRE_DEAL: return bettingMessage(bet, autoDealing, broke);
     case GamePhases.OFFERS: return offerMessage(offers);
     case GamePhases.PLAYER_TURN: return lastHand ? "Last hand before the shuffle" : "Your move";
     case GamePhases.END_ROUND: return lastHand ? "Shuffling" : "";
@@ -31,10 +31,10 @@ function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand }) {
 // the shuffle ("Shuffling", also when the shoe runs out mid-round), the peek ("Dealer checks for blackjack", "No blackjack": `peek` is "checking" or
 // "clear") and, once the hands are settled, the verdict: one word, never over a card (`verdict`: { kind, word, amt, extra }, see utils/verdict.js).
 // This line is the board's ONE polite live region (#85): `heard` (utils/verdict.js `resultsLine`) rides in it, hidden from the eye, with the verdict. //
-function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, autoDealing = false, lastHand = false, verdict = null, shuffling = false, peek = null, heard = null }) {
+function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, broke = false, autoDealing = false, lastHand = false, verdict = null, shuffling = false, peek = null, heard = null }) {
   const text = waiting ? "Waiting for the server..." : shuffling ? "Shuffling"
     : peek === "clear" ? "No blackjack" : peek === "checking" ? "Dealer checks for blackjack"
-    : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand });
+    : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand, broke });
   return (
     <div className="msg" aria-live="polite">
       {reconnecting ? <span className="reconnecting">Reconnecting...</span>

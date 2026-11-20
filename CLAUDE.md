@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) + screens (#87) at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) + screens (#87) + loop1 (#166) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. CI has an `e2e` job in `ci.yml` that gates the deploy.
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
 
@@ -32,7 +32,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Round state: `src/utils/gameReducer.js` (pure reducer; `nextAutoAction` names the next automatic step).
   `GameProvider` = `useReducer` + one timer effect (cleanup cancels it on reset or unmount) + a credit-event
   effect that applies each balance change once. Two contexts: `useGameState()` and `useGameActions()`
-  (stable; components that only act, like Header, use just this).
+  (stable; components that only act, like TopBar, use just this).
 - Sign-in (ADR-0002): `api.js` sends the bearer token from `sessionStorage` (`bj.token`); a 401 on a
   signed-in request clears it and signs out. `PlayerProvider` restores the session on load via
   `GET /api/player/me`.
@@ -212,7 +212,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   close, focus back to the opener). GameBoard owns its state; the felt print, the menu item and Home's Rules open it. Its lines come from `sheetGroups(settings)` in `ruleCatalog.js` (reuses the felt's words, labels and
   summaries, hides by `showWhen`; even money only when `offersAtDeal` would offer it): add a rule's line there. Destructive asks (Leave game, Log out) are `ConfirmDialog`s returned by `useNavActions` as `confirm`: the
   component that calls the hook must render `{confirm}`; never `window.confirm`. Home, Log in (`/login`), Create an account (`/signup`), Loading and Error are the standalone `.page-screen` screens
-  (`components/PageScreens`); only Settings still shows `Header`. `App` shows Loading while a saved session is restored and Error ("Can't reach the table": Try again / Home) when the restore got no answer
+  (`components/PageScreens`); Settings has only its own sticky "Table / Settings" head: there is no global header (#166 L1-12; Home and Log out are reached from the table menu and the Account section, and a signed-out visitor on /settings gets Log in / Home links). `App` shows Loading while a saved session is restored and Error ("Can't reach the table": Try again / Home) when the restore got no answer
   (`restoreFailed`; a 401 clears the token and just signs out). The manifest (`public/manifest.webmanifest`) and `public/icons/*.png` (wordmark on #070908, one-off Playwright rasterisation, no script kept) are linked
   from `index.html`; no service worker. Card faces are 500 px WebP (`/cards/<rank>_of_<suit>.webp`, no PNG): never add PNG faces back. `staticwebapp.config.json`: static folders (`/assets`, `/brand`, `/cards`, `/fonts`,
   `/icons`, `/sounds`) and root `*.svg` / `*.webmanifest` are excluded from the `index.html` fallback and there is NO 404 `responseOverride` (it served HTML for a missing file, so a broken image or font looked like
@@ -234,6 +234,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   leave it with Show hand totals off, "blackjack" stays) in a hidden span. Never add a second `aria-live` or a hidden duplicate of the line: Playwright's strict `getByText` and the jsdom `getByText` queries would find two. Focus moves per phase in
   Dock's effect (deps `phase`, `openOffers`, `busy`), only from nothing or the dock. Targets are 44 px (inline links get it from an ::after or padding, never a visible change); the 12 px text floor and the `--tx-3` / accent-text tokens follow DESIGN section 3.
 - Sound (#86): settings `soundOn` / `hapticsOn` / `soundVolume`; every sound is synthesized in `src/utils/sound.js` (no audio files). `setSoundPrefs` is called from GameBoard; deal/flip play in `FlyCard`, chip in `PlayerHand`, shuffle in `useShuffle`, win/lose in GameBoard. `sound.js` must never use `Math.random` (its noise uses a local LCG; the e2e seeds depend on the draw count). The disabled Volume slider dims only the input (`.slider.off input`) and keeps `--tx-2` on its output, or axe color-contrast fails.
+
+- Loop 1 fix pass (#166): the chip stack lifts by `--k` / `--h` (a percentage of the svg's own height) because `--chip` holds `cqi` units and inside `.stack` (a query container for the numeral swap) they would resolve to the stack's own width, not the seat's. `Game` waits on Loading while `starting` (signed in, settings loading) instead of redirecting to `/`: GameProvider's start only moves a player still on an entry route, so a reload on `/game` used to land on Home when the settings answered at once. A refused opening bet voids the round but its cards are NOT put back in the shoe (they were seen face up; restoring would deal them again): they go to the discard pile like a misdeal (L1-27, by design). An opened Settings section scrolls to the top of the page (`sec-<id>`, instant on arrival, smooth after unless reduced motion). The rules sheet has its own full sentences in `sheetGroups` (the felt print and the Settings summaries keep their short phrases). Base text is 15 px / 1.4 in `--tx` on `:root` / body (the felt keeps `#eef2ef`); the total pill is 26 px at every width. `e2e/loop1.spec.js` guards these (it also runs in the `phone` project).
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

@@ -5,6 +5,7 @@ import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 import { canHit, canSplit, canDouble, canSurrender, cents, insuranceStake } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
+import { money } from "./money";
 import * as engine from "./gameEngine";
 
 // All round state lives here. The reducer is pure apart from `refill`/`shoe` values passed in on actions,
@@ -435,7 +436,8 @@ export function gameReducer(state, action) {
       const bet = state.pendingBets.find((b) => b.seq === action.seq);
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
-        // The server never took the stake, so the round never happened: back to betting, nothing to refund.
+        // The server never took the stake, so the round never happened: back to betting, nothing to refund. Its cards were seen face up, so they stay
+        // out of the shoe and go to the discard pile, like a misdeal (L1-27: by design; putting them back would deal them again).
         return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, betHistory: [], pendingBets: [],
           notice: "The server refused your bet, so the round was cancelled." };
       }
@@ -469,7 +471,7 @@ export function gameReducer(state, action) {
       const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
       let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
         autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
-        notice: broke ? `Not enough credits to rebet $${initialBet.toLocaleString()}: auto deal paused` : null };
+        notice: broke ? `Not enough credits to rebet ${money(initialBet)}: auto deal paused` : null };
       if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;

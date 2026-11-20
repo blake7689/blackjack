@@ -108,7 +108,7 @@ export async function login(page) {
   await (await settingsLoaded).finished();
   // idle, before the deal. The table opens with its shuffle (#83: 4.5 s at Normal speed, 1.5 s on the fixture's fastest), the line says Shuffling until it is over.
   await page.locator('.felt').dispatchEvent('click'); // a tap on the felt skips the opening shuffle (#83), so no test pays its 1.5 s on a slow CI runner
-  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/^(Place your bets|Out of credits)$/)).toBeVisible({ timeout: 15_000 }); // a table with no credits says Out of credits (L1-18)
 }
 
 export const openTable = login;

@@ -18,6 +18,18 @@ const ICONS = [
   ["i-clear", <path d="M6 6l12 12M18 6L6 18" />],
   ["i-rebet", <><path d="M4 12a8 8 0 0 1 13.7-5.6L20 9" /><path d="M20 4v5h-5" /><path d="M20 12a8 8 0 0 1-13.7 5.6L4 15" /><path d="M4 20v-5h5" /></>],
   ["i-info", <><circle cx="12" cy="12" r="8.5" /><path d="M12 11v6M12 7.5v.5" /></>],
+  // the play, offers and results keys (#166 L1-10): the mockup's i-hit ... i-money
+  ["i-hit", <path d="M12 5v14M5 12h14" />],
+  ["i-stay", <path d="M5 12h14" />],
+  ["i-double", <><rect x="4" y="7" width="9" height="13" rx="2" /><path d="M9 4h9a2 2 0 0 1 2 2v11" /></>],
+  ["i-split", <path d="M12 20v-6M12 14L6 6M12 14l6-8M6 6v4M6 6h4M18 6v4M18 6h-4" />],
+  ["i-surrender", <path d="M6 21V4M6 4h11l-2.5 4 2.5 4H6" />],
+  ["i-triple", <><rect x="3" y="9" width="8" height="12" rx="1.8" /><path d="M7 6h8a2 2 0 0 1 2 2v10" /><path d="M11 3h8a2 2 0 0 1 2 2v10" /></>],
+  ["i-pause", <path d="M9 6v12M15 6v12" />],
+  ["i-play", <path d="M8 5.5v13l10.5-6.5z" />],
+  ["i-next", <path d="M5 12h13M13 6l6 6-6 6" />],
+  ["i-shield", <path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z" />],
+  ["i-money", <><path d="M7 12h10M12 7v10" /><circle cx="12" cy="12" r="8.5" /></>],
   // Settings (#84): the section chevron and the preset list's tick
   ["i-chevron", <path d="M7 10l5 5 5-5" />],
   ["i-check", <path d="M5 12.5l4.5 4.5L19 7.5" />],

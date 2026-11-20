@@ -16,7 +16,7 @@ html, body, #root, .app-root {
     padding-bottom: 0;
 }
 
-/* safe areas, left and right (once, here); the top is the Header's and the bottom the footer's and the pages' */
+/* safe areas, left and right (once, here); the top is each page's own bar's and the bottom the pages' */
 .app-root { padding-left: var(--safe-l); padding-right: var(--safe-r); }
 
 a { 

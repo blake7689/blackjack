@@ -9,11 +9,12 @@ import { getToken } from "../utils/api";
 import { getSettings, saveSettings } from "../utils/playerEngine";
 import { stepWait } from "../utils/cardAnimation";
 import { useTheme } from "../hooks/useTheme";
+import { readLook, saveLook } from "../utils/theme";
 
 const ENTRY_ROUTES = new Set(["/", "/login", "/signup"]);
 
 export function GameProvider({ children }) {
-  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const [state, dispatch] = useReducer(gameReducer, initialGameState, (s) => ({ ...s, settings: readLook(s.settings) })); // starts with the last look, so no flash before the saved settings load
   const { player, getCredits, applyCreditEvent } = usePlayer();
   const signedIn = player != null;
   const { deckCount, includeCutCard, playTimeout, autoDealDelay } = state.settings;
@@ -23,6 +24,8 @@ export function GameProvider({ children }) {
   // Signed in and the table not yet started: the player is about to land on it (see the settings effect below).
   const [started, setStarted] = useState(false);
   useTheme(state.settings); // <html> data-felt / data-accent / data-mode / .no-totals follow the saved settings
+  const { feltTheme, accent, mode, showTotals } = state.settings;
+  useEffect(() => saveLook({ feltTheme, accent, mode, showTotals }), [feltTheme, accent, mode, showTotals]); // read back at boot (main.jsx)
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
   const stateRef = useRef(state);

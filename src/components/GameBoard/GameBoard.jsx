@@ -164,6 +164,7 @@ export default function GameBoard() {
               gamePhase={busy && (phase === GamePhases.PLAYER_TURN || phase === GamePhases.OFFERS) ? GamePhases.DEALING : phase}
               offers={offers}
               bet={betCircle}
+              broke={chips.length === 0}
               autoDealing={autoDealPending}
               lastHand={cutCardFound}
               waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
@@ -185,7 +186,7 @@ export default function GameBoard() {
                 active={hands.length ? selectedHandIndex === idx && phase === GamePhases.PLAYER_TURN : phase === GamePhases.PRE_DEAL && canBet}
                 gamePhase={phase}
                 showTotals={settings.showTotals}
-                chip={chip}
+                chip={chip ?? picked}
                 canBet={canBet}
                 onBet={addBet}
                 multi={seats.length > 1}

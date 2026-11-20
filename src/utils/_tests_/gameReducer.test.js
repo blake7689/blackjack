@@ -548,6 +548,20 @@ describe("server answers to bets (#23)", () => {
       expect(s.pendingBets).toEqual([{ seq: s.creditEvents.at(-1).seq, handTag: null, amount: 10, newRound: true }]);
     });
 
+    it("a refused opening bet voids the round but its cards stay out of the shoe: the next deal draws different ones (L1-27, by design)", () => {
+      const before = run(started(["10", "10", "9", "7", "2", "3", "4", "5", "6"]), { type: "ADD_BET", amount: 10 });
+      const dealtRound = run(before, { type: "DEAL" });
+      const seen = dealtRound.hands[0].cards.map((c) => c.id);
+      const voided = rejectAt(dealtRound, 0);
+      expect(voided.phase).toBe(GamePhases.PRE_DEAL);
+      expect(voided.notice).toBe("The server refused your bet, so the round was cancelled.");
+      expect(voided.shoe).toBe(dealtRound.shoe); // nothing is put back
+      expect(voided.seenIds).toBe(dealtRound.seenIds); // the count keeps what was seen
+      expect(voided.runningCount).toBe(dealtRound.runningCount);
+      const again = run(voided, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+      expect(again.hands[0].cards.map((c) => c.id).some((id) => seen.includes(id))).toBe(false);
+    });
+
     it("never reuses a tag across rounds", () => {
       const first = dealt(["10", "10", "9", "7"]);
       const next = run(first, { type: "RESET_GAME", shoe: stackedShoe(["9", "10", "8", "7"]), phase: GamePhases.PRE_DEAL },
@@ -845,7 +859,7 @@ describe("auto deal (#88)", () => {
 
     it("writes a four-digit bet with its thousands separator", () => {
       const s = run({ ...finished(), initialBet: 1500 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
-      expect(s.notice).toBe(`Not enough credits to rebet $${(1500).toLocaleString()}: auto deal paused`);
+      expect(s.notice).toBe("Not enough credits to rebet $1,500: auto deal paused");
       expect(s.notice).toMatch(/^Not enough credits to rebet \$1\D?500: auto deal paused$/);
     });
 

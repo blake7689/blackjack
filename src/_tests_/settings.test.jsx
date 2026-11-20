@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, act, cleanup, within } from "@testing-library/react";
-import { renderUI, testPlayer } from "./testUtils";
+import { renderUI, testPlayer, NavButtons } from "./testUtils";
+import { scrolls } from "./setup";
+import { useNavigate } from "react-router-dom";
 import Settings from "../pages/Settings";
-import Header from "../components/Header/Header";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { RULE_PRESETS } from "../utils/rulePresets";
 import { initialGameState } from "../utils/gameReducer";
@@ -43,6 +44,7 @@ function openLive(game = {}, extra = {}) {
   view = renderUI(<Settings />, { path: "/settings", game: { phase: GamePhases.PRE_DEAL, ...game }, ...extra, actions: { changeSettings, ...extra.actions } });
   return view;
 }
+function NavLinks() { const nav = useNavigate(); return <button onClick={() => nav("/settings#rules")}>to rules</button>; }
 const withSettings = (patch) => ({ settings: { ...initialGameState.settings, ...patch } });
 
 afterEach(() => {
@@ -56,6 +58,8 @@ describe("Settings: the page", () => {
   it("asks a visitor to log in", () => {
     renderUI(<Settings />, { player: { player: null } });
     expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login"); // no header any more: a visitor still has a way out
+    expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/");
   });
 
   it("has a Table button, a title, six sections and no tabs; nothing is changed, so there is no Save bar", () => {
@@ -94,6 +98,46 @@ describe("Settings: the page", () => {
   it.each([["rules", "Table rules"], ["play", "Gameplay"], ["chips", "Chips"], ["look", "Appearance"], ["sound", "Sound & haptics"], ["account", "Account"]])("the link /settings#%s opens %s", (hash, name) => {
     renderUI(<Settings />, { path: `/settings#${hash}` });
     expect(expanded()).toEqual([name]);
+  });
+
+  describe("an opened section scrolls to the top of the page (L1-22)", () => {
+    const last = () => scrolls.at(-1);
+    it("a deep link scrolls its section into view at once, with nothing before it", () => {
+      expect(scrolls).toHaveLength(0);
+      renderUI(<Settings />, { path: "/settings#sound" });
+      expect(scrolls).toHaveLength(1);
+      expect(last().el.id).toBe("sec-sound");
+      expect(last().options).toEqual({ block: "start", behavior: "auto" });
+    });
+
+    it("no section open, nothing scrolls; a tap on a header scrolls that section at once, and closing it does not scroll", () => {
+      open();
+      expect(scrolls).toHaveLength(0);
+      fireEvent.click(sectionButton("Account"));
+      expect(last().el.id).toBe("sec-account");
+      expect(last().options).toEqual({ block: "start", behavior: "auto" }); // never smooth: the hint bubble hides on any scroll (L1-38)
+      fireEvent.click(sectionButton("Account"));
+      expect(scrolls).toHaveLength(1);
+    });
+
+    it("a Save that sends Account back open brings it into view", async () => {
+      const updatePlayer = vi.fn().mockRejectedValue(new Error("Name taken"));
+      openLive({}, { player: { updatePlayer } });
+      show("Account");
+      type("Username", "taken");
+      show("Gameplay");
+      scrolls.length = 0;
+      fireEvent.click(saveButton());
+      await flush();
+      expect(last().el.id).toBe("sec-account");
+    });
+
+    it("a link to another #section while here scrolls to it", () => {
+      const view = renderUI(<><Settings /><NavLinks /></>, { path: "/settings#play" });
+      fireEvent.click(screen.getByRole("button", { name: "to rules" }));
+      expect(last().el.id).toBe("sec-rules");
+      view.unmount();
+    });
   });
 
   it("an unknown hash, and the old ?tab link, open nothing (the tabs and their plumbing are gone)", () => {
@@ -691,21 +735,20 @@ describe("Settings: the unsaved-changes guard", () => {
     expect(location()).toBe("/game");
   });
 
-  it("the header's Home, Settings and Log out each ask first, and carry on after Discard and leave", () => {
-    const { gameActions, playerCtx } = renderUI(<><Header /><Settings /></>, { path: "/settings" });
+  it("the Home, Settings and Log out moves each ask first, and carry on after Discard and leave", () => {
+    const { gameActions, playerCtx } = renderUI(<><NavButtons /><Settings /></>, { path: "/settings" });
     dirty();
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     expect(screen.getByRole("dialog", { name: "Discard your changes?" })).toBeTruthy();
     expect(location()).toBe("/settings");
     expect(gameActions.resetGame).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Settings" }));
     expect(screen.getByRole("dialog", { name: "Discard your changes?" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "tester" }));
-    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Log out" }));
     expect(screen.getByRole("dialog", { name: "Discard your changes?" })).toBeTruthy();
     expect(playerCtx.logout).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
@@ -715,19 +758,19 @@ describe("Settings: the unsaved-changes guard", () => {
   });
 
   it("the Home button goes home after Discard and leave", () => {
-    const { gameActions } = renderUI(<><Header /><Settings /></>, { path: "/settings" });
+    const { gameActions } = renderUI(<><NavButtons /><Settings /></>, { path: "/settings" });
     dirty();
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
     expect(gameActions.resetGame).toHaveBeenCalled();
     expect(location()).toBe("/");
   });
 
-  it("the header's Settings button goes to Settings after Discard and leave, with no section open", () => {
-    renderUI(<><Header /><Settings /></>, { path: "/settings#play" });
+  it("the Settings move goes to Settings after Discard and leave, with no section open", () => {
+    renderUI(<><NavButtons /><Settings /></>, { path: "/settings#play" });
     expect(expanded()).toEqual(["Gameplay"]);
     fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Settings" }));
     fireEvent.click(screen.getByRole("button", { name: "Discard and leave" }));
     expect(location()).toBe("/settings");
   });

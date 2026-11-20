@@ -1278,6 +1278,18 @@ describe("a restore that gets no answer (#87)", () => {
     expect(ctx.player).toBeNull();
   });
 
+  it("an error while signing the restored player in is logged, not shown as a failed restore", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    // reads: restoring's initial state, restore(), then the guard in the success handler, which throws here
+    api.getToken.mockReturnValueOnce("tok").mockReturnValueOnce("tok").mockImplementationOnce(() => { throw new Error("boom"); }).mockReturnValue("tok");
+    const { ctx } = setup();
+    await settleQueue();
+    expect(ctx.restoreFailed).toBe(false);
+    expect(ctx.restoring).toBe(false);
+    expect(error).toHaveBeenCalledWith("Restoring the session failed", expect.any(Error));
+    error.mockRestore();
+  });
+
   it("a failure that arrives after logging out meanwhile is ignored", async () => {
     api.getToken.mockReturnValue("tok");
     const me = deferred();

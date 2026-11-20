@@ -158,7 +158,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
 
   const autoOn = settings.autoDeal && settings.resetInitialBet; // Pause / Resume shows between rounds while auto deal is on
   const pause = autoOn && (
-    <Key label={autoDealPaused ? "Resume" : "Pause"} name={autoDealPaused ? "Resume auto deal" : "Pause auto deal"}
+    <Key label={autoDealPaused ? "Resume" : "Pause"} icon={autoDealPaused ? "i-play" : "i-pause"} name={autoDealPaused ? "Resume auto deal" : "Pause auto deal"}
       onClick={autoDealPaused ? actions.resumeAutoDeal : actions.pauseAutoDeal} />
   );
   let face, rowA, rowB, acting = false;
@@ -185,11 +185,11 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     acting = true;
     const half = insuranceStake(hands[0].bet);
     const open = [
-      offers.insurance && { id: "insurance", hotkey: "I", label: `Insurance $${half}`, run: actions.takeInsurance },
-      offers.evenMoney && { id: "evenMoney", hotkey: "E", label: "Even money", run: actions.evenMoney },
-      offers.surrender && { id: "surrender", hotkey: "R", label: "Surrender", sub: `$${half} back`, run: () => actions.surrender(0) },
+      offers.insurance && { id: "insurance", hotkey: "I", label: `Insurance ${money(half)}`, icon: "i-shield", run: actions.takeInsurance },
+      offers.evenMoney && { id: "evenMoney", hotkey: "E", label: "Even money", icon: "i-money", run: actions.evenMoney },
+      offers.surrender && { id: "surrender", hotkey: "R", label: "Surrender", icon: "i-surrender", sub: `${money(half)} back`, run: () => actions.surrender(0) },
     ].filter(Boolean);
-    rowA = open.map((o, i) => <Key key={o.id} label={o.label} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy, o.run)} />);
+    rowA = open.map((o, i) => <Key key={o.id} label={o.label} icon={o.icon} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy, o.run)} />);
     rowB = <Key label="No thanks" kind="solid big" {...bind("N", busy, actions.declineOffers)} />;
   } else if (phase === GamePhases.POST_ROUND) {
     face = "results";
@@ -200,13 +200,13 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
           <small>{net > 0 ? "You won" : net < 0 ? "You lost" : "Even round"}</small>
           <b className={net > 0 ? "up" : net < 0 ? "down" : undefined}>{signed(net)}</b>
         </div>
-        <div className="s-r">Balance<b>${credits.toLocaleString()}</b></div>
+        <div className="s-r">Balance<b>{money(credits)}</b></div>
       </div>
     );
     rowB = (
       <>
         {pause}
-        <Key label="Next hand" kind="primary big wider" focus {...bind("Space", false, actions.continueRound)} />
+        <Key label="Next hand" icon="i-next" kind="primary big wider" focus {...bind("Space", false, actions.continueRound)} />
       </>
     );
   } else {
@@ -218,16 +218,16 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     const can = yours ? handActions(hands[sel], dealer, hands.length, credits, settings) : NOTHING;
     rowA = (
       <>
-        <Key label="Double" {...bind("D", !can.double, () => actions.double(sel))} />
-        <Key label="Split" {...bind("P", !can.split, () => actions.split(sel))} />
-        {settings.surrender !== SurrenderOptions.NONE && <Key label="Surrender" {...bind("R", !can.surrender, () => actions.surrender(sel))} />}
-        {settings.tripleDown && <Key label="Triple" {...bind("T", !can.triple, () => actions.triple(sel))} />}
+        <Key label="Double" icon="i-double" {...bind("D", !can.double, () => actions.double(sel))} />
+        <Key label="Split" icon="i-split" {...bind("P", !can.split, () => actions.split(sel))} />
+        {settings.surrender !== SurrenderOptions.NONE && <Key label="Surrender" icon="i-surrender" {...bind("R", !can.surrender, () => actions.surrender(sel))} />}
+        {settings.tripleDown && <Key label="Triple" icon="i-triple" {...bind("T", !can.triple, () => actions.triple(sel))} />}
       </>
     );
     rowB = (
       <>
-        <Key label="Stay" kind="solid big" {...bind("S", !yours, () => actions.stand(sel))} />
-        <Key label="Hit" kind="primary big" focus={phase === GamePhases.PLAYER_TURN} {...bind("H", !can.hit, () => actions.hit(sel))} />
+        <Key label="Stay" icon="i-stay" kind="solid big" {...bind("S", !yours, () => actions.stand(sel))} />
+        <Key label="Hit" icon="i-hit" kind="primary big" focus={phase === GamePhases.PLAYER_TURN} {...bind("H", !can.hit, () => actions.hit(sel))} />
       </>
     );
   }

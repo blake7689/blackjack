@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { useNavActions } from "../hooks/useNavActions";
@@ -15,6 +15,7 @@ import { leaveGuard } from "../utils/leaveGuard";
 import { validateField } from "../utils/validation";
 import { ALLOWED_CHIPS } from "../utils/constants/chips";
 import { parseChipValues, formatChipValues } from "../utils/chips";
+import { money } from "../utils/money";
 import { Chip } from "../components/Chip/Chip";
 import RulesSection from "../components/RulesSection/RulesSection";
 import ConfirmDialog from "../components/SettingsControls/ConfirmDialog";
@@ -49,6 +50,8 @@ export default function Settings() {
   const [edits, setEdits] = useState({}); // only unsaved edits, so settings that load after the page opens (#36) still show
   const [open, setOpen] = useState(() => (SECTIONS.includes(hash.slice(1)) ? hash.slice(1) : null));
   useEffect(() => { if (SECTIONS.includes(hash.slice(1))) setOpen(hash.slice(1)); }, [hash]); // a link to another #section while here
+  // An opened section scrolls to the top of the page (the mockup's deep link does; here the page is the scroll container, L1-22): always at once: a smooth scroll runs on for ~300 ms, and the hint bubble hides on any scroll (HintLayer), so a tap on an "i" right after opening lost its tip (L1-38).
+  useEffect(() => { if (open) document.getElementById(`sec-${open}`)?.scrollIntoView({ block: "start", behavior: "auto" }); }, [open]);
   const [asking, setAsking] = useState(null); // the confirm on screen: { kind: "leave" | "reset" | "delete", go? }
   const [notice, setNotice] = useState(null); // one status line for the page's results
   const [profileError, setProfileError] = useState("");
@@ -73,7 +76,7 @@ export default function Settings() {
   useEffect(() => { saved.current = settings; });
   useEffect(() => () => applyTheme(saved.current, !!window.matchMedia?.("(prefers-color-scheme: light)")?.matches), []);
 
-  // While there are unsaved changes: the header's Home / Settings / Log out ask first (useNavActions), and so does a page unload.
+  // While there are unsaved changes: Table, Log out (and the table menu's Home / Settings / Log out) ask first (useNavActions / leaveGuard), and so does a page unload.
   const dirty = changed.length > 0;
   useEffect(() => {
     if (!dirty) return undefined;
@@ -83,7 +86,7 @@ export default function Settings() {
     return () => { leaveGuard.ask = null; window.removeEventListener("beforeunload", warn); };
   }, [dirty]);
 
-  if (!player) return <div className="page-bg"><div className="page-message">Please log in to manage settings.</div></div>;
+  if (!player) return <div className="page-bg"><div className="page-message"><p>Please log in to manage settings.</p><p className="signed"><Link to="/login">Log in</Link> · <Link to="/">Home</Link></p></div></div>; // no header any more: a visitor still needs a way out
 
   const edit = (patch) => { setNotice(null); setEdits((e) => ({ ...e, ...patch })); };
   const editProfile = (name) => (e) => { setProfileError(""); edit({ [name]: e.target.value }); };
@@ -203,11 +206,11 @@ export default function Settings() {
                 const chosen = chosenChips.includes(chip);
                 const last = chosen && chosenChips.length === 1;
                 return (
-                  <button key={chip} type="button" className="cp" aria-pressed={chosen} aria-label={`$${chip.toLocaleString()} chip`} aria-disabled={last || undefined}
+                  <button key={chip} type="button" className="cp" aria-pressed={chosen} aria-label={`${money(chip)} chip`} aria-disabled={last || undefined}
                     aria-describedby={last ? "chip-hint" : undefined}
                     onClick={() => !last && edit({ chipValues: formatChipValues(chosen ? chosenChips.filter((c) => c !== chip) : [...chosenChips, chip]) })}>
                     <Chip value={chip} />
-                    <span aria-hidden="true">${chip.toLocaleString()}</span>
+                    <span aria-hidden="true">{money(chip)}</span>
                   </button>
                 );
               })}
