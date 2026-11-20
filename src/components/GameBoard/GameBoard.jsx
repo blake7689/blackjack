@@ -186,7 +186,7 @@ export default function GameBoard() {
                 active={hands.length ? selectedHandIndex === idx && phase === GamePhases.PLAYER_TURN : phase === GamePhases.PRE_DEAL && canBet}
                 gamePhase={phase}
                 showTotals={settings.showTotals}
-                chip={chip ?? picked}
+                chip={chip}
                 canBet={canBet}
                 onBet={addBet}
                 multi={seats.length > 1}

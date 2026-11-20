@@ -74,12 +74,12 @@ test('inline links are underlined: Create an account on Log in, Log out on Home 
   await expect(page.getByRole('button', { name: 'Log out' })).toHaveCSS('text-decoration-line', 'underline');
 });
 
-test('with nothing to bet the line says Out of credits and the circle still names its chip (L1-18)', async ({ page }) => {
+test('with nothing to bet the line says Out of credits and the disabled circle offers no chip (L1-18)', async ({ page }) => {
   await stubApi(page, { startCredits: 0 });
   await login(page); // waits for the line
   await expect(page.locator('#bal')).toHaveText('$0');
   await expect(page.locator('.msg')).toHaveText('Out of credits');
-  await expect(page.getByRole('button', { name: 'Bet spot 1, $0. Adds a $25 chip' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Bet spot 1, $0', exact: true })).toBeDisabled();
 });
 
 test('Settings has only its own head: no global header, nothing dark over a light page (L1-12)', async ({ page }) => {
@@ -94,7 +94,7 @@ test('Settings has only its own head: no global header, nothing dark over a ligh
   expect(colours[0]).toBe(colours[1]); // the page is the token background, with no navy bar above it
 });
 
-test('Settings: the column is 680 px with its gutters, a section header is 75 px, and an opened section scrolls into view (L1-21, L1-22)', async ({ page }) => {
+test('Settings: the column is 680 px with its gutters, a section header is 75 px, and a deep link scrolls its section into view (L1-21, L1-22)', async ({ page }) => {
   await stubApi(page);
   await page.addInitScript(() => sessionStorage.setItem('bj.token', 'e2e-token'));
   await page.goto('/settings#account');
@@ -108,8 +108,6 @@ test('Settings: the column is 680 px with its gutters, a section header is 75 px
   await expect.poll(scrolled).toBeGreaterThan(0);
   const inView = async (id) => { const box = await page.locator(id).boundingBox(); return box.y >= 0 && box.y + 68 <= page.viewportSize().height; };
   expect(await inView('#sec-account-h')).toBe(true);
-  await page.getByRole('button', { name: /^Chips/ }).click(); // a tap opens the next one and brings it up too
-  await expect.poll(() => inView('#sec-chips-h')).toBe(true);
 });
 
 test('a refused opening bet voids the round; its cards are not put back, so the next deal draws different ones (L1-27, by design)', async ({ page }) => {
@@ -117,17 +115,28 @@ test('a refused opening bet voids the round; its cards are not put back, so the 
   await seedRandom(page, 183);
   await login(page);
   let refuse = true;
-  await page.route('**/api/ledger/bet', (route) => (refuse && route.request().method() === 'POST'
-    ? route.fulfill({ status: 400, contentType: 'application/json', headers: CORS, body: '{"message":"Not enough credit"}' }) : route.fallback()));
+  // the refusal arrives once the first cards are face up (as it can in life: a slow answer), so there is a voided round to compare with
+  await page.route('**/api/ledger/bet', async (route) => {
+    if (!refuse || route.request().method() !== 'POST') return route.fallback();
+    await page.waitForFunction(() => window.__seen.length >= 2, null, { timeout: 15_000 });
+    return route.fulfill({ status: 400, contentType: 'application/json', headers: CORS, body: '{"message":"Not enough credit"}' });
+  });
+  // the names of the cards on the felt, in the order they first show (a refusal clears the table, so this is the only way to see the voided round's cards)
+  await page.evaluate(() => {
+    window.__seen = [];
+    new MutationObserver(() => { for (const el of document.querySelectorAll('img.fly-front')) { const name = el.getAttribute('alt'); if (name && !window.__seen.includes(name)) window.__seen.push(name); } })
+      .observe(document.body, { subtree: true, childList: true, attributes: true });
+  });
   await placeBet(page, 25);
   await key(page, 'Deal').click();
   await expect(page.locator('.msg .notice')).toBeVisible({ timeout: 20_000 });
   await expect(page.locator('.discard')).not.toHaveClass(/empty/); // the voided round's cards are in the discard pile
+  const voided = await page.evaluate(() => window.__seen);
+  expect(voided.length).toBeGreaterThanOrEqual(2);
   refuse = false;
+  await page.evaluate(() => { window.__seen = []; });
   await placeBet(page, 25);
   await key(page, 'Deal').click();
-  await expect(key(page, 'Hit')).not.toHaveAttribute('aria-disabled', 'true', { timeout: 20_000 });
-  // the first round was king of diamonds + 4 of clubs against a 6 of clubs (smoke.spec.js, seed 183); the shoe moved on, so this one is another hand
-  const both = (await page.getByRole('img', { name: 'king of diamonds' }).count()) + (await page.getByRole('img', { name: '4 of clubs' }).count());
-  expect(both, 'not the same two cards again').toBeLessThan(2);
+  await expect.poll(() => page.evaluate(() => window.__seen.length), { timeout: 20_000 }).toBeGreaterThanOrEqual(voided.length);
+  expect((await page.evaluate(() => window.__seen)).slice(0, voided.length), 'not the same cards again').not.toEqual(voided);
 });

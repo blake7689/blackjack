@@ -216,12 +216,6 @@ describe("PlayerHand: the bet circle and its stacks (#82)", () => {
       expect(spot("Bet spot 1, $0").disabled).toBe(false); // canBet is the gate; with it but no chip the name just offers none
     });
 
-    it("names the chip it adds even when it cannot bet now (out of credits, a shuffle): the mockup's name, L1-18", () => {
-      view(hand(), { canBet: false, chip: 25 });
-      const s = spot("Bet spot 1, $0. Adds a $25 chip");
-      expect(s.disabled).toBe(true);
-    });
-
     it("is idle: not the accent seat, when it is not active", () => {
       const { container } = view(hand(), { active: false });
       expect(container.querySelector(".seat").classList.contains("active")).toBe(false);

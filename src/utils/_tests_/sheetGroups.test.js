@@ -3,7 +3,7 @@ import { sheetGroups, feltPrint } from "../ruleCatalog";
 import { RULE_PRESETS } from "../rulePresets";
 import { initialGameState } from "../gameReducer";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
-import { offersAtDeal } from "../blackjackLogic";
+import { offersAtDeal, canSplit } from "../blackjackLogic";
 import { stackedShoe } from "./stackedShoe";
 
 // The Table rules sheet's content (#87): plain English worked out from the settings, in ruleCatalog.js only.
@@ -68,6 +68,13 @@ describe("sheetGroups (#87)", () => {
     expect(group(VEGAS, "Dealer").join("|")).not.toMatch(/dealer blackjack takes/i);
     expect(group(withRules({ dealerHoleBehaviour: US_NO_PEEK, noHoleCardLoss: "original" }), "Dealer")).toContain("A dealer blackjack takes only your first bet");
     expect(group(withRules({ dealerHoleBehaviour: EU, noHoleCardLoss: "all" }), "Dealer")).toContain("A dealer blackjack takes everything you staked");
+  });
+
+  it("the fixed line 'Any two ten-value cards split' matches the engine: a king and a ten split (canSplit goes by card value)", () => {
+    expect(group(VEGAS, "Splitting")).toContain("Any two ten-value cards split");
+    const [king, ten] = stackedShoe(["K", "10"]);
+    expect(king.rank).not.toBe(ten.rank);
+    expect(canSplit({ cards: [king, ten] }, 1, 4)).toBe(true);
   });
 
   it("says 1 deck, not 1 decks", () => {

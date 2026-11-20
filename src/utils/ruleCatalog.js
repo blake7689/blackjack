@@ -198,7 +198,7 @@ export function sheetGroups(settings) {
     ]],
     ["Splitting", [
       summaryOf("maxSplitHands"),
-      "Any two ten-value cards split",
+      "Any two ten-value cards split", // fixed text: the engine splits by card value (canSplit); sheetGroups.test.js checks a king and a ten split, so they cannot drift apart
       settings.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each",
       shown("resplitAces") && (settings.resplitAces ? "Aces may be split again" : "Aces split once"),
       settings.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it",

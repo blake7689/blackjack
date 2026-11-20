@@ -6,7 +6,7 @@ import ConfirmDialog from "../components/SettingsControls/ConfirmDialog";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { leaveGuard } from "../utils/leaveGuard";
 
-// The three moves the Header, Home and the table's top bar menu share: Home (asks first once cards are out), Settings (`goSettings("rules")`
+// The three moves Home, Settings' Table / Log out buttons and the table's top bar menu share: Home (asks first once cards are out), Settings (`goSettings("rules")`
 // opens that section: /settings#rules) and Log out (asks first). Each first asks Settings to confirm discarding unsaved changes. The asks are
 // styled confirms (#87: the safe button first, the danger outline): `confirm` is the dialog to render (null when none is open). //
 export function useNavActions() {

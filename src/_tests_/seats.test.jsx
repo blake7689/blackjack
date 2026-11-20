@@ -42,11 +42,11 @@ describe("the betting seat", () => {
 });
 
 describe("out of credits (L1-18)", () => {
-  it("the line says Out of credits, and the circle still names the chip it would add (the mockup's wording), disabled", () => {
+  it("the line says Out of credits, and the disabled circle offers no chip in its name", () => {
     renderUI(<GameBoard />, { player: { player: { userName: "t", credits: 0 } }, game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0, seenIds: ["x"] } });
     expect(screen.getByText("Out of credits", { selector: ".msg" })).toBeTruthy();
     expect(screen.queryByText("Place your bets")).toBeNull();
-    expect(screen.getByRole("button", { name: "Bet spot 1, $0. Adds a $25 chip" }).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Bet spot 1, $0" }).disabled).toBe(true);
   });
 });
 

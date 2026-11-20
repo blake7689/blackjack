@@ -49,9 +49,16 @@ export default function Settings() {
   const { hash } = useLocation();
   const [edits, setEdits] = useState({}); // only unsaved edits, so settings that load after the page opens (#36) still show
   const [open, setOpen] = useState(() => (SECTIONS.includes(hash.slice(1)) ? hash.slice(1) : null));
-  useEffect(() => { if (SECTIONS.includes(hash.slice(1))) setOpen(hash.slice(1)); }, [hash]); // a link to another #section while here
-  // An opened section scrolls to the top of the page (the mockup's deep link does; here the page is the scroll container, L1-22): always at once: a smooth scroll runs on for ~300 ms, and the hint bubble hides on any scroll (HintLayer), so a tap on an "i" right after opening lost its tip (L1-38).
-  useEffect(() => { if (open) document.getElementById(`sec-${open}`)?.scrollIntoView({ block: "start", behavior: "auto" }); }, [open]);
+  // A deep link or a #section change while here, and a Save that sends the player back to Account, scroll that section to the top of the page (the mockup's deep link does;
+  // here the page is the scroll container, L1-22). A tap on a header does not. Always at once: a smooth scroll runs on for ~300 ms and the hint bubble hides on any scroll
+  // (HintLayer, L1-38). `toScroll` waits until the section is open: the body must be there, or the page is too short to scroll that far.
+  const toScroll = useRef(null);
+  useEffect(() => { if (SECTIONS.includes(hash.slice(1))) { toScroll.current = hash.slice(1); setOpen(hash.slice(1)); } }, [hash]);
+  useEffect(() => {
+    if (!toScroll.current || toScroll.current !== open) return;
+    document.getElementById(`sec-${open}`)?.scrollIntoView({ block: "start", behavior: "auto" });
+    toScroll.current = null;
+  });
   const [asking, setAsking] = useState(null); // the confirm on screen: { kind: "leave" | "reset" | "delete", go? }
   const [notice, setNotice] = useState(null); // one status line for the page's results
   const [profileError, setProfileError] = useState("");
@@ -116,7 +123,7 @@ export default function Settings() {
           failed = true;
         }
       }
-      if (failed || invalid.length) { problems.push("Your profile isn't saved yet."); setOpen("account"); }
+      if (failed || invalid.length) { problems.push("Your profile isn't saved yet."); toScroll.current = "account"; setOpen("account"); }
     }
     if (settingsChanged.length) {
       const sent = pick(settingsChanged);

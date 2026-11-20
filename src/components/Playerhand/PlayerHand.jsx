@@ -64,7 +64,7 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
   // hand (baseStake 0: its whole stake was an added one) have no such split: one stack of the whole bet, its exact amount on the label.
   const dbl = hand.isDouble && hand.baseStake > 0 && hand.bet === hand.baseStake * 2 ? hand.baseStake : 0;
   const ins = hand.insurance > 0 ? hand.insurance : 0;
-  const spotName = betting ? `Bet spot ${index + 1}, ${money(hand.bet)}${chip ? `. Adds a ${money(chip)} chip` : ""}` : `Bet ${money(hand.bet)}`;
+  const spotName = betting ? `Bet spot ${index + 1}, ${money(hand.bet)}${canBet && chip ? `. Adds a ${money(chip)} chip` : ""}` : `Bet ${money(hand.bet)}`;
 
   // Chips arriving and leaving. The flights are state-driven: whoever changed the bet (a tap, a key, Rebet, 2x, the automatic rebet, a double, insurance) gets the
   // same motion, and none of it reserves or holds the board (a tap must never delay the dock).

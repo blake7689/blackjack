@@ -110,14 +110,13 @@ describe("Settings: the page", () => {
       expect(last().options).toEqual({ block: "start", behavior: "auto" });
     });
 
-    it("no section open, nothing scrolls; a tap on a header scrolls that section at once, and closing it does not scroll", () => {
+    it("a tap on a header (opening or closing) never scrolls the page", () => {
       open();
+      fireEvent.click(sectionButton("Account"));
+      expect(expanded()).toEqual(["Account"]);
+      fireEvent.click(sectionButton("Account"));
+      fireEvent.click(sectionButton("Chips"));
       expect(scrolls).toHaveLength(0);
-      fireEvent.click(sectionButton("Account"));
-      expect(last().el.id).toBe("sec-account");
-      expect(last().options).toEqual({ block: "start", behavior: "auto" }); // never smooth: the hint bubble hides on any scroll (L1-38)
-      fireEvent.click(sectionButton("Account"));
-      expect(scrolls).toHaveLength(1);
     });
 
     it("a Save that sends Account back open brings it into view", async () => {
@@ -130,6 +129,8 @@ describe("Settings: the page", () => {
       fireEvent.click(saveButton());
       await flush();
       expect(last().el.id).toBe("sec-account");
+      expect(last().options).toEqual({ block: "start", behavior: "auto" }); // never smooth: the hint bubble hides on any scroll (L1-38)
+      expect(scrolls).toHaveLength(1);
     });
 
     it("a link to another #section while here scrolls to it", () => {
