@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { lazyReload } from "../utils/lazyReload";
 import { Link } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { useNavActions } from "../hooks/useNavActions";
-import RulesSheet from "../components/RulesSheet/RulesSheet";
 import Wordmark from "../components/Wordmark/Wordmark";
 import { LoadingScreen, Page } from "../components/PageScreens/PageScreens";
+
+const RulesSheet = lazyReload(() => import("../components/RulesSheet/RulesSheet")); // #169
 
 // Home (DESIGN section 8; no felt hero since L2-5: the wordmark, a column of actions and space). Signed in: Play starts the table, then Rules, Settings and "Signed in as ... · Log out". Signed out: Log in, Create an account, Rules.
 // A player just signed in whose table is about to start sees Loading, never a flash of Home: a signed-in player opens on the table and reaches Home from its menu. //
@@ -43,7 +45,7 @@ export default function Home() {
           </div>
         </>
       )}
-      {rules && <RulesSheet settings={settings} onClose={() => setRules(false)} />}
+      {rules && <Suspense fallback={null}><RulesSheet settings={settings} onClose={() => setRules(false)} /></Suspense>}
       {confirm}
     </Page>
   );

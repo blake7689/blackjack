@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import "./Dialog.css";
 
 // A confirm for a destructive step (Delete profile, Discard, Start a new shoe): the safe button comes first and takes focus, the danger
 // button is an outline (DESIGN sections 5 and 8). Escape means the safe answer, Tab stays inside, and focus goes back where it was. //

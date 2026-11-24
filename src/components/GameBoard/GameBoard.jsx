@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { lazyReload } from "../../utils/lazyReload";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, landed, queue, reserve, spots } from "../../utils/cardAnimation";
 import { sweepCards } from "../../utils/cardFx";
@@ -22,7 +23,6 @@ import TopBar from "../TopBar/TopBar";
 import DealerArea from "../DealerArea/DealerArea";
 import Shoe from "../Shoe/Shoe";
 import FeltPrintBase from "../FeltPrint/FeltPrint";
-import RulesSheet from "../RulesSheet/RulesSheet";
 import CenterMessage from "../CenterMessage/CenterMessage";
 import PlayerHand from "../Playerhand/PlayerHand";
 import Dock from "../Dock/Dock";
@@ -34,6 +34,7 @@ import "./GameBoard.css";
 const TOP_UP_BELOW = 100;
 // FeltPrint calls centrePrint (layout reads) after every one of its own renders; memoized, that is when its settings or box change, not on every board render (#140).
 const FeltPrint = memo(FeltPrintBase);
+const RulesSheet = lazyReload(() => import("../RulesSheet/RulesSheet")); // #169: loaded when first opened
 const subscribeLanded = (l) => { landed.listeners.add(l); return () => landed.listeners.delete(l); };
 const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "lose", surrender: "lose" }; // verdict kind -> sound and buzz (a push has neither)
 
@@ -209,7 +210,7 @@ export default function GameBoard() {
 
       <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} />
       <div className="flight-layer" ref={layerRef} />
-      {rules && <RulesSheet settings={settings} onClose={() => setRules(false)} />}
+      {rules && <Suspense fallback={null}><RulesSheet settings={settings} onClose={() => setRules(false)} /></Suspense>}
     </div>
     </FlightContext.Provider>
   );
