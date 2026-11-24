@@ -1,0 +1,39 @@
+# Runs only the live smoke test (#170), never a deploy. Use it after an API deploy or any time you want
+# to check the real site. Dispatch only works once this file is on the default branch (main).
+# Run it with: gh workflow run live-smoke.yml   (then: gh run watch)
+name: Live smoke (on demand)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live_smoke:
+    name: Live smoke test (on demand)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # One run at a time: two runs would race on the test account's balance.
+    concurrency:
+      group: live-smoke
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Chromium shell only, no browser cache (same as the e2e job in ci.yml).
+      - run: bash scripts/install-playwright-browser.sh
+        timeout-minutes: 4
+      # The login secrets are set on this step only, so no other step can read them.
+      - run: npx playwright test -c playwright.live.config.js
+        timeout-minutes: 6
+        env:
+          E2E_LIVE_USERNAME: ${{ secrets.E2E_LIVE_USERNAME }}
+          E2E_LIVE_PASSWORD: ${{ secrets.E2E_LIVE_PASSWORD }}
+          CI: true
+      - if: failure()
+        run: echo "::error::Live smoke test failed - this is an alarm, nothing is deployed or rolled back. See the test step log."
