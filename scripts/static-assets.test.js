@@ -64,16 +64,17 @@ describe('the card faces', () => {
     expect(files.some((name) => name.endsWith('.png') || name === 'back.png')).toBe(false);
   });
 
-  it('are real WebP images from the 500 px source, far lighter than the 4.7 MB of PNGs', () => {
+  it('are real WebP images, 360 px wide (#169: the largest card is 156 css px, 312 at 2x), far lighter than the 4.7 MB of PNGs', () => {
     let bytes = 0;
     for (const name of readdirSync(dir)) {
       const data = readFileSync(join(dir, name));
       expect([data.subarray(0, 4).toString(), data.subarray(8, 12).toString()], name).toEqual(['RIFF', 'WEBP']);
       expect(data.subarray(12, 16).toString(), name).toBe('VP8X'); // dimensions: 24-bit width - 1, height - 1
-      expect(1 + data.readUIntLE(24, 3), name).toBe(500);
+      expect(1 + data.readUIntLE(24, 3), name).toBe(360);
+      expect(1 + data.readUIntLE(27, 3), name).toBe(523); // keeps the 500 x 726 aspect ratio
       bytes += data.length;
     }
-    expect(bytes).toBeLessThan(2 * 1024 * 1024);
+    expect(bytes).toBeLessThan(800 * 1024);
   });
 
   it('are the only card files the code asks for: no .png card path in src', () => {
