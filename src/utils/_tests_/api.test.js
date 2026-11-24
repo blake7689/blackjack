@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { apiGet, apiPost, apiPut, apiDelete, getToken, setToken, clearToken, setUnauthorizedHandler, COLD_START_TIMEOUT_MS } from "../api";
+import { apiGet, apiPost, apiPut, apiDelete, getToken, setToken, clearToken, setUnauthorizedHandler, swapToken, COLD_START_TIMEOUT_MS } from "../api";
 
 const respond = (res) => {
   const fetch = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: 1 }), text: async () => "", ...res }));
@@ -123,6 +123,186 @@ describe("errors", () => {
 
     setToken("expired");
     await expect(apiGet("/player/me")).rejects.toThrow();
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(getToken()).toBeNull();
+  });
+});
+
+// A fetch whose answers the test hands out one by one: calls[i].resolve(res) answers the i-th request.
+function controlled() {
+  const calls = [];
+  const fetch = vi.fn((url, init) => new Promise((resolve) => { calls.push({ init, resolve }); }));
+  vi.stubGlobal("fetch", fetch);
+  return { fetch, calls };
+}
+const ok = (body = { ok: 1 }) => ({ ok: true, status: 200, json: async () => body, text: async () => "" });
+const unauthorized = { ok: false, status: 401, text: async () => "{}" };
+const gate = () => {
+  let open;
+  const promise = new Promise((resolve) => { open = resolve; });
+  return { promise, open };
+};
+const auth = (call) => call.init.headers.Authorization;
+
+describe("password change token swap (#171)", () => {
+  it("makes requests wait while the swap runs, then sends them with the new token", async () => {
+    const fetch = respond({});
+    setToken("old");
+    const hold = gate();
+    const swap = swapToken(async () => { await hold.promise; setToken("new"); return "swapped"; });
+
+    const waiting = apiGet("/x");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(fetch).not.toHaveBeenCalled(); // gated: nothing goes out with the old token
+    hold.open();
+    expect(await swap).toBe("swapped");
+    await waiting;
+    expect(fetch.mock.calls[0][1].headers.Authorization).toBe("Bearer new");
+  });
+
+  it("lets the swap's own calls (ungated) through, and requests pass freely once it is over", async () => {
+    const fetch = respond({});
+    setToken("old");
+    const hold = gate();
+    const swap = swapToken(async () => {
+      await apiPut("/p", {}, true);
+      await apiPost("/q", {}, undefined, true);
+      await hold.promise;
+    });
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+    expect(fetch.mock.calls.map(([url]) => url.split("/").pop())).toEqual(["p", "q"]);
+    hold.open();
+    await swap;
+    await apiGet("/x");
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
+  it("releases the gate when the swap throws, and passes the error on", async () => {
+    const fetch = respond({});
+    await expect(swapToken(async () => { throw new Error("nope"); })).rejects.toThrow("nope");
+    await apiGet("/x");
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("a 401 for the old token that arrives during the swap waits and retries once with the new token, without signing out", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const { calls, fetch } = controlled();
+    setToken("old");
+    const sent = apiGet("/x");
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    expect(auth(calls[0])).toBe("Bearer old");
+
+    const hold = gate();
+    const swap = swapToken(async () => { await hold.promise; setToken("new"); });
+    calls[0].resolve(unauthorized); // the revoked token was refused while the swap runs
+    await Promise.resolve();
+    expect(fetch).toHaveBeenCalledOnce(); // still waiting for the swap
+    hold.open();
+    await swap;
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(auth(calls[1])).toBe("Bearer new");
+    calls[1].resolve(ok({ done: true }));
+
+    expect(await sent).toEqual({ done: true });
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(getToken()).toBe("new");
+  });
+
+  it("a 401 for the old token that arrives after the swap is over retries once with the new token", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const { calls } = controlled();
+    setToken("old");
+    const sent = apiPut("/x", { a: 1 });
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    await swapToken(async () => setToken("new"));
+    calls[0].resolve(unauthorized);
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    expect(auth(calls[1])).toBe("Bearer new");
+    expect(calls[1].init.body).toBe('{"a":1}'); // the retry repeats the same request
+    calls[1].resolve(ok());
+
+    await sent;
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    expect(getToken()).toBe("new");
+  });
+
+  it("when the swap ends with no new token, the request throws and neither clears nor signs out again", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const { calls, fetch } = controlled();
+    setToken("old");
+    const sent = apiGet("/x");
+    sent.catch(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    const hold = gate();
+    const swap = swapToken(async () => { await hold.promise; clearToken(); });
+    calls[0].resolve(unauthorized);
+    hold.open();
+    await swap;
+
+    await expect(sent).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledOnce(); // no retry
+    expect(onUnauthorized).not.toHaveBeenCalled();
+  });
+
+  it("a swap that leaves the token unchanged is a normal 401: no retry, token cleared, signed out", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const { calls, fetch } = controlled();
+    setToken("old");
+    const sent = apiGet("/x");
+    sent.catch(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    const hold = gate();
+    const swap = swapToken(() => hold.promise);
+    calls[0].resolve(unauthorized);
+    hold.open();
+    await swap;
+
+    await expect(sent).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(getToken()).toBeNull();
+  });
+
+  it("a 401 on the retry itself signs out (it retries only once)", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const { calls, fetch } = controlled();
+    setToken("old");
+    const sent = apiGet("/x");
+    sent.catch(() => {});
+    await vi.waitFor(() => expect(calls).toHaveLength(1));
+    await swapToken(async () => setToken("new"));
+    calls[0].resolve(unauthorized);
+    await vi.waitFor(() => expect(calls).toHaveLength(2));
+    calls[1].resolve(unauthorized);
+
+    await expect(sent).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(getToken()).toBeNull();
+  });
+
+  it("the swap's own ungated calls are never retried on a 401", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const fetch = respond({ ok: false, status: 401, text: async () => "{}" });
+    setToken("old");
+    await expect(swapToken(() => apiPut("/p", {}, true))).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("a 401 outside any swap still clears the token and signs out (no retry)", async () => {
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+    const fetch = respond({ ok: false, status: 401, text: async () => "{}" });
+    setToken("tok");
+    await expect(apiGet("/x")).rejects.toMatchObject({ status: 401 });
+    expect(fetch).toHaveBeenCalledOnce();
     expect(onUnauthorized).toHaveBeenCalledOnce();
     expect(getToken()).toBeNull();
   });

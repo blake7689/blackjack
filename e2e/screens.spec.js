@@ -334,7 +334,7 @@ test.describe('Home and the sign-in screens', () => {
     await expect(create).toBeDisabled();
     await username.fill('newbie');
     await page.getByLabel('Email', { exact: true }).fill('newbie@e2e.test');
-    await page.getByLabel('Password', { exact: true }).fill('secret1');
+    await page.getByLabel('Password', { exact: true }).fill('secret12');
     await page.getByLabel('First name', { exact: true }).fill('New');
     await expect(create).toBeDisabled(); // the last name is still missing
     await page.getByLabel('Last name', { exact: true }).fill('Bie');

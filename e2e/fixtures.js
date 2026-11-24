@@ -20,15 +20,17 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
 // loginError: { status, message } makes POST /auth/login fail with it (a sign-in refusal).
+// reloginError: { status, message } makes only the 2nd and later logins fail (the sign-in after a password change, #171).
+// Each login after the first answers with a new token ('e2e-token-2', ...); `requests` lists every call with its Authorization header.
 // meFailures: how many GET /player/me calls answer 503 before it answers normally (a restore that gets no answer: the Error screen, #87).
 // settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real). Whatever is passed,
 // the account's saved settings carry tableMessages "all" (every prompt shows at once, so the specs can wait on "Place your bets" and "Your move", L2-1) and currency "USD"
 // (the "$10 chip" names do not depend on the runner's locale, L2-2) unless a spec sets its own.
-export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
+export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   let meFailuresLeft = meFailures;
   const replies = [...topUps];
-  const stub = { bets: [], settles: [], topups: [], saves: [], failed: [], unknown: [] };
+  const stub = { bets: [], settles: [], topups: [], saves: [], logins: [], passwords: [], requests: [], failed: [], unknown: [] };
   stubs.set(page, stub);
   page.on('requestfailed', (r) => { if (r.url().startsWith('http://api.e2e.test')) stub.failed.push(`${r.method()} ${r.url()} ${r.failure()?.errorText}`); });
 
@@ -37,11 +39,19 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDel
     const json = (body, status = 200) => route.fulfill({ status, headers: CORS, contentType: 'application/json', body: JSON.stringify(body) });
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS }); // CORS preflight (Authorization / Content-Type)
     const endpoint = `${req.method()} ${new URL(req.url()).pathname.replace(/^\/api/, '')}`;
+    stub.requests.push({ endpoint, auth: req.headers().authorization });
     switch (endpoint) {
-      case 'POST /auth/login':
+      case 'POST /auth/login': {
         await hold(loginDelayMs);
-        if (loginError) return json({ message: loginError.message }, loginError.status);
-        return json({ accessToken: 'e2e-token' });
+        stub.logins.push(req.postDataJSON());
+        const n = stub.logins.length;
+        const error = n > 1 && reloginError ? reloginError : loginError;
+        if (error) return json({ message: error.message }, error.status);
+        return json({ accessToken: n > 1 ? `e2e-token-${n}` : 'e2e-token' });
+      }
+      case 'PUT /player/me/password':
+        stub.passwords.push(req.postDataJSON());
+        return route.fulfill({ status: 204, headers: CORS });
       case 'GET /player/me':
         await hold(meDelayMs);
         if (meFailuresLeft-- > 0) return json({ message: 'e2e stub: the API is unavailable' }, 503);

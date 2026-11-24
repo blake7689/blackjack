@@ -3,7 +3,7 @@ import {
   normalizePlayer, getMe, loginPlayer, registerPlayer, updateProfile, changePassword,
   deleteMe, logoutPlayer, placeBet, settleRound, topUp, getSettings, saveSettings,
 } from "../playerEngine";
-import { getToken, setToken } from "../api";
+import { getToken, setToken, clearToken, apiGet } from "../api";
 
 const profile = { userName: "tester", email: "t@example.com", firstName: "T", lastName: null, credits: 1000 };
 
@@ -108,11 +108,99 @@ describe("account changes", () => {
   });
 
   it("changePassword sends the current and the new password", async () => {
+    setToken("tok-old");
     fetchMock.mockResolvedValueOnce(respond(null, 204));
-    await changePassword("old-pass", "new-pass");
+    await changePassword("old-pass", "new-pass1", "tester");
 
-    expect(call()).toMatchObject({ method: "PUT", body: { currentPassword: "old-pass", newPassword: "new-pass" } });
-    expect(call().url).toMatch(/\/player\/me\/password$/);
+    expect(call(0)).toMatchObject({ method: "PUT", body: { currentPassword: "old-pass", newPassword: "new-pass1" }, auth: "Bearer tok-old" });
+    expect(call(0).url).toMatch(/\/player\/me\/password$/);
+  });
+});
+
+describe("changePassword signs in again (#171)", () => {
+  const gate = () => {
+    let open;
+    const promise = new Promise((resolve) => { open = resolve; });
+    return { promise, open };
+  };
+
+  it("logs in with the new password and keeps the new token; resolves false", async () => {
+    setToken("tok-old");
+    fetchMock
+      .mockResolvedValueOnce(respond(null, 204))
+      .mockResolvedValueOnce(respond({ tokenType: "Bearer", accessToken: "tok-new" }));
+
+    expect(await changePassword("old-pass", "new-pass1", "tester")).toBe(false);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(call(1)).toMatchObject({ method: "POST", body: { usernameOrEmail: "tester", password: "new-pass1" } });
+    expect(call(1).url).toMatch(/\/auth\/login$/);
+    expect(getToken()).toBe("tok-new");
+  });
+
+  it("the login waits as long as a cold start, and the PUT keeps the 10 s default", async () => {
+    setToken("tok-old");
+    const spy = vi.spyOn(AbortSignal, "timeout");
+    fetchMock.mockResolvedValueOnce(respond(null, 204)).mockResolvedValueOnce(respond({ accessToken: "tok-new" }));
+    await changePassword("old-pass", "new-pass1", "tester");
+    expect(spy.mock.calls.map(([t]) => t)).toEqual([10000, 90000]);
+    spy.mockRestore();
+  });
+
+  it("a failed login clears the token and resolves true, so the caller signs out", async () => {
+    setToken("tok-old");
+    fetchMock.mockResolvedValueOnce(respond(null, 204)).mockResolvedValueOnce(respond({ message: "down" }, 500));
+
+    expect(await changePassword("old-pass", "new-pass1", "tester")).toBe(true);
+    expect(getToken()).toBeNull();
+  });
+
+  it("a refused password change throws, keeps the old token, and releases the gate", async () => {
+    setToken("tok-old");
+    fetchMock.mockResolvedValueOnce(respond({ message: "Incorrect password." }, 400));
+
+    await expect(changePassword("wrong", "new-pass1", "tester")).rejects.toThrow("Incorrect password.");
+    expect(fetchMock).toHaveBeenCalledOnce(); // no login attempt
+    expect(getToken()).toBe("tok-old");
+    fetchMock.mockResolvedValueOnce(respond(profile));
+    await apiGet("/player/me"); // not held by a stuck gate
+    expect(call().auth).toBe("Bearer tok-old");
+  });
+
+  it("signing out while the change is in flight: no login, no token", async () => {
+    setToken("tok-old");
+    const put = gate();
+    fetchMock.mockImplementationOnce(async () => { await put.promise; return respond(null, 204); });
+
+    const changing = changePassword("old-pass", "new-pass1", "tester");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    clearToken(); // logout (or a 401) meanwhile
+    put.open();
+
+    expect(await changing).toBe(false);
+    expect(fetchMock).toHaveBeenCalledOnce(); // never signed in again
+    expect(getToken()).toBeNull();
+  });
+
+  it("holds other requests until the new token is stored, then sends them with it", async () => {
+    setToken("tok-old");
+    const put = gate();
+    fetchMock
+      .mockImplementationOnce(async () => { await put.promise; return respond(null, 204); })
+      .mockResolvedValueOnce(respond({ accessToken: "tok-new" }));
+    const changing = changePassword("old-pass", "new-pass1", "tester");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+
+    fetchMock.mockResolvedValueOnce(respond({ credits: 990 }));
+    const queued = placeBet(10, false, "id-1");
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledOnce(); // the bet is waiting
+    put.open();
+    await changing;
+    await queued;
+
+    expect(call(2).url).toMatch(/\/ledger\/bet$/);
+    expect(call(2).auth).toBe("Bearer tok-new");
   });
 });
 

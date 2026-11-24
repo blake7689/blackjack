@@ -25,8 +25,15 @@ export function PlayerProvider({ children }) {
   const [restoring, setRestoring] = useState(() => !!getToken());
   // The restore got no answer (network, timeout, 5xx): the app shows its Error screen (Try again / Home) instead of acting signed out (#87).
   const [restoreFailed, setRestoreFailed] = useState(false);
+  // A message for the Login page (e.g. after a password change we could not sign back in from); cleared by the next sign-in.
+  const [notice, setNotice] = useState(null);
+  // Counts sign-ins and sign-outs: "same player" for queued work means the same count, not the same token,
+  // because a password change swaps the token without changing the player (#171).
+  const sessionRef = useRef(0);
 
   const signIn = useCallback((p) => {
+    sessionRef.current += 1;
+    if (p) setNotice(null);
     playerRef.current = p;
     unsentRef.current = 0;
     pendingRef.current = 0;
@@ -41,14 +48,15 @@ export function PlayerProvider({ children }) {
   }, []);
 
   // Restore a session after a page refresh; an expired token (401, which clears it) just leaves you signed out; any other failure keeps the token and
-  // sets `restoreFailed`. Ignore a late answer if you logged out or in as someone else meanwhile (the token changed).
+  // sets `restoreFailed`. Ignore a late answer if you logged out or in as someone else meanwhile (the session changed).
   const restore = useCallback(() => {
-    const token = getToken();
-    if (!token) return;
+    if (!getToken()) return;
+    const session = sessionRef.current;
+    const same = () => sessionRef.current === session && !!getToken(); // no sign-in or sign-out since, and the token was not cleared (a 401)
     setRestoring(true);
     setRestoreFailed(false);
     // then(ok, fail), not then().catch(): only getMe's own failure means "no answer"; an error while signing in is a bug, logged, not an Error screen.
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }, () => { if (getToken() === token) setRestoreFailed(true); })
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (same()) signIn(p); }, () => { if (same()) setRestoreFailed(true); })
       .catch((error) => console.error("Restoring the session failed", error))
       .finally(() => setRestoring(false));
   }, [signIn]);
@@ -69,7 +77,12 @@ export function PlayerProvider({ children }) {
     setPlayer(playerRef.current);
     return playerRef.current;
   }, []);
-  const changePassword = useCallback((currentPassword, newPassword) => changePasswordApi(currentPassword, newPassword), []);
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    if (await changePasswordApi(currentPassword, newPassword, playerRef.current?.userName)) {
+      signIn(null);
+      setNotice("Your password was changed, but we could not sign you in again. Please sign in with your new password.");
+    }
+  }, [signIn]);
   const deletePlayer = useCallback(async () => {
     await deleteMe();
     signIn(null);
@@ -92,8 +105,8 @@ export function PlayerProvider({ children }) {
   // then shows the server's balance plus local changes. It stops quietly if the player signed out or changed
   // since it was queued, so one player's retry is never charged to another. report(seq, outcome) tells the game.
   const enqueue = useCallback(({ seq, quiet, newRound, optimistic, call }, report) => {
-    const token = getToken();
-    const stop = () => !playerRef.current || getToken() !== token;
+    const session = sessionRef.current;
+    const stop = () => !playerRef.current || sessionRef.current !== session;
     pendingRef.current += optimistic;
     queueRef.current = queueRef.current.then(async () => {
       const reload = async () => {
@@ -177,7 +190,7 @@ export function PlayerProvider({ children }) {
   // outcome with one requestId. Resolves { ok } or { ok: false, locked, retryAfter }; the code is never logged or kept.
   const topUp = useCallback((code) => new Promise((resolve) => {
     const requestId = newRequestId();
-    const token = getToken();
+    const session = sessionRef.current;
     let applied = false;
     let locked = null;
     let before = 0;
@@ -191,7 +204,7 @@ export function PlayerProvider({ children }) {
     };
     enqueue({ quiet: true, optimistic: 0, call }, (_, outcome) => {
       // enqueue reports a dropped call (sign-out, other player) as "confirmed" too, so check for that here: no badge then.
-      const ok = outcome === "confirmed" && applied && !!playerRef.current && getToken() === token;
+      const ok = outcome === "confirmed" && applied && !!playerRef.current && sessionRef.current === session;
       if (ok) showChange(getCredits() - before); // enqueue has already set the new balance
       resolve(ok ? { ok: true } : { ok: false, locked: locked !== null, retryAfter: locked?.retryAfter });
     });
@@ -205,8 +218,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, notice, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, notice, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;
