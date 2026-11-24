@@ -1,84 +1,79 @@
-// Table sounds and haptics (#86). Every sound is synthesized here with the Web Audio API (no audio files, no third-party assets, see public/CREDITS.md).
-// The board mirrors the saved settings into `prefs` (setSoundPrefs); a call does nothing while its setting is off or the browser has no AudioContext /
-// navigator.vibrate. Playing never waits for anything and never throws. //
+// Table sounds and haptics (#86, recorded sounds L2-9). The sounds are CC0 recordings in public/sounds (see public/CREDITS.md), fetched and decoded into
+// AudioBuffers the first time Sound is on (never at app start) and played through the Web Audio API. The board mirrors the saved settings into `prefs`
+// (setSoundPrefs); a call does nothing while its setting is off or the browser has no AudioContext / navigator.vibrate. Playing never waits for anything
+// and never throws: a sound that is not decoded yet (or whose file failed) is skipped. Never use Math.random here: the e2e seeds depend on its draw count.
+
+// To swap a sound: drop the new file in public/sounds, then change its row. `file` (in public/sounds), `at` = where playing starts in the file (s),
+// `ms` = the longest it plays (0 = the whole file; it fades out over its last moments), `gain` = its level against the others (measured, not heard:
+// the chip's peak is the reference). The deal and flip fire for every card, so only their useful part plays.
+const SOUNDS = {
+  deal: { file: "deal.mp3", at: 0.25, ms: 300, gain: 1.5 },
+  flip: { file: "flip.mp3", at: 0.25, ms: 500, gain: 1.5 },
+  chip: { file: "chip.mp3", at: 0, ms: 0, gain: 1 },
+  shuffle: { file: "shuffle.mp3", at: 0.1, ms: 3000, gain: 1.1 },
+  win: { file: "win.mp3", at: 0, ms: 0, gain: 0.4 },
+  lose: { file: "lose.mp3", at: 0, ms: 2500, gain: 0.7 },
+};
+const FADE = 0.15; // s, the fade-out at the end of every sound (never longer than half of it)
 
 const prefs = { soundOn: false, soundVolume: 50, hapticsOn: false };
 export const setSoundPrefs = ({ soundOn, soundVolume, hapticsOn }) => {
+  const was = prefs.soundOn;
   const v = Number(soundVolume);
-  return Object.assign(prefs, { soundOn: soundOn === true, soundVolume: Number.isFinite(v) ? v : 50, hapticsOn: hapticsOn === true });
+  const set = Object.assign(prefs, { soundOn: soundOn === true, soundVolume: Number.isFinite(v) ? v : 50, hapticsOn: hapticsOn === true });
+  if (!was) preload(); // Sound has just been switched on (a no-op while it is off)
+  return set;
 };
 
 let ctx = null;
-let noise = null;
 const context = () => {
-  if (!ctx && typeof AudioContext === "function") ctx = new AudioContext(); // lazily, on the first sound (a user gesture has happened by then)
+  if (!ctx && typeof AudioContext === "function") ctx = new AudioContext(); // lazily: when Sound is on at the first table render (setSoundPrefs), possibly suspended until the next gesture, or at the first sound
   if (ctx?.state === "suspended") ctx.resume?.()?.catch?.(() => {}); // a refused resume is not an error
   return ctx;
 };
 
-// iOS Safari only lets a context start (or resume) inside a user gesture, and the first sound often comes from a timer. So every tap or key press makes / resumes it
-// while Sound is on; once it runs this is one cheap check.
-const unlock = () => { if (prefs.soundOn) try { context(); } catch { /* ignore */ } };
-for (const type of ["pointerdown", "keydown"]) document.addEventListener(type, unlock, { capture: true, passive: true });
-
-// A short buffer of white noise, made once.
-const noiseBuffer = (c) => {
-  if (!noise) {
-    noise = c.createBuffer(1, c.sampleRate / 2, c.sampleRate);
-    const data = noise.getChannelData(0);
-    let s = 1; // own LCG, never Math.random: e2e seeds that (see CLAUDE.md)
-    for (let i = 0; i < data.length; i++) data[i] = ((s = (s * 1664525 + 1013904223) >>> 0) / 2147483648) - 1;
-  }
-  return noise;
-};
-
-// One voice: a tone (`freq` to `to`, Hz) or a band of noise (`freq` = its centre), `dur` s long, starting `at` s from now, at `peak` of the volume.
-function voice(c, out, { kind = "tone", freq, to = freq, at = 0, dur, peak = 1, type = "sine" }) {
-  const t = c.currentTime + at;
-  const gain = c.createGain();
-  gain.gain.setValueAtTime(0.0001, t);
-  gain.gain.exponentialRampToValueAtTime(peak, t + 0.008);
-  gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  gain.connect(out);
-  let src;
-  if (kind === "noise") {
-    src = c.createBufferSource();
-    src.buffer = noiseBuffer(c);
-    const band = c.createBiquadFilter();
-    band.type = "bandpass";
-    band.frequency.value = freq;
-    src.connect(band);
-    band.connect(gain);
-  } else {
-    src = c.createOscillator();
-    src.type = type;
-    src.frequency.setValueAtTime(freq, t);
-    src.frequency.exponentialRampToValueAtTime(to, t + dur);
-    src.connect(gain);
-  }
-  src.start(t);
-  src.stop(t + dur + 0.02);
+// name -> the decoded AudioBuffer; null while it loads or after it has failed twice; absent until asked for.
+const buffers = new Map();
+const failed = new Set();
+function load(name) {
+  if (buffers.has(name)) return;
+  buffers.set(name, null);
+  fetch(`/sounds/${SOUNDS[name].file}`)
+    .then((r) => { if (!r.ok) throw new Error(`sound ${name}: ${r.status}`); return r.arrayBuffer(); })
+    .then((data) => ctx.decodeAudioData(data))
+    .then((buf) => buffers.set(name, buf), () => { if (!failed.has(name)) { failed.add(name); buffers.delete(name); } }); // one more try, on the next play
 }
 
-const SOUNDS = {
-  deal: [{ kind: "noise", freq: 2600, dur: 0.07, peak: 0.5 }],
-  flip: [{ kind: "noise", freq: 3800, dur: 0.05, peak: 0.35 }, { freq: 900, to: 600, at: 0.02, dur: 0.05, peak: 0.12, type: "triangle" }],
-  chip: [{ freq: 1900, to: 1200, dur: 0.06, peak: 0.5, type: "triangle" }, { kind: "noise", freq: 5000, dur: 0.03, peak: 0.25 }],
-  win: [{ freq: 660, dur: 0.16, peak: 0.5 }, { freq: 990, at: 0.12, dur: 0.3, peak: 0.5 }],
-  lose: [{ freq: 330, to: 300, dur: 0.18, peak: 0.5, type: "triangle" }, { freq: 220, to: 160, at: 0.14, dur: 0.34, peak: 0.5, type: "triangle" }],
-  shuffle: [0, 0.18, 0.36, 0.54, 0.72, 0.9].map((at) => ({ kind: "noise", freq: 2200, at, dur: 0.12, peak: 0.3 })),
-};
+// Makes the context and starts loading all six files, so the first deal does not lag. Runs when Sound is switched on, and on every tap or key press
+// while it is on (iOS Safari only lets a context start or resume inside an activating event, so pointerup counts too, and the first sound often comes from a timer); once everything
+// is loaded and running it is a few cheap checks.
+function preload() {
+  if (!prefs.soundOn) return;
+  try { if (context()) Object.keys(SOUNDS).forEach(load); } catch { /* ignore */ }
+}
+for (const type of ["pointerdown", "pointerup", "keydown"]) document.addEventListener(type, preload, { capture: true, passive: true });
 
-// `volume` 0-100 (the soundVolume setting) maps straight to the master gain.
-export function playSound(name, volume = prefs.soundVolume) {
-  if (!prefs.soundOn || !SOUNDS[name]) return;
+// `volume` 0-100 (the soundVolume setting) maps straight to the master gain; `maxMs` shortens the sound further (the shuffle is cut at the on-screen shuffle's length).
+export function playSound(name, volume = prefs.soundVolume, maxMs = Infinity) {
+  const s = SOUNDS[name];
+  if (!prefs.soundOn || !s) return;
   try {
     const c = context();
     if (!c) return;
-    const out = c.createGain();
-    out.gain.value = Math.max(0, Math.min(100, Number(volume) || 0)) / 100;
-    out.connect(c.destination);
-    SOUNDS[name].forEach((v) => voice(c, out, v));
+    const buf = buffers.get(name);
+    if (!buf) return load(name); // not decoded yet: this one is skipped (a failed one is asked for once more)
+    const dur = Math.min(buf.duration - s.at, Math.min(s.ms || Infinity, maxMs) / 1000);
+    const level = (Math.max(0, Math.min(100, Number(volume) || 0)) / 100) * s.gain;
+    const t = c.currentTime;
+    const gain = c.createGain();
+    gain.gain.setValueAtTime(level, t);
+    gain.gain.setValueAtTime(level, t + dur - Math.min(FADE, dur / 2));
+    gain.gain.linearRampToValueAtTime(0, t + dur);
+    gain.connect(c.destination);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.connect(gain);
+    src.start(t, s.at, dur);
   } catch { /* a sound that cannot play is never an error */ }
 }
 

@@ -22,7 +22,18 @@ Clash Display and Satoshi (Fontshare / Indian Type Foundry), the faces the desig
 
 ## Sounds
 
-All six table sounds (deal, flip, chip, shuffle, win, lose) are generated in code with the Web Audio API (oscillators and filtered noise) in `src/utils/sound.js`. There are no audio files and no third-party assets, so no licence or attribution applies.
+The six table sounds are recordings from Freesound, in `public/sounds/` (MP3, trimmed at play time by the table at the top of `src/utils/sound.js`). All six are released under CC0 1.0 (public domain), so no attribution is required; they are listed here anyway. The win and shuffle recordings are provisional.
+
+| Sound | File | Freesound | Author |
+|---|---|---|---|
+| deal | `sounds/deal.mp3` | 843344 "Card slide" | BapttX |
+| flip | `sounds/flip.mp3` | 84322 "flipCard.wav" | Splashdust |
+| chip | `sounds/chip.mp3` | 201808 "poker_chips6.wav" | fartheststar |
+| shuffle | `sounds/shuffle.mp3` | 217503 "Shuffling cards (riffle) 03.WAV" | VKProduktion |
+| win | `sounds/win.mp3` | 541985 "GASP_Chimes_Success_4.wav" | Rob_Marion |
+| lose | `sounds/lose.mp3` | 578406 "Vibraphone Sting" | nomiqbomi |
+
+Licence: CC0 1.0 Universal, <https://creativecommons.org/publicdomain/zero/1.0/>.
 
 ## Wordmark and favicon
 

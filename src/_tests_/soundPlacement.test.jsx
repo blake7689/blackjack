@@ -128,6 +128,7 @@ describe("the shuffle sound (useShuffle)", () => {
   it("plays once when the table opens with the shuffle, and not again as it runs", async () => {
     board();
     expect(played("shuffle")).toBe(1);
+    expect(playSound).toHaveBeenCalledWith("shuffle", undefined, expect.toSatisfy((ms) => ms > 1000 && ms < 6000)); // told how long the on-screen shuffle runs, so the recording ends with it
     await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
     expect(played("shuffle")).toBe(1);
   });
@@ -194,35 +195,50 @@ describe("the win and lose sounds, and the buzz (GameBoard)", () => {
     expect(buzzes()).toHaveLength(2);
   });
 
-  it("nothing is made or buzzed while Sound and Vibration are off: no audio context work, no navigator.vibrate", () => {
+  it("nothing is made, requested or buzzed while Sound and Vibration are off: no audio context work, no sound files, no navigator.vibrate", () => {
     const gain = vi.spyOn(globalThis.AudioContext.prototype, "createGain");
+    const get = vi.spyOn(globalThis, "fetch");
     results(round(WIN), { ...SOUND_ON, soundOn: false, hapticsOn: false });
     expect(gain).not.toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
     expect(buzzes()).toEqual([]);
   });
 
-  it("Sound and Vibration are separate: Sound alone makes the chime and no buzz, Vibration alone buzzes and makes no audio", () => {
-    const osc = vi.spyOn(globalThis.AudioContext.prototype, "createOscillator");
-    results(round(WIN), { ...SOUND_ON, soundOn: true, hapticsOn: false });
-    expect(osc).toHaveBeenCalledTimes(2); // the win chime's two notes
-    expect(buzzes()).toEqual([]);
-    cleanup();
-    osc.mockClear();
-    results(round(WIN), { ...SOUND_ON, soundOn: false, hapticsOn: true });
-    expect(osc).not.toHaveBeenCalled();
-    expect(buzzes()).toEqual([[40, 60, 40]]);
-  });
-
-  it("the board follows the saved settings as they change: it plays with Sound on, and goes quiet when it is turned off", () => {
-    const osc = vi.spyOn(globalThis.AudioContext.prototype, "createOscillator");
-    const view = results(round(WIN), { ...SOUND_ON, hapticsOn: false });
-    expect(osc).toHaveBeenCalledTimes(2);
+  // The board turns Sound on, which loads the files (asynchronously); a result after they are decoded is heard, so the second result is the one checked.
+  const flush = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); });
+  const next = (view, settings) => { // the board moves on, then the next round's verdict
     view.gameState.phase = GamePhases.POST_ROUND;
-    view.gameState.settings = { ...SOUND_ON, soundOn: false, hapticsOn: false };
+    view.gameState.settings = settings;
     view.rerender(<GameBoard />);
     view.gameState.phase = GamePhases.RESULTS;
     view.rerender(<GameBoard />);
-    expect(played("win")).toBe(2); // asked again for the next result ...
-    expect(osc).toHaveBeenCalledTimes(2); // ... but Sound is off, so nothing was made
+  };
+
+  it("Sound and Vibration are separate: Sound alone makes the chime and no buzz, Vibration alone buzzes and makes no audio", async () => {
+    const src = vi.spyOn(globalThis.AudioContext.prototype, "createBufferSource");
+    const view = results(round(WIN), { ...SOUND_ON, soundOn: true, hapticsOn: false });
+    await flush();
+    const before = src.mock.calls.length;
+    next(view, { ...SOUND_ON, soundOn: true, hapticsOn: false });
+    expect(src.mock.calls.length).toBeGreaterThan(before); // the win chime, from its decoded recording
+    expect(buzzes()).toEqual([]);
+    cleanup();
+    src.mockClear();
+    results(round(WIN), { ...SOUND_ON, soundOn: false, hapticsOn: true });
+    expect(src).not.toHaveBeenCalled();
+    expect(buzzes()).toEqual([[40, 60, 40]]);
+  });
+
+  it("the board follows the saved settings as they change: it plays with Sound on, and goes quiet when it is turned off", async () => {
+    const src = vi.spyOn(globalThis.AudioContext.prototype, "createBufferSource");
+    const view = results(round(WIN), { ...SOUND_ON, hapticsOn: false });
+    await flush();
+    const before = src.mock.calls.length;
+    next(view, { ...SOUND_ON, hapticsOn: false });
+    const heard = src.mock.calls.length;
+    expect(heard).toBeGreaterThan(before);
+    next(view, { ...SOUND_ON, soundOn: false, hapticsOn: false });
+    expect(played("win")).toBe(3); // asked again for the next result ...
+    expect(src).toHaveBeenCalledTimes(heard); // ... but Sound is off, so nothing was made
   });
 });

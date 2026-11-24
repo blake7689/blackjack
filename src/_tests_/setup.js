@@ -25,15 +25,16 @@ Element.prototype.getAnimations = () => [];
 Element.prototype.scrollIntoView = function scrollIntoView(options) { scrolls.push({ el: this, options }); }; // jsdom has none (Settings scrolls an opened section into view)
 }
 
-// jsdom has no Web Audio or vibration (#86): a stub context whose nodes accept every call, and a recording navigator.vibrate.
+// jsdom has no Web Audio or vibration (#86): a stub context whose nodes accept every call and whose decodeAudioData answers a 1 s buffer, a fetch that
+// answers the /sounds/ files (any other URL goes to the real fetch), and a recording navigator.vibrate.
 export const vibrations = [];
 globalThis.AudioContext = class {
-  constructor() { this.currentTime = 0; this.sampleRate = 8000; this.state = "running"; this.destination = {}; }
+  constructor() { this.currentTime = 0; this.state = "running"; this.destination = {}; }
   resume() { this.state = "running"; }
-  createBuffer(channels, length) { const data = new Float32Array(length); return { getChannelData: () => data }; }
-  createGain() { return { gain: { value: 1, setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {} }; }
-  createOscillator() { return { frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, start() {}, stop() {} }; }
-  createBufferSource() { return { connect() {}, start() {}, stop() {} }; }
-  createBiquadFilter() { return { frequency: {}, connect() {} }; }
+  decodeAudioData() { return Promise.resolve({ duration: 1 }); }
+  createGain() { return { gain: { setValueAtTime() {}, linearRampToValueAtTime() {} }, connect() {} }; }
+  createBufferSource() { return { connect() {}, start() {} }; }
 };
+const realFetch = globalThis.fetch;
+globalThis.fetch = (url, ...rest) => (String(url).startsWith("/sounds/") ? Promise.resolve({ ok: true, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }) : realFetch(url, ...rest));
 if (typeof navigator !== "undefined") navigator.vibrate = (pattern) => { vibrations.push(pattern); return true; };
