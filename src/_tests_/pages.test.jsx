@@ -33,12 +33,12 @@ describe("Home", () => {
       expect(screen.queryByText(/Signed in as/)).toBeNull();
     });
 
-    it("Rules opens the Table rules sheet without a Change rules link, and Close puts focus back on Rules", () => {
+    it("Rules opens the Table rules sheet without a Change rules link, and Close puts focus back on Rules", async () => {
       visitor();
       const rules = screen.getByRole("button", { name: "Rules" });
       rules.focus();
       fireEvent.click(rules);
-      const sheet = screen.getByRole("dialog", { name: "Table rules" });
+      const sheet = await screen.findByRole("dialog", { name: "Table rules" });
       expect(within(sheet).queryByRole("link", { name: "Change rules" })).toBeNull();
       fireEvent.click(within(sheet).getByRole("button", { name: "Close" }));
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -65,10 +65,10 @@ describe("Home", () => {
       expect(location()).toBe("/game");
     });
 
-    it("Rules opens the sheet with a Change rules link to Settings", () => {
+    it("Rules opens the sheet with a Change rules link to Settings", async () => {
       renderUI(<Home />);
       fireEvent.click(screen.getByRole("button", { name: "Rules" }));
-      expect(within(screen.getByRole("dialog", { name: "Table rules" })).getByRole("link", { name: "Change rules" }).getAttribute("href")).toBe("/settings#rules");
+      expect(within(await screen.findByRole("dialog", { name: "Table rules" })).getByRole("link", { name: "Change rules" }).getAttribute("href")).toBe("/settings#rules");
     });
 
     it("Log out asks 'Log out?' with the safe button first and focused; Stay logged in keeps the session, Log out signs out", () => {
@@ -329,14 +329,17 @@ describe("validateField", () => {
 describe("App", () => {
   const banner = () => screen.queryByRole("button", { name: "Home" }); // the app Header's Home button (Settings has its own, separate heading)
 
-  it("Home is a standalone screen with no header; Settings keeps the header", () => {
+  it("Home is a standalone screen with no header; Settings keeps the header and loads as a lazy chunk (#169)", async () => {
     const view = renderUI(<App />, { path: "/" });
     expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
     expect(banner()).toBeNull();
     view.unmount();
     renderUI(<App />, { path: "/settings" });
     expect(banner()).toBeTruthy();
-  });
+    expect(screen.getByRole("status").textContent).toContain("Shuffling up..."); // the Loading screen while the chunk loads
+    // the first import of the page is slow under coverage, so wait longer than the default
+    expect(await screen.findByRole("heading", { level: 1, name: "Settings" }, { timeout: 14000 })).toBeTruthy();
+  }, 15000);
 
   it("routes /login to Log in and /signup to Create an account", () => {
     const view = renderUI(<App />, { path: "/login", player: { player: null } });

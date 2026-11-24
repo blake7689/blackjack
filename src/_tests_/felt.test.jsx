@@ -148,23 +148,23 @@ describe("Shoe (#81)", () => {
 describe("the table's felt (#81)", () => {
   const playing = { phase: GamePhases.PLAYER_TURN, dealer: { cards: stackedShoe(["6"]), dealerDisplayTotal: 6 } };
 
-  it("has the felt, its rail, the shoe and the print on the stage, and the print opens the Table rules sheet, which Escape closes", () => {
+  it("has the felt, its rail, the shoe and the print on the stage, and the print opens the Table rules sheet, which Escape closes", async () => {
     const { container } = renderUI(<GameBoard />, { game: playing });
     expect(container.querySelector(".room > .felt > .rail")).not.toBeNull();
     expect(container.querySelector(".felt .main-area.stage .stage-in .shoe .deck-stack")).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Table rules" }));
-    expect(screen.getByRole("dialog", { name: "Table rules" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Table rules" })).toBeTruthy(); // the sheet is a lazy chunk (#169)
     expect(screen.getByTestId("location").textContent).toBe("/"); // stays on the table
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("the menu's Table rules opens the same sheet over the table, and closing it puts focus back on the menu button", () => {
+  it("the menu's Table rules opens the same sheet over the table, and closing it puts focus back on the menu button", async () => {
     renderUI(<GameBoard />, { game: playing });
     const menuButton = screen.getByRole("button", { name: "Menu" });
     fireEvent.click(menuButton);
     fireEvent.click(within(screen.getByRole("navigation", { name: "Menu" })).getByRole("button", { name: "Table rules" }));
-    expect(screen.getByRole("dialog", { name: "Table rules" })).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Table rules" })).toBeTruthy();
     expect(screen.getByTestId("location").textContent).toBe("/");
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();

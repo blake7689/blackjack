@@ -5,6 +5,7 @@ import { usePlayer } from "../../hooks/usePlayer";
 import { houseEdge, formatEdge } from "../../utils/houseEdge";
 import { rulePresetOf } from "../../utils/rulePresets";
 import { RULES_TITLE, sheetGroups } from "../../utils/ruleCatalog";
+import "../SettingsControls/Dialog.css";
 import "./RulesSheet.css";
 
 // The Table rules sheet (#87, DESIGN section 5): a bottom sheet on phones, a centred panel from 720 px. The preset and its house edge, then the

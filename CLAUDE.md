@@ -214,7 +214,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   component that calls the hook must render `{confirm}`; never `window.confirm`. Home, Log in (`/login`), Create an account (`/signup`), Loading and Error are the standalone `.page-screen` screens
   (`components/PageScreens`); only Settings still shows `Header`. `App` shows Loading while a saved session is restored and Error ("Can't reach the table": Try again / Home) when the restore got no answer
   (`restoreFailed`; a 401 clears the token and just signs out). The manifest (`public/manifest.webmanifest`) and `public/icons/*.png` (wordmark on #070908, one-off Playwright rasterisation, no script kept) are linked
-  from `index.html`; no service worker. Card faces are 500 px WebP (`/cards/<rank>_of_<suit>.webp`, no PNG): never add PNG faces back. `staticwebapp.config.json`: static folders (`/assets`, `/brand`, `/cards`, `/fonts`,
+  from `index.html`; no service worker. Card faces are 360 px WebP (#169, q75; largest card is 312 px at 2x) (`/cards/<rank>_of_<suit>.webp`, no PNG): never add PNG faces back. `staticwebapp.config.json`: static folders (`/assets`, `/brand`, `/cards`, `/fonts`,
   `/icons`, `/sounds`) and root `*.svg` / `*.webmanifest` are excluded from the `index.html` fallback and there is NO 404 `responseOverride` (it served HTML for a missing file, so a broken image or font looked like
   a parse error); a new static folder goes in that exclude list.
 
@@ -234,6 +234,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   leave it with Show hand totals off, "blackjack" stays) in a hidden span. Never add a second `aria-live` or a hidden duplicate of the line: Playwright's strict `getByText` and the jsdom `getByText` queries would find two. Focus moves per phase in
   Dock's effect (deps `phase`, `openOffers`, `busy`), only from nothing or the dock. Targets are 44 px (inline links get it from an ::after or padding, never a visible change); the 12 px text floor and the `--tx-3` / accent-text tokens follow DESIGN section 3.
 - Sound (#86): settings `soundOn` / `hapticsOn` / `soundVolume`; every sound is synthesized in `src/utils/sound.js` (no audio files). `setSoundPrefs` is called from GameBoard; deal/flip play in `FlyCard`, chip in `PlayerHand`, shuffle in `useShuffle`, win/lose in GameBoard. `sound.js` must never use `Math.random` (its noise uses a local LCG; the e2e seeds depend on the draw count). The disabled Volume slider dims only the input (`.slider.off input`) and keeps `--tx-2` on its output, or axe color-contrast fails.
+- Code splitting (#169): `Settings` (App.jsx) and `RulesSheet` (GameBoard, Home) are `React.lazy` (fallback `LoadingScreen` / `null`); Home, Game, GameBoard, Login stay static. CSS that a lazy module shares with eager ones (`.btn`, `.dlg*` in `SettingsControls/Dialog.css`) must be imported by the eager users too, or it ships only in the lazy chunk and the dialogs render unstyled (only e2e `screens.spec.js` catches it; jsdom loads no CSS). Tests open the sheet with `await findBy*`.
 
 ## Do not
 - Commit secrets; edit `dist/`; change the API contract here without changing blackJackAPI.

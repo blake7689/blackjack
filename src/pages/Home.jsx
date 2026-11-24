@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { lazyReload } from "../utils/lazyReload";
 import { Link } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { useNavActions } from "../hooks/useNavActions";
 import { Chip } from "../components/Chip/Chip";
-import RulesSheet from "../components/RulesSheet/RulesSheet";
 import Wordmark from "../components/Wordmark/Wordmark";
 import { LoadingScreen, Page } from "../components/PageScreens/PageScreens";
+
+const RulesSheet = lazyReload(() => import("../components/RulesSheet/RulesSheet")); // #169
 
 // Two cards lying flat and a chip on the felt (DESIGN section 8): decorative.
 const Hero = () => (
@@ -54,7 +56,7 @@ export default function Home() {
           </div>
         </>
       )}
-      {rules && <RulesSheet settings={settings} onClose={() => setRules(false)} />}
+      {rules && <Suspense fallback={null}><RulesSheet settings={settings} onClose={() => setRules(false)} /></Suspense>}
       {confirm}
     </Page>
   );
