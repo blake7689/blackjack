@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { usePlayer } from "../../hooks/usePlayer";
 import { houseEdge, formatEdge } from "../../utils/houseEdge";
+import { focusTarget } from "../../utils/opener";
 import { rulePresetOf } from "../../utils/rulePresets";
 import { RULES_TITLE, sheetGroups } from "../../utils/ruleCatalog";
 import "../SettingsControls/Dialog.css";
@@ -19,7 +20,7 @@ export default function RulesSheet({ settings, onClose }) {
 
   useEffect(() => { latest.current = onClose; });
   useEffect(() => {
-    const previous = document.activeElement;
+    const previous = focusTarget();
     ref.current.querySelector("button").focus();
     const onKeyDown = (e) => {
       if (e.key === "Escape") return latest.current();
