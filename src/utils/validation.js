@@ -5,7 +5,7 @@ export function validateField(name, value) {
   switch (name) {
     case "userName": return !value.trim() ? "Username is required." : value.length < 3 ? "Username must be at least 3 characters." : "";
     case "email": return !value.trim() ? "Email is required." : !EMAIL.test(value) ? "Invalid email format." : "";
-    case "password": return value && value.length < 6 ? "Password must be at least 6 characters." : "";
+    case "password": return value && value.length < 8 ? "Password must be at least 8 characters." : "";
     default: return !value.trim() ? `${name === "firstName" ? "First" : "Last"} name is required.` : "";
   }
 }

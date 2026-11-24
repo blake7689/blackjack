@@ -24,7 +24,17 @@ export function setUnauthorizedHandler(handler) {
   onUnauthorized = handler;
 }
 
-async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS) {
+// A password change revokes the caller's token (#171); the swap gets a new one. While it runs, every other request
+// waits here, so none goes out with the old token. Only the swap's own calls pass `ungated`.
+let swap = null;
+export async function swapToken(run) {
+  let release;
+  swap = new Promise((resolve) => { release = resolve; });
+  try { return await run(); } finally { swap = null; release(); }
+}
+
+async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS, ungated = false, retried = false) {
+  if (!ungated) await swap;
   const token = getToken();
   const res = await fetch(`${API_BASE}${url}`, {
     method,
@@ -37,8 +47,16 @@ async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS) {
   });
   if (!res.ok) {
     if (res.status === 401 && token) {
-      clearToken();
-      onUnauthorized();
+      // Sent with the old token while a swap ran (or finished): wait for it and retry once with the new token.
+      if (!ungated && !retried && (swap || getToken() !== token)) {
+        await swap;
+        const fresh = getToken();
+        if (fresh && fresh !== token) return request(method, url, body, timeout, ungated, true);
+      }
+      if (getToken() === token) {
+        clearToken();
+        onUnauthorized();
+      }
     }
     const txt = await res.text();
     // err.status tells callers a definite refusal (4xx) from a network failure, which has none.
@@ -64,6 +82,6 @@ function errorMessage(text) {
 
 // The default 10 s suits the ledger (an unknown outcome is retried); pass a longer timeout where the API may be waking up.
 export const apiGet = (url, timeout) => request("GET", url, undefined, timeout);
-export const apiPost = (url, body, timeout) => request("POST", url, body, timeout);
-export const apiPut = (url, body) => request("PUT", url, body);
+export const apiPost = (url, body, timeout, ungated) => request("POST", url, body, timeout, ungated);
+export const apiPut = (url, body, ungated) => request("PUT", url, body, undefined, ungated);
 export const apiDelete = (url) => request("DELETE", url);

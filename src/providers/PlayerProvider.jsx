@@ -21,8 +21,15 @@ export function PlayerProvider({ children }) {
   // Set when a round's opening bet is refused: the rest of that round's bets are then dropped unsent.
   const roundRefusedRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
+  // A message for the Login page (e.g. after a password change we could not sign back in from); cleared by the next sign-in.
+  const [notice, setNotice] = useState(null);
+  // Counts sign-ins and sign-outs: "same player" for queued work means the same count, not the same token,
+  // because a password change swaps the token without changing the player (#171).
+  const sessionRef = useRef(0);
 
   const signIn = useCallback((p) => {
+    sessionRef.current += 1;
+    if (p) setNotice(null);
     playerRef.current = p;
     unsentRef.current = 0;
     pendingRef.current = 0;
@@ -37,11 +44,11 @@ export function PlayerProvider({ children }) {
   }, []);
 
   // Restore a session after a page refresh; an expired token (401) just leaves you signed out.
-  // Ignore a late answer if you logged out or in as someone else meanwhile (the token changed).
+  // Ignore a late answer if you logged out or in as someone else meanwhile (the session changed).
   useEffect(() => {
-    const token = getToken();
-    if (!token) return;
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }).catch(() => {});
+    if (!getToken()) return;
+    const session = sessionRef.current;
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (sessionRef.current === session) signIn(p); }).catch(() => {});
   }, [signIn]);
 
   // Any signed-in request that gets 401 signs you out here.
@@ -58,7 +65,12 @@ export function PlayerProvider({ children }) {
     setPlayer(playerRef.current);
     return playerRef.current;
   }, []);
-  const changePassword = useCallback((currentPassword, newPassword) => changePasswordApi(currentPassword, newPassword), []);
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    if (await changePasswordApi(currentPassword, newPassword, playerRef.current?.userName)) {
+      signIn(null);
+      setNotice("Your password was changed, but we could not sign you in again. Please sign in with your new password.");
+    }
+  }, [signIn]);
   const deletePlayer = useCallback(async () => {
     await deleteMe();
     signIn(null);
@@ -80,8 +92,8 @@ export function PlayerProvider({ children }) {
   // then shows the server's balance plus local changes. It stops quietly if the player signed out or changed
   // since it was queued, so one player's retry is never charged to another. report(seq, outcome) tells the game.
   const enqueue = useCallback(({ seq, quiet, newRound, optimistic, call }, report) => {
-    const token = getToken();
-    const stop = () => !playerRef.current || getToken() !== token;
+    const session = sessionRef.current;
+    const stop = () => !playerRef.current || sessionRef.current !== session;
     pendingRef.current += optimistic;
     queueRef.current = queueRef.current.then(async () => {
       const reload = async () => {
@@ -165,7 +177,7 @@ export function PlayerProvider({ children }) {
   // outcome with one requestId. Resolves { ok } or { ok: false, locked, retryAfter }; the code is never logged or kept.
   const topUp = useCallback((code) => new Promise((resolve) => {
     const requestId = newRequestId();
-    const token = getToken();
+    const session = sessionRef.current;
     let applied = false;
     let locked = null;
     let before = 0;
@@ -179,7 +191,7 @@ export function PlayerProvider({ children }) {
     };
     enqueue({ quiet: true, optimistic: 0, call }, (_, outcome) => {
       // enqueue reports a dropped call (sign-out, other player) as "confirmed" too, so check for that here: no badge then.
-      const ok = outcome === "confirmed" && applied && !!playerRef.current && getToken() === token;
+      const ok = outcome === "confirmed" && applied && !!playerRef.current && sessionRef.current === session;
       if (ok) showChange(getCredits() - before); // enqueue has already set the new balance
       resolve(ok ? { ok: true } : { ok: false, locked: locked !== null, retryAfter: locked?.retryAfter });
     });
@@ -193,8 +205,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, notice, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, notice, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

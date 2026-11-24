@@ -93,11 +93,11 @@ describe("Login", () => {
     const login = vi.fn().mockResolvedValue(testPlayer);
     renderUI(<Login />, { path: "/login", player: { login } });
     type("Username or Email", "tester");
-    type("Password", "secret1");
+    type("Password", "secret12");
     fireEvent.click(screen.getByText("Log in"));
     expect(screen.getByText("Contacting server...")).toBeTruthy();
     await flush();
-    expect(login).toHaveBeenCalledWith({ usernameOrEmail: "tester", password: "secret1" });
+    expect(login).toHaveBeenCalledWith({ usernameOrEmail: "tester", password: "secret12" });
     expect(location()).toBe("/");
   });
 
@@ -150,14 +150,44 @@ describe("Login", () => {
     expect(screen.queryByPlaceholderText("Starting credits")).toBeNull();
     type("Username", "newbie");
     type("Email", "n@example.com");
-    type("Password", "secret1");
+    type("Password", "secret12");
     type("First name", "New");
     type("Last name", "Bie");
     fireEvent.click(screen.getByText("Create & sign in"));
     expect(screen.getByText("Creating…")).toBeTruthy();
     await flush();
-    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret1", email: "n@example.com", firstName: "New", lastName: "Bie" });
+    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret12", email: "n@example.com", firstName: "New", lastName: "Bie" });
     expect(location()).toBe("/");
+  });
+
+  it("shows the provider's notice as an alert (e.g. a password change we could not sign back in from, #171), and none without one", () => {
+    const { unmount } = renderUI(<Login />, { path: "/login", player: { notice: "Please sign in with your new password." } });
+    expect(screen.getByRole("alert").textContent).toBe("Please sign in with your new password.");
+    unmount();
+    renderUI(<Login />, { path: "/login" });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("applies no length rule when logging in, so a 6 or 7 character password from before the 8-character rule still works", async () => {
+    const login = vi.fn().mockResolvedValue(testPlayer);
+    renderUI(<Login />, { path: "/login", player: { login } });
+    type("Username or Email", "tester");
+    for (const password of ["secret", "secret1"]) {
+      type("Password", password);
+      expect(screen.queryByText(/at least/)).toBeNull();
+      fireEvent.click(screen.getByText("Log in"));
+      await flush();
+      expect(login).toHaveBeenLastCalledWith({ usernameOrEmail: "tester", password });
+    }
+  });
+
+  it("signup refuses a 7 character password and accepts 8", () => {
+    renderUI(<Login />, { path: "/login", player: { addPlayer: vi.fn() } });
+    fireEvent.click(screen.getByText("Add player"));
+    type("Password", "1234567");
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
+    type("Password", "12345678");
+    expect(screen.queryByText(/at least 8/)).toBeNull();
   });
 
   it("shows each signup field's error and blocks the form until it is valid", () => {
@@ -173,7 +203,7 @@ describe("Login", () => {
     type("Email", "not-an-email");
     expect(screen.getByText("Invalid email format.")).toBeTruthy();
     type("Password", "123");
-    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
     type("Password", "");
     expect(screen.getByText("Password is required.")).toBeTruthy();
     fireEvent.blur(screen.getByPlaceholderText("First name"));
@@ -193,7 +223,7 @@ describe("Login", () => {
     fireEvent.click(screen.getByText("Add player"));
     type("Username", "newbie");
     type("Email", "n@example.com");
-    type("Password", "secret1");
+    type("Password", "secret12");
     type("First name", "New");
     type("Last name", "Bie");
     fireEvent.submit(screen.getByText("Create & sign in").closest("form"));
@@ -214,8 +244,8 @@ describe("validateField", () => {
     expect(validateField("email", "nope")).toBe("Invalid email format.");
     expect(validateField("email", "a@b.co")).toBe("");
     expect(validateField("password", "")).toBe("");
-    expect(validateField("password", "12345")).toBe("Password must be at least 6 characters.");
-    expect(validateField("password", "123456")).toBe("");
+    expect(validateField("password", "1234567")).toBe("Password must be at least 8 characters.");
+    expect(validateField("password", "12345678")).toBe("");
     expect(validateField("firstName", "")).toBe("First name is required.");
     expect(validateField("lastName", "")).toBe("Last name is required.");
     expect(validateField("lastName", "X")).toBe("");
@@ -228,6 +258,12 @@ describe("Settings", () => {
   it("asks a visitor to log in", () => {
     renderUI(<Settings />, { player: { player: null } });
     expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the provider's sign-in notice to a signed-out visitor (#171)", () => {
+    renderUI(<Settings />, { player: { player: null, notice: "Please sign in with your new password." } });
+    expect(screen.getByRole("alert").textContent).toBe("Please sign in with your new password.");
   });
 
   it("enables Save only for a valid profile change, and saves it", async () => {
@@ -259,23 +295,35 @@ describe("Settings", () => {
     expect(button.disabled).toBe(true);
     fireEvent.change(current, { target: { value: "old-pass" } });
     fireEvent.change(next, { target: { value: "123" } });
-    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
     expect(button.disabled).toBe(true);
-    fireEvent.change(next, { target: { value: "new-pass" } });
+    fireEvent.change(next, { target: { value: "new-pass1" } });
     fireEvent.click(button);
     await flush();
-    expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass");
+    expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass1");
     expect(current.value).toBe("");
     const shown = [screen.getByRole("status").textContent];
     for (let i = 0; i < 2; i++) {
       fireEvent.change(current, { target: { value: "wrong" } });
-      fireEvent.change(next, { target: { value: "new-pass" } });
+      fireEvent.change(next, { target: { value: "new-pass1" } });
       fireEvent.click(button);
       await flush();
       shown.push(screen.getByRole("status").textContent);
     }
     expect(shown).toEqual(["Password changed", "Incorrect password.", "Password change failed"]);
     expect(window.alert).not.toHaveBeenCalled();
+  });
+
+  it("the new password must be 8 characters: 7 is refused and keeps the button off, 8 enables it", () => {
+    const { container } = renderUI(<Settings />);
+    fireEvent.change(container.querySelector('input[name="currentPassword"]'), { target: { value: "old-pass" } });
+    const next = container.querySelector('input[name="newPassword"]');
+    fireEvent.change(next, { target: { value: "1234567" } });
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
+    expect(screen.getByText("Change password").disabled).toBe(true);
+    fireEvent.change(next, { target: { value: "12345678" } });
+    expect(screen.queryByText(/at least 8/)).toBeNull();
+    expect(screen.getByText("Change password").disabled).toBe(false);
   });
 
   it("shows a failed save inline, with a fallback message", async () => {

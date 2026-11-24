@@ -59,7 +59,7 @@ function SettingInput({ setting, value, onChange }) {
 }
 
 export default function Settings() {
-  const { player, updatePlayer, changePassword, deletePlayer } = usePlayer();
+  const { player, notice: signInNotice, updatePlayer, changePassword, deletePlayer } = usePlayer();
   const { settings, phase } = useGameState();
   const { changeSetting, changeSettings, resetGame } = useGameActions();
   const nav = useNavigate();
@@ -80,7 +80,12 @@ export default function Settings() {
   const done = (text) => setNotice({ text });
   const failed = (text) => setNotice({ text, error: true });
 
-  if (!player) return <div className="page-bg"><div className="page-message">Please log in to manage settings.</div></div>;
+  if (!player) return (
+    <div className="page-bg">
+      {signInNotice && <div role="alert" className="notice error">{signInNotice}</div>}
+      <div className="page-message">Please log in to manage settings.</div>
+    </div>
+  );
 
   const errors = Object.fromEntries(PROFILE_FIELDS.map(({ name }) => [name, validateField(name, form[name])]));
   const hasErrors = Object.values(errors).some(Boolean);
