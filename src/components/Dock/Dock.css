@@ -89,7 +89,7 @@
 @media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } }
 /* the shortcut hints (the Show keyboard shortcuts setting, L2-3): on a desktop-size screen only, never on a landscape phone */
 @media (min-width: 900px) and (min-height: 521px) { .dock.hints .key kbd { display: block; } .dock.hints .rc[data-key]::before { display: block; } }
-@media (max-width: 359px) { .key small { display: none; } }
+@media (max-width: 359px) { .key small { display: none; } .key { padding: 0 3px; } } /* L4-1: Rebet's 33 px of text and 12 px of padding (45 px) were 3 px wider than its 42 px of room (44 px key less 2 px of border) at 320 px */
 @media (max-height: 520px) {
   .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
   .key { flex-direction: row; gap: 6px; }

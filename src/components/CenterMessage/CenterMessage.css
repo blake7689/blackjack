@@ -16,7 +16,7 @@
    sheen (1400 ms). It fills the message line; a two-line verdict (the insurance result) has room (centrePrint keeps it clear of the cards). */
 .msg:has(.verdict) { overflow: visible; } /* the insurance line below the word is taller than the 48 px line: it hangs into the room centrePrint keeps */
 .verdict { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: center; column-gap: 12px; animation: verdict 620ms var(--e-spring) both; }
-.verdict em { flex-basis: 100%; text-align: center; font-style: normal; font-size: 13px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--even); margin-top: 4px; }
+.verdict em { flex-basis: 100%; text-align: center; font-style: normal; font-size: 13px; line-height: 1.2; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--even); margin-top: 2px; }
 .verdict b { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 7.4cqi, 40px); letter-spacing: .08em; line-height: 1; }
 .verdict span { font-family: var(--font-display); font-weight: 500; font-size: clamp(18px, 4.4cqi, 26px); color: #fff; }
 .verdict.win b { color: var(--win); text-shadow: 0 0 24px rgb(63 227 151 / .45); }

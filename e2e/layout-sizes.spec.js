@@ -1,13 +1,13 @@
 import { test, expect, stubApi, seedRandom, login, placeBet, VEGAS } from './fixtures';
 
-// Layout at seven sizes (#168). At each size: a round (bet, offers + insurance, your move, results, next hand), a split round and the six Settings
+// Layout at eight sizes (#168). At each size: a round (bet, offers + insurance, your move, results, next hand), a split round and the six Settings
 // sections. After every step the page is audited, and a violation fails the test with every offender listed:
 //   - no sideways scroll; - nothing outside the viewport, cut by an overflow ancestor, or with its text cut in its own box;
 //   - no overlap between table pieces (or between controls on Settings); - top bar and dock heights per DESIGN section 4; - tap targets >= 44 px high.
 // Chromium project only (the sizes are set here, not by Playwright projects). Reduced motion keeps every step still when it is measured.
 // Seeds: picked for the order of shoe builds before the deal (CLAUDE.md "E2E seeds"; how to re-pick is the comment at the bottom).
 const SEEDS = { insurance: 18128, pair: 1522024, play: 1149 }; // 9 vs ace (insurance offered) / 8,8 vs 6 / 10,9 vs 6
-const SIZES = [[320, 568], [375, 667], [844, 390], [412, 915], [768, 1024], [1024, 768], [1920, 1080]];
+const SIZES = [[320, 568], [375, 667], [414, 760], [844, 390], [412, 915], [768, 1024], [1024, 768], [1920, 1080]];
 const SECTIONS = { rules: /^Table rules/, play: /^Gameplay/, chips: /^Chips/, look: /^Appearance/, sound: /^Sound/, account: /^Account/ };
 
 // Known, accepted findings. Each is matched by its kind, its sizes and the text of the offender; keep this list minimal, one line of reason each.
@@ -16,10 +16,6 @@ const WAIVERS = [
   { name: 'rack-edge-chip', kind: 'clipped', match: /\.rack/, reason: 'the chip rack scrolls sideways and fades its edge chip with a mask, so one chip is cut by design' },
   { name: 'rack-scroller-box', kind: 'text', match: /rack-wrap/, reason: 'the same masked rack scroller: its content is a few px wider or taller than its box because it scrolls' },
   { name: 'hit-area-844x390', kind: 'overlap', sizes: ['844x390'], match: /icon-btn.* x div\.(discard|shoe)/, reason: 'the 44 px Menu / Settings hit areas stick 4 px out of the 40 px top bar over the empty shoe and discard boxes; nothing visible touches' },
-  // Known findings in the area of the open release check (#166, its loops edit Dock, PlayerHand, Shoe and Pill CSS); drop each waiver when #166 fixes it.
-  { name: 'rebet-text-320x568', kind: 'text', sizes: ['320x568'], match: /"Rebet"/, reason: '#166: the Rebet key text is 3 px wider than its 42 px key at 320 px' },
-  { name: 'verdict-over-card-320x568', kind: 'overlap', sizes: ['320x568'], match: /(verdict|div\.msg).* x div\.card/, reason: '#166: the verdict box lies 2.4 px over the top of the player card at 320x568' },
-  { name: 'shoe-over-total-375x667', kind: 'overlap', sizes: ['375x667'], match: /div\.shoe .* x span\.pill/, reason: '#166: the dealer total pill overlaps the shoe box by up to 8 px at 375x667' },
 ];
 
 // DESIGN section 4: top bar and dock heights per mode, and the two dock rows on a phone (rack / keys).
@@ -40,7 +36,7 @@ function auditInPage({ kind }) {
   const desc = (e) => { const cls = typeof e.className === 'string' ? e.className.trim().split(/\s+/).slice(0, 3).join('.') : ''; const t = (e.getAttribute('aria-label') || e.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24); return `${e.tagName.toLowerCase()}${e.id ? '#' + e.id : ''}${cls ? '.' + cls : ''}${t ? ` "${t}"` : ''}`; };
   const R = (e) => { const r = e.getBoundingClientRect(); return JSON.stringify([Math.round(r.x * 10) / 10, Math.round(r.y * 10) / 10, Math.round(r.width * 10) / 10, Math.round(r.height * 10) / 10]); };
   const root = document.documentElement;
-  const out = { hscroll: root.scrollWidth > innerWidth || document.body.scrollWidth > innerWidth ? `page ${root.scrollWidth}/${document.body.scrollWidth} wide in ${innerWidth}` : '', clipped: [], overlaps: [], taps: [], text: [] };
+  const out = { hscroll: root.scrollWidth > innerWidth || document.body.scrollWidth > innerWidth ? `page ${root.scrollWidth}/${document.body.scrollWidth} wide in ${innerWidth}` : '', clipped: [], overlaps: [], taps: [], text: [], strict: [] };
   const all = [...new Set([...document.querySelectorAll(INT + ',' + PIECES + ',.print-hit,.print')])].filter((e) => vis(e) && !e.closest(SKIP) && !e.closest('[hidden]'));
   const tol = 1;
   // clipped: outside the viewport, or cut by an overflow ancestor
@@ -96,6 +92,11 @@ function auditInPage({ kind }) {
     if (!(r.width > 0)) continue;
     if (h < 44 - 0.5) out.taps.push(`${desc(e)} ${Math.round(h * 10) / 10} px high (${Math.round(r.width)} wide)`);
   }
+  // the overlap rule above tolerates 1.5 px; these two do not: a verdict (two lines for an insurance result) is 8 px clear of the first card (DESIGN section 4 "Middle"), and no total pill touches the shoe's box
+  const verdict = document.querySelector('.msg .verdict'), cardTops = [...document.querySelectorAll('.seats .card')].filter(vis).map((e) => e.getBoundingClientRect().top);
+  if (kind === 'table' && verdict && cardTops.length) { const gap = Math.min(...cardTops) - Math.max(verdict.getBoundingClientRect().bottom, document.querySelector('.msg').getBoundingClientRect().bottom); if (gap < 8) out.strict.push(`verdict ${Math.round(gap * 10) / 10} px above the first card (at least 8)`); }
+  const shoe = document.querySelector('.shoe')?.getBoundingClientRect();
+  if (kind === 'table' && shoe) for (const pill of document.querySelectorAll('.dealer-hand .pill')) { const p = pill.getBoundingClientRect(); const w = Math.min(shoe.right, p.right) - Math.max(shoe.left, p.left), h = Math.min(shoe.bottom, p.bottom) - Math.max(shoe.top, p.top); if (w > 0 && h > 0) out.strict.push(`${desc(pill)} overlaps the shoe box by ${Math.round(w * 10) / 10}x${Math.round(h * 10) / 10}`); }
   const q = (s) => { const e = document.querySelector(s); return e && vis(e) ? Math.round(e.getBoundingClientRect().height * 10) / 10 : null; };
   out.heights = { top: q('.top'), dock: q('.dock'), rows: [...document.querySelectorAll('.dock-row')].filter(vis).map((e) => Math.round(e.getBoundingClientRect().height * 10) / 10) };
   return out;
@@ -116,7 +117,7 @@ async function audit(page, size, step, kind = 'table') {
   const ex = expected(w, h);
   const bad = [];
   if (a.hscroll) bad.push(['hscroll', a.hscroll]);
-  for (const [k, list] of [['clipped', a.clipped], ['text', a.text], ['overlap', a.overlaps], ['tap', a.taps]]) for (const t of list) bad.push([k, t]);
+  for (const [k, list] of [['clipped', a.clipped], ['text', a.text], ['overlap', a.overlaps], ['tap', a.taps], ['strict', a.strict]]) for (const t of list) bad.push([k, t]);
   if (kind === 'table') {
     if (a.heights.top !== ex.top) bad.push(['height', `top bar ${a.heights.top} px (DESIGN ${ex.top}, ${ex.mode})`]);
     if (a.heights.dock !== ex.dock) bad.push(['height', `dock ${a.heights.dock} px (DESIGN ${ex.dock}, ${ex.mode})`]);
