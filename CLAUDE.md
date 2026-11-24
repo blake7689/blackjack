@@ -180,8 +180,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `Math.random` changes (new shoe builds, router keys), the seed in the deal test needs re-picking; its card assertions fail first. A bug that
   slips past the jsdom tests (timers, layout, animation, network) gets an e2e test. The tests rely on the `.flight-layer`, `.fly-inner`,
   `.options-wrap` and `.board.busy` hooks (`.options-wrap` is the dock while it holds the action bar or the offers; under `.board.busy` its keys are
-  `aria-disabled` and inert, so the e2e watcher looks for a key that is not `aria-disabled`): rename one and the test changes with it. CI guards: `globalTimeout` 7 min per leg in `playwright.config.js` (the `e2e` job is a matrix over the Playwright projects `chromium` and `phone`, #146; each leg runs `--project=<name>`, and the SWA deploy's `needs: test` waits for both), step
-  timeouts 4 min (browser install) and 8 min (tests) in `ci.yml`, all under the 12-min job limit; #123 was a slow apt mirror during
+  `aria-disabled` and inert, so the e2e watcher looks for a key that is not `aria-disabled`): rename one and the test changes with it. CI guards: `globalTimeout` 11 min per leg in `playwright.config.js` (the `e2e` job is a matrix over the Playwright projects `chromium` and `phone`, #146; each leg runs `--project=<name>`, and the SWA deploy's `needs: test` waits for both), step
+  timeouts 4 min (browser install) and 12 min (tests) in `ci.yml`, all under the 17-min job limit; #123 was a slow apt mirror during
   `playwright install --with-deps`, not a hang. The install runs through `scripts/install-playwright-browser.sh` (#127: 2 attempts x 105 s,
   5 s apart, all inside the 4-min step timeout; a slow mirror is retried, not waited out), in `ci.yml` and the SWA `live_smoke` job.
 - The dpkg-lock tests in `scripts/install-playwright-browser.test.js` skip on Windows, so only Linux CI runs them: a local green run proves nothing for that script, so check that the `build-test` log shows them ran (#159, PR #162).
