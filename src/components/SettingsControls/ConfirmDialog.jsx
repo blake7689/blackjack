@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
+import { focusTarget } from "../../utils/opener";
 import "./Dialog.css";
 
 // A confirm for a destructive step (Delete profile, Discard, Start a new shoe): the safe button comes first and takes focus, the danger
@@ -12,7 +13,7 @@ export default function ConfirmDialog({ title, body, safe, danger, onSafe, onDan
 
   useEffect(() => { latest.current = onSafe; });
   useEffect(() => {
-    const previous = document.activeElement;
+    const previous = focusTarget();
     ref.current.querySelector("button").focus();
     const onKeyDown = (e) => {
       if (e.key === "Escape") return latest.current();

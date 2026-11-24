@@ -7,12 +7,16 @@ import { test, expect, stubApi, seedRandom, login, submitLogin, placeBet, VEGAS 
 // With insurance off and surrender none the ace up offers nothing, so the peek happens inside the deal (a display hold after the cards land, no extra step).
 const NO_OFFER = { ...VEGAS, insurance: false, surrender: 'none', playTimeout: 500 };
 
-// Samples every frame: while the line says the dealer checks, how much of the hole card is in view (against the felt's top edge), how far it tucked under,
+// Samples on every frame, every 4 ms and on every DOM change, so a slow runner that paints few frames (WebKit on CI, #180) still sees the 0.2 s hold and the 0.5 s
+// "No blackjack": while the line says the dealer checks, how much of the hole card is in view (against the felt's top edge), how far it tucked under,
 // whether any face reached the dealer's hand (the hole card is the king of spades in the seed-207 round), and whether "No blackjack" was ever shown.
 async function watchPeek(page) {
   await page.evaluate(() => {
     const w = (window.__peek = { checking: 0, minShown: 1, tucked: 0, leaks: 0, sawClear: false });
-    const frame = () => {
+    let rest = null; // the hole card's top against the felt's top while nothing animates it
+    const sample = () => {
+      const h = document.querySelector('.dealer-hand [data-fk="hole"] .card'), f = document.querySelector('.felt');
+      if (h && f && !h.getAnimations().length) rest = h.getBoundingClientRect().top - f.getBoundingClientRect().top;
       const line = document.querySelector('.msg')?.textContent ?? '';
       if (line.includes('No blackjack')) w.sawClear = true;
       if (line.includes('Dealer checks for blackjack')) {
@@ -24,12 +28,22 @@ async function watchPeek(page) {
           const above = Math.max(0, felt.getBoundingClientRect().top - r.top);
           w.minShown = Math.min(w.minShown, 1 - above / r.height);
           w.tucked = Math.max(w.tucked, above);
+          // A runner that paints no frame during the 0.2 s hold never shows the hole card tucked, so the slide's own target counts too: where the running
+          // translate animation takes the card, against the felt edge (the card's rest position is where it sat before any animation ran).
+          const slide = hole.getAnimations().map((a) => a.effect.getKeyframes()[1]?.translate).find((t) => /[1-9]/.test(t ?? ''));
+          if (slide && rest !== null) {
+            const target = Number(slide.match(/-?\d+(\.\d+)?/g).at(-1));
+            w.tucked = Math.max(w.tucked, -(rest + target));
+            w.minShown = Math.min(w.minShown, 1 - Math.max(0, -(rest + target)) / r.height);
+          }
         }
         if (document.querySelector('.dealer-hand img[alt*="king"]')) w.leaks++;
       }
-      requestAnimationFrame(frame);
     };
+    const frame = () => { sample(); requestAnimationFrame(frame); };
     requestAnimationFrame(frame);
+    setInterval(sample, 4);
+    new MutationObserver(sample).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
   });
 }
 const readPeek = (page) => page.evaluate(() => window.__peek);
@@ -44,8 +58,7 @@ async function dealNoOffer(page, seed) {
   return api;
 }
 
-test('the peek with no offer: the hole card tucks under the felt and back with 85 % in view, its face never in the page, then the dealer\'s blackjack flips it (#83)', async ({ page, browserName }) => {
-  test.skip(browserName === 'webkit', 'peek frame sampling misses frames in WebKit on CI (#180)');
+test('the peek with no offer: the hole card tucks under the felt and back with 85 % in view, its face never in the page, then the dealer\'s blackjack flips it (#83)', async ({ page }) => {
   const api = await dealNoOffer(page, 207);
   await expect(page.getByRole('img', { name: 'ace of diamonds' })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Offers' })).toHaveCount(0); // nothing is offered
@@ -61,8 +74,7 @@ test('the peek with no offer: the hole card tucks under the felt and back with 8
   expect(api.settles).toEqual([{ payout: 0, requestId: expect.any(String) }]);
 });
 
-test('the peek with no offer and no blackjack: the same check, then "No blackjack", then your move (#83)', async ({ page, browserName }) => {
-  test.skip(browserName === 'webkit', 'peek frame sampling misses frames in WebKit on CI (#180)');
+test('the peek with no offer and no blackjack: the same check, then "No blackjack", then your move (#83)', async ({ page }) => {
   await dealNoOffer(page, 65);
   await expect(page.getByRole('img', { name: 'ace of clubs' })).toBeVisible();
   await expect(page.getByText('Your move', { exact: true })).toBeVisible({ timeout: 20_000 });

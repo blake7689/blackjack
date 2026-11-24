@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../../hooks/usePlayer";
+import { focusTarget } from "../../utils/opener";
 import "./TopUpPrompt.css";
 
 // Every refusal reads the same, so the text never hints at why (#90). Only the lockout says more.
@@ -28,7 +29,7 @@ export default function TopUpPrompt({ onClose }) {
   // Focus the input, give focus back on close, close on Escape and keep Tab inside the dialog.
   useEffect(() => {
     alive.current = true;
-    const previous = document.activeElement;
+    const previous = focusTarget();
     inputRef.current.focus();
     const onKeyDown = (e) => {
       if (e.key === "Escape") return busyRef.current ? undefined : onClose(); // not mid-flight: it would reopen a second top-up
