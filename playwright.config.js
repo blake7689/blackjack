@@ -10,7 +10,7 @@ const narrowSpecs = /(smoke|topup|a11y|split|layout|tableart|chips|animations|so
 export default defineConfig({
   testDir: 'e2e',
   timeout: 60_000, // the cold-start test holds sign-in and /player/me for 15 s + 11 s, ~28 s in all
-  globalTimeout: ci ? 11 * 60_000 : undefined, // per matrix leg (chromium / phone / webkit), each ~5-7 min on GitHub runners; ends before the step/job limits so Playwright fails with a report
+  globalTimeout: ci ? 14 * 60_000 : undefined, // per matrix leg (chromium / phone / webkit), the chromium leg takes about 9 min on GitHub runners; ends before the step/job limits so Playwright fails with a report
   retries: ci ? 1 : 0,
   reporter: ci ? [['list'], ['html', { open: 'never' }], ['./e2e/flakyReporter.js']] : 'list',
   use: {

@@ -286,6 +286,8 @@ const playOut = (page) => expect.poll(async () => {
   return 'playing';
 }, { timeout: 40_000, intervals: [200] }).toBe('done');
 
+// Nothing here depends on which frames the browser managed to draw: the sampler only checks invariants that hold in every frame, the landing is read from each
+// copy's own animation (where it starts, where it ends, and where it is when it finishes), and the end state is waited for as a condition (a slow runner drops frames).
 test('the discard pile: the swept cards land exactly on its top card, which never moves, never blinks, and only grows (L2-10)', async ({ page }) => {
   await stubApi(page);
   await seedRandom(page, 183);
@@ -296,35 +298,53 @@ test('the discard pile: the swept cards land exactly on its top card, which neve
     await playOut(page);
     await expect(page.locator('.flight-layer > *')).toHaveCount(0);
     await page.evaluate(() => {
-      window.__pile = [];
-      window.__pileDone = false;
-      const t0 = performance.now();
-      let seen = false, after = 0; // it logs until the copies have come and gone and the pile has had 30 frames on its own (10 s at most: a slow runner)
-      const centre = (el) => { const b = el.getBoundingClientRect(); return [Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2)]; };
-      const tick = () => {
-        const d = document.querySelector('.discard'), card = d.querySelector('.discard-card'), copies = [...document.querySelectorAll('.fly-copy.sweep')];
-        window.__pile.push({ pile: centre(card), lv: Number(d.dataset.lv), empty: d.classList.contains('empty'), opacity: Number(getComputedStyle(card).opacity), copies: copies.length, last: copies.length ? centre(copies.at(-1)) : null });
-        if (copies.length) seen = true;
-        if (seen && !copies.length) after++;
-        if (after < 30 && performance.now() - t0 < 10_000) requestAnimationFrame(tick); else window.__pileDone = true;
+      const run = (window.__run = { stop: false, seen: false, frames: [], copies: [] });
+      const centre = (el) => { const b = el.getBoundingClientRect(); return [b.left + b.width / 2, b.top + b.height / 2]; };
+      new MutationObserver((records) => {
+        for (const r of records) for (const n of r.addedNodes) {
+          if (n.nodeType !== 1 || !n.matches('.fly-copy.sweep')) continue;
+          run.seen = true;
+          const anim = n.getAnimations().find((a) => a.effect.getKeyframes()[0].translate);
+          const [bx, by] = String(anim.effect.getKeyframes()[1].translate).split(' ').map(parseFloat);
+          const copy = { from: centre(n), by: [bx, by], end: null }; // the animation's start (translate 0 0) and its destination
+          run.copies.push(copy);
+          anim.finished.then(() => { if (n.isConnected) copy.end = centre(n); }, () => {}); // when sampled at its end, it is still on the table (fill: both)
+        }
+      }).observe(document, { subtree: true, childList: true });
+      const sample = () => {
+        const d = document.querySelector('.discard'), card = d.querySelector('.discard-card');
+        run.frames.push({ pile: centre(card).map(Math.round), lv: Number(d.dataset.lv), empty: d.classList.contains('empty'), opacity: Number(getComputedStyle(card).opacity), copies: document.querySelectorAll('.fly-copy.sweep').length });
       };
+      run.sample = sample; // the test takes one last frame itself when it stops, so a runner too busy to draw frames cannot leave the sampler empty-handed
+      const tick = () => { sample(); if (!run.stop) requestAnimationFrame(tick); };
       requestAnimationFrame(tick);
     });
     await key(page, 'Next hand').click();
-    await expect.poll(() => page.evaluate(() => window.__pileDone), { timeout: 15_000 }).toBe(true);
-    const frames = await page.evaluate(() => window.__pile);
+    // The settled end state: the copies came, and are gone, and the pile is there at full strength with its top card.
+    await expect.poll(() => page.evaluate(() => {
+      const d = document.querySelector('.discard');
+      return window.__run.seen && !document.querySelector('.fly-copy.sweep') && !d.classList.contains('empty') && getComputedStyle(d.querySelector('.discard-card')).opacity === '1';
+    }), { timeout: 20_000 }).toBe(true);
+    const { frames, copies } = await page.evaluate(() => { window.__run.stop = true; window.__run.sample(); return window.__run; });
     const first = frames[0].pile;
     expect(frames.every((f) => f.pile.join() === first.join()), 'the pile\'s top card never moves').toBe(true);
-    const landed = frames.filter((f) => f.last && f.last.join() === f.pile.join());
-    expect(landed.length, 'the last copy lands exactly on the pile\'s top card').toBeGreaterThan(0);
-    const lastCopy = frames.map((f) => f.copies > 0).lastIndexOf(true);
-    // From the moment the copies are on the pile until the last one goes, the pile is there at full strength under them: no frame without it, no fade in.
-    for (const f of frames.slice(frames.findIndex((x) => x.last && x.last.join() === x.pile.join()))) {
-      if (f.opacity < 1) expect(f.empty, 'a pile that is dimmed is an empty one').toBe(true);
+    expect(copies.length, 'every card on the table swept').toBeGreaterThan(0);
+    for (const c of copies) {
+      expect(Math.abs(c.from[0] + c.by[0] - first[0]), 'a copy is sent to the pile\'s top card (x)').toBeLessThanOrEqual(1);
+      expect(Math.abs(c.from[1] + c.by[1] - first[1]), 'a copy is sent to the pile\'s top card (y)').toBeLessThanOrEqual(1);
+      if (c.end) { // a copy caught at the end of its flight is on the top card, within a pixel of rounding
+        expect(Math.abs(c.end[0] - first[0]), 'it lands on the pile (x)').toBeLessThanOrEqual(2);
+        expect(Math.abs(c.end[1] - first[1]), 'it lands on the pile (y)').toBeLessThanOrEqual(2);
+      }
     }
-    const after = frames.slice(lastCopy + 1);
-    expect(after.length).toBeGreaterThan(0);
-    expect(after.every((f) => f.opacity === 1 && !f.empty), 'after the copies go the pile is solid').toBe(true);
+    // No frame without the pile unless it is the empty one, and no fade-in (the empty class is how it hides): dimmed means empty, and once there are cards it is never empty again.
+    for (const f of frames) if (f.opacity < 1) expect(f.empty, 'a pile that is dimmed is an empty one').toBe(true);
+    const firstFilled = frames.findIndex((f) => !f.empty);
+    expect(firstFilled, 'the pile got its cards').toBeGreaterThanOrEqual(0);
+    expect(frames.slice(firstFilled).every((f) => !f.empty && f.opacity === 1), 'once it has cards the pile is solid, never empty again').toBe(true);
+    // From the frame after the last copy went, the pile is already there at its new level: it was not waiting for the round's state to follow (the blink of L2-10).
+    const gone = frames.map((f) => f.copies > 0).lastIndexOf(true);
+    if (gone >= 0) expect(frames.slice(gone + 1).every((f) => !f.empty && f.opacity === 1 && f.lv === frames.at(-1).lv), 'when the copies go the pile is already there, at its new level').toBe(true);
     const levels = frames.map((f) => f.lv);
     expect(levels, 'the pile only grows').toEqual([...levels].sort((a, b) => a - b));
     await expect(page.locator('.rack-wrap:not(.off)')).toBeVisible({ timeout: 20_000 });

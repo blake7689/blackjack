@@ -1,4 +1,5 @@
 import { memo, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { flushSync } from "react-dom";
 import { lazyReload } from "../../utils/lazyReload";
 import { FlightContext } from "../../context/FlightContext";
 import { cardTiming, clearLanded, landed, queue, reserve, spots } from "../../utils/cardAnimation";
@@ -99,7 +100,7 @@ export default function GameBoard() {
     const fx = sweepCards();
     if (!fx) return;
     const undo = reserve(performance.now() + fx.ms + 50);
-    const landedAt = setTimeout(() => setSwept(true), fx.ms);
+    const landedAt = setTimeout(() => flushSync(() => setSwept(true)), fx.ms); // flushed in this task: the copies' own timer (ms + 100, cardFx) can then never run before the pile has rendered its new level
     return () => { undo(); fx.cancel(); clearTimeout(landedAt); setSwept(false); };
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
