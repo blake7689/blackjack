@@ -1,12 +1,15 @@
+import { Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
+import { lazyReload } from "./utils/lazyReload";
 import Sprite from "./components/Sprite/Sprite";
 import { ErrorScreen, LoadingScreen } from "./components/PageScreens/PageScreens";
 import Home from "./pages/Home";
-import Settings from "./pages/Settings";
 import Login from "./pages/Login";
 import Game from "./pages/Game"
 import { usePlayer } from "./hooks/usePlayer";
 import "./App.css";
+
+const Settings = lazyReload(() => import("./pages/Settings")); // #169: the biggest page, off the first-paint chunk
 
 export default function App() {
   const { restoring, restoreFailed, retryRestore, skipRestore } = usePlayer();
@@ -20,7 +23,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/game" element={<Game />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<Suspense fallback={<LoadingScreen />}><Settings /></Suspense>} />
             <Route path="/login" element={<Login key="login" />} />
             <Route path="/signup" element={<Login key="signup" signup />} />
           </Routes>

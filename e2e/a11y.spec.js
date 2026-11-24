@@ -73,6 +73,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // the keys wake up once the cards have landed
   await expect(page.locator('.board.busy')).toHaveCount(0);
+  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // the label fades back after the bet badge: never scan it blended
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
@@ -88,6 +89,7 @@ test('game board at the results has no serious accessibility violations, and ann
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.board.busy')).toHaveCount(0);
   await expect(page.locator('.msg .verdict')).toHaveCSS('opacity', '1'); // the verdict pops in: never scan it blended
+  await expect(page.locator('.bal .delta')).toHaveCSS('opacity', '1'); // so does the balance badge (it blended in WebKit's slower frames)
   await expect(page.getByText('Hand 1: push, 19. Dealer: 19.')).toBeAttached(); // what a screen reader hears
   await expect(page.locator('[aria-live]')).toHaveCount(1); // one live region on the table
   await expectNoSeriousA11y(page, 'board, results');

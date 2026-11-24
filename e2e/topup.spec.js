@@ -7,10 +7,11 @@ const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
 // The balance in the top bar (the chip buttons also read '$100').
 const shown = (page) => page.locator('#bal');
 
-// Seven quick clicks on the balance (the hidden gesture: 7 within 3 s).
+// Seven quick clicks on the balance (the hidden gesture: 7 within 3 s). Raw mouse clicks at one point: locator.click() re-checks the element
+// each time (~0.4-0.6 s per click in WebKit), which can push 7 clicks past the 3 s window.
 async function tapBalance(page, times = 7) {
-  const balance = page.getByText('Balance', { exact: true });
-  for (let i = 0; i < times; i++) await balance.click();
+  const box = await page.getByText('Balance', { exact: true }).boundingBox();
+  for (let i = 0; i < times; i++) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 test('seven taps on a low balance open the prompt: a wrong code fails generically, the right one tops up (#90)', async ({ page }) => {
