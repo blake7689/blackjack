@@ -108,4 +108,4 @@ Unit tests for game logic and edge cases are located in `src/utils/_tests_/`. Ru
 npm test
 ```
 
-Deplyed with Azure at: https://lively-sky-084c84203.2.azurestaticapps.net/
+Deployed with Azure at: https://blakejack.win/
