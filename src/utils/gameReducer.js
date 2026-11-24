@@ -5,6 +5,7 @@ import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
 import { canHit, canSplit, canDouble, canSurrender, cents, insuranceStake } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
+import { money } from "./money";
 import * as engine from "./gameEngine";
 
 // All round state lives here. The reducer is pure apart from `refill`/`shoe` values passed in on actions,
@@ -47,6 +48,9 @@ export const initialGameState = {
     soundOn: false, // table sounds and vibration (#86, utils/sound.js): display settings, not rules
     soundVolume: 50, // 0-100
     hapticsOn: false,
+    tableMessages: "hints", // the message line (L2-1, CenterMessage): "all", "hints" (prompts after 5 s idle, results and notices) or "results" (results and notices only)
+    currency: "auto", // the symbol on every amount (L2-2, utils/money.js): "auto" follows the device's language; play money, so only the symbol changes
+    showKeyHints: false, // the keyboard shortcut hints on the dock keys and the rack (L2-3, 900 px and wider; the keys work either way)
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -108,6 +112,8 @@ const ENUM_SETTINGS = {
   feltTheme: ["green", "blue", "red"],
   accent: ["emerald", "sapphire", "ember", "orchid"],
   mode: ["dark", "light", "system"],
+  tableMessages: ["all", "hints", "results"],
+  currency: ["auto", "USD", "GBP", "EUR"],
 };
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
@@ -435,7 +441,8 @@ export function gameReducer(state, action) {
       const bet = state.pendingBets.find((b) => b.seq === action.seq);
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
-        // The server never took the stake, so the round never happened: back to betting, nothing to refund.
+        // The server never took the stake, so the round never happened: back to betting, nothing to refund. Its cards were seen face up, so they stay
+        // out of the shoe and go to the discard pile, like a misdeal (L1-27: by design; putting them back would deal them again).
         return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, betHistory: [], pendingBets: [],
           notice: "The server refused your bet, so the round was cancelled." };
       }
@@ -443,11 +450,11 @@ export function gameReducer(state, action) {
       if (bet.side === "insurance") {
         // Only the insurance is void: the hand's own stake is untouched.
         const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, insurance: 0 } : h));
-        return { ...state, hands, pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused your $${bet.amount} insurance bet; the hand is not insured.` };
+        return { ...state, hands, pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused your ${money(bet.amount)} insurance bet; the hand is not insured.` };
       }
       const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, bet: h.bet - bet.amount } : h));
       return { ...state, hands, betCircle: hands.reduce((sum, h) => sum + h.bet, 0),
-        pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused $${bet.amount} of your stake; that hand plays for less.` };
+        pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused ${money(bet.amount)} of your stake; that hand plays for less.` };
     }
 
     case "SETTLE":
@@ -469,7 +476,7 @@ export function gameReducer(state, action) {
       const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
       let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
         autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
-        notice: broke ? `Not enough credits to rebet $${initialBet.toLocaleString()}: auto deal paused` : null };
+        notice: broke ? `Not enough credits to rebet ${money(initialBet)}: auto deal paused` : null };
       if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;

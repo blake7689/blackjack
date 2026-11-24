@@ -20,7 +20,7 @@ export const GROUPS = ["Shoe", "Dealer", "Payouts", "Doubling", "Splitting", "Su
 export const RULES_TITLE = "Table rules";
 export const VARIATIONS_TITLE = "House variations";
 export const ADVANCED_TITLE = "Advanced";
-export const EDGE_NOTE = "House edge is an estimate for a player who uses basic strategy and declines insurance: published rule-by-rule figures added together, so it is approximate. A plus sign means a worse deal for you. Insurance, House variations and Advanced options are not counted.";
+export const EDGE_NOTE = "House edge is an estimated house edge over the player who uses basic strategy and declines insurance. Figure is approximate. A plus sign means a worse deal for you, as the house would gain advantage. Insurance, House variations and Advanced options are not counted.";
 
 // A change of dealer mode also moves blackjackPaysImmediately to the new mode's preset pairing (true with a peek, false without a hole
 // card or with no peek), but only while it still holds the pairing of the current mode: a value the player set on purpose stays.
@@ -118,7 +118,18 @@ export const APP_SETTINGS = {
   feltTheme: { label: "Felt", hint: "Colour of the table cloth" },
   accent: { label: "Accent", hint: "Colour of keys and highlights" },
   mode: { label: "Mode", hint: "Dark, light or follow your device" },
+  tableMessages: { label: "Table messages", hint: "What the line on the felt says" },
+  showKeyHints: { label: "Show keyboard shortcuts", sub: "Key hints on the controls", hint: "Shortcut keys on the buttons" },
+  currency: { label: "Currency", hint: "Symbol on every amount (play money)" },
 };
+
+// The choices of the two list settings above (label, and for Table messages a line of what it does): Settings' radio groups read them.
+export const TABLE_MESSAGES = [
+  { value: "all", label: "All", hint: "Every message, as it happens" },
+  { value: "hints", label: "Hints", hint: "Prompts after a few idle seconds, plus results and notices" },
+  { value: "results", label: "Celebrations only", hint: "Only results and notices" },
+];
+export const CURRENCIES = [{ value: "auto", label: "Auto" }, { value: "USD", label: "$" }, { value: "GBP", label: "£" }, { value: "EUR", label: "€" }];
 
 // The rules that apply to these settings (a rule that does not apply has no effect and is not shown).
 export const visibleIn = (settings) => RULE_CATALOG.filter((rule) => rule.showWhen?.(settings) ?? true);
@@ -166,16 +177,17 @@ export function feltPrint(settings) {
   };
 }
 
+// The sheet's own sentences (the mockup's rules sheet, L1-23): full sentences, where the felt and the Settings summaries are short phrases.
+const SHEET_HOLE = { [US_PEEK]: "The dealer peeks for blackjack before you play", [US_NO_PEEK]: "The dealer has a hole card but doesn't check it", [EU]: "No second card: the dealer takes it after you play" };
+const SHEET_DOUBLE_ON = { [DoubleOn.ANY]: "any two cards", [DoubleOn.NINE_TO_ELEVEN]: "a hard 9, 10 or 11", [DoubleOn.TEN_TO_ELEVEN]: "a hard 10 or 11" };
+
 // The Table rules sheet (#87): [{ title, items }] for the groups Payouts, Dealer, Doubling, Splitting and Surrender, each line plain English and worked out
-// from `settings`. Where the catalog already has the words (the felt's, a rule's label or summary) they are reused; `showWhen` (through `hiddenKeys`)
+// from `settings`. The deck and split-limit lines reuse the catalog's summaries, the rest are the sheet's own sentences; `showWhen` (through `hiddenKeys`)
 // leaves out a rule the mode makes meaningless; even money only when offered (`offersAtDeal`: insurance on, and a blackjack that is not paid at once).
 export function sheetGroups(settings) {
   const shown = (key) => !hiddenKeys(settings).has(key);
   const summaryOf = (key) => RULE_CATALOG.find((rule) => rule.key === key).summary.text(settings[key], settings);
-  const labelOf = (key) => APP_TOGGLES.find((toggle) => toggle.key === key).label();
   const evenMoney = settings.insurance && (settings.dealerHoleBehaviour === US_PEEK || !bjPaysWithoutPeek(settings));
-  const { soft, mode } = feltPrint(settings);
-  const hole = HOLE_OPTIONS.find((option) => option.value === settings.dealerHoleBehaviour);
   const groups = [
     ["Payouts", [
       `Blackjack pays ${blackjackOdds(settings)}`,
@@ -185,18 +197,19 @@ export function sheetGroups(settings) {
     ]],
     ["Dealer", [
       `${summaryOf("deckCount")} in the shoe`,
-      soft,
-      `${mode}. ${hole.hint}`,
-      shown("noHoleCardLoss") && summaryOf("noHoleCardLoss"),
+      settings.dealerHitsSoft17 ? "The dealer hits soft 17" : "The dealer stands on all 17s",
+      SHEET_HOLE[settings.dealerHoleBehaviour],
+      shown("noHoleCardLoss") && (settings.noHoleCardLoss === NoHoleCardLoss.ALL ? "A dealer blackjack takes everything you staked" : "A dealer blackjack takes only your first bet"),
     ]],
     ["Doubling", [
-      summaryOf("doubleOn"),
+      `Double on ${SHEET_DOUBLE_ON[settings.doubleOn]}`,
       settings.doubleAfterSplit ? "Double after a split" : "No double after a split",
-      settings.tripleDown && labelOf("tripleDown"),
-      settings.doubleFaceDown && labelOf("doubleFaceDown"),
+      settings.tripleDown && "Triple down allowed",
+      settings.doubleFaceDown && "The double card is dealt face down",
     ]],
     ["Splitting", [
       summaryOf("maxSplitHands"),
+      "Any two ten-value cards split", // fixed text: the engine splits by card value (canSplit); sheetGroups.test.js checks a king and a ten split, so they cannot drift apart
       settings.hitSplitAces ? "Split aces may be hit" : "Split aces get one card each",
       shown("resplitAces") && (settings.resplitAces ? "Aces may be split again" : "Aces split once"),
       settings.splitDeal === "both" ? "Both split hands get their second card at once" : "Each split hand gets its second card when you reach it",

@@ -95,11 +95,10 @@ describe("Home", () => {
     expect(container.querySelector("h1 svg").getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("hides the decorative hero from assistive tech and points its cards at the .webp faces", () => {
+  it("has no felt hero (L2-5): the wordmark, the actions and nothing decorative", () => {
     const { container } = renderUI(<Home />);
-    const hero = container.querySelector(".hero");
-    expect(hero.getAttribute("aria-hidden")).toBe("true");
-    expect([...hero.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual(["/cards/ace_of_spades.webp", "/cards/king_of_hearts.webp"]);
+    expect(container.querySelector(".hero, img")).toBeNull();
+    expect(container.querySelector("main.page.home h1 svg")).toBeTruthy();
   });
 
   it("shows Loading, not Home, while the table is about to start (DESIGN section 8)", () => {
@@ -125,15 +124,27 @@ describe("Game", () => {
     expect(location()).toBe("/");
   });
 
+  it("waits on Loading, not Home, while the signed-in table is being started (L1-14)", () => {
+    renderUI(<Game />, { path: "/game", game: { starting: true } });
+    expect(screen.getByRole("status").textContent).toContain("Shuffling up...");
+    expect(location()).toBe("/game");
+  });
+
+  it("still sends a visitor home while `starting` is set", () => {
+    renderUI(<Game />, { path: "/game", player: { player: null }, game: { starting: true } });
+    expect(location()).toBe("/");
+  });
+
   it("shows the table for a started game", () => {
     renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL, seenIds: ["seen"] } });
     expect(screen.getByText("Place your bets")).toBeTruthy();
   });
 
-  it("opens with the shuffle when the round has not started (#83): the line and the Deal key say Shuffling", () => {
+  it("opens with the shuffle when the round has not started (#83): the line says Shuffling, the dock waits and Deal still says Deal", () => {
     renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL } });
     expect(screen.getByText("Shuffling", { selector: ".msg" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Shuffling" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("button", { name: "Deal" }).getAttribute("aria-disabled")).toBe("true");
+    expect(document.querySelector(".rack-wrap").classList.contains("off")).toBe(true);
   });
 });
 
@@ -154,7 +165,7 @@ describe("Log in (/login)", () => {
 
   it("logs in and goes home", async () => {
     const login = vi.fn().mockResolvedValue(testPlayer);
-    renderUI(<Login />, { path: "/login", player: { login } });
+    renderUI(<Login />, { path: "/login", player: { player: null, login } });
     type("Username or Email", "tester");
     type("Password", "secret1");
     fireEvent.click(logInButton());
@@ -170,7 +181,7 @@ describe("Log in (/login)", () => {
     vi.useFakeTimers();
     let finish;
     const login = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
-    renderUI(<Login />, { path: "/login", player: { login } });
+    renderUI(<Login />, { path: "/login", player: { player: null, login } });
     fireEvent.click(logInButton());
     expect(screen.getByRole("status").textContent).toBe("Contacting server...");
     act(() => { vi.advanceTimersByTime(5000); });
@@ -193,7 +204,7 @@ describe("Log in (/login)", () => {
       .mockRejectedValueOnce(new Error("Failed to fetch"))
       .mockRejectedValueOnce(new Error("Invalid username/email or password."))
       .mockRejectedValueOnce(new Error(""));
-    renderUI(<Login />, { path: "/login", player: { login } });
+    renderUI(<Login />, { path: "/login", player: { player: null, login } });
     for (let i = 0; i < 3; i++) {
       fireEvent.click(logInButton());
       await flush();
@@ -213,7 +224,7 @@ describe("Log in (/login)", () => {
 
   it("the fields are not invalid before an error, and the error clears when the next attempt starts", async () => {
     const login = vi.fn().mockRejectedValueOnce(new Error("Nope")).mockResolvedValueOnce(testPlayer);
-    renderUI(<Login />, { path: "/login", player: { login } });
+    renderUI(<Login />, { path: "/login", player: { player: null, login } });
     expect(screen.getByLabelText("Password").getAttribute("aria-invalid")).toBe("false");
     fireEvent.click(logInButton());
     await flush();
@@ -222,6 +233,52 @@ describe("Log in (/login)", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     await flush();
     expect(location()).toBe("/");
+  });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
+  });
+});
+
+describe("Log in and Create an account when already signed in", () => {
+  it.each([["/login", <Login />], ["/signup", <Login signup />]])("%s sends a signed-in player to /game", (path, ui) => {
+    renderUI(ui, { path });
+    expect(location()).toBe("/game");
+    expect(screen.queryByRole("heading", { level: 1 })).toBeNull();
+  });
+
+  it("does not redirect while its own log-in is in flight (it goes home itself)", async () => {
+    let finish;
+    const login = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const { playerCtx, rerender } = renderUI(<Login />, { path: "/login", player: { player: null, login } });
+    fireEvent.click(screen.getByRole("button", { name: "Log in" }));
+    playerCtx.player = testPlayer; // the provider signs the player in before login() resolves
+    rerender(<Login />);
+    expect(location()).toBe("/login");
+    await act(async () => finish(testPlayer));
+    expect(location()).toBe("/");
+  });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
   });
 });
 
@@ -327,15 +384,18 @@ describe("validateField", () => {
 });
 
 describe("App", () => {
-  const banner = () => screen.queryByRole("button", { name: "Home" }); // the app Header's Home button (Settings has its own, separate heading)
+  const banner = () => screen.queryByRole("button", { name: "Home" }); // the old global Header's Home button: gone (L1-12)
 
-  it("Home is a standalone screen with no header; Settings keeps the header", () => {
+  it("Home is a standalone screen with no header; Settings has only its own Table / Settings head, no global header", () => {
     const view = renderUI(<App />, { path: "/" });
     expect(screen.getByRole("heading", { level: 1, name: "Blakejack" })).toBeTruthy();
     expect(banner()).toBeNull();
     view.unmount();
     renderUI(<App />, { path: "/settings" });
-    expect(banner()).toBeTruthy();
+    expect(banner()).toBeNull();
+    expect(screen.getByRole("heading", { level: 1, name: "Settings" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Table" })).toBeTruthy();
+    // Home is reached from the table's menu, Log out from the Account section
   });
 
   it("routes /login to Log in and /signup to Create an account", () => {
@@ -407,5 +467,18 @@ describe("the Loading and Error screens (#87)", () => {
     fireEvent.click(screen.getByRole("link", { name: "Home" }));
     expect(onHome).toHaveBeenCalledOnce();
     expect(location()).toBe("/");
+  });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
   });
 });

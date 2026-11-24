@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { resolveMode, applyTheme } from "../theme";
+import { resolveMode, applyTheme, saveLook, readLook } from "../theme";
 
 const settings = { feltTheme: "blue", accent: "orchid", mode: "light", showTotals: true };
 const html = document.documentElement;
@@ -58,5 +58,37 @@ describe("applyTheme (#79)", () => {
     document.head.innerHTML = "";
     window.getComputedStyle.mockReturnValue({ getPropertyValue: () => "#123456" });
     expect(() => applyTheme(settings, false)).not.toThrow();
+  });
+});
+
+describe("saveLook and readLook (boot look)", () => {
+  const base = { feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true, deckCount: 6 };
+  afterEach(() => localStorage.clear());
+
+  it("reads back what was saved, laid over the base settings", () => {
+    saveLook({ ...settings, deckCount: 2 });
+    expect(readLook(base)).toEqual({ ...base, ...settings }); // only the four look keys are stored
+  });
+
+  it("gives the base when nothing, junk or a non-object is stored", () => {
+    expect(readLook(base)).toEqual(base);
+    for (const junk of ["{not json", "null", "5", '"x"']) {
+      localStorage.setItem("bj.look", junk);
+      expect(readLook(base), junk).toEqual(base);
+    }
+  });
+
+  it("ignores each invalid value on its own and keeps the valid ones", () => {
+    localStorage.setItem("bj.look", JSON.stringify({ feltTheme: "purple", accent: "ember", mode: "neon", showTotals: "yes" }));
+    expect(readLook(base)).toEqual({ ...base, accent: "ember" });
+    localStorage.setItem("bj.look", JSON.stringify({ mode: "system", showTotals: false }));
+    expect(readLook(base)).toEqual({ ...base, mode: "system", showTotals: false });
+  });
+
+  it("copes with blocked storage: reading gives the base, writing does not throw", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("full"); });
+    expect(readLook(base)).toEqual(base);
+    expect(() => saveLook(settings)).not.toThrow();
   });
 });

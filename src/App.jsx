@@ -1,6 +1,5 @@
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route } from "react-router-dom";
 import Sprite from "./components/Sprite/Sprite";
-import Header from "./components/Header/Header";
 import { ErrorScreen, LoadingScreen } from "./components/PageScreens/PageScreens";
 import Home from "./pages/Home";
 import Settings from "./pages/Settings";
@@ -11,7 +10,6 @@ import "./App.css";
 
 export default function App() {
   const { restoring, restoreFailed, retryRestore, skipRestore } = usePlayer();
-  const headed = useLocation().pathname === "/settings"; // Home and Log in are standalone screens and the table has its own top bar; Settings keeps the header
   // A saved session is being restored (up to a cold API start), or could not be: Loading or Error on every page, never a page that thinks you are signed out.
   const gate = restoreFailed ? <ErrorScreen onRetry={retryRestore} onHome={skipRestore} /> : restoring ? <LoadingScreen /> : null;
   return (
@@ -19,7 +17,6 @@ export default function App() {
       <Sprite />
       {gate ?? (
         <>
-          {headed && <Header />}
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/game" element={<Game />} />

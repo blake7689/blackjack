@@ -29,10 +29,15 @@
 .key.solid:hover { background: var(--tx); filter: brightness(.94); }
 .key.offer { border-color: rgb(var(--accent-rgb) / .55); color: var(--accent-tx); background: rgb(var(--accent-rgb) / .08); font-size: 15px; }
 .key small { font-size: 12px; font-weight: 500; color: var(--tx-3); }
-.key kbd { display: none; position: absolute; top: 6px; right: 7px; font: 600 12px/1 var(--font-ui); color: var(--tx-2); } /* the shortcut, on desktop */
+.key kbd { display: none; position: absolute; top: 6px; right: 7px; font: 600 12px/1 var(--font-ui); color: var(--tx-2); } /* the shortcut: shown by the Show keyboard shortcuts setting (.hints, below) */
 .key.primary kbd, .key.solid kbd { color: inherit; } /* on the primary fill and the solid slab the hint takes the key's ink: --tx-2 would not read there */
 .glyph::before, .key kbd::before { content: attr(data-text); }
 .key.primary small { color: inherit; } /* 12 px on the accent needs the full ink */
+/* auto deal's countdown (L2-4, the mockup's .key .bar): the Deal or Next hand key fills a bar in the key's own ink over the wait before the automatic step */
+.key .bar { position: absolute; left: 10px; right: 10px; bottom: 6px; height: 3px; border-radius: 2px; background: rgb(0 0 0 / .18); overflow: hidden; pointer-events: none; }
+.key .bar i { display: block; height: 100%; background: var(--accent-ink); opacity: .6; transform-origin: left; animation: fill linear both; }
+@keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .key .bar { display: none; } } /* no moving bar; the Pause key still shows auto deal is on */
 .dock .wider { flex: 3 1 0; }
 
 /* the keys that act wait while a card flies or flips (#6, #72): inert (and dimmed, see aria-disabled) until it lands */
@@ -75,14 +80,15 @@
 @media (min-width: 900px), (max-height: 520px) {
   .dock-in { max-width: var(--col); display: flex; gap: 10px; align-items: stretch; }
   .dock-row { display: contents; }
-  .key kbd { display: block; }
   .rc[aria-pressed="true"] svg, .rc[aria-pressed="true"]::after { transform: translateY(-2px); }
   .rack-wrap { flex: 0 1 auto; padding: 0 10px; } /* as wide as its chips, scrolling only when the row is short */
   .rack-wrap.scroll { flex: 1 1 auto; padding: 0; }
   .rack { gap: 8px; }
   .dock-note { flex: 3 1 auto; white-space: nowrap; }
 }
-@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } .rc[data-key]::before { display: block; } }
+@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } }
+/* the shortcut hints (the Show keyboard shortcuts setting, L2-3): on a desktop-size screen only, never on a landscape phone */
+@media (min-width: 900px) and (min-height: 521px) { .dock.hints .key kbd { display: block; } .dock.hints .rc[data-key]::before { display: block; } }
 @media (max-width: 359px) { .key small { display: none; } }
 @media (max-height: 520px) {
   .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
@@ -92,6 +98,5 @@
   /* the small betting keys are icon-only (their label stays as the accessible name) */
   .dock-in[data-face="betting"] .key:not(.big):has(> svg) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .dock-in .key.big { flex: none; min-width: 96px; }
-  .dock-in[data-shuffling] .key.big > span { font-size: 14px; } /* the Deal key keeps room for its word */
   .summary .s-l b { font-size: 22px; }
 }

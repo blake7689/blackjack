@@ -92,7 +92,7 @@ describe("ruleCatalog (#91, #84)", () => {
   });
 
   it("Gameplay keeps its settings: names, the Show hand totals subtitle, and the Auto deal 'Needs Rebet' subtitle", () => {
-    expect(Object.keys(APP_SETTINGS)).toEqual(["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "soundOn", "soundVolume", "hapticsOn", "chipValues", "feltTheme", "accent", "mode"]);
+    expect(Object.keys(APP_SETTINGS)).toEqual(["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "soundOn", "soundVolume", "hapticsOn", "chipValues", "feltTheme", "accent", "mode", "tableMessages", "showKeyHints", "currency"]);
     expect(APP_SETTINGS.playTimeout.label).toBe("Game speed");
     expect(APP_SETTINGS.showTotals).toMatchObject({ label: "Show hand totals", sub: "Yours and the dealer's" });
     expect(APP_SETTINGS.autoDeal).toMatchObject({ label: "Auto deal", sub: "Needs Rebet" });
@@ -159,7 +159,8 @@ describe("ruleCatalog (#91, #84)", () => {
     for (const mode of Object.values(DealerHoleOptions)) expect(keysOf(visibleIn(settings(mode)))).toContain("insurance");
   });
 
-  it("the note says the edge is an estimate, what a plus sign means, and what is not counted; the section titles", () => {
+  it("the note is Blake's wording exactly (L2-7), and the section titles", () => {
+    expect(EDGE_NOTE).toBe("House edge is an estimated house edge over the player who uses basic strategy and declines insurance. Figure is approximate. A plus sign means a worse deal for you, as the house would gain advantage. Insurance, House variations and Advanced options are not counted.");
     expect(EDGE_NOTE).toMatch(/estimate/);
     expect(EDGE_NOTE).toMatch(/approximate/);
     expect(EDGE_NOTE).toMatch(/plus sign means a worse deal/);

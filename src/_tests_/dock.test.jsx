@@ -39,6 +39,13 @@ describe("CenterMessage (the one 48 px line)", () => {
     expect(text({ gamePhase: PRE_DEAL, bet: 0, autoDealing: true })).toBe("Dealing soon");
   });
 
+  it("out of credits (no chip the balance covers): the line says so, until a bet is down or auto deal takes over (L1-18)", () => {
+    expect(text({ gamePhase: PRE_DEAL, broke: true })).toBe("Out of credits");
+    expect(text({ gamePhase: PRE_DEAL, broke: true, bet: 10 })).toBe("Tap Deal"); // chips still in the circle
+    expect(text({ gamePhase: PRE_DEAL, broke: true, autoDealing: true })).toBe("Dealing soon");
+    expect(text({ gamePhase: POST_ROUND, broke: true })).toBe("");
+  });
+
   it("asks one question per offer: even money, then insurance, then surrender", () => {
     const all = { insurance: true, evenMoney: true, surrender: true };
     expect(text({ gamePhase: OFFERS, offers: all })).toBe("Even money?");
@@ -155,13 +162,23 @@ describe("Dock", () => {
       expect([dimmed("Clear"), dimmed("Deal")]).toEqual([false, false]);
     });
 
-    it("says 'auto' on Deal while an automatic deal is armed", () => {
+    it("shows the countdown bar on Deal while an automatic deal waits, and never an 'auto' line (L2-4)", () => {
       const { container, rerender, gameState } = show(betting({ betCircle: 5 }));
-      expect(key("Deal").querySelector("small")).toBeNull();
-      gameState.autoDealPending = true;
+      expect(key("Deal").querySelector(".bar")).toBeNull();
+      gameState.autoBar = { type: "DEAL", ms: 3000, at: 1 };
       rerender(<Dock busy={false} />);
-      expect(key("Deal").querySelector("small").textContent).toBe("auto");
-      expect(key("Deal").getAttribute("aria-label")).toBe("Deal"); // the name does not change
+      const bar = key("Deal").querySelector(".bar");
+      expect(bar.getAttribute("aria-hidden")).toBe("true");
+      expect(bar.firstChild.style.animationDuration).toBe("3000ms"); // the real remaining wait of the one timer
+      expect(key("Deal").querySelector("small")).toBeNull();
+      expect(key("Deal").textContent).toBe("Deal"); // the name does not change
+      gameState.autoBar = { type: "DEAL", ms: 3000, at: 2 }; // the timer restarted: a new bar element, so the animation starts over
+      const first = bar.firstChild;
+      rerender(<Dock busy={false} />);
+      expect(key("Deal").querySelector(".bar i")).not.toBe(first);
+      gameState.autoBar = { type: "CONTINUE", ms: 1000, at: 3 }; // the other timer step belongs to Next hand
+      rerender(<Dock busy={false} />);
+      expect(key("Deal").querySelector(".bar")).toBeNull();
       expect(container.querySelector(".options-wrap")).toBeNull(); // betting is not a busy-hidden face
     });
 
@@ -579,9 +596,9 @@ describe("Dock", () => {
       expect(container.querySelector(".options-wrap")).toBe(screen.getByRole("group", { name: "Offers" }));
     });
 
-    it("a half-dollar stake is shown as it is: $2.5", () => {
+    it("a half-dollar stake shows its cents: $2.50", () => {
       show(offering(OFFER_INSURANCE, 5));
-      expect(screen.getByText("Insurance $2.5")).toBeTruthy();
+      expect(screen.getByText("Insurance $2.50")).toBeTruthy();
     });
 
     it("even money, and early surrender with the stake it gives back", () => {
@@ -590,6 +607,11 @@ describe("Dock", () => {
       cleanup();
       show(offering({ insurance: true, evenMoney: false, surrender: true, peek: true }));
       expect(keys()).toEqual(["Insurance $5", "Surrender$5 back", "No thanks"]);
+    });
+
+    it("a half-dollar stake shows its cents on the surrender key too", () => {
+      show(offering({ insurance: false, evenMoney: false, surrender: true, peek: true }, 5));
+      expect(keys()).toEqual(["Surrender$2.50 back", "No thanks"]);
     });
 
     it("an offer already used is gone, and 'No thanks' is always there", () => {
@@ -723,7 +745,7 @@ describe("Dock", () => {
     it("shows cents when there are some", () => {
       const { container } = show(settled([hand(["A", "K"], { payout: 22.5 })]), { player: { ...testPlayer, credits: 1234.5 } });
       expect(summary(container).net.textContent).toBe("+$12.50");
-      expect(summary(container).balance).toBe("$1,234.5"); // same as StatsPanel: credits.toLocaleString()
+      expect(summary(container).balance).toBe("$1,234.50"); // money(): two places for cents
     });
 
     it("adds every hand of a split round", () => {
@@ -734,6 +756,34 @@ describe("Dock", () => {
     it("a signed-out player has a $0 balance", () => {
       const { container } = show(settled([hand(["10", "9"], { payout: 10 })]), { player: null });
       expect(summary(container).balance).toBe("$0");
+    });
+  });
+
+  describe("icons (L1-10: the mockup's key() icons; the accessible names stay the words)", () => {
+    const ic = (name) => key(name).querySelector("svg use")?.getAttribute("href") ?? null;
+    it("your move: Double, Split, Surrender, Triple, Stay (-) and Hit (+)", () => {
+      show(playing(["8", "8"], {}, { settings: settings({ tripleDown: true }) }));
+      expect(["Double", "Split", "Surrender", "Triple", "Stay", "Hit"].map(ic)).toEqual(["#i-double", "#i-split", "#i-surrender", "#i-triple", "#i-stay", "#i-hit"]);
+      expect(key("Hit").querySelector("svg").getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("offers: Insurance (shield), Even money, Surrender; No thanks has none", () => {
+      show(offering({ insurance: true, evenMoney: true, surrender: true, peek: true }));
+      expect([/^Insurance/, /^Even money/, /^Surrender/].map((name) => key(name).querySelector("svg use").getAttribute("href"))).toEqual(["#i-shield", "#i-money", "#i-surrender"]);
+      expect(key("No thanks").querySelector("svg")).toBeNull();
+    });
+
+    it("results: Next hand (the arrow); betting: Pause and Resume (pause and play), Deal none", () => {
+      const on = settings({ resetInitialBet: true, autoDeal: true });
+      const { rerender, gameState } = show({ phase: POST_ROUND, settings: on, hands: [hand(["10", "6"], { status: HandStatus.DONE })] });
+      expect(ic("Next hand")).toBe("#i-next");
+      expect(ic("Pause auto deal")).toBe("#i-pause");
+      gameState.autoDealPaused = true;
+      rerender(<Dock busy={false} />);
+      expect(ic("Resume auto deal")).toBe("#i-play");
+      cleanup();
+      show({ phase: PRE_DEAL, settings: on, hands: [] });
+      expect(key("Deal").querySelector("svg")).toBeNull();
     });
   });
 

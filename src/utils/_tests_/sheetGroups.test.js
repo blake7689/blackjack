@@ -3,7 +3,7 @@ import { sheetGroups, feltPrint } from "../ruleCatalog";
 import { RULE_PRESETS } from "../rulePresets";
 import { initialGameState } from "../gameReducer";
 import { DealerHoleOptions } from "../constants/dealerHoleOptions";
-import { offersAtDeal } from "../blackjackLogic";
+import { offersAtDeal, canSplit } from "../blackjackLogic";
 import { stackedShoe } from "./stackedShoe";
 
 // The Table rules sheet's content (#87): plain English worked out from the settings, in ruleCatalog.js only.
@@ -25,18 +25,18 @@ describe("sheetGroups (#87)", () => {
   it("reads Vegas: 6 decks, 3 to 2, insurance and even money, peek, any two cards, 4 hands, late surrender", () => {
     expect(sheetGroups(VEGAS)).toEqual([
       { title: "Payouts", items: ["Blackjack pays 3 to 2", "Other wins pay 1 to 1", "Insurance pays 2 to 1 when the dealer shows an ace", "Even money on your blackjack against a dealer ace"] },
-      { title: "Dealer", items: ["6 decks in the shoe", "Dealer hits soft 17", "Dealer peeks. The dealer checks for blackjack before you play."] },
+      { title: "Dealer", items: ["6 decks in the shoe", "The dealer hits soft 17", "The dealer peeks for blackjack before you play"] },
       { title: "Doubling", items: ["Double on any two cards", "Double after a split"] },
-      { title: "Splitting", items: ["Split up to 4 hands", "Split aces get one card each", "Aces split once", "Each split hand gets its second card when you reach it"] },
+      { title: "Splitting", items: ["Split up to 4 hands", "Any two ten-value cards split", "Split aces get one card each", "Aces split once", "Each split hand gets its second card when you reach it"] },
       { title: "Surrender", items: ["Late surrender"] },
     ]);
   });
 
   it.each([
-    ["Atlantic City", { decks: "8 decks in the shoe", soft: "Dealer stands on all 17s", mode: "No second card", surrender: "Late surrender" }],
-    ["Europe", { decks: "6 decks in the shoe", soft: "Dealer stands on all 17s", mode: "No second card", surrender: "No surrender" }],
-    ["Australia", { decks: "6 decks in the shoe", soft: "Dealer stands on all 17s", mode: "No second card", surrender: "No surrender" }],
-    ["Singapore", { decks: "6 decks in the shoe", soft: "Dealer stands on all 17s", mode: "No second card", surrender: "Early surrender (not against an ace)" }],
+    ["Atlantic City", { decks: "8 decks in the shoe", soft: "The dealer stands on all 17s", mode: "No second card", surrender: "Late surrender" }],
+    ["Europe", { decks: "6 decks in the shoe", soft: "The dealer stands on all 17s", mode: "No second card", surrender: "No surrender" }],
+    ["Australia", { decks: "6 decks in the shoe", soft: "The dealer stands on all 17s", mode: "No second card", surrender: "No surrender" }],
+    ["Singapore", { decks: "6 decks in the shoe", soft: "The dealer stands on all 17s", mode: "No second card", surrender: "Early surrender (not against an ace)" }],
   ])("reads %s from its own preset", (name, expected) => {
     const settings = withRules(RULE_PRESETS[name]);
     const dealer = group(settings, "Dealer");
@@ -53,21 +53,28 @@ describe("sheetGroups (#87)", () => {
     expect(group(VEGAS, "Splitting")[0]).toBe("Split up to 4 hands");
   });
 
-  it("uses the felt's own words for the hole-card mode and the soft 17 line", () => {
+  it("the soft 17 and hole-card lines are the sheet's own full sentences (the mockup's), not the felt's short phrases (L1-23)", () => {
+    const lineFor = { [US_PEEK]: "The dealer peeks for blackjack before you play", [US_NO_PEEK]: "The dealer has a hole card but doesn't check it", [EU]: "No second card: the dealer takes it after you play" };
     for (const mode of [US_PEEK, US_NO_PEEK, EU]) {
-      const settings = withRules({ dealerHoleBehaviour: mode });
-      const { mode: felt, soft } = feltPrint(settings);
-      const dealer = group(settings, "Dealer");
-      expect(dealer, mode).toContain(soft);
-      expect(dealer.some((line) => line.startsWith(`${felt}. `)), mode).toBe(true);
+      const dealer = group(withRules({ dealerHoleBehaviour: mode }), "Dealer");
+      expect(dealer, mode).toContain(lineFor[mode]);
     }
-    expect(group(withRules({ dealerHoleBehaviour: US_NO_PEEK }), "Dealer").join("|")).toContain("No peek. The dealer has a hole card but doesn't check it.");
+    expect(group(withRules({ dealerHitsSoft17: true }), "Dealer")).toContain("The dealer hits soft 17");
+    expect(group(withRules({ dealerHitsSoft17: false }), "Dealer")).toContain("The dealer stands on all 17s");
+    expect(feltPrint(VEGAS).soft).toBe("Dealer hits soft 17"); // the felt print keeps its own words
   });
 
   it("says what a dealer blackjack takes only without a peek", () => {
-    expect(group(VEGAS, "Dealer").join("|")).not.toMatch(/Dealer blackjack takes/);
-    expect(group(withRules({ dealerHoleBehaviour: US_NO_PEEK, noHoleCardLoss: "original" }), "Dealer")).toContain("Dealer blackjack takes only your first bet");
-    expect(group(withRules({ dealerHoleBehaviour: EU, noHoleCardLoss: "all" }), "Dealer")).toContain("Dealer blackjack takes everything");
+    expect(group(VEGAS, "Dealer").join("|")).not.toMatch(/dealer blackjack takes/i);
+    expect(group(withRules({ dealerHoleBehaviour: US_NO_PEEK, noHoleCardLoss: "original" }), "Dealer")).toContain("A dealer blackjack takes only your first bet");
+    expect(group(withRules({ dealerHoleBehaviour: EU, noHoleCardLoss: "all" }), "Dealer")).toContain("A dealer blackjack takes everything you staked");
+  });
+
+  it("the fixed line 'Any two ten-value cards split' matches the engine: a king and a ten split (canSplit goes by card value)", () => {
+    expect(group(VEGAS, "Splitting")).toContain("Any two ten-value cards split");
+    const [king, ten] = stackedShoe(["K", "10"]);
+    expect(king.rank).not.toBe(ten.rank);
+    expect(canSplit({ cards: [king, ten] }, 1, 4)).toBe(true);
   });
 
   it("says 1 deck, not 1 decks", () => {
@@ -97,12 +104,13 @@ describe("sheetGroups (#87)", () => {
   });
 
   it("doubling: the double-on rule, DAS on and off, and the two variations only when on", () => {
-    expect(group(withRules({ doubleOn: "9-11", doubleAfterSplit: false }), "Doubling")).toEqual(["Double on hard 9 to 11", "No double after a split"]);
-    expect(group(withRules({ doubleOn: "10-11" }), "Doubling")[0]).toBe("Double on hard 10 to 11");
+    expect(group(withRules({ doubleOn: "9-11", doubleAfterSplit: false }), "Doubling")).toEqual(["Double on a hard 9, 10 or 11", "No double after a split"]);
+    expect(group(withRules({ doubleOn: "10-11" }), "Doubling")[0]).toBe("Double on a hard 10 or 11");
     const variations = group(withRules({ tripleDown: true, doubleFaceDown: true }), "Doubling");
-    expect(variations).toContain("Triple down");
-    expect(variations).toContain("Double down card face down");
+    expect(variations).toContain("Triple down allowed");
+    expect(variations).toContain("The double card is dealt face down");
     expect(group(VEGAS, "Doubling").join("|")).not.toMatch(/Triple|face down/);
+    expect(group(withRules({ doubleOn: "any" }), "Doubling")[0]).toBe("Double on any two cards");
   });
 
   it.each([

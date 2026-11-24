@@ -30,8 +30,10 @@
   src: url("/fonts/cormorant-garamond-700-subset.woff2") format("woff2");
 }
 
+/* the mockup's base text (L1-15): 15 px / 1.4 in --tx (set on body below); no rem or em units are used, and every text input sets its own 16 px (no iOS zoom) */
 :root {
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.4;
   font-weight: 400;
   font-synthesis: none;
   text-rendering: optimizeLegibility;

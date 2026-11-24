@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { screen, fireEvent, within } from "@testing-library/react";
-import { renderUI } from "./testUtils";
-import Header from "../components/Header/Header";
+import { renderUI, NavButtons } from "./testUtils";
 import TopBar from "../components/TopBar/TopBar";
 import { useNavActions } from "../hooks/useNavActions";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -13,8 +12,8 @@ const location = () => screen.getByTestId("location").textContent;
 
 describe("Leave game and return Home?", () => {
   it("is described by its body, lists Keep playing before Leave, and focuses Keep playing", () => {
-    renderUI(<Header />, inRound);
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    renderUI(<NavButtons />, inRound);
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     const dialog = screen.getByRole("dialog", { name: "Leave game and return Home?" });
     expect(dialog.getAttribute("aria-modal")).toBe("true");
     expect(document.getElementById(dialog.getAttribute("aria-describedby")).textContent).toBe("Any bet in the circle will be lost.");
@@ -26,8 +25,8 @@ describe("Leave game and return Home?", () => {
   });
 
   it("Escape means Keep playing: it closes, resets nothing and returns focus to the Home button", () => {
-    const { gameActions } = renderUI(<Header />, inRound);
-    const home = screen.getByRole("button", { name: "Home" });
+    const { gameActions } = renderUI(<NavButtons />, inRound);
+    const home = screen.getByRole("button", { name: "Nav Home" });
     home.focus();
     fireEvent.click(home);
     fireEvent.keyDown(document, { key: "Escape" });
@@ -38,8 +37,8 @@ describe("Leave game and return Home?", () => {
   });
 
   it("Leave runs resetGame and navigates Home, once", () => {
-    const { gameActions } = renderUI(<Header />, inRound);
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    const { gameActions } = renderUI(<NavButtons />, inRound);
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     fireEvent.click(screen.getByRole("button", { name: "Leave" }));
     expect(gameActions.resetGame).toHaveBeenCalledOnce();
     expect(location()).toBe("/");
@@ -47,8 +46,8 @@ describe("Leave game and return Home?", () => {
   });
 
   it("Tab stays inside the dialog: from Leave to Keep playing, and Shift+Tab back", () => {
-    renderUI(<Header />, inRound);
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    renderUI(<NavButtons />, inRound);
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     const [safe, danger] = within(screen.getByRole("dialog")).getAllByRole("button");
     danger.focus();
     const forward = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
@@ -61,8 +60,8 @@ describe("Leave game and return Home?", () => {
   });
 
   it.each([GamePhases.NONE, GamePhases.PRE_DEAL])("is not asked at %s: nothing is out, so Home goes straight home", (phase) => {
-    const { gameActions } = renderUI(<Header />, { path: "/game", actions: { getPhase: () => phase } });
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    const { gameActions } = renderUI(<NavButtons />, { path: "/game", actions: { getPhase: () => phase } });
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(gameActions.resetGame).toHaveBeenCalledOnce();
   });
@@ -75,9 +74,17 @@ describe("Leave game and return Home?", () => {
     expect(gameActions.resetGame).not.toHaveBeenCalled();
   });
 
+  it.each([GamePhases.OFFERS, GamePhases.PEEK])("asks before leaving a table waiting at %s: the insured bet would be lost", (phase) => {
+    const { gameActions } = renderUI(<NavButtons />, { path: "/game", actions: { getPhase: () => phase } });
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
+    expect(screen.getByRole("dialog", { name: "Leave game and return Home?" })).toBeTruthy();
+    expect(gameActions.resetGame).not.toHaveBeenCalled();
+    expect(location()).toBe("/game");
+  });
+
   it("does nothing on Home itself (no dialog, no reset)", () => {
-    const { gameActions } = renderUI(<Header />, { path: "/", actions: { getPhase: () => GamePhases.PLAYER_TURN } });
-    fireEvent.click(screen.getByRole("button", { name: "Home" }));
+    const { gameActions } = renderUI(<NavButtons />, { path: "/", actions: { getPhase: () => GamePhases.PLAYER_TURN } });
+    fireEvent.click(screen.getByRole("button", { name: "Nav Home" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(gameActions.resetGame).not.toHaveBeenCalled();
   });
@@ -85,9 +92,8 @@ describe("Leave game and return Home?", () => {
 
 describe("Log out?", () => {
   const ask = () => {
-    const view = renderUI(<Header />, { path: "/game" });
-    fireEvent.click(screen.getByRole("button", { name: "tester" }));
-    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    const view = renderUI(<NavButtons />, { path: "/game" });
+    fireEvent.click(screen.getByRole("button", { name: "Nav Log out" }));
     return view;
   };
 
@@ -106,8 +112,7 @@ describe("Log out?", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(playerCtx.logout).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "tester" }));
-    fireEvent.click(screen.getByRole("button", { name: "Log out" }));
+    fireEvent.click(screen.getByRole("button", { name: "Nav Log out" }));
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Log out" }));
     expect(playerCtx.logout).toHaveBeenCalledOnce();
     expect(gameActions.resetGame).toHaveBeenCalledOnce();
