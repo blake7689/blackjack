@@ -1,0 +1,36 @@
+/* The one message line fills its box (.mid in GameBoard.css: 48 px, 30 px on a short landscape phone, 56 px on wide screens) whatever it says (DESIGN section 4), 12 px tracked capitals in the felt's strongest ink. */
+.msg {
+  height: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; overflow: hidden;
+  font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; text-align: center;
+  color: var(--print-strong); text-shadow: 0 1px 2px rgb(0 0 0 / .4);
+}
+.msg .notice { color: var(--alert-tx); } /* a refused bet, in coral */
+.msg .reconnecting::before {
+  content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; vertical-align: 1px;
+  background: var(--surr); animation: msg-pulse 1.2s var(--e-io) infinite;
+}
+@keyframes msg-pulse { 50% { opacity: .35; transform: scale(.7); } }
+@media (prefers-reduced-motion: reduce) { .msg .reconnecting::before { animation: none; } }
+
+/* The verdict (#83): one word on the felt, never over a card; it pops in with its letter-spacing closing (620 ms spring); BLACKJACK! glows in the accent with a
+   sheen (1400 ms). It fills the message line; a two-line verdict (the insurance result) has room (centrePrint keeps it clear of the cards). */
+.msg:has(.verdict) { overflow: visible; } /* the insurance line below the word is taller than the 48 px line: it hangs into the room centrePrint keeps */
+.verdict { display: flex; align-items: baseline; flex-wrap: wrap; justify-content: center; column-gap: 12px; animation: verdict 620ms var(--e-spring) both; }
+.verdict em { flex-basis: 100%; text-align: center; font-style: normal; font-size: 13px; line-height: 1.2; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--even); margin-top: 2px; }
+.verdict b { font-family: var(--font-display); font-weight: 600; font-size: clamp(28px, 7.4cqi, 40px); letter-spacing: .08em; line-height: 1; }
+.verdict span { font-family: var(--font-display); font-weight: 500; font-size: clamp(18px, 4.4cqi, 26px); color: #fff; }
+.verdict.win b { color: var(--win); text-shadow: 0 0 24px rgb(63 227 151 / .45); }
+.verdict.lose b, .verdict.bust b { color: var(--lose); }
+.verdict.push b { color: var(--push); }
+.verdict.surrender b { color: var(--surr); }
+.verdict.even b { color: var(--even); }
+.verdict.bj b { color: var(--accent-tx); text-shadow: 0 0 28px rgb(var(--accent-rgb) / .6), 0 0 2px rgb(255 255 255 / .4); animation: flash 1400ms var(--e-io) 250ms both; }
+@media (max-height: 520px) { .verdict b { font-size: 26px; } .verdict span { font-size: 18px; } .verdict { flex-wrap: nowrap; } .verdict em { flex-basis: auto; margin: 0; } }
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) { .verdict b { font-size: 40px; } .verdict span { font-size: 26px; } }
+@keyframes verdict { 0% { opacity: 0; transform: translateY(10px) scale(.92); letter-spacing: .3em; } 100% { opacity: 1; transform: none; } }
+@keyframes flash { 0% { filter: brightness(1); } 25% { filter: brightness(1.9); } 100% { filter: brightness(1); } }
+
+/* A prompt that waited for the player (Table messages: Hints, L2-1) fades in; with reduced motion it just appears. */
+.msg .prompt { animation: promptIn 700ms var(--e-io) both; }
+@keyframes promptIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .msg .prompt { animation: none; } }

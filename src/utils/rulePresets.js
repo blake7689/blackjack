@@ -1,5 +1,6 @@
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
+import { hiddenKeys } from "./ruleCatalog";
 
 // Rules presets (#35 A5, #91): each sets every rule setting at once. Any other combination is "Custom".
 // Vegas is the default: initialGameState.settings equals it. Sources are in the spec (Specs\Regional rules.md).
@@ -19,37 +20,39 @@ export const RULE_PRESETS = {
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK, deckCount: 6, dealerHitsSoft17: true,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.LATE, insurance: true, ...advanced(true),
+    surrender: SurrenderOptions.LATE, insurance: true, splitDeal: "one", ...advanced(true),
   },
   "Atlantic City": {
     dealerHoleBehaviour: afterPlayers, deckCount: 8, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 4, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.LATE, insurance: true, ...advanced(false),
+    surrender: SurrenderOptions.LATE, insurance: true, splitDeal: "one", ...advanced(false),
   },
   Europe: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 0, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ALL,
-    surrender: SurrenderOptions.NONE, insurance: true, ...advanced(false),
+    surrender: SurrenderOptions.NONE, insurance: true, splitDeal: "one", ...advanced(false),
   },
   Australia: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.NINE_TO_ELEVEN, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.NONE, insurance: true, ...advanced(false),
+    surrender: SurrenderOptions.NONE, insurance: true, splitDeal: "one", ...advanced(false),
   },
   Singapore: {
     dealerHoleBehaviour: afterPlayers, deckCount: 6, dealerHitsSoft17: false,
     blackjackPayout: BlackjackPayouts.THREE_TWO, doubleOn: DoubleOn.ANY, doubleAfterSplit: true,
     maxSplitHands: 3, resplitAces: false, hitSplitAces: false, noHoleCardLoss: NoHoleCardLoss.ORIGINAL,
-    surrender: SurrenderOptions.EARLY_NO_ACE, insurance: true, ...advanced(false),
+    surrender: SurrenderOptions.EARLY_NO_ACE, insurance: true, splitDeal: "one", ...advanced(false),
   },
 };
 
 export const CUSTOM = "Custom";
 
+// The preset these settings match, ignoring the keys the current mode hides (ruleCatalog's `showWhen`: they do nothing there, so they never make a preset read as Custom).
 export function rulePresetOf(settings) {
+  const hidden = hiddenKeys(settings);
   return Object.keys(RULE_PRESETS).find((name) =>
-    Object.entries(RULE_PRESETS[name]).every(([key, value]) => settings[key] === value)) ?? CUSTOM;
+    Object.entries(RULE_PRESETS[name]).every(([key, value]) => hidden.has(key) || settings[key] === value)) ?? CUSTOM;
 }

@@ -2189,3 +2189,209 @@ describe("offers (#91): insurance, even money and early surrender at the offers"
     });
   });
 });
+
+describe("splitDeal (#133): one at a time, or both at once", () => {
+  const ranks = (r) => r.hands.map((h) => h.cards.map((c) => c.rank[0]).join(""));
+  const totals = (r) => r.hands.map((h) => h.total);
+  // Everything a round decides, to compare two rounds that deal the same cards to the same hands.
+  const outcome = (r) => ({
+    ranks: ranks(r), totals: totals(r), results: r.results, payout: r.payout, staked: r.staked, status: r.hands.map((h) => h.status), cardsLeft: r.cardsLeft,
+    ledger: r.state.creditEvents.map(({ kind, amount }) => [kind, amount]), blackjack: r.hands.map((h) => h.isBlackjack),
+  });
+  const withRule = (splitDeal) => (args) => playRound({ ...args, rules: { ...args.rules, splitDeal } });
+  const one = withRule("one");
+  const both = withRule("both");
+  // A round where the first hand acts without drawing: both rules deal the same cards, in the same order, to the same hands.
+  const sameOutcome = (args) => {
+    const r = one(args);
+    expect(outcome(r)).toEqual(outcome(both(args)));
+    return r;
+  };
+
+  it("the shoe's order differs only when the first hand draws: 'one' gives the first hand's hit before the second hand's card, 'both' after", () => {
+    const cards = ["8", "10", "8", "7", "3", "5", "K", "9"]; // 8-8 v 10-7, then 3, 5, K
+    const actions = ["split", "hit", "stand"];
+    const a = one({ cards, actions });
+    expect(ranks(a)).toEqual(["835", "8k"]); // hand 1: 3 then the hit 5; hand 2 gets K only when play reaches it
+    expect(totals(a)).toEqual([16, 18]);
+    expect(a.results).toEqual([LOSE, WIN]);
+    const b = both({ cards, actions });
+    expect(ranks(b)).toEqual(["83k", "85"]); // 3 and 5 at the split, the hit takes K
+    expect(totals(b)).toEqual([21, 13]);
+    expect(b.results).toEqual([WIN, LOSE]);
+  });
+
+  it("deals no extra card: the same shoe, the same cards left over", () => {
+    const cards = ["8", "10", "8", "7", "3", "K", "9"];
+    expect(one({ cards, actions: ["split"] }).cardsLeft).toBe(1);
+    expect(both({ cards, actions: ["split"] }).cardsLeft).toBe(1);
+  });
+
+  describe.each([["US peek", Modes.PEEK], ["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]])("%s: a split where the first hand stands", (_name, mode) => {
+    // EU deals the dealer's second card after the player acts; the US modes deal it with the opening cards.
+    const table = (d2, ...draws) => (mode === Modes.EU ? ["8", "10", "8", ...draws, d2] : ["8", "10", "8", d2, ...draws]);
+
+    it("a pair of eights against 10-7 plays the same under both rules", () => {
+      const r = sameOutcome({ cards: table("7", "3", "K"), mode, actions: ["split"] });
+      expect([ranks(r), r.results, r.payout, r.staked]).toEqual([["83", "8k"], [LOSE, WIN], 20, 20]);
+    });
+  });
+
+  describe.each([["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]])("%s: a hidden dealer blackjack", (_name, mode) => {
+    it("takes both split hands, and the late card changes nothing", () => {
+      const cards = mode === Modes.EU ? ["8", "A", "8", "3", "10", "K"] : ["8", "A", "8", "K", "3", "10"];
+      const r = sameOutcome({ cards, mode, actions: ["split"] });
+      expect([r.results, r.payout, r.dealer.isBlackjack]).toEqual([[LOSE, LOSE], 0, true]);
+    });
+  });
+
+  it("the waiting hand ends with two cards, the one that moved first, and no waiting flag", () => {
+    const r = one({ cards: ["8", "10", "8", "7", "3", "K", "9"], actions: ["split"] });
+    expect(r.hands[1]).toMatchObject({ awaitingCard: false, isSplit: true, status: HandStatus.DONE });
+    expect(r.hands[1].cards[0].moved).toBe(true);
+    expect(r.hands[1].cards).toHaveLength(2);
+  });
+
+  it("doubleAfterSplit applies to the second hand once it has its card: 8-3 (11) doubles, drawing the next card", () => {
+    const r = one({ cards: ["8", "10", "8", "7", "5", "3", "9"], actions: ["split", "stand", "double"] });
+    expect(ranks(r)).toEqual(["85", "839"]);
+    expect(r.hands.map((h) => h.bet)).toEqual([10, 20]);
+    expect(r.results).toEqual([LOSE, WIN]);
+    expect([r.staked, r.payout]).toEqual([30, 40]);
+    expect(r.state.creditEvents.filter((e) => e.kind === "bet").map((e) => e.amount)).toEqual([10, 10, 10]); // opening, split, double
+  });
+
+  it("a face-down double on the first hand does not stop the second hand getting its card", () => {
+    const r = one({ cards: ["8", "10", "8", "7", "3", "9", "K"], actions: ["split", "double"], rules: { doubleFaceDown: true } });
+    expect(ranks(r)).toEqual(["839", "8k"]);
+    expect(totals(r)).toEqual([20, 18]);
+    expect(r.results).toEqual([WIN, WIN]);
+    expect(r.hands.every((h) => h.hiddenCards.length === 0)).toBe(true);
+    expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+  });
+
+  describe("split aces", () => {
+    const aces = ["A", "10", "A", "7"];
+
+    it("each ace stands on its one card; the second's card arrives as play reaches it", () => {
+      const r = sameOutcome({ cards: [...aces, "5", "9"], actions: ["split"] });
+      expect([ranks(r), r.results, r.payout]).toEqual([["a5", "a9"], [LOSE, WIN], 20]);
+      expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+    });
+
+    it("the same with resplitAces on when no ace comes", () => {
+      sameOutcome({ cards: [...aces, "K", "5"], actions: ["split"], rules: { resplitAces: true } });
+    });
+
+    it("resplitAces: the first ace gets an ace and splits again while the second still waits; each waiting ace then takes a card in turn", () => {
+      // Split 1: [A-A][A (waiting)]. Split 2 of the first: [A-K][A (waiting)][A (waiting)]; the waiting aces draw 5 and 9 in order.
+      const r = one({ cards: [...aces, "A", "K", "5", "9"], actions: ["split", "split"], rules: { resplitAces: true, maxSplitHands: 4 } });
+      expect(ranks(r)).toEqual(["ak", "a5", "a9"]);
+      expect(r.hands.every((h) => h.status === HandStatus.DONE && !h.awaitingCard)).toBe(true);
+      expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+      expect([r.staked, r.results, r.payout]).toEqual([30, [WIN, LOSE, WIN], 40]);
+    });
+
+    it("resplitAces at the hand limit: the first A-A is finished at once and the second hand's late ace ends it too, with no hang", () => {
+      const r = sameOutcome({ cards: [...aces, "A", "A", "5"], actions: ["split", "split"], rules: { resplitAces: true, maxSplitHands: 2 } });
+      expect(ranks(r)).toEqual(["aa", "aa"]);
+      expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+      expect(r.state.phase).toBe(GamePhases.POST_ROUND);
+      expect(r.cardsLeft).toBe(1);
+    });
+
+    it("hitSplitAces: the first ace may hit before the second ace's card is dealt", () => {
+      const rules = { hitSplitAces: true };
+      const a = one({ cards: [...aces, "5", "2", "K"], actions: ["split", "hit", "stand"], rules });
+      expect(ranks(a)).toEqual(["a52", "ak"]); // the hit took the 2, then the second ace got the K
+      expect([totals(a)[0], a.hands[1].total, a.hands[1].isBlackjack]).toEqual([18, 21, false]);
+      const b = both({ cards: [...aces, "5", "2", "K"], actions: ["split", "hit", "stand"], rules });
+      expect(ranks(b)).toEqual(["a5k", "a2"]);
+    });
+
+    it("hitSplitAces: the second ace is in play on its card, not standing, so it can hit", () => {
+      const r = one({ cards: [...aces, "5", "2", "K"], actions: ["split", "stand", "hit"], rules: { hitSplitAces: true } });
+      expect(ranks(r)).toEqual(["a5", "a2k"]);
+    });
+  });
+
+  describe("a first hand that is already finished at the split goes straight to the second", () => {
+    it("a 21 (10-A): the turn skips to the waiting hand", () => {
+      const r = sameOutcome({ cards: ["10", "9", "10", "8", "A", "5"], actions: ["split"] });
+      expect([ranks(r), totals(r), r.results, r.payout]).toEqual([["1a", "15"], [21, 15], [WIN, LOSE], 20]);
+      expect(r.hands[0].isBlackjack).toBe(false);
+    });
+
+    it("the second hand may act after its card (10-5 hits to 10-5-6 = 21)", () => {
+      const r = one({ cards: ["10", "9", "10", "8", "A", "5", "6"], actions: ["split", "hit"] });
+      expect([ranks(r), totals(r), r.results, r.payout]).toEqual([["1a", "156"], [21, 21], [WIN, WIN], 40]);
+    });
+
+    it("blackJackOnSplit on: the first hand's 21 is a blackjack and pays 3:2; off it pays 1:1", () => {
+      const cards = ["10", "9", "10", "8", "A", "5"];
+      const on = sameOutcome({ cards, actions: ["split"], blackJackOnSplit: true });
+      expect([on.hands[0].isBlackjack, on.payout]).toEqual([true, 25]);
+      const off = sameOutcome({ cards, actions: ["split"], blackJackOnSplit: false });
+      expect([off.hands[0].isBlackjack, off.payout]).toEqual([false, 20]);
+    });
+
+    it("blackJackOnSplit on: a blackjack on the card the second hand gets later counts; off it is a plain 21", () => {
+      const cards = ["10", "9", "10", "8", "5", "A"];
+      const on = sameOutcome({ cards, actions: ["split"], blackJackOnSplit: true });
+      expect([on.hands.map((h) => h.isBlackjack), on.hands[1].status, on.payout]).toEqual([[false, true], HandStatus.DONE, 25]);
+      const off = sameOutcome({ cards, actions: ["split"], blackJackOnSplit: false });
+      expect([off.hands.map((h) => h.isBlackjack), off.hands[1].status, off.payout]).toEqual([[false, false], HandStatus.DONE, 20]);
+    });
+
+    it("both hands 21: the dealer still plays and both win", () => {
+      const r = sameOutcome({ cards: ["K", "10", "K", "6", "A", "A", "4"], actions: ["split"] });
+      expect([totals(r), r.results, r.dealer.total]).toEqual([[21, 21], [WIN, WIN], 20]);
+    });
+  });
+
+  describe("resplitting the second hand after its card", () => {
+    const eights = ["8", "10", "8", "7"];
+
+    it("the second hand gets its 8 and splits again: the first of the pair draws, the new hand waits and draws in turn", () => {
+      const r = one({ cards: [...eights, "3", "8", "2", "K"], actions: ["split", "stand", "split", "stand", "stand"] });
+      expect(ranks(r)).toEqual(["83", "82", "8k"]);
+      expect([totals(r), r.results, r.staked, r.payout]).toEqual([[11, 10, 18], [LOSE, LOSE, WIN], 30, 20]);
+      expect(r.cardsLeft).toBe(0);
+    });
+
+    it("the hand limit applies to the late 8: with 2 hands a second split is refused and the hand plays on as it is", () => {
+      const r = one({ cards: [...eights, "3", "8", "K"], actions: ["split", "stand", "split", "stand"], rules: { maxSplitHands: 2 } });
+      expect(r.hands).toHaveLength(2);
+      expect(ranks(r)).toEqual(["83", "88"]);
+      expect(r.staked).toBe(20);
+      expect(r.cardsLeft).toBe(1); // the refused split drew nothing
+    });
+
+    it("two waiting hands in a row: the first hand splits again, so the second and third hand each wait and draw in turn", () => {
+      // [8][8 waiting] -> the first draws 8 -> split again: [8-2][8 waiting][8 waiting]; K and 5 arrive when each is reached.
+      const r = one({ cards: [...eights, "8", "2", "K", "5"], actions: ["split", "split", "stand", "stand", "stand"] });
+      expect(ranks(r)).toEqual(["82", "8k", "85"]);
+      expect([totals(r), r.results, r.staked, r.payout]).toEqual([[10, 18, 13], [LOSE, WIN, LOSE], 30, 20]);
+      expect(new Set(r.hands.map((h) => h.tag)).size).toBe(3);
+    });
+
+    it("one ledger bet per split, and one settle for the round", () => {
+      const r = one({ cards: [...eights, "8", "2", "K", "5"], actions: ["split", "split", "stand", "stand", "stand"] });
+      expect(r.state.creditEvents.map(({ kind, amount }) => [kind, amount])).toEqual([["local", -10], ["bet", 10], ["bet", 10], ["bet", 10], ["settle", 20]]);
+    });
+  });
+
+  it("settlement matches 'both' when the same cards land in the same hands, with other table rules on", () => {
+    const rules = { dealerHitsSoft17: true, noHoleCardLoss: "original", maxSplitHands: 4 };
+    sameOutcome({ cards: ["8", "10", "8", "6", "3", "K", "5"], actions: ["split"], rules });
+    sameOutcome({ cards: ["8", "A", "8", "6", "3", "K", "2"], actions: ["split"], mode: Modes.NO_PEEK, rules });
+    sameOutcome({ cards: ["8", "A", "8", "3", "K", "9"], actions: ["split"], mode: Modes.EU, rules });
+  });
+
+  it("a split bet the server refuses while the hand waits lowers that hand's stake to 0; it still gets its card and pays nothing", () => {
+    const r = one({ cards: ["8", "10", "8", "7", "3", "K"], actions: ["split"], refuse: [1] });
+    expect(r.hands[1]).toMatchObject({ bet: 0, payout: 0 });
+    expect(ranks(r)).toEqual(["83", "8k"]);
+    expect(r.payout).toBe(0); // 8-3 loses, and the 8-K win had no stake
+  });
+});

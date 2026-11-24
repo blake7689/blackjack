@@ -1,18 +1,23 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act, cleanup } from "@testing-library/react";
-import { MemoryRouter, useNavigate } from "react-router-dom";
+import { MemoryRouter, Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import { GameProvider } from "../providers/GameProvider";
+import Game from "../pages/Game";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { PlayerContext } from "../context/PlayerContext";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import * as cards from "../utils/cards";
 import { queue } from "../utils/cardAnimation";
+import { money, setCurrency } from "../utils/money";
 
 // Saved settings on the server (#36), controlled per test.
 const remote = vi.hoisted(() => ({ getSettings: vi.fn(), saveSettings: vi.fn(), token: null }));
 vi.mock("../utils/playerEngine", () => ({ getSettings: remote.getSettings, saveSettings: remote.saveSettings }));
 vi.mock("../utils/api", () => ({ getToken: () => remote.token }));
+
+// The table itself is not under test here: Game decides whether to show it.
+vi.mock("../components/GameBoard/GameBoard", () => ({ default: () => <div>the table</div> }));
 
 // Every new shoe comes from the next stacked list, so rounds are scripted.
 const shoes = [];
@@ -25,6 +30,7 @@ function Probe({ ctx }) {
   ctx.state = useGameState();
   ctx.actions = useGameActions();
   ctx.navigate = useNavigate();
+  ctx.pathname = useLocation().pathname;
   return null;
 }
 
@@ -136,9 +142,25 @@ describe("GameProvider", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it("passes the player's balance to bets, doubles and splits", () => {
-    shoes.push(stackedShoe(["8", "10", "8", "7", "3", "10", "2"]));
+  it("undoBet takes back the last chip locally (the balance, the circle, the history); the ledger sees one opening bet at the deal", () => {
+    shoes.push(stackedShoe(["10", "10", "9", "7"]));
     const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(25));
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.undoBet());
+    expect([ctx.state.betCircle, ctx.state.betHistory]).toEqual([25, [25]]);
+    expect(events(player).filter((e) => e.kind === "local").map((e) => e.amount)).toEqual([-25, -10, 10]);
+    act(() => ctx.actions.deal());
+    expect(events(player).filter((e) => e.kind === "bet")).toEqual([{ kind: "bet", amount: 25, newRound: true, alreadyDeducted: true, handTag: null }]);
+    act(() => ctx.actions.undoBet()); // dealt: nothing to undo
+    expect(ctx.state.betCircle).toBe(25);
+  });
+
+  it("passes the player's balance to bets, doubles and splits", () => {
+    shoes.push(stackedShoe(["2"]), stackedShoe(["8", "10", "8", "7", "3", "10", "2"])); // the first is dealt by the rule change
+    const { ctx, player } = setup();
+    act(() => { ctx.actions.changeSetting("splitDeal", "both"); }); // both split hands dealt at once, the rule this scenario was written for
     act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(500)); // more than the balance
     expect(ctx.state.betCircle).toBe(0);
@@ -327,7 +349,7 @@ describe("GameProvider", () => {
     expect(remote.saveSettings).not.toHaveBeenCalled();
     remote.token = "token";
     await act(async () => { await ctx.actions.changeSetting("deckCount", 3); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
     expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ deckCount: 3, playTimeout: 500 });
   });
 
@@ -496,7 +518,7 @@ describe("GameProvider auto deal (#88)", () => {
       tick(); // CONTINUE
       tick(); // END_ROUND: 0 < $1,000
       expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: true });
-      expect(ctx.state.notice).toBe(`Not enough credits to rebet $${(1000).toLocaleString()}: auto deal paused`);
+      expect(ctx.state.notice).toBe("Not enough credits to rebet $1,000: auto deal paused");
       expect(vi.getTimerCount()).toBe(0);
       advance(60_000);
       expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
@@ -735,9 +757,91 @@ describe("GameProvider auto deal (#88)", () => {
       cards.createShoe.mockClear(); // the sign-in load built its own shoe
       await act(async () => { await ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
       const saved = remote.saveSettings.mock.calls[0][0];
-      expect(saved).toMatchObject({ v: 4, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
+      expect(saved).toMatchObject({ v: 5, resetInitialBet: true, autoDeal: true, autoDealDelay: 500 });
       expect(Object.values(saved).every((v) => ["string", "number", "boolean"].includes(typeof v))).toBe(true);
       expect(cards.createShoe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("the remembered look (no flash before the saved settings load)", () => {
+    const html = document.documentElement;
+
+    it("remembers the look it applies, and starts with it on the next load, signed out or not yet loaded", () => {
+      const first = setup();
+      act(() => { first.ctx.actions.changeSettings({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false }); });
+      expect(JSON.parse(localStorage.getItem("bj.look"))).toEqual({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false });
+      cleanup();
+      const second = setup();
+      expect(second.ctx.state.settings).toMatchObject({ feltTheme: "red", accent: "ember", mode: "light", showTotals: false });
+      expect(html.dataset).toMatchObject({ felt: "red", accent: "ember", mode: "light" });
+      expect(html.classList.contains("no-totals")).toBe(true);
+    });
+
+    it("a saved look that arrives with the settings replaces it and is remembered", async () => {
+      localStorage.setItem("bj.look", JSON.stringify({ feltTheme: "red" }));
+      remote.getSettings.mockResolvedValue({ v: 5, feltTheme: "blue" });
+      const { ctx } = setup({ signedIn: true });
+      expect(ctx.state.settings.feltTheme).toBe("red"); // the stored look until the load answers
+      await flush();
+      expect(ctx.state.settings.feltTheme).toBe("blue");
+      expect(JSON.parse(localStorage.getItem("bj.look")).feltTheme).toBe("blue");
+    });
+  });
+
+  // The countdown bar's data (L2-4): GameProvider gives `autoBar` while the DEAL or CONTINUE step waits, with the real length of that wait.
+  describe("the countdown bar's data (L2-4)", () => {
+    it("is null until an automatic deal waits, then { DEAL, the wait, when it began } for the delay, and null again once it deals", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      expect(ctx.state.autoBar).toBeNull();
+      playOut(ctx);
+      expect(ctx.state.autoBar).toMatchObject({ type: "CONTINUE", ms: 1000 }); // the results move on after one Rate of Play
+      toArmed(ctx);
+      expect(ctx.state.autoBar).toMatchObject({ type: "DEAL", ms: DELAY });
+      const began = ctx.state.autoBar.at;
+      expect(typeof began).toBe("number");
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(ctx.state.autoBar).toBeNull();
+    });
+
+    it("the wait is the real one: a card still in the air makes the DEAL wait (and its bar) longer, and a restarted timer is a new bar", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      const first = ctx.state.autoBar;
+      queue.free = performance.now() + 6000;
+      act(() => { ctx.actions.changeSettings({ autoDealDelay: 2000 }); }); // re-arms the DEAL timer
+      expect(ctx.state.autoBar).not.toBe(first);
+      expect(ctx.state.autoBar.ms).toBe(6000 + 600); // max(2000, 6000 + 0.3 x 2000), as the timer itself waits
+    });
+
+    it("goes when auto deal is paused, a bet changes or the player leaves the table, and has none without auto deal", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      expect(ctx.state.autoBar).not.toBeNull();
+      act(() => ctx.actions.pauseAutoDeal());
+      expect(ctx.state.autoBar).toBeNull();
+      act(() => ctx.actions.resumeAutoDeal());
+      act(() => ctx.navigate("/settings"));
+      expect(ctx.state.autoBar).toBeNull();
+      shoes.push(threeRounds());
+      cleanup();
+      const manual = startAuto({ settings: { resetInitialBet: true } });
+      playOut(manual.ctx);
+      expect(manual.ctx.state.autoBar).toBeNull();
+    });
+
+    it("the step timers that are not auto deal's (the dealer, settling) have no bar", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      tick(); // DEAL_DONE
+      act(() => ctx.actions.stand(0));
+      expect(ctx.state.phase).not.toBe(GamePhases.POST_ROUND);
+      expect(ctx.state.autoBar).toBeNull();
     });
   });
 });
@@ -745,7 +849,7 @@ describe("GameProvider auto deal (#88)", () => {
 describe("GameProvider saved table rules (#91)", () => {
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, insurance: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, insurance: false, splitDeal: "both",
   };
   const vegas = {
     dealerHitsSoft17: true, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
@@ -788,26 +892,26 @@ describe("GameProvider saved table rules (#91)", () => {
     expect(cards.createShoe).toHaveBeenLastCalledWith(3, true);
   });
 
-  it("a setting change saves { v: 4, ...every setting }", async () => {
+  it("a setting change saves { v: 5, ...every setting }", async () => {
     remote.token = "token";
     remote.getSettings.mockResolvedValue({});
     const { ctx } = setup({ signedIn: true });
     await flush();
     await act(async () => { await ctx.actions.changeSetting("blackjackPayout", "6:5"); });
     const saved = remote.saveSettings.mock.calls[0][0];
-    expect(saved.v).toBe(4);
+    expect(saved.v).toBe(5);
     expect(Object.keys(saved).sort()).toEqual(["v", ...Object.keys(ctx.state.settings)].sort());
     expect(saved).toMatchObject({ ...vegas, blackjackPayout: "6:5" });
   });
 
-  it("a v: 1 table that changes one setting is saved as v: 4 with its legacy rule values (no silent payout change)", async () => {
+  it("a v: 1 table that changes one setting is saved as v: 5 with its legacy rule values (no silent payout change)", async () => {
     remote.token = "token";
     remote.getSettings.mockResolvedValue({ v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 });
     const { ctx } = setup({ signedIn: true });
     await flush();
     await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
     const saved = remote.saveSettings.mock.calls[0][0];
-    expect(saved).toMatchObject({ v: 4, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(saved).toMatchObject({ v: 5, ...legacy, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
     expect(saved.dealerHitsSoft17).toBe(false);
     expect(saved.noHoleCardLoss).toBe("all");
   });
@@ -823,7 +927,7 @@ describe("GameProvider saved table rules (#91)", () => {
 
 describe("GameProvider: no save before the saved settings have loaded (#91)", () => {
   const stored = { v: 1, dealerHoleBehaviour: "drawAfter", deckCount: 3 };
-  const legacyRules = { dealerHitsSoft17: false, blackjackPayout: "3:2", noHoleCardLoss: "all", maxSplitHands: 0, insurance: false };
+  const legacyRules = { dealerHitsSoft17: false, blackjackPayout: "3:2", noHoleCardLoss: "all", maxSplitHands: 0, insurance: false, splitDeal: "both" };
   const signInOut = (ctx, player, signedIn) => (
     <MemoryRouter initialEntries={["/game"]}>
       <PlayerContext.Provider value={signedIn ? player : { player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
@@ -843,7 +947,7 @@ describe("GameProvider: no save before the saved settings have loaded (#91)", ()
     expect(remote.saveSettings).not.toHaveBeenCalled();
   });
 
-  it("once the load resolves, the same change saves v: 4 with the loaded values, and a v: 1 table's legacy rules are written, not Vegas", async () => {
+  it("once the load resolves, the same change saves v: 5 with the loaded values, and a v: 1 table's legacy rules are written, not Vegas", async () => {
     remote.token = "token";
     let answer;
     remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
@@ -853,7 +957,7 @@ describe("GameProvider: no save before the saved settings have loaded (#91)", ()
     await act(async () => answer(stored));
     await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
     expect(remote.saveSettings).toHaveBeenCalledTimes(1);
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, ...legacyRules, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, ...legacyRules, deckCount: 3, dealerHoleBehaviour: "drawAfter", playTimeout: 750 });
   });
 
   it("a failed load keeps rejecting saves, while the change still applies here", async () => {
@@ -929,14 +1033,14 @@ describe("GameProvider surrender (#91)", () => {
     expect(ctx.state).toBe(before);
   });
 
-  it("saves surrender in the version 4 object, and a change deals a new shoe like any table rule", async () => {
+  it("saves surrender in the version 5 object, and a change deals a new shoe like any table rule", async () => {
     remote.token = "token";
     const { ctx } = setup({ signedIn: true });
     await flush();
     cards.createShoe.mockClear();
     await act(async () => { await ctx.actions.changeSetting("surrender", "early"); });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, surrender: "early" });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, surrender: "early" });
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
 
@@ -1090,14 +1194,14 @@ describe("GameProvider offers (#91)", () => {
     expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 5 }]);
   });
 
-  it("saves insurance in the version 4 object, and a change deals a new shoe like any table rule", async () => {
+  it("saves insurance in the version 5 object, and a change deals a new shoe like any table rule", async () => {
     remote.token = "token";
     const { ctx } = setup({ signedIn: true });
     await flush();
     cards.createShoe.mockClear();
     await act(async () => { await ctx.actions.changeSetting("insurance", false); });
-    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 4, insurance: false });
-    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 4, ...ctx.state.settings });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, insurance: false });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
     expect(cards.createShoe).toHaveBeenCalledTimes(1);
   });
 
@@ -1111,5 +1215,333 @@ describe("GameProvider offers (#91)", () => {
     const current = setup({ signedIn: true });
     await flush();
     expect(current.ctx.state.settings.insurance).toBe(true);
+  });
+});
+
+describe("GameProvider split deal (#133)", () => {
+  const ranks = (hand) => hand.cards.map((c) => c.rank[0]).join("");
+  // Starts a round and splits the first hand; `cards` is the whole shoe, `settings` any rule to change first (that deals its own shoe, so it takes the first one).
+  const splitRound = (cards, settings) => {
+    shoes.push(...(settings ? [stackedShoe(["2"])] : []), stackedShoe(cards));
+    const { ctx, player } = setup();
+    if (settings) act(() => { ctx.actions.changeSettings(settings); });
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick(); // DEAL_DONE
+    act(() => ctx.actions.split(0));
+    return { ctx, player };
+  };
+
+  it("deals the second hand's card by itself, one beat after the first hand is finished, and not before", () => {
+    const { ctx, player } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    expect(ctx.state.hands.map(ranks)).toEqual(["83", "8"]);
+    expect(vi.getTimerCount()).toBe(0); // the player is playing hand 1: nothing is scheduled
+    act(() => ctx.actions.stand(0));
+    expect(ctx.state.hands[1].awaitingCard).toBe(true);
+    expect(vi.getTimerCount()).toBe(1);
+    act(() => { vi.advanceTimersByTime(100); });
+    expect(ctx.state.hands[1].awaitingCard).toBe(true);
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["83", "8k"]);
+    expect(ctx.state.hands[1].awaitingCard).toBe(false);
+    expect([ctx.state.phase, ctx.state.selectedHandIndex]).toEqual([GamePhases.PLAYER_TURN, 1]);
+    expect(vi.getTimerCount()).toBe(0); // now the player acts
+    expect(events(player).filter((e) => e.kind === "bet")).toHaveLength(2); // the late card adds no bet
+  });
+
+  it("two waiting hands in a row each get their card: the timer is set again for the second hand", () => {
+    const { ctx } = splitRound(["A", "10", "A", "7", "A", "K", "5", "9", "3", "4"], { resplitAces: true });
+    expect(ctx.state.hands.map(ranks)).toEqual(["aa", "a"]);
+    act(() => ctx.actions.split(0)); // [A-K][A waiting][A waiting]
+    expect(ctx.state.hands.map((h) => !!h.awaitingCard)).toEqual([false, true, true]);
+    expect(ctx.state.selectedHandIndex).toBe(1);
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["ak", "a5", "a"]);
+    expect(ctx.state.selectedHandIndex).toBe(2); // same step, dealer and phase as before: only the hand changed
+    tick();
+    expect(ctx.state.hands.map(ranks)).toEqual(["ak", "a5", "a9"]);
+    expect(ctx.state.phase).toBe(GamePhases.DEALER_TURN);
+  });
+
+  it("leaving the game page does not stop the late card (it is a step of the round, not of auto deal)", () => {
+    const { ctx } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    act(() => ctx.actions.stand(0));
+    act(() => ctx.navigate("/settings"));
+    tick();
+    expect(ctx.state.hands[1].awaitingCard).toBe(false);
+  });
+
+  it("resetting the game while a hand waits cancels the late card", () => {
+    const { ctx } = splitRound(["8", "10", "8", "7", "3", "K", "9"]);
+    act(() => ctx.actions.stand(0));
+    shoes.push(stackedShoe(["2"])); // the new shoe of the reset
+    act(() => ctx.actions.resetGame());
+    expect(vi.getTimerCount()).toBe(0);
+    for (let i = 0; i < 3; i++) tick();
+    expect(ctx.state.hands).toEqual([]);
+  });
+
+  it("is a table rule: it is saved in the version 5 object and a change deals a new shoe", async () => {
+    remote.token = "token";
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    cards.createShoe.mockClear();
+    await act(async () => { await ctx.actions.changeSetting("splitDeal", "both"); });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ v: 5, splitDeal: "both" });
+    expect(remote.saveSettings).toHaveBeenCalledWith({ v: 5, ...ctx.state.settings });
+    expect(cards.createShoe).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads 'both' from a version 4 object and 'one' from a version 5 one", async () => {
+    remote.getSettings.mockResolvedValue({ v: 4, insurance: true });
+    const old = setup({ signedIn: true });
+    await flush();
+    expect(old.ctx.state.settings.splitDeal).toBe("both");
+    cleanup();
+    remote.getSettings.mockResolvedValue({ v: 5, splitDeal: "one" });
+    const current = setup({ signedIn: true });
+    await flush();
+    expect(current.ctx.state.settings.splitDeal).toBe("one");
+  });
+});
+
+describe("the signed-in start on the table (DESIGN section 8)", () => {
+  const swap = (rerender, ctx, player, path = "/") => rerender(
+    <MemoryRouter initialEntries={[path]}>
+      <PlayerContext.Provider value={{ player, getCredits: () => 0, applyCreditEvent: () => {} }}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    </MemoryRouter>
+  );
+
+  it("waits for the saved settings, then starts the game and replaces / with /game", async () => {
+    remote.getSettings.mockResolvedValue({ v: 5, deckCount: 4 });
+    const { ctx } = setup({ signedIn: true, path: "/" });
+    expect(ctx.state.starting).toBe(true); // Home shows Loading meanwhile
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.state.settings.deckCount).toBe(4);
+    expect(ctx.state.starting).toBe(false);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("starts with the settings it has when they cannot be loaded", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true, path: "/" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("leaves a player who is on another page where they are", async () => {
+    const { ctx } = setup({ signedIn: true, path: "/settings" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/settings");
+  });
+
+  it.each(["/login", "/signup"])("replaces %s with /game once signed in (#144)", async (path) => {
+    const { ctx } = setup({ signedIn: true, path });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("replaces /login with /game when the settings cannot be loaded (#144)", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx } = setup({ signedIn: true, path: "/login" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("the sign-in lands on /game while the ref still reads /login: Login's own navigate has not rendered (#144)", async () => {
+    const { ctx, rerender } = setup({ path: "/login" });
+    swap(rerender, ctx, { userName: "alice" }); // signed in, no route change yet
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+  });
+
+  it("leaves a player already on /game where they are", async () => {
+    const { ctx } = setup({ signedIn: true, path: "/game" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    expect(ctx.pathname).toBe("/game");
+  });
+
+  it("signed out: nothing starts, nothing is loading, / stays Home", async () => {
+    const { ctx } = setup({ path: "/" });
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
+    expect(ctx.state.starting).toBe(false);
+    expect(ctx.pathname).toBe("/");
+  });
+
+  it("does it once per sign-in: Home opened later stays Home, and the next sign-in starts again", async () => {
+    const { ctx, rerender } = setup({ signedIn: true, path: "/" });
+    await flush();
+    act(() => ctx.actions.resetGame());
+    act(() => ctx.navigate("/"));
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE); // no bounce back to the table
+    expect(ctx.pathname).toBe("/");
+    swap(rerender, ctx, null);
+    expect(ctx.state.starting).toBe(false);
+    swap(rerender, ctx, { userName: "bob" });
+    expect(ctx.state.starting).toBe(true);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+  });
+
+  it("does not start a game for a sign-in that ended before its settings came back", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx, rerender } = setup({ signedIn: true, path: "/" });
+    swap(rerender, ctx, null);
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.NONE);
+  });
+});
+
+// L1-14: a reload on /game while signed in. The player is restored, the table is not started until the saved settings come back, and Game must wait for it
+// instead of redirecting to "/" (which GameProvider's start, running on an older pathname, would then leave in place: Home instead of the table).
+describe("a reload on /game while signed in (L1-14)", () => {
+  const visited = [];
+  function Pages({ ctx }) {
+    const at = useLocation().pathname;
+    if (visited.at(-1) !== at) visited.push(at);
+    return (
+      <>
+        <Probe ctx={ctx} />
+        <Routes><Route path="/game" element={<Game />} /><Route path="/" element={<div>home</div>} /></Routes>
+      </>
+    );
+  }
+  const reload = () => {
+    visited.length = 0;
+    const ctx = {};
+    const utils = render(
+      <MemoryRouter initialEntries={["/game"]}>
+        <PlayerContext.Provider value={{ player: { userName: "alice" }, getCredits: () => 0, applyCreditEvent: () => {} }}>
+          <GameProvider><Pages ctx={ctx} /></GameProvider>
+        </PlayerContext.Provider>
+      </MemoryRouter>
+    );
+    return { ctx, ...utils };
+  };
+
+  it("shows Loading while the settings load, then the table, and never leaves /game", async () => {
+    let answer;
+    remote.getSettings.mockReturnValue(new Promise((resolve) => { answer = resolve; }));
+    const { ctx, container } = reload();
+    expect(container.textContent).toContain("Shuffling up...");
+    expect(ctx.pathname).toBe("/game");
+    answer({});
+    await flush();
+    expect(container.textContent).toContain("the table");
+    expect(visited).toEqual(["/game"]);
+  });
+
+  it("lands on the table when the settings answer at once", async () => {
+    remote.getSettings.mockResolvedValue({});
+    const { ctx, container } = reload();
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(container.textContent).toContain("the table");
+    expect(visited).toEqual(["/game"]);
+  });
+
+  it("lands on the table when the settings cannot be loaded", async () => {
+    remote.getSettings.mockRejectedValue(new Error("offline"));
+    const { ctx, container } = reload();
+    await flush();
+    expect(ctx.pathname).toBe("/game");
+    expect(container.textContent).toContain("the table");
+  });
+});
+
+describe("GameProvider: the reload warning while a hand is in play (L2-12)", () => {
+  // A page unload asks the browser's "Leave site?" through beforeunload: preventDefault and a returnValue. `asks` fires one and says whether it did.
+  const asks = () => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const start = (codes = ["10", "10", "9", "6", "K"]) => {
+    shoes.push(stackedShoe(codes));
+    const view = setup();
+    act(() => view.ctx.actions.startGame());
+    return view;
+  };
+
+  it("does not ask before a hand is dealt, with a bet on the table, or on a table not started", () => {
+    const view = setup();
+    expect(asks()).toBe(false); // nothing started
+    const { ctx } = start();
+    expect(asks()).toBe(false);
+    act(() => ctx.actions.addBet(10));
+    expect(asks()).toBe(false); // a bet is only chips on the felt until it is dealt
+    view.unmount();
+  });
+
+  it("asks from the deal until the round is settled: dealing, the turn, the dealer, the results", () => {
+    const { ctx } = start();
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    expect(asks()).toBe(true);
+    tick(); // DEAL_DONE
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+    expect(asks()).toBe(true);
+    act(() => ctx.actions.stand(0));
+    expect(asks()).toBe(true); // the dealer plays
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(asks()).toBe(false); // settled: between rounds
+  });
+
+  it("asks while the offers wait too, and stops when the round is swept away (Next hand)", () => {
+    const { ctx } = start(["10", "A", "9", "6", "K"]);
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.OFFERS);
+    expect(asks()).toBe(true);
+    act(() => ctx.actions.declineOffers());
+    for (let i = 0; i < 4 && ctx.state.phase !== GamePhases.PLAYER_TURN; i++) tick();
+    act(() => ctx.actions.stand(0));
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    act(() => ctx.actions.continueRound());
+    expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+    expect(asks()).toBe(false);
+  });
+
+  it("asks on any page (a hand left in play behind Settings is lost by a reload too), and the listener goes with the provider", () => {
+    const view = start();
+    act(() => view.ctx.actions.addBet(10));
+    act(() => view.ctx.actions.deal());
+    act(() => view.ctx.navigate("/settings"));
+    expect(asks()).toBe(true);
+    view.unmount();
+    expect(asks()).toBe(false);
+  });
+});
+
+describe("GameProvider: the currency setting reaches money() (L2-2)", () => {
+  const SYMBOLS = (n) => `${money(n)}`;
+  afterEach(() => setCurrency("USD"));
+
+  it("a saved currency sets the symbol every amount shows, and changing it changes it at once", async () => {
+    remote.getSettings.mockResolvedValue({ v: 5, currency: "GBP" });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.currency).toBe("GBP");
+    expect(SYMBOLS(10)).toBe("£10");
+    act(() => { ctx.actions.changeSettings({ currency: "EUR" }); });
+    expect(SYMBOLS(10)).toBe("€10");
+    act(() => { ctx.actions.changeSettings({ currency: "auto" }); });
+    expect(SYMBOLS(10)).toBe("$10"); // jsdom\x27s language is en-US
   });
 });

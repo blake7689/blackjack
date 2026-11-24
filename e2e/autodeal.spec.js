@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, VEGAS } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, VEGAS, placeBet } from './fixtures';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -8,10 +8,9 @@ test('auto deal continues, rebets and deals the next round with no click (#88)',
   const api = await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, resetInitialBet: true, autoDeal: true, autoDealDelay: 300 } });
   await seedRandom(page, 183);
   await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
 
   await expect(page.getByRole('button', { name: 'Pause auto deal' })).toBeVisible(); // the setting reached the table
-  await page.getByRole('button', { name: 'Add 10', exact: true }).click();
+  await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click(); // the only Deal click of the test
   await expect(page.getByRole('img', { name: 'king of diamonds' })).toBeVisible();
   await page.getByRole('button', { name: 'Hit' }).click({ timeout: 15_000 });
@@ -26,6 +25,6 @@ test('auto deal continues, rebets and deals the next round with no click (#88)',
     { amount: 10, newRound: true, requestId: expect.stringMatching(V4) },
   ]);
   expect(api.bets[1].requestId).not.toBe(api.bets[0].requestId);
-  await expect(page.getByRole('button', { name: 'Hit' })).toBeVisible({ timeout: 15_000 }); // round 2 is on the table, on the player's turn
+  await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // round 2 is on the table, on the player's turn
   expect(api.failed).toEqual([]);
 });

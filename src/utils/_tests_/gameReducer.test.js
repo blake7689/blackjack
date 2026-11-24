@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { setCurrency } from "../money";
 import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES, RESET_SETTINGS } from "../gameReducer";
 import { RULE_PRESETS } from "../rulePresets";
 import { GamePhases } from "../constants/gamePhases";
@@ -6,7 +7,8 @@ import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus
 
 const run = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1000, ...a }), state);
 const started = (cards) => run(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
-const dealing = (cards, bet = 10) => run(started(cards), { type: "ADD_BET", amount: bet }, { type: "DEAL" });
+// These scenarios predate splitDeal (#133): they play the old rule, both split hands dealt at once.
+const dealing = (cards, bet = 10) => run(started(cards), { type: "SET_SETTING", key: "splitDeal", value: "both" }, { type: "ADD_BET", amount: bet }, { type: "DEAL" });
 const dealt = (cards, bet = 10) => run(dealing(cards, bet), { type: "DEAL_DONE" });
 const withoutSeq = (e) => { const copy = { ...e }; delete copy.seq; delete copy.handTag; return copy; };
 const events = (s) => s.creditEvents.map(withoutSeq);
@@ -316,6 +318,49 @@ describe("dealer and settlement steps", () => {
   });
 });
 
+describe("the shuffle signal (#83): shoeSeq counts new shoes, shoeMid says the shoe ran out in a round", () => {
+  it("starts at 0, and a new game's shoe is shoe 1 (made between rounds, not mid-round)", () => {
+    expect([initialGameState.shoeSeq, initialGameState.shoeMid]).toEqual([0, false]);
+    const s = started(["5"]);
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, false]);
+  });
+
+  it("plain draws, bets and a round to its end change nothing", () => {
+    const s = dealt(["10", "10", "9", "7"]);
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, false]);
+    const done = playRound({ cards: ["10", "10", "9", "7"] }).state;
+    expect([done.shoeSeq, done.shoeMid]).toEqual([1, false]);
+    expect(run(done, { type: "CONTINUE" }, { type: "END_ROUND" }).shoeSeq).toBe(1); // no cut card seen: the same shoe
+  });
+
+  it("the cut card's shuffle (Next hand after it was drawn) is a new shoe between rounds", () => {
+    const finished = { ...playRound({ cards: ["10", "10", "9", "7"] }).state, cutCardFound: true };
+    const s = run(finished, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["2", "3"]) });
+    expect([s.shoeSeq, s.shoeMid]).toEqual([finished.shoeSeq + 1, false]);
+  });
+
+  it("a table setting with a new shoe (Rate of Play does not count) deals a new shoe, even from a round in progress", () => {
+    const s = dealt(["10", "10", "9", "7"]);
+    const decks = run(s, { type: "SET_SETTING", key: "deckCount", value: 3, shoe: stackedShoe(["2"]) });
+    expect([decks.shoeSeq, decks.shoeMid]).toEqual([s.shoeSeq + 1, false]); // the table is reset first: it is between rounds again
+    const speed = run(s, { type: "SET_SETTING", key: "playTimeout", value: 500 });
+    expect(speed.shoeSeq).toBe(s.shoeSeq);
+  });
+
+  it("the shoe running out in the middle of a round is a new shoe flagged mid-round, so the board plays the short shuffle and the cards stay", () => {
+    const shoe = [...stackedShoe(["10", "10"]), { id: "CUT-1", type: "cut" }, ...stackedShoe(["9"])];
+    const s = run({ ...initialGameState, phase: GamePhases.PRE_DEAL, shoe }, { type: "ADD_BET", amount: 10 },
+      { type: "DEAL", refill: () => stackedShoe(["7", "5"]) });
+    expect([s.shoeSeq, s.shoeMid]).toEqual([1, true]);
+    expect(s.hands[0].cards.length).toBeGreaterThan(0);
+  });
+
+  it("resetting to no game is not a shuffle to play mid-round", () => {
+    const s = run(dealt(["10", "10", "9", "7"]), { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE });
+    expect(s.shoeMid).toBe(false);
+  });
+});
+
 describe("end of round", () => {
   const finished = (settings = {}) => {
     const r = playRound({ cards: ["10", "10", "9", "7"] });
@@ -414,7 +459,7 @@ describe("saved settings (#36)", () => {
   const defaults = initialGameState.settings;
 
   it("keeps known keys of the right type and fills the rest from the defaults", () => {
-    expect(sanitizeSettings({ v: 4, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
+    expect(sanitizeSettings({ v: 5, deckCount: 4, resetInitialBet: true, rigDeck: "x", bogus: 1 }))
       .toEqual({ ...defaults, deckCount: 4, resetInitialBet: true });
     expect(sanitizeSettings(undefined)).toEqual(defaults);
   });
@@ -433,6 +478,58 @@ describe("saved settings (#36)", () => {
     expect(sanitizeSettings({ includeCutCard: "yes", deckCount: "4", dealerHoleBehaviour: "drawAfter_noDraw21" }))
       .toMatchObject({ includeCutCard: true, deckCount: 6, dealerHoleBehaviour: defaults.dealerHoleBehaviour });
     expect(sanitizeSettings({ dealerHoleBehaviour: "drawAfter" }).dealerHoleBehaviour).toBe("drawAfter");
+  });
+
+  it("display settings (#79) default to green / emerald / dark with totals shown", () => {
+    expect(defaults).toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+    expect(sanitizeSettings(undefined)).toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+  });
+
+  it("keeps valid display settings and drops wrong values to the defaults (#79)", () => {
+    expect(sanitizeSettings({ feltTheme: "red", accent: "orchid", mode: "system", showTotals: false }))
+      .toMatchObject({ feltTheme: "red", accent: "orchid", mode: "system", showTotals: false });
+    expect(sanitizeSettings({ feltTheme: "purple", accent: "teal", mode: "auto", showTotals: "no" }))
+      .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+    expect(sanitizeSettings({ feltTheme: 1, accent: null, mode: ["dark"], showTotals: 0 }))
+      .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
+  });
+
+  it("Table messages, Currency and Show keyboard shortcuts (L2-1, L2-2, L2-3) default to Hints, Auto and off, are display settings, and need no version bump", () => {
+    expect(defaults).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings(undefined)).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings({ v: 1 })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false }); // an old save has no legacy value to restore
+    for (const key of ["tableMessages", "currency", "showKeyHints"]) {
+      expect(RESET_SETTINGS).not.toContain(key); // changing them never deals a new shoe
+      expect(Object.keys(LEGACY_RULES)).not.toContain(key);
+    }
+    expect(SETTINGS_VERSION).toBe(5);
+  });
+
+  it("keeps valid Table messages, Currency and Show keyboard shortcuts values and drops anything else to the defaults (L2-1, L2-2, L2-3)", () => {
+    for (const tableMessages of ["all", "hints", "results"]) expect(sanitizeSettings({ tableMessages }).tableMessages).toBe(tableMessages);
+    for (const currency of ["auto", "USD", "GBP", "EUR"]) expect(sanitizeSettings({ currency }).currency).toBe(currency);
+    expect(sanitizeSettings({ showKeyHints: true }).showKeyHints).toBe(true);
+    expect(sanitizeSettings({ tableMessages: "everything", currency: "JPY", showKeyHints: "yes" })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings({ tableMessages: 1, currency: ["GBP"], showKeyHints: 1 })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+  });
+
+  it("sound and haptics (#86) default to off, at volume 50, and are not table rules", () => {
+    expect(defaults).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings(undefined)).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings({ v: 1 })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false }); // an old save has no legacy value to restore
+    expect(SETTING_RANGES.soundVolume).toEqual([0, 100]);
+    for (const key of ["soundOn", "soundVolume", "hapticsOn"]) expect(RESET_SETTINGS).not.toContain(key); // changing them never deals a new shoe
+  });
+
+  it("keeps valid sound settings, clamps the volume and rounds it, and drops wrong types to the defaults (#86)", () => {
+    expect(sanitizeSettings({ soundOn: true, soundVolume: 80, hapticsOn: true })).toMatchObject({ soundOn: true, soundVolume: 80, hapticsOn: true });
+    expect(sanitizeSettings({ soundVolume: 0 }).soundVolume).toBe(0); // 0 is a real volume, not "missing"
+    expect(sanitizeSettings({ soundVolume: 100 }).soundVolume).toBe(100);
+    expect(sanitizeSettings({ soundVolume: 250 }).soundVolume).toBe(100);
+    expect(sanitizeSettings({ soundVolume: -20 }).soundVolume).toBe(0);
+    expect(sanitizeSettings({ soundVolume: 33.6 }).soundVolume).toBe(34);
+    expect(sanitizeSettings({ soundOn: "true", soundVolume: "80", hapticsOn: 1 })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
+    expect(sanitizeSettings({ soundOn: null, soundVolume: null, hapticsOn: [true] })).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
   });
 
   it("between rounds deals a new shoe when a table setting changed, otherwise just applies", () => {
@@ -469,6 +566,20 @@ describe("server answers to bets (#23)", () => {
       expect(s.nextHandTag).toBe(2);
       expect(s.creditEvents.at(-1)).toMatchObject({ kind: "bet", newRound: true, handTag: null });
       expect(s.pendingBets).toEqual([{ seq: s.creditEvents.at(-1).seq, handTag: null, amount: 10, newRound: true }]);
+    });
+
+    it("a refused opening bet voids the round but its cards stay out of the shoe: the next deal draws different ones (L1-27, by design)", () => {
+      const before = run(started(["10", "10", "9", "7", "2", "3", "4", "5", "6"]), { type: "ADD_BET", amount: 10 });
+      const dealtRound = run(before, { type: "DEAL" });
+      const seen = dealtRound.hands[0].cards.map((c) => c.id);
+      const voided = rejectAt(dealtRound, 0);
+      expect(voided.phase).toBe(GamePhases.PRE_DEAL);
+      expect(voided.notice).toBe("The server refused your bet, so the round was cancelled.");
+      expect(voided.shoe).toBe(dealtRound.shoe); // nothing is put back
+      expect(voided.seenIds).toBe(dealtRound.seenIds); // the count keeps what was seen
+      expect(voided.runningCount).toBe(dealtRound.runningCount);
+      const again = run(voided, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+      expect(again.hands[0].cards.map((c) => c.id).some((id) => seen.includes(id))).toBe(false);
     });
 
     it("never reuses a tag across rounds", () => {
@@ -549,6 +660,14 @@ describe("server answers to bets (#23)", () => {
   });
 
   describe("a refused extra stake", () => {
+    afterEach(() => setCurrency("USD"));
+
+    it("the notice names the amount in the player's currency (L2-2)", () => {
+      setCurrency("GBP");
+      const doubled = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
+      expect(rejectAt(doubled, 1).notice).toBe("The server refused £10 of your stake; that hand plays for less.");
+    });
+
     it("a refused double keeps the cards, drops the bet by the double's amount and says so", () => {
       const doubled = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
       const s = rejectAt(doubled, 1);
@@ -768,7 +887,7 @@ describe("auto deal (#88)", () => {
 
     it("writes a four-digit bet with its thousands separator", () => {
       const s = run({ ...finished(), initialBet: 1500 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
-      expect(s.notice).toBe(`Not enough credits to rebet $${(1500).toLocaleString()}: auto deal paused`);
+      expect(s.notice).toBe("Not enough credits to rebet $1,500: auto deal paused");
       expect(s.notice).toMatch(/^Not enough credits to rebet \$1\D?500: auto deal paused$/);
     });
 
@@ -940,11 +1059,11 @@ describe("saved settings, versions 1 to 4 (#91): no silent payout change", () =>
   // What a table played like before #91: the values a `v: 1` object gets for the rule keys it does not have.
   const legacy = {
     dealerHitsSoft17: false, blackjackPayout: "3:2", doubleOn: "any", doubleAfterSplit: true, resplitAces: false, hitSplitAces: false,
-    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none", insurance: false,
+    noHoleCardLoss: "all", deckCount: 2, maxSplitHands: 0, surrender: "none", insurance: false, splitDeal: "both",
   };
 
   it("exports the version and the legacy values", () => {
-    expect(SETTINGS_VERSION).toBe(4);
+    expect(SETTINGS_VERSION).toBe(5);
     expect(LEGACY_RULES).toEqual(legacy);
   });
 
@@ -958,10 +1077,10 @@ describe("saved settings, versions 1 to 4 (#91): no silent payout change", () =>
   it.each([
     ["{} (a player who never saved)", {}],
     ["no version", { tripleDown: false }],
-    ["v: 4 with nothing else", { v: 4 }],
+    ["v: 5 with nothing else", { v: 5 }],
     ["null", null],
     ["undefined", undefined],
-    ["a future version", { v: 5 }],
+    ["a future version", { v: 6 }],
     ["a version that is a string", { v: "1" }],
   ])("%s gets the Vegas defaults", (_name, saved) => {
     expect(sanitizeSettings(saved)).toEqual(vegas);
@@ -996,8 +1115,8 @@ describe("saved settings, versions 1 to 4 (#91): no silent payout change", () =>
   describe("wrong types and unknown values fall back", () => {
     const bad = { dealerHitsSoft17: "yes", blackjackPayout: "7:5", doubleOn: "none", doubleAfterSplit: 1, resplitAces: "no", hitSplitAces: null, noHoleCardLoss: 3, deckCount: "6", maxSplitHands: "4" };
 
-    it("to the Vegas default for v: 4", () => {
-      expect(sanitizeSettings({ v: 4, ...bad })).toEqual(vegas);
+    it("to the Vegas default for v: 5", () => {
+      expect(sanitizeSettings({ v: 5, ...bad })).toEqual(vegas);
     });
 
     it("to the Vegas default for {}", () => {
@@ -1031,7 +1150,7 @@ describe("saved settings, versions 1 to 4 (#91): no silent payout change", () =>
   });
 
   it("drops unknown keys, and the version is not a setting", () => {
-    const s = sanitizeSettings({ v: 4, bogus: 1, rigDeck: true });
+    const s = sanitizeSettings({ v: 5, bogus: 1, rigDeck: true });
     expect(s).toEqual(vegas);
     expect(s).not.toHaveProperty("v");
   });
@@ -1267,7 +1386,7 @@ describe("surrender in saved settings (#91)", () => {
 
   it("only surrender is filled by version 3: a v: 2 object keeps Vegas for its other missing keys", () => {
     const s = sanitizeSettings({ v: 2 });
-    expect(s).toEqual({ ...vegas, surrender: "none", insurance: false });
+    expect(s).toEqual({ ...vegas, surrender: "none", insurance: false, splitDeal: "both" });
   });
 
   it("LOAD_SETTINGS of a v: 2 object between rounds deals the new shoe: surrender went from late to none", () => {
@@ -1280,9 +1399,9 @@ describe("surrender in saved settings (#91)", () => {
 
   it("LOAD_SETTINGS of the same surrender leaves the shoe alone; a changed one never resets a round in progress", () => {
     const table = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
-    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
+    expect(gameReducer(table, { type: "LOAD_SETTINGS", saved: { v: 5, surrender: "late" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table.shoe);
     const round = dealt(["10", "6", "6", "K", "5"]);
-    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 4, surrender: "none" }, shoe: stackedShoe(["4"]) });
+    const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 5, surrender: "none" }, shoe: stackedShoe(["4"]) });
     expect([loaded.phase, loaded.hands, loaded.shoe, loaded.settings.surrender]).toEqual([round.phase, round.hands, round.shoe, "none"]);
   });
 });
@@ -1590,5 +1709,349 @@ describe("offers: the reducer (#91)", () => {
     const s = offered(["10", "A", "6", "K"]);
     expect(s.pendingBets).toEqual([{ seq: expect.any(Number), handTag: null, amount: 10, newRound: true }]);
     expect(run(s, { type: "TAKE_INSURANCE" }).pendingBets[1]).toEqual({ seq: expect.any(Number), handTag: s.hands[0].tag, amount: 5, newRound: false, side: "insurance" });
+  });
+});
+
+describe("splitDeal (#133): the reducer", () => {
+  const EIGHTS = ["8", "10", "8", "7"]; // 8-8 against 10-7 (hole 7)
+  const table = (cards, rules = {}) => run(started(cards), { type: "SET_SETTING", values: { ...LEGACY_RULES, blackjackPaysImmediately: false, splitDeal: "one", ...rules } },
+    { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+  const split = (s) => run(s, { type: "SPLIT", handIdx: s.selectedHandIndex });
+  const reached = (cards, rules) => run(split(table(cards, rules)), { type: "STAND", handIdx: 0 }); // hand 0 stands: the turn reaches the waiting hand
+  const rank = (h) => h.cards.map((c) => c.rank[0]).join("");
+
+  describe("SPLIT in 'one'", () => {
+    it("gives only the first hand its card: the split-off hand holds the moved card, waits, and is not DONE", () => {
+      const before = table([...EIGHTS, "3", "K"]);
+      const s = split(before);
+      expect(s.hands.map(rank)).toEqual(["83", "8"]);
+      expect(s.hands[0]).toMatchObject({ total: 11, status: HandStatus.PLAYING });
+      expect(s.hands[0].awaitingCard).toBeUndefined();
+      expect(s.hands[1]).toMatchObject({ awaitingCard: true, status: HandStatus.PLAYING, result: HandResult.NONE, isBlackjack: false, isBusted: false, total: 8, totals: [8], bet: 10, baseStake: 0 });
+      expect(s.hands[1].cards[0].moved).toBe(true);
+      expect(s.hands[1].tag).not.toBe(s.hands[0].tag);
+      expect(s.shoe).toHaveLength(before.shoe.length - 1); // one card, not two
+      expect(s.selectedHandIndex).toBe(0);
+      expect(s.phase).toBe(GamePhases.PLAYER_TURN);
+      expect(nextAutoAction(s)).toBeNull(); // the player is playing hand 0
+      expect(events(s).at(-1)).toEqual(bet(10, false, false)); // the split stake is taken at the split
+    });
+
+    it("'both' still deals two cards and nothing waits", () => {
+      const before = table([...EIGHTS, "3", "K"], { splitDeal: "both" });
+      const s = split(before);
+      expect(s.hands.map(rank)).toEqual(["83", "8k"]);
+      expect(s.hands.some((h) => h.awaitingCard)).toBe(false);
+      expect(s.shoe).toHaveLength(before.shoe.length - 2);
+    });
+
+    it("a first hand that finishes at once (A-K 21 from a split ace) hands the turn to the waiting hand", () => {
+      const s = split(table(["A", "10", "A", "7", "K", "5"]));
+      expect(s.hands.map((h) => h.status)).toEqual([HandStatus.DONE, HandStatus.PLAYING]);
+      expect([s.phase, s.selectedHandIndex, nextAutoAction(s)]).toEqual([GamePhases.PLAYER_TURN, 1, "DEAL_SPLIT_CARD"]);
+    });
+  });
+
+  describe("a hand waiting for its card", () => {
+    const waiting = () => reached([...EIGHTS, "3", "K"], { tripleDown: true });
+
+    it("is the selected hand, the phase stays PLAYER_TURN, and the next automatic step is DEAL_SPLIT_CARD", () => {
+      const s = waiting();
+      expect([s.phase, s.selectedHandIndex, s.hands[1].awaitingCard, nextAutoAction(s)]).toEqual([GamePhases.PLAYER_TURN, 1, true, "DEAL_SPLIT_CARD"]);
+    });
+
+    it("the dealer does not play: it is unrevealed, with its one card, and no dealer step is scheduled", () => {
+      const s = waiting();
+      expect([s.dealerRevealed, s.dealer.cards.length, s.dealerHole.cards.length]).toEqual([false, 1, 1]);
+      expect(["DEALER_REVEAL", "DEALER_STEP", "SETTLE"]).not.toContain(nextAutoAction(s));
+    });
+
+    it.each(["HIT", "STAND", "DOUBLE", "TRIPLE", "SPLIT", "SURRENDER"])("%s is refused: the state is returned as it was", (type) => {
+      const s = waiting();
+      expect(run(s, { type, handIdx: 1 })).toBe(s);
+    });
+
+    it("an eight waiting alone is not offered a split either, even with every rule on", () => {
+      const s = reached([...EIGHTS, "3", "K"], { tripleDown: true, doubleAfterSplit: true, maxSplitHands: 0 });
+      expect(run(s, { type: "SPLIT", handIdx: 1 })).toBe(s);
+    });
+
+    it("actions on the hand being played are refused while the other waits only because it is not selected", () => {
+      const s = split(table([...EIGHTS, "3", "K"]));
+      expect(run(s, { type: "HIT", handIdx: 1 })).toBe(s); // the waiting hand is not the selected one
+      expect(run(s, { type: "HIT", handIdx: 0 }).hands[0].cards).toHaveLength(3); // the first hand still plays
+    });
+  });
+
+  describe("DEAL_SPLIT_CARD", () => {
+    it("gives the waiting hand the next card and the player then acts on it", () => {
+      const s = reached([...EIGHTS, "3", "K", "9"]);
+      const before = s.shoe.length;
+      const d = run(s, { type: "DEAL_SPLIT_CARD" });
+      expect(rank(d.hands[1])).toBe("8k");
+      expect(d.hands[1]).toMatchObject({ awaitingCard: false, total: 18, status: HandStatus.PLAYING, isSplit: true });
+      expect(d.shoe).toHaveLength(before - 1);
+      expect([d.phase, d.selectedHandIndex, nextAutoAction(d)]).toEqual([GamePhases.PLAYER_TURN, 1, null]);
+      expect(d.creditEvents).toEqual(s.creditEvents); // no bet: the stake was taken at the split
+      expect(run(d, { type: "HIT", handIdx: 1 }).hands[1].cards).toHaveLength(3);
+    });
+
+    it("a second DEAL_SPLIT_CARD does nothing: the hand no longer waits", () => {
+      const d = run(reached([...EIGHTS, "3", "K", "9"]), { type: "DEAL_SPLIT_CARD" });
+      expect(run(d, { type: "DEAL_SPLIT_CARD" })).toBe(d);
+    });
+
+    it("is ignored outside the player's turn, and when no hand waits or the selected hand does not exist", () => {
+      expect(run(initialGameState, { type: "DEAL_SPLIT_CARD" })).toBe(initialGameState);
+      const noWait = table([...EIGHTS, "3"]);
+      expect(run(noWait, { type: "DEAL_SPLIT_CARD" })).toBe(noWait);
+      const waiting = reached([...EIGHTS, "3", "K"]);
+      expect(run({ ...waiting, phase: GamePhases.DEALER_TURN }, { type: "DEAL_SPLIT_CARD" }).hands[1].awaitingCard).toBe(true);
+      const nobody = { ...waiting, selectedHandIndex: 9 };
+      expect(run(nobody, { type: "DEAL_SPLIT_CARD" })).toBe(nobody);
+      expect(nextAutoAction(nobody)).toBeNull();
+    });
+
+    it("a split ace that gets its card stands, and with nothing left to play the turn goes to the dealer", () => {
+      const aces = split(table(["A", "10", "A", "7", "5", "9"]));
+      expect(aces.hands.map((h) => h.status)).toEqual([HandStatus.DONE, HandStatus.PLAYING]);
+      const d = run(aces, { type: "DEAL_SPLIT_CARD" });
+      expect(d.hands.map((h) => [rank(h), h.status, !!h.awaitingCard])).toEqual([["a5", HandStatus.DONE, false], ["a9", HandStatus.DONE, false]]);
+      expect([d.phase, d.selectedHandIndex, nextAutoAction(d)]).toEqual([GamePhases.DEALER_TURN, 0, "DEALER_REVEAL"]);
+    });
+
+    it("an ace pair at the hand limit is finished by the late ace, so the turn never rests on a finished hand", () => {
+      const s = split(table(["A", "10", "A", "7", "A", "A", "5"], { resplitAces: true, maxSplitHands: 2 }));
+      expect(s.hands.map((h) => [rank(h), h.status])).toEqual([["aa", HandStatus.DONE], ["a", HandStatus.PLAYING]]);
+      const d = run(s, { type: "DEAL_SPLIT_CARD" });
+      expect(d.hands.map((h) => [rank(h), h.status])).toEqual([["aa", HandStatus.DONE], ["aa", HandStatus.DONE]]);
+      expect(d.phase).toBe(GamePhases.DEALER_TURN);
+    });
+
+    it("an ace pair under the limit stays in play to split again, and its card does not finish the other waiting hands", () => {
+      // [A-A][A waiting] -> split the first -> [A-K][A waiting][A waiting]: the dead-ace check must skip both waiting hands.
+      const first = split(table(["A", "10", "A", "7", "A", "K", "5", "9"], { resplitAces: true, maxSplitHands: 4 }));
+      const second = split(first);
+      expect(second.hands.map((h) => [rank(h), h.status, !!h.awaitingCard])).toEqual([["ak", HandStatus.DONE, false], ["a", HandStatus.PLAYING, true], ["a", HandStatus.PLAYING, true]]);
+      expect([second.selectedHandIndex, nextAutoAction(second)]).toEqual([1, "DEAL_SPLIT_CARD"]);
+      const one = run(second, { type: "DEAL_SPLIT_CARD" });
+      expect([one.selectedHandIndex, one.hands[1].status, nextAutoAction(one)]).toEqual([2, HandStatus.DONE, "DEAL_SPLIT_CARD"]); // two waiting hands in a row
+      const two = run(one, { type: "DEAL_SPLIT_CARD" });
+      expect(two.hands.map(rank)).toEqual(["ak", "a5", "a9"]);
+      expect(two.phase).toBe(GamePhases.DEALER_TURN);
+    });
+
+    it("blackJackOnSplit is read when the card arrives: on makes K-A a blackjack, off a plain 21", () => {
+      const cards = ["K", "9", "K", "8", "5", "A"];
+      for (const blackJackOnSplit of [true, false]) {
+        const d = run(reached(cards, { blackJackOnSplit }), { type: "DEAL_SPLIT_CARD" });
+        expect([d.hands[1].total, d.hands[1].isBlackjack, d.hands[1].status]).toEqual([21, blackJackOnSplit, HandStatus.DONE]);
+      }
+    });
+
+    it("a refused split bet while the hand waits leaves it waiting; its card is still dealt", () => {
+      const s = reached([...EIGHTS, "3", "K"]);
+      const tag = s.hands[1].tag;
+      const seq = s.pendingBets.find((b) => b.handTag === tag).seq;
+      const refused = run(s, { type: "BET_REJECTED", seq });
+      expect(refused.hands[1]).toMatchObject({ bet: 0, awaitingCard: true });
+      expect(nextAutoAction(refused)).toBe("DEAL_SPLIT_CARD");
+      expect(run(refused, { type: "DEAL_SPLIT_CARD" }).hands[1]).toMatchObject({ bet: 0, awaitingCard: false, total: 18 });
+    });
+  });
+
+  describe("the count and the shoe", () => {
+    it("the late card is counted when it is dealt, not before, and exactly once", () => {
+      const s = reached([...EIGHTS, "3", "5", "9"]); // 8 8 10 (the 7 hole hidden) then 3: running count so far
+      const late = s.hands[1].cards;
+      expect(late).toHaveLength(1);
+      const d = run(s, { type: "DEAL_SPLIT_CARD" });
+      const card = d.hands[1].cards[1];
+      expect(s.seenIds).not.toContain(card.id);
+      expect(d.seenIds).toContain(card.id);
+      expect(d.runningCount).toBe(s.runningCount + card.count); // the 5 counts +1
+      expect(d.seenIds).toHaveLength(s.seenIds.length + 1);
+      expect(new Set(d.seenIds).size).toBe(d.seenIds.length);
+    });
+
+    it("the moved card is counted once at the split (it was seen at the deal)", () => {
+      const before = table([...EIGHTS, "3", "5"]);
+      const after = split(before);
+      expect(after.seenIds).toHaveLength(before.seenIds.length + 1); // only the new first-hand card
+    });
+
+    it("an empty shoe is refilled for the late draw, and the count restarts from what is on the table", () => {
+      const s = reached([...EIGHTS, "3"]); // the shoe is now empty
+      expect(s.shoe).toHaveLength(0);
+      const d = run(s, { type: "DEAL_SPLIT_CARD", refill: () => stackedShoe(["K", "2"]) });
+      expect(rank(d.hands[1])).toBe("8k");
+      expect(d.shoe.map((c) => c.rank)).toEqual(["2"]);
+      const visible = [...d.hands.flatMap((h) => h.cards), ...d.dealer.cards];
+      expect(d.seenIds.sort()).toEqual(visible.map((c) => c.id).sort());
+      expect(d.runningCount).toBe(visible.reduce((sum, c) => sum + c.count, 0));
+    });
+
+    it("the cut card is skipped and noted while drawing the late card", () => {
+      const cut = { id: "CUT-1", type: "cut" };
+      const s = reached([...EIGHTS, "3"]);
+      const d = run({ ...s, shoe: [cut, ...stackedShoe(["K"])] }, { type: "DEAL_SPLIT_CARD" });
+      expect([rank(d.hands[1]), d.cutCardFound]).toEqual(["8k", true]);
+    });
+
+    it("the shoe in the state is never mutated by the draw (StrictMode runs reducers twice)", () => {
+      const s = reached([...EIGHTS, "3", "K", "9"]);
+      const shoe = [...s.shoe];
+      const a = run(s, { type: "DEAL_SPLIT_CARD" });
+      const b = run(s, { type: "DEAL_SPLIT_CARD" });
+      expect(s.shoe).toEqual(shoe);
+      expect(rank(a.hands[1])).toBe(rank(b.hands[1]));
+    });
+  });
+
+  describe("saved settings and the rule list", () => {
+    const splitDealOf = (saved) => sanitizeSettings(saved).splitDeal;
+
+    it("is a table rule (a change deals a new shoe), and a preset sets it", () => {
+      expect(RESET_SETTINGS).toContain("splitDeal");
+      expect(initialGameState.settings.splitDeal).toBe("one");
+      for (const preset of Object.values(RULE_PRESETS)) expect(preset.splitDeal).toBe("one");
+    });
+
+    it.each([[1], [2], [3], [4]])("a v: %i object without it gets 'both' (the table paid out that way)", (v) => {
+      expect(splitDealOf({ v })).toBe("both");
+    });
+
+    it.each([["{}", {}], ["no version", { tripleDown: true }], ["v: 5", { v: 5 }], ["null", null], ["undefined", undefined], ["a future version", { v: 6 }], ["a string version", { v: "1" }]])("%s gets 'one'", (_n, saved) => {
+      expect(splitDealOf(saved)).toBe("one");
+    });
+
+    it("a value that was saved is kept, in either direction, at any version", () => {
+      for (const v of [1, 4, 5]) for (const value of ["one", "both"]) expect(splitDealOf({ v, splitDeal: value })).toBe(value);
+    });
+
+    it("a wrong type or an unknown value falls back to the version's default", () => {
+      for (const bad of ["x", "", 1, true, null, ["one"]]) {
+        expect(splitDealOf({ v: 5, splitDeal: bad })).toBe("one");
+        expect(splitDealOf({ v: 4, splitDeal: bad })).toBe("both");
+        expect(splitDealOf({ splitDeal: bad })).toBe("one");
+      }
+    });
+
+    it("LOAD_SETTINGS of an older table between rounds deals the new shoe: splitDeal went from one to both", () => {
+      const table0 = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
+      const loaded = gameReducer(table0, { type: "LOAD_SETTINGS", saved: { v: 4 }, shoe: stackedShoe(["4"]) });
+      expect(loaded.settings.splitDeal).toBe("both");
+      expect(loaded.shoe).not.toBe(table0.shoe);
+      expect(loaded.shoe.map((c) => c.rank)).toEqual(["4"]);
+    });
+
+    it("LOAD_SETTINGS of the same value leaves the shoe, and one that arrives mid-round never resets the round", () => {
+      const table0 = gameReducer(initialGameState, { type: "START_GAME", shoe: stackedShoe(["2", "3"]) });
+      expect(gameReducer(table0, { type: "LOAD_SETTINGS", saved: { v: 5, splitDeal: "one" }, shoe: stackedShoe(["4"]) }).shoe).toBe(table0.shoe);
+      const round = reached([...EIGHTS, "3", "K"]);
+      const loaded = gameReducer(round, { type: "LOAD_SETTINGS", saved: { v: 5, splitDeal: "both" }, shoe: stackedShoe(["4"]) });
+      expect([loaded.phase, loaded.hands, loaded.shoe, loaded.settings.splitDeal]).toEqual([round.phase, round.hands, round.shoe, "both"]);
+    });
+
+    it("changing it with a new shoe (as the provider does) mid-round resets the table, so a waiting hand never meets the other rule", () => {
+      const round = reached([...EIGHTS, "3", "K"]);
+      const reset = run(round, { type: "SET_SETTING", key: "splitDeal", value: "both", shoe: stackedShoe(["2"]) });
+      expect([reset.phase, reset.hands, reset.settings.splitDeal]).toEqual([GamePhases.PRE_DEAL, [], "both"]);
+    });
+  });
+});
+
+describe("betHistory and UNDO_BET (#82)", () => {
+  const add = (...amounts) => amounts.map((amount) => ({ type: "ADD_BET", amount }));
+  const betting = (...amounts) => run(started(["5"]), ...add(...amounts));
+  const finishedRound = (settings = {}) => {
+    const r = playRound({ cards: ["10", "10", "9", "7"] });
+    return { ...r.state, settings: { ...r.state.settings, ...settings } };
+  };
+
+  it("starts empty, and ADD_BET pushes each amount in the order it was added", () => {
+    expect(initialGameState.betHistory).toEqual([]);
+    expect(betting(10, 5, 25).betHistory).toEqual([10, 5, 25]);
+  });
+
+  it("a refused ADD_BET (too poor, wrong phase) leaves the history alone", () => {
+    const s = betting(10);
+    expect(run(s, { type: "ADD_BET", amount: 50, credits: 5 }).betHistory).toEqual([10]);
+    expect(run(initialGameState, { type: "ADD_BET", amount: 5 }).betHistory).toEqual([]);
+  });
+
+  it("UNDO_BET takes the last amount off the circle and gives it back locally, one at a time", () => {
+    const s = run(betting(10, 5, 25), { type: "UNDO_BET" });
+    expect([s.betCircle, s.betHistory]).toEqual([15, [10, 5]]);
+    expect(events(s)).toEqual([local(-10), local(-5), local(-25), local(25)]);
+    const none = run(s, { type: "UNDO_BET" }, { type: "UNDO_BET" });
+    expect([none.betCircle, none.betHistory]).toEqual([0, []]);
+    expect(events(none).slice(-2)).toEqual([local(5), local(10)]);
+  });
+
+  it("UNDO_BET with an empty history, or outside betting, changes nothing", () => {
+    const s = started(["5"]);
+    expect(run(s, { type: "UNDO_BET" })).toBe(s);
+    expect(run(initialGameState, { type: "UNDO_BET" })).toBe(initialGameState);
+    const dealtState = dealt(["10", "10", "9", "7"]);
+    expect(run({ ...dealtState, betHistory: [10] }, { type: "UNDO_BET" }).betCircle).toBe(dealtState.betCircle); // wrong phase wins over a stale history
+    expect(run({ ...dealtState, betHistory: [10] }, { type: "UNDO_BET" })).toEqual({ ...dealtState, betHistory: [10] });
+  });
+
+  it("UNDO_BET cancels a pending auto deal, like ADD_BET and CLEAR_BET", () => {
+    const AUTO = { resetInitialBet: true, autoDeal: true };
+    const armed = run(finishedRound(AUTO), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect(armed.autoDealPending).toBe(true);
+    expect(run(armed, { type: "UNDO_BET" })).toMatchObject({ betCircle: 0, betHistory: [], autoDealPending: false });
+  });
+
+  it("CLEAR_BET empties the history", () => {
+    expect(run(betting(10, 5), { type: "CLEAR_BET" })).toMatchObject({ betCircle: 0, betHistory: [] });
+  });
+
+  it("DEAL clears the history, and the ledger still gets one opening bet of the whole circle (undo never reaches it)", () => {
+    const s = run(started(["10", "10", "9", "7"]), ...add(25, 10, 5), { type: "UNDO_BET" }, { type: "DEAL" });
+    expect(s.betHistory).toEqual([]);
+    expect(s.initialBet).toBe(35);
+    const ledger = s.creditEvents.filter((e) => e.kind === "bet");
+    expect(ledger.map(withoutSeq)).toEqual([bet(35, true, true)]);
+    expect(s.pendingBets).toHaveLength(1);
+  });
+
+  it("resetTable (a new game, a reset, a settings reset) clears the history and refunds the circle", () => {
+    const s = betting(10, 5);
+    const reset = run(s, { type: "RESET_GAME", shoe: stackedShoe(["5"]), phase: GamePhases.PRE_DEAL });
+    expect([reset.betCircle, reset.betHistory]).toEqual([0, []]);
+    expect(events(reset).at(-1)).toEqual(local(15));
+    expect(run(s, { type: "START_GAME", shoe: stackedShoe(["5"]) }).betHistory).toEqual([]);
+  });
+
+  it("a voided round (the server refuses the opening bet) clears the history", () => {
+    const s = run(started(["10", "10", "9", "7"]), ...add(10, 5), { type: "DEAL" });
+    const voided = run({ ...s, betHistory: [10, 5] }, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+    expect([voided.phase, voided.betCircle, voided.betHistory]).toEqual([GamePhases.PRE_DEAL, 0, []]);
+  });
+
+  it("a refused double (not the opening bet) leaves the history alone", () => {
+    const s = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
+    const refused = run({ ...s, betHistory: [7] }, { type: "BET_REJECTED", seq: s.pendingBets.at(-1).seq });
+    expect(refused.betHistory).toEqual([7]);
+  });
+
+  it("END_ROUND seeds the history with the initial bet on an auto rebet, and leaves it empty otherwise", () => {
+    const rebet = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect([rebet.betCircle, rebet.betHistory]).toEqual([10, [10]]);
+    const off = run(finishedRound(), { type: "CONTINUE" }, { type: "END_ROUND" });
+    expect(off.betHistory).toEqual([]);
+    const poor = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND", credits: 5 });
+    expect([poor.betCircle, poor.betHistory]).toEqual([0, []]);
+  });
+
+  it("an undone rebet leaves nothing to undo again, and the next ADD_BET starts a fresh history", () => {
+    const rebet = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
+    const undone = run(rebet, { type: "UNDO_BET" });
+    expect(undone).toMatchObject({ betCircle: 0, betHistory: [] });
+    expect(run(undone, { type: "UNDO_BET" })).toBe(undone);
+    expect(run(undone, ...add(5)).betHistory).toEqual([5]);
   });
 });

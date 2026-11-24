@@ -4,13 +4,14 @@ import { test, expect, stubApi, openTable } from './fixtures';
 const CODE = 'dummy-code-123';
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-// The whole balance block (the chip buttons also read '$100').
-const shown = (page) => page.getByText('Credits:').locator('..');
+// The balance in the top bar (the chip buttons also read '$100').
+const shown = (page) => page.locator('#bal');
 
-// Seven quick clicks on the balance (the hidden gesture: 7 within 3 s).
+// Seven quick clicks on the balance (the hidden gesture: 7 within 3 s). Raw mouse clicks at one point: locator.click() re-checks the element
+// each time (~0.4-0.6 s per click in WebKit), which can push 7 clicks past the 3 s window.
 async function tapBalance(page, times = 7) {
-  const balance = page.getByText('Credits:');
-  for (let i = 0; i < times; i++) await balance.click();
+  const box = await page.getByText('Balance', { exact: true }).boundingBox();
+  for (let i = 0; i < times; i++) await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
 }
 
 test('seven taps on a low balance open the prompt: a wrong code fails generically, the right one tops up (#90)', async ({ page }) => {
@@ -22,7 +23,7 @@ test('seven taps on a low balance open the prompt: a wrong code fails genericall
     ],
   });
   await openTable(page);
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await tapBalance(page);
@@ -40,7 +41,7 @@ test('seven taps on a low balance open the prompt: a wrong code fails genericall
   await dialog.getByLabel('Code').fill(CODE);
   await dialog.getByRole('button', { name: 'Submit' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(shown(page)).toHaveText('Credits: $10,040');
+  await expect(shown(page)).toHaveText('$10,040');
   await expect(page.getByText(CODE)).toHaveCount(0);
 
   expect(api.topups).toEqual([
@@ -64,7 +65,7 @@ test('a locked-out code attempt shows the wait from Retry-After, and no retry fo
   await expect(dialog.getByRole('alert')).toHaveText('Too many attempts. Try again later in about 10 minutes.');
   await expect(dialog.getByRole('button', { name: 'Submit' })).toBeEnabled();
   expect(api.topups).toHaveLength(1); // a lockout is final for this attempt; the stub would 501 a second call
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
 });
 
 test('Escape and Cancel close the prompt and leave the balance alone (#90)', async ({ page }) => {
@@ -77,7 +78,7 @@ test('Escape and Cancel close the prompt and leave the balance alone (#90)', asy
   await tapBalance(page);
   await page.getByRole('button', { name: 'Cancel' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(shown(page)).toHaveText('Credits: $40');
+  await expect(shown(page)).toHaveText('$40');
   expect(api.topups).toEqual([]);
 });
 
@@ -85,7 +86,7 @@ test('seven taps open nothing at $100 or more (#90)', async ({ page }) => {
   await stubApi(page, { startCredits: 100 });
   await openTable(page);
   await tapBalance(page, 14);
-  await expect(shown(page)).toHaveText('Credits: $100');
+  await expect(shown(page)).toHaveText('$100');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
@@ -97,7 +98,7 @@ test('the backdrop covers the whole viewport, header and betting footer included
 
   // Header and footer controls sit under the overlay, so a real click there could not reach them.
   const settings = await page.getByRole('button', { name: 'Settings', exact: true }).boundingBox();
-  const chip = await page.getByRole('button', { name: 'Add 10', exact: true }).boundingBox();
+  const chip = await page.getByRole('button', { name: '$10 chip', exact: true }).boundingBox();
   const { width, height } = page.viewportSize();
   const points = [
     [2, 2], [width / 2, 2], [width - 3, 2], // header: corners and top edge
@@ -106,9 +107,35 @@ test('the backdrop covers the whole viewport, header and betting footer included
     [2, height - 3], [width / 2, height - 3], [width - 3, height - 3], // bottom edge
   ];
   const outside = await page.evaluate(
-    (pts) => pts.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('.topup-overlay')),
+    (pts) => pts.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('.dlg-overlay')),
     points,
   );
   expect(outside).toEqual([]);
-  expect(await page.evaluate(() => document.querySelector('.topup-overlay').parentElement === document.body)).toBe(true);
+  expect(await page.evaluate(() => document.querySelector('.dlg-overlay').parentElement === document.body)).toBe(true);
+});
+
+test('the code dialog is styled like the other dialogs: surface, radius 22, Cancel then a primary Submit, 358 px wide on a phone (L1-13)', async ({ page }) => {
+  await stubApi(page, { startCredits: 40 });
+  await openTable(page);
+  await tapBalance(page);
+  const dialog = page.getByRole('dialog', { name: 'Enter code' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS('border-radius', '22px');
+  await expect(dialog).toHaveCSS('border-top-width', '1px');
+  const { width } = page.viewportSize();
+  const box = await dialog.boundingBox();
+  expect(box.width).toBe(Math.min(380, width - 32)); // 358 at 390 wide; the shared .dlg max-width
+  const [cancel, submit] = await dialog.getByRole('button').all();
+  await expect(cancel).toHaveText('Cancel');
+  await expect(submit).toHaveText('Submit');
+  const colours = await page.evaluate(() => {
+    const dlg = document.querySelector('.dlg.topup');
+    const primary = dlg.querySelector('button[type=submit]');
+    const root = getComputedStyle(document.documentElement);
+    const probe = (v) => { const e = document.createElement('i'); e.style.background = `var(${v})`; document.body.append(e); const c = getComputedStyle(e).backgroundColor; e.remove(); return c; };
+    return { bg: getComputedStyle(dlg).backgroundColor, surf: probe('--surf'), btn: getComputedStyle(primary).backgroundColor, accent: probe('--accent'), font: getComputedStyle(dlg.querySelector('h2')).fontFamily, display: root.getPropertyValue('--font-display').trim() };
+  });
+  expect(colours.bg).toBe(colours.surf);
+  expect(colours.btn).toBe(colours.accent);
+  expect(colours.font).toContain(colours.display.split(',')[0].replace(/["']/g, '')); // the title is in the display face
 });

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePlayer } from "../../hooks/usePlayer";
+import { focusTarget } from "../../utils/opener";
 import "./TopUpPrompt.css";
 
 // Every refusal reads the same, so the text never hints at why (#90). Only the lockout says more.
@@ -28,7 +29,7 @@ export default function TopUpPrompt({ onClose }) {
   // Focus the input, give focus back on close, close on Escape and keep Tab inside the dialog.
   useEffect(() => {
     alive.current = true;
-    const previous = document.activeElement;
+    const previous = focusTarget();
     inputRef.current.focus();
     const onKeyDown = (e) => {
       if (e.key === "Escape") return busyRef.current ? undefined : onClose(); // not mid-flight: it would reopen a second top-up
@@ -72,10 +73,10 @@ export default function TopUpPrompt({ onClose }) {
 
   // A portal to body so the overlay's z-index is not trapped inside the stats panel's stacking context.
   return createPortal(
-    <div className="topup-overlay">
-      <form ref={dialogRef} className="topup-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
+    <div className="dlg-overlay">
+      <form ref={dialogRef} className="dlg topup" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
         <h2 id={titleId}>Enter code</h2>
-        <label htmlFor={inputId}>Code</label>
+        <label htmlFor={inputId}>Code
         <input
           id={inputId}
           ref={inputRef}
@@ -89,11 +90,12 @@ export default function TopUpPrompt({ onClose }) {
           readOnly={busy}
           onChange={(e) => setCode(e.target.value)}
         />
-        {error && <div role="alert">{error}</div>}
-        {busy && reconnecting && <div role="status">Reconnecting...</div>}
-        <div className="topup-buttons">
-          <button type="submit" disabled={busy}>Submit</button>
-          <button type="button" disabled={busy} onClick={onClose}>Cancel</button>
+        </label>
+        {error && <p className="ferr" role="alert">{error}</p>}
+        {busy && reconnecting && <p role="status">Reconnecting...</p>}
+        <div className="dlg-act">
+          <button type="button" className="btn plain" disabled={busy} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn primary" disabled={busy}>Submit</button>
         </div>
       </form>
     </div>,

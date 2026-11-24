@@ -1,48 +1,39 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
-  cardTiming, flightFrames, hold, reducedMotion, reserve, queue, stepWait, landed, markLanded, clearLanded, resetCardStage,
+  cardTiming, flightFrames, hold, reducedMotion, reserve, queue, speedK, stepWait, landed, markLanded, clearLanded, resetCardStage,
 } from "../cardAnimation";
 
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe("cardTiming", () => {
   it.each([
-    [250, 87.5, 125],
-    [1000, 350, 450],
-    [5000, 450, 450], // the slide is capped at 450 ms
-  ])("Rate of Play %i ms: slide %f, flip %f", (T, slide, flip) => {
-    expect(cardTiming(T)).toEqual({ slide, stagger: slide + 40, flip, gap: 40 });
+    [250, 300, 200], // the slide is clamp(.52 x speed, 300, 760); the pause between cards clamp(.45 x speed, 200, 900)
+    [1000, 520, 450],
+    [5000, 760, 900],
+  ])("Rate of Play %i ms: slide %f, stagger %f, turn 420", (T, slide, stagger) => {
+    expect(cardTiming(T)).toEqual({ slide, stagger, flip: 420, gap: 40 });
+  });
+
+  it("speedK is Rate of Play / 1000, 0.33 to 1.2", () => {
+    expect([250, 1000, 5000].map(speedK)).toEqual([0.33, 1, 1.2]);
   });
 });
 
 describe("flightFrames", () => {
-  const translate = (f) => f.transform.match(/translate\((-?[\d.e-]+)px, (-?[\d.e-]+)px\)/).slice(1).map(Number);
+  const parts = (f) => f.transform.match(/translate\((-?[\d.e-]+)px, (-?[\d.e-]+)px\) rotate\((-?[\d.e-]+)deg\)/).slice(1).map(Number);
 
-  it("has 17 frames from the shoe to the card's own spot, settling at the end rotation", () => {
+  it("has four frames from the shoe to the card's own spot: -36 deg through -12 (45 %) and -5 (84 %) to the end rotation", () => {
     const frames = flightFrames(100, -60, 90);
-    expect(frames).toHaveLength(17);
-    expect(translate(frames[0])).toEqual([100, -60]);
-    expect(frames[0].transform).toContain("rotate(78deg)"); // 90 - 12
-    expect(translate(frames[16])).toEqual([0, 0]);
-    expect(frames[16].transform).toContain("rotate(90deg)");
+    expect(frames.map((f) => f.offset)).toEqual([0, 0.45, 0.84, 1]);
+    expect(parts(frames[0])).toEqual([100, -60, 54]); // 90 - 36
+    expect(parts(frames[1])).toEqual([45, -27, 78]);
+    expect(parts(frames[2])).toEqual([8, -4.8, 85]);
+    expect(parts(frames[3])).toEqual([0, 0, 90]);
   });
 
-  it.each([[120, 80], [120, -80], [-120, 80], [-120, -80], [0, 90], [0, -90], [90, 0], [0, 0]])(
-    "bows upward for (dx %i, dy %i): the path never dips below the straight line",
-    (dx, dy) => {
-      const frames = flightFrames(dx, dy, 0);
-      const ys = frames.map((f) => translate(f)[1]);
-      // At each sample the point is above (smaller y than) the straight line from start to end.
-      frames.forEach((f, i) => {
-        const t = i / 16;
-        expect(translate(f)[1]).toBeLessThanOrEqual(dy * (1 - t) + 1e-9);
-      });
-      const lift = Math.min(...frames.map((f, i) => translate(f)[1] - dy * (1 - i / 16)));
-      if (dx) expect(lift).toBeLessThan(-10); // a real bow, not a straight line
-      else if (dy) expect(Math.max(...frames.map((f) => Math.abs(translate(f)[0])))).toBeGreaterThan(10); // straight above/below the shoe it bows sideways
-      expect(ys[16]).toBe(0);
-    }
-  );
+  it("settles square (0 deg) by default", () => {
+    expect(parts(flightFrames(10, 10).at(-1))).toEqual([0, 0, 0]);
+  });
 });
 
 describe("reducedMotion", () => {
@@ -132,6 +123,28 @@ describe("hold", () => {
     reserve(900);
     hold()();
     expect(queue.free).toBe(900);
+  });
+
+  it("with maxMs lets go by itself after that long (a background tab must never leave the board busy), telling the listeners once", () => {
+    vi.useFakeTimers();
+    const listener = vi.fn();
+    queue.listeners.add(listener);
+    const release = hold(500);
+    expect(queue.holds.size).toBe(1);
+    vi.advanceTimersByTime(499);
+    expect(queue.holds.size).toBe(1);
+    vi.advanceTimersByTime(1);
+    expect(queue.holds.size).toBe(0);
+    expect(listener).toHaveBeenCalledTimes(2); // taken, released
+    release(); // a late release changes nothing
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("with maxMs, an early release cancels the timer", () => {
+    vi.useFakeTimers();
+    const release = hold(500);
+    release();
+    expect(vi.getTimerCount()).toBe(0);
   });
 });
 

@@ -1,0 +1,77 @@
+/* TOP BAR (#81, DESIGN section 5): sleek, one quiet row, no boxes. Three columns, the outer two equal, so the balance sits on the bar's
+   centre whatever is beside it. The row is --top tall plus the top safe area (the board's first grid row). */
+.top { position: relative; z-index: var(--z-top); box-sizing: border-box; padding: var(--safe-t) 4px 0 2px; }
+.top-in { position: relative; box-sizing: border-box; height: 100%; max-width: var(--col); margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; column-gap: 6px; }
+.top-in button { font: inherit; color: inherit; }
+.bar-l { justify-self: start; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.top-wm { height: 15px; min-width: 0; flex: none; width: auto; aspect-ratio: 276 / 64; color: var(--tx); }
+.icon-btn { flex: none; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border-radius: var(--r2); border: 0; background: transparent; color: var(--tx); transition: background var(--t-press); }
+.icon-btn:hover { background: var(--surf); }
+.icon-btn svg { width: 22px; height: 22px; }
+
+/* the balance: label over the number on phones, one line on wide screens and landscape; the hidden top-up listens here (#90) */
+.bal { position: relative; display: grid; justify-items: center; user-select: none; touch-action: manipulation; }
+.bal-top { position: relative; display: grid; place-items: center; height: 14px; }
+.bal-lbl { font-size: 12px; color: var(--tx-3); letter-spacing: .1em; text-transform: uppercase; line-height: 14px; transition: opacity var(--t-ui); }
+.bal.changing .bal-lbl { opacity: 0; } /* the change badge takes the label's place for a moment: nothing moves */
+#bal { font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: .01em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.delta { position: absolute; left: 50%; top: 0; translate: -50% 0; font-size: 12px; font-weight: 700; padding: 0 6px; border-radius: 99px; line-height: 14px; white-space: nowrap; }
+.delta.up { color: var(--win-tx); background: rgb(63 227 151 / .13); }
+.delta.down { color: var(--lose-tx); background: rgb(255 107 94 / .13); }
+.delta { transition: opacity 400ms var(--e-io); } /* 2.6 s on show, then it fades over 400 ms (TopBar sets .out) */
+.delta.pop { animation: pop 420ms var(--e-spring); }
+.delta.out { opacity: 0; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* the count and Settings: plain text, no box. The label, then the figure in its fixed column: no gap opening up between them */
+.top-r { justify-self: end; display: flex; align-items: center; gap: 2px; min-width: 0; }
+.count { display: flex; flex-direction: column; justify-content: center; padding: 0 4px; white-space: nowrap; }
+.count span { display: flex; align-items: baseline; justify-content: flex-start; gap: 6px; line-height: 1.15; }
+.count i { font-style: normal; font-size: 12px; color: var(--tx-3); display: inline-block; width: 36px; } /* one label width for Count and True, so both figures share a column */
+.count b { font-size: 13px; color: var(--tx); font-weight: 700; display: inline-block; width: 4ch; text-align: right; } /* fixed width: a new value never moves the box */
+@media (min-width: 600px) { .top-wm { height: 17px; } .bar-l { gap: 6px; } }
+@media (min-width: 900px) {
+  .top { padding: var(--safe-t) var(--gutter) 0; }
+  .top-wm { height: 19px; }
+  .bal-top { position: static; height: 0; } /* the number alone is centred; the label sits before it, the badge after it */
+  .bal-lbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; line-height: 1; }
+  .delta { left: calc(100% + 8px); top: 50%; translate: 0 -50%; }
+  .bal.changing .bal-lbl { opacity: 1; }
+  #bal { font-size: 21px; }
+  .count { flex-direction: row; gap: 14px; padding: 0 8px; }
+}
+@media (max-height: 520px) {
+  .bal-top { position: static; height: 0; }
+  .bal-lbl { position: absolute; right: calc(100% + 8px); top: 50%; translate: 0 -50%; line-height: 1; }
+  #bal { font-size: 17px; }
+  .delta { left: calc(100% + 8px); top: 50%; translate: 0 -50%; }
+  .bal.changing .bal-lbl { opacity: 1; }
+  .count { flex-direction: row; gap: 12px; }
+}
+
+/* the menu */
+.menu { position: absolute; z-index: var(--z-top); top: calc(var(--top) + var(--safe-t) - 4px); left: 8px; box-sizing: border-box; width: 260px; max-width: calc(100vw - 16px); padding: var(--s2); background: var(--surf); border: 1px solid var(--line-2); border-radius: var(--r3); box-shadow: 0 24px 60px -12px rgb(0 0 0 / .7); }
+.menu[hidden] { display: none; }
+.menu-i { display: flex; align-items: center; gap: var(--s3); width: 100%; min-height: 44px; padding: 0 var(--s3); border: 0; background: none; border-radius: var(--r1); font-size: 15px; font-weight: 500; text-align: left; }
+.menu-i:hover { background: var(--surf-2); }
+.menu-i[aria-disabled="true"] { cursor: default; }
+.menu-i svg { width: 20px; height: 20px; flex: none; color: var(--tx-2); }
+.menu-i small { margin-left: auto; font-size: 12px; color: var(--tx-3); }
+.menu hr { border: 0; border-top: 1px solid var(--line); margin: var(--s2) 0; }
+.menu-h { margin: var(--s1) var(--s3) var(--s2); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; color: var(--tx-3); }
+.felts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 0 var(--s3) var(--s2); }
+.fs { box-sizing: border-box; cursor: pointer; display: flex; align-items: center; min-height: 44px; padding: 0; border: 0; background: none; }
+.fs i { display: block; width: 100%; height: 36px; border-radius: var(--r1); position: relative; overflow: hidden; box-shadow: inset 0 0 0 1px rgb(255 255 255 / .08); }
+.fs[aria-checked="true"] i { box-shadow: inset 0 0 0 2px var(--accent), 0 0 0 3px rgb(var(--accent-rgb) / .25); }
+.fs:focus-visible i { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fs[data-felt="green"] i { background: radial-gradient(90% 90% at 50% 30%, #1b7d53, #0e5a3b 55%, #04221a); }
+.fs[data-felt="blue"] i { background: radial-gradient(90% 90% at 50% 30%, #1f5d96, #12406c 55%, #061a30); }
+.fs[data-felt="red"] i { background: radial-gradient(90% 90% at 50% 30%, #8d2431, #661720 55%, #25060b); }
+/* a 320 px phone: the count's columns tighten a little, so the three parts of the bar never overlap */
+@media (max-width: 380px) {
+  .count { padding: 0; }
+  .count span { gap: 4px; }
+  .count i { width: 32px; }
+  .count b { width: 3.4ch; }
+  .top-in { column-gap: 2px; }
+}

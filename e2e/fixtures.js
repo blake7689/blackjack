@@ -22,9 +22,13 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // loginError: { status, message } makes POST /auth/login fail with it (a sign-in refusal).
 // reloginError: { status, message } makes only the 2nd and later logins fail (the sign-in after a password change, #171).
 // Each login after the first answers with a new token ('e2e-token-2', ...); `requests` lists every call with its Authorization header.
-// settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real).
-export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
+// meFailures: how many GET /player/me calls answer 503 before it answers normally (a restore that gets no answer: the Error screen, #87).
+// settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real). Whatever is passed,
+// the account's saved settings carry tableMessages "all" (every prompt shows at once, so the specs can wait on "Place your bets" and "Your move", L2-1) and currency "USD"
+// (the "$10 chip" names do not depend on the runner's locale, L2-2) unless a spec sets its own.
+export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
+  let meFailuresLeft = meFailures;
   const replies = [...topUps];
   const stub = { bets: [], settles: [], topups: [], saves: [], logins: [], passwords: [], requests: [], failed: [], unknown: [] };
   stubs.set(page, stub);
@@ -50,9 +54,10 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, relog
         return route.fulfill({ status: 204, headers: CORS });
       case 'GET /player/me':
         await hold(meDelayMs);
+        if (meFailuresLeft-- > 0) return json({ message: 'e2e stub: the API is unavailable' }, 503);
         return json({ ...PLAYER, credits });
       case 'GET /player/me/settings':
-        return json(settings);
+        return json({ tableMessages: 'all', currency: 'USD', ...settings });
       case 'PUT /player/me/settings':
         stub.saves.push(req.postDataJSON());
         return json({});
@@ -108,17 +113,22 @@ export async function submitLogin(page) {
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
 }
 
-// Signs in and waits for the settings load to finish.
+// Signs in and sits at the table: a signed-in player lands on it (DESIGN section 8), once the settings have loaded (each settings load builds a shoe: seed 183, see smoke.spec.js).
 export async function login(page) {
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await submitLogin(page);
-  await (await settingsLoaded).finished(); // each settings load builds a shoe: settled before Start Game (seed 183, see smoke.spec.js)
+  await (await settingsLoaded).finished();
+  // idle, before the deal. The table opens with its shuffle (#83: 4.5 s at Normal speed, 1.5 s on the fixture's fastest), the line says Shuffling until it is over.
+  await page.locator('.felt').dispatchEvent('click'); // a tap on the felt skips the opening shuffle (#83), so no test pays its 1.5 s on a slow CI runner
+  await expect(page.getByText(/^(Place your bets|Out of credits)$/)).toBeVisible({ timeout: 15_000 }); // a table with no credits says Out of credits (L1-18)
 }
 
-export async function openTable(page) {
-  await login(page);
-  await page.getByRole('button', { name: 'Start Game' }).click();
-  await expect(page.getByText('Place your bets!')).toBeVisible(); // idle, before the deal
+export const openTable = login;
+
+// Bets a chip the way a player does (#82): pick it in the rack, then tap the bet circle (the circle bets the selected chip).
+export async function placeBet(page, chip = 10) {
+  await page.getByRole('button', { name: `$${chip} chip`, exact: true }).click();
+  await page.getByRole('button', { name: /^Bet spot 1,/ }).click();
 }
 
 // Any endpoint the stub does not know fails the test (the 501 alone could be swallowed by the app).

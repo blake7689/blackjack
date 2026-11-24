@@ -23,6 +23,7 @@ import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./
 //  - split to 2 hands: the page's "may not resplit" says +0.10, the calculator's table says +0.055; the calculator's is used;
 //  - unlimited splits (taken as 4 hands: the calculator stops at 4);
 //  - the interaction between rules (the model is additive);
+//  - splitDeal (#133, "one at a time" or "both at once"): not counted, no published figure; it only changes when the second card is dealt;
 //  - early surrender with no hole card, and "early, not against an ace" (taken as the figure against a ten only).
 //
 // Accuracy: against the calculator's table (3456 rule sets x 3:2 and 6:5) the largest miss is 0.28 (1 deck, 10-11 doubles, RSA and HSA);

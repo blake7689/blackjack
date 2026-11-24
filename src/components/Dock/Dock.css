@@ -1,0 +1,102 @@
+/* The bottom dock (DESIGN sections 4 and 5, mockup.css "dock"). Its height is the board's --dock plus the bottom safe area, the
+   same in every state; --rowA / --rowB are the two rows of the phone dock. Desktop and landscape phones are one row. */
+.dock {
+  position: relative; z-index: var(--z-dock); box-sizing: border-box; min-width: 0;
+  background: var(--bg-2); border-top: 1px solid var(--line);
+  padding: 10px 10px calc(10px + var(--safe-b));
+}
+.dock-in {
+  height: 100%; max-width: 560px; margin: 0 auto;
+  display: grid; grid-template-rows: var(--rowA) var(--rowB); gap: 8px;
+}
+.dock-row { display: flex; gap: 8px; min-width: 0; }
+
+.key {
+  flex: 1 1 0; min-width: 44px; min-height: 44px; position: relative;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 0 6px;
+  border-radius: var(--r3); border: 1px solid var(--line); background: var(--surf); color: var(--tx);
+  font: 700 13px/1.2 var(--font-ui); letter-spacing: .01em; white-space: nowrap; overflow: hidden;
+  touch-action: manipulation; transition: transform var(--t-press), background var(--t-press); /* no opacity fade: a key waking up must be at full contrast at once */
+}
+.key svg { width: 20px; height: 20px; flex: none; }
+.key:active { transform: scale(.96); }
+.key:hover { background: var(--surf-2); }
+.key[aria-disabled="true"] { opacity: .34; pointer-events: none; } /* not now: shown dimmed, keeps its place and its focus */
+.key.big { flex-direction: row; gap: 10px; font-size: 17px; }
+.key.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: inset 0 1px 0 rgb(255 255 255 / .3), 0 10px 26px -10px rgb(var(--accent-rgb) / .8); }
+.key.primary:hover { filter: brightness(1.06); background: var(--accent); }
+.key.solid { background: var(--tx); color: var(--bg); border-color: transparent; }
+.key.solid:hover { background: var(--tx); filter: brightness(.94); }
+.key.offer { border-color: rgb(var(--accent-rgb) / .55); color: var(--accent-tx); background: rgb(var(--accent-rgb) / .08); font-size: 15px; }
+.key small { font-size: 12px; font-weight: 500; color: var(--tx-3); }
+.key kbd { display: none; position: absolute; top: 6px; right: 7px; font: 600 12px/1 var(--font-ui); color: var(--tx-2); } /* the shortcut: shown by the Show keyboard shortcuts setting (.hints, below) */
+.key.primary kbd, .key.solid kbd { color: inherit; } /* on the primary fill and the solid slab the hint takes the key's ink: --tx-2 would not read there */
+.glyph::before, .key kbd::before { content: attr(data-text); }
+.key.primary small { color: inherit; } /* 12 px on the accent needs the full ink */
+/* auto deal's countdown (L2-4, the mockup's .key .bar): the Deal or Next hand key fills a bar in the key's own ink over the wait before the automatic step */
+.key .bar { position: absolute; left: 10px; right: 10px; bottom: 6px; height: 3px; border-radius: 2px; background: rgb(0 0 0 / .18); overflow: hidden; pointer-events: none; }
+.key .bar i { display: block; height: 100%; background: var(--accent-ink); opacity: .6; transform-origin: left; animation: fill linear both; }
+@keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .key .bar { display: none; } } /* no moving bar; the Pause key still shows auto deal is on */
+.dock .wider { flex: 3 1 0; }
+
+/* the keys that act wait while a card flies or flips (#6, #72): inert (and dimmed, see aria-disabled) until it lands */
+.board.busy .options-wrap { pointer-events: none; }
+
+/* betting (#82): the chip rack, then Undo, Clear, Rebet, 2x, Pause and Deal. The rack shows every chip the balance covers, whole chips only: evenly
+   spaced when they fit, else scrolled by whole chips (Dock's ChipRack sets .scroll, --rgap and --rpad), a chevron toward more, none cut at rest. */
+.rack-wrap { position: relative; flex: 1; min-width: 0; overflow: hidden; border-radius: var(--r4); background: linear-gradient(var(--groove-1), var(--groove-2)); box-shadow: inset 0 2px 5px rgb(0 0 0 / .4), inset 0 -1px 0 rgb(255 255 255 / .05); }
+.rack { display: flex; align-items: center; justify-content: space-evenly; height: 100%; padding: 0; }
+.rack-wrap.scroll .rack { justify-content: flex-start; gap: var(--rgap, 8px); overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scroll-padding: 0 var(--rpad, 12px); padding: 0 var(--rpad, 12px); scrollbar-width: none;
+  mask-image: linear-gradient(90deg, transparent calc(var(--rpad, 12px) - 1px), #000 var(--rpad, 12px), #000 calc(100% - var(--rpad, 12px)), transparent calc(100% - var(--rpad, 12px) + 1px)); } /* a chip outside the k whole slots is not shown at all */
+.rack-wrap.scroll::before, .rack-wrap.scroll::after { content: ""; position: absolute; top: 50%; width: 8px; height: 8px; border: solid var(--tx-2); border-width: 0 2px 2px 0; opacity: 0; transition: opacity var(--t-ui); pointer-events: none; }
+.rack-wrap.scroll::before { left: calc(var(--rpad, 12px) / 2 - 2px); transform: translate(-50%, -50%) rotate(135deg); }
+.rack-wrap.scroll::after { right: calc(var(--rpad, 12px) / 2 - 2px); transform: translate(50%, -50%) rotate(-45deg); }
+.rack-wrap.more-l::before, .rack-wrap.more-r::after { opacity: .8; } /* more chips this way */
+.rack-wrap.scroll .rack::-webkit-scrollbar { display: none; }
+.rack-wrap.scroll .rc { scroll-snap-align: start; }
+.rack-wrap.off .rc { opacity: .38; pointer-events: none; } /* #147: no chips while the table shuffles or sweeps (the mockup's .rack-wrap.off); the chips are aria-disabled too */
+.rc { touch-action: manipulation; flex: none; width: var(--rc); height: var(--rc); padding: 0; border: 0; border-radius: 50%; background: none; position: relative; }
+.rc svg { width: 100%; height: 100%; filter: drop-shadow(0 2px 1.5px rgb(0 0 0 / .5)); transition: filter var(--t-ui), transform var(--t-ui) var(--e-spring); } /* the lift moves the chip and its ring, never the button (its box stays 44 px) */
+.rc::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--accent), 0 0 12px rgb(var(--accent-rgb) / .45); opacity: 0; transition: opacity var(--t-ui), transform var(--t-ui) var(--e-spring); } /* the selected chip's ring, inside its own edge */
+.rc[aria-pressed="true"] svg, .rc[aria-pressed="true"]::after { transform: translateY(-3px); }
+.rc[aria-pressed="true"] svg { filter: drop-shadow(1px 6px 4px rgb(0 0 0 / .5)); }
+.rc[aria-pressed="true"]::after { opacity: 1; }
+.rc[data-key]::before { content: attr(data-key); display: none; position: absolute; z-index: 1; right: -2px; top: -2px; min-width: 16px; height: 16px; padding: 0 3px; border-radius: 8px; background: var(--surf-3); color: var(--tx); font: 700 12px/16px var(--font-ui); text-align: center; }
+.dock-note { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: var(--tx-2); letter-spacing: .02em; } /* out of credits */
+.dock-note svg { width: 20px; height: 20px; flex: none; }
+
+/* results: the net and the balance */
+.summary { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 6px; }
+.summary .s-l { display: flex; flex-direction: column; }
+.summary .s-l small { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--tx-3); }
+.summary .s-l b { font: 600 30px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.summary .s-l b.up { color: var(--win-tx); }
+.summary .s-l b.down { color: var(--lose-tx); }
+.summary .s-r { text-align: right; font-size: 13px; color: var(--tx-2); }
+.summary .s-r b { display: block; font-size: 17px; color: var(--tx); font-variant-numeric: tabular-nums; }
+
+/* one row: desktop and landscape phone */
+@media (min-width: 900px), (max-height: 520px) {
+  .dock-in { max-width: var(--col); display: flex; gap: 10px; align-items: stretch; }
+  .dock-row { display: contents; }
+  .rc[aria-pressed="true"] svg, .rc[aria-pressed="true"]::after { transform: translateY(-2px); }
+  .rack-wrap { flex: 0 1 auto; padding: 0 10px; } /* as wide as its chips, scrolling only when the row is short */
+  .rack-wrap.scroll { flex: 1 1 auto; padding: 0; }
+  .rack { gap: 8px; }
+  .dock-note { flex: 3 1 auto; white-space: nowrap; }
+}
+@media (min-width: 900px) { .dock { padding: 14px var(--gutter) calc(14px + var(--safe-b)); } .key.big { min-width: 150px; } }
+/* the shortcut hints (the Show keyboard shortcuts setting, L2-3): on a desktop-size screen only, never on a landscape phone */
+@media (min-width: 900px) and (min-height: 521px) { .dock.hints .key kbd { display: block; } .dock.hints .rc[data-key]::before { display: block; } }
+@media (max-width: 359px) { .key small { display: none; } .key { padding: 0 3px; } } /* L4-1: Rebet's 33 px of text and 12 px of padding (45 px) were 3 px wider than its 42 px of room (44 px key less 2 px of border) at 320 px */
+@media (max-height: 520px) {
+  .dock { padding: 8px 12px calc(8px + var(--safe-b)); }
+  .key { flex-direction: row; gap: 6px; }
+  .key kbd, .key small { display: none; }
+  .rc:focus-visible { outline-offset: -3px; } /* the rack is 48 px tall here: an outside ring would be cut by it */
+  /* the small betting keys are icon-only (their label stays as the accessible name) */
+  .dock-in[data-face="betting"] .key:not(.big):has(> svg) > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .dock-in .key.big { flex: none; min-width: 96px; }
+  .summary .s-l b { font-size: 22px; }
+}

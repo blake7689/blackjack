@@ -6,10 +6,8 @@ import { test, expect } from '@playwright/test';
 
 const COLD = 120_000; // sign-in and /me can each wait out a 30+ s Azure cold start
 
-// The balance in the stats panel: its text nodes only, so the "+10" / "-10" change badge is left out.
-const readBalance = (page) =>
-  page.locator('.stats-panel > div:nth-child(2)').evaluate((el) =>
-    Number(Array.from(el.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').replace(/[^0-9.-]/g, '')));
+// The balance in the top bar (#bal holds the figure alone: the "+10" / "-10" change badge is a sibling).
+const readBalance = (page) => page.locator('#bal').innerText().then((text) => Number(text.replace(/[^0-9.-]/g, '')));
 const cents = (n) => Math.round(n * 100) / 100;
 
 test('live site: sign in, play one round, the ledger and the balance agree (#119)', async ({ page }) => {
@@ -34,30 +32,34 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   await page.getByPlaceholder('Username or Email').fill(process.env.E2E_LIVE_USERNAME);
   await page.getByPlaceholder('Password').fill(process.env.E2E_LIVE_PASSWORD);
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
-  await page.getByRole('button', { name: 'Start Game' }).click({ timeout: COLD });
 
-  const chips = page.getByRole('button', { name: /^Add \d+$/ });
-  await expect(page.getByRole('button', { name: 'Deal', exact: true })).toBeVisible({ timeout: COLD }); // the table is up
+  // The account's own saved settings apply here (nothing is stubbed): Table messages may be Hints, so the line on the felt is empty until a prompt's 5 s pass, and the
+  // currency may be any symbol (L2-1, L2-2). So nothing below waits on a message or reads a symbol: it waits on the dock (its betting face with the rack awake, the
+  // Deal key, Next hand) and #bal, and reads chip values from the rack's data-chip.
+  const chips = page.locator('.rack .rc'); // the rack's chips (#82)
+  const bettingOpen = page.locator('.dock-in[data-face="betting"]').locator('.rack-wrap:not(.off), .dock-note'); // the betting face, and not shuffling or sweeping (the rack is dimmed then); a broke account shows its note instead of the rack, and fails on the clear message below
+  await expect(bettingOpen).toBeVisible({ timeout: COLD }); // the table is up and its opening shuffle is over
   const start = await readBalance(page);
-  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.getAttribute('aria-label').slice(4))))).sort((a, b) => a - b);
+  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.dataset.chip)))).sort((a, b) => a - b);
   if (!chipValues.length || start < chipValues[0]) {
     throw new Error(`The test account has too little play money (balance ${start}, smallest bet ${chipValues[0] ?? 'none'}): top it up through the app's normal flow.`);
   }
-  await page.getByRole('button', { name: `Add ${chipValues[0]}`, exact: true }).click();
+  await page.locator(`.rack .rc[data-chip="${chipValues[0]}"]`).click(); // pick the smallest chip, then bet it on the circle
+  await page.getByRole('button', { name: /^Bet spot 1,/ }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
 
   // Live rules and shoe are unknown: decline every offer, Stay on every hand, never hit, double or split.
-  const results = page.getByText('Click anywhere to continue...');
+  const results = page.getByRole('button', { name: 'Next hand' });
   await expect.poll(async () => {
     if (await results.isVisible()) return 'done';
     for (const button of [page.getByRole('group', { name: 'Offers' }).getByRole('button', { name: 'No thanks' }), page.getByRole('button', { name: 'Stay' })]) {
-      if (await button.isVisible()) await button.click({ timeout: 5_000 }).catch(() => {}); // the buttons can vanish between check and click
+      if (await button.isVisible() && await button.isEnabled()) await button.click({ timeout: 5_000 }).catch(() => {}); // a key is dimmed (aria-disabled) until it can act, and can vanish between check and click
     }
     return 'playing';
   }, { timeout: COLD, intervals: [250], message: 'the round never reached its results' }).toBe('done');
 
   await results.click();
-  await expect(page.getByText('Place your bets!')).toBeVisible();
+  await expect(bettingOpen).toBeVisible({ timeout: 15_000 }); // the sweep, and a shuffle (4.5 s at Normal) when the cut card came out (#83), are over
   await expect.poll(() => settles.length, { timeout: 30_000, message: 'the settle call never returned' }).toBe(1);
 
   expect(bets, 'exactly one ledger bet').toHaveLength(1);

@@ -3,7 +3,7 @@ import { screen, fireEvent, act, within } from "@testing-library/react";
 import { render } from "@testing-library/react";
 import { renderUI, testPlayer, fakePlayer } from "./testUtils";
 import { PlayerContext } from "../context/PlayerContext";
-import StatsPanel from "../components/StatsPanel/StatsPanel";
+import TopBar from "../components/TopBar/TopBar";
 import GameBoard from "../components/GameBoard/GameBoard";
 import TopUpPrompt from "../components/TopUpPrompt/TopUpPrompt";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -18,11 +18,11 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-describe("StatsPanel hidden taps", () => {
+describe("The balance (TopBar): hidden taps", () => {
   const low = { player: { player: { ...testPlayer, credits: 50 } } };
   const tap = (times, gapMs = 0) => {
     for (let i = 0; i < times; i++) {
-      fireEvent.click(screen.getByText("Credits:"));
+      fireEvent.click(screen.getByText("Balance"));
       if (gapMs) act(() => { vi.advanceTimersByTime(gapMs); });
     }
   };
@@ -30,7 +30,7 @@ describe("StatsPanel hidden taps", () => {
   afterEach(() => vi.useRealTimers());
 
   it("7 quick taps open the prompt; 6 do nothing", () => {
-    renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    renderUI(<TopBar tapEnabled />, low);
     tap(6);
     expect(dialog()).toBeNull();
     tap(1);
@@ -38,7 +38,7 @@ describe("StatsPanel hidden taps", () => {
   });
 
   it("the 7 taps must fit inside 3 s: a span of 2994 ms opens, 3000 ms does not", () => {
-    renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    renderUI(<TopBar tapEnabled />, low);
     tap(6, 499); // the 7th tap lands 6 x 499 = 2994 ms after the first
     tap(1);
     expect(dialog()).not.toBeNull();
@@ -50,7 +50,7 @@ describe("StatsPanel hidden taps", () => {
   });
 
   it("taps spread over more than 3 s never add up, but the window slides", () => {
-    renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    renderUI(<TopBar tapEnabled />, low);
     tap(10, 1000);
     expect(dialog()).toBeNull();
     tap(4);
@@ -62,16 +62,16 @@ describe("StatsPanel hidden taps", () => {
   });
 
   it("does nothing when taps are not enabled (the default too)", () => {
-    const { rerender } = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled={false} />, low);
+    const { rerender } = renderUI(<TopBar tapEnabled={false} />, low);
     tap(20);
     expect(dialog()).toBeNull();
-    rerender(<StatsPanel player={{ credits: 50 }} />);
+    rerender(<TopBar />);
     tap(20);
     expect(dialog()).toBeNull();
   });
 
   it("the counter starts over after the prompt opens; clicks inside the prompt are not taps", () => {
-    renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    renderUI(<TopBar tapEnabled />, low);
     tap(7);
     expect(dialog()).not.toBeNull();
     for (let i = 0; i < 8; i++) fireEvent.click(screen.getByText("Enter code"));
@@ -84,26 +84,27 @@ describe("StatsPanel hidden taps", () => {
   });
 
   it("renders the overlay as a direct child of document.body, outside the panel; clicks inside it are not taps and 7 do not reopen it", () => {
-    const { container } = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
+    const { container } = renderUI(<TopBar tapEnabled />, low);
     tap(7);
-    const overlay = document.querySelector(".topup-overlay");
+    const overlay = document.querySelector(".dlg-overlay");
     expect(overlay.parentElement).toBe(document.body);
     expect(container.contains(overlay)).toBe(false);
-    expect(screen.getByRole("dialog").closest(".topup-overlay")).toBe(overlay);
+    expect(screen.getByRole("dialog").closest(".dlg-overlay")).toBe(overlay);
     for (let i = 0; i < 7; i++) fireEvent.click(screen.getByLabelText("Code")); // would be a 2nd prompt if they counted
     fireEvent.click(screen.getByText("Cancel"));
-    expect(document.querySelectorAll(".topup-overlay")).toHaveLength(0);
-    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText("Credits:"));
+    expect(document.querySelectorAll(".dlg-overlay")).toHaveLength(0);
+    for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText("Balance"));
     expect(dialog()).toBeNull(); // only 6 real taps since the reopen: the inside clicks did not add up
   });
 
   it("adds nothing to the DOM before the taps: same markup, no role, tabindex or aria on the balance", () => {
-    const on = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled />, low);
-    const markupOn = on.container.innerHTML;
+    const on = renderUI(<TopBar tapEnabled />, low);
+    const markupOn = on.container.querySelector(".bal").outerHTML;
     on.unmount();
-    const off = renderUI(<StatsPanel player={{ credits: 50 }} tapEnabled={false} />, low);
-    expect(markupOn).toBe(off.container.innerHTML);
-    expect(off.container.querySelector("[role], [tabindex], [aria-label], [aria-describedby], button, input")).toBeNull();
+    const off = renderUI(<TopBar tapEnabled={false} />, low);
+    expect(markupOn).toBe(off.container.querySelector(".bal").outerHTML);
+    expect(off.container.querySelector(".bal [role], .bal [tabindex], .bal [aria-label], .bal [aria-describedby], .bal button, .bal input")).toBeNull();
+    expect(off.container.querySelector(".bal").attributes).toHaveLength(1); // just its class
   });
 });
 
@@ -112,8 +113,8 @@ describe("GameBoard tapEnabled", () => {
   const lowPlayer = { ...testPlayer, credits: 99 };
   // Seven quick taps on the balance: does the prompt open?
   const opens = (game, player = lowPlayer) => {
-    const { unmount } = renderUI(<GameBoard />, { game, player: { player } });
-    for (let i = 0; i < 7; i++) fireEvent.click(screen.getByText("Credits:"));
+    const { unmount, container } = renderUI(<GameBoard />, { game, player: { player } });
+    for (let i = 0; i < 7; i++) fireEvent.click(container.querySelector(".bal-lbl")); // the results dock also says Balance
     const open = dialog() !== null;
     unmount();
     return open;
@@ -134,8 +135,14 @@ describe("GameBoard tapEnabled", () => {
   });
 
   it("not in any other phase", () => {
+    // A real table for every phase: a settled hand, the dealer's up card and the offers (OFFERS shows them in the dock).
+    const table = {
+      hands: [{ tag: "a", cards: [], hiddenCards: [], totals: [0], bet: 10, payout: 0, insurance: 0, status: "done", result: "None" }],
+      dealer: { cards: [], dealerDisplayTotal: 0 },
+      offers: { insurance: true, evenMoney: false, surrender: false },
+    };
     for (const phase of Object.values(GamePhases).filter((p) => p !== GamePhases.PRE_DEAL)) {
-      expect(opens({ ...preDeal, phase }), phase).toBe(false);
+      expect(opens({ ...preDeal, ...table, phase }), phase).toBe(false);
     }
   });
 
@@ -176,8 +183,9 @@ describe("TopUpPrompt", () => {
     expect(input().getAttribute("autocomplete")).toBe("new-password"); // "off" is ignored by browsers: they would offer to save the code
     for (const a of ["data-lpignore", "data-1p-ignore", "data-bwignore"]) expect(input().getAttribute(a), a).toBe("true");
     expect(input().maxLength).toBe(200);
-    expect(within(d).getByRole("button", { name: "Submit" })).toBeTruthy();
-    expect(within(d).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    const [cancel, submit] = within(d).getAllByRole("button"); // Cancel (plain), then Submit (primary), as in the mockup
+    expect([cancel.textContent, submit.textContent]).toEqual(["Cancel", "Submit"]);
+    expect([d.className, cancel.className, submit.className]).toEqual(["dlg topup", "btn plain", "btn primary"]); // the token-styled confirm classes (L1-13)
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
   });
@@ -208,17 +216,17 @@ describe("TopUpPrompt", () => {
 
     it("Tab on the last control wraps to the first, shift-Tab on the first wraps to the last", () => {
       show();
-      screen.getByRole("button", { name: "Cancel" }).focus();
+      screen.getByRole("button", { name: "Submit" }).focus(); // the last one: Cancel comes first, then Submit (the mockup's order)
       expect(tab()).toBe(false);
       expect(document.activeElement).toBe(input());
       expect(tab(true)).toBe(false);
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Submit" }));
     });
 
     it("leaves Tab alone between the ends", () => {
       show();
       expect(tab()).toBe(true); // input is first, not last
-      screen.getByRole("button", { name: "Submit" }).focus();
+      screen.getByRole("button", { name: "Cancel" }).focus();
       expect(tab()).toBe(true);
       expect(tab(true)).toBe(true);
     });

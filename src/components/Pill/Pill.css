@@ -1,0 +1,19 @@
+/* total pill: beside the hand (right of its last card), or above it when several seats share a portrait row; never on a card */
+.pill { position: absolute; z-index: var(--z-pill); left: calc(100% + 8px); top: 50%; translate: 0 -50%; height: 26px; min-width: 32px; padding: 0 9px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 13px; background: rgb(8 10 9 / .86); color: #fff; font-size: 14px; font-weight: 700; border: 1px solid rgb(255 255 255 / .14); box-shadow: 0 4px 10px rgb(0 0 0 / .35); backdrop-filter: blur(6px); white-space: nowrap; }
+/* it fades in as it appears, like the mockup's (L1-19: the "dimmed" pill in the mockup's peek shot is that fade caught half way; it is at full strength after 220 ms) */
+.pill { animation: pillIn var(--t-ui) var(--e-spring) backwards; }
+@keyframes pillIn { from { opacity: 0; scale: .8; } }
+.pill small { font-size: 12px; font-weight: 500; color: rgb(255 255 255 / .62); }
+.pill.bust { background: var(--lose); color: #250502; border-color: transparent; }
+.pill.bj { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+.pill.on { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / .22), 0 4px 10px rgb(0 0 0 / .35); }
+/* while the opening cards are dealt the totals wait; Show hand totals off hides every total, but not the "Blackjack!" badge */
+.stage-in.dealing .pill { visibility: hidden; }
+.no-totals .stage-in .pill:not(.bj) { visibility: hidden; }
+/* several seats in portrait: centred above the hand (32 px reserved by .seat .hand) */
+.stage-in.multi .seat .pill { left: 50%; top: auto; bottom: calc(100% + 6px); translate: -50% 0; }
+@media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  /* landscape and wide: in the seat's own 56 px column beside the hand */
+  .stage-in.multi .seat .pill { left: calc(100% + 8px); top: 50%; bottom: auto; translate: 0 -50%; }
+}
+/* wide: the same 26 px pill. The mockup's own wide rule (32 px / 17 px) sits above its base .pill rule, so the base wins there and the pill stays 26 / 14 / 13 (L1-16). */

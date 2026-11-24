@@ -1,0 +1,9 @@
+/* The felt print (#81): ink on cloth. Its box and place are GameBoard.css (.print); the lines are laid out by FeltPrint.jsx. */
+.print text { fill: var(--print); font-weight: 700; }
+.print .caps { font-family: var(--font-print-caps); }
+.print .book { font-family: var(--font-print-book); font-variant-numeric: lining-nums; }
+.print .band { fill: none; stroke: var(--print); stroke-width: 1.2; opacity: .55; } /* the two ruled arcs round the insurance line */
+.print { position: relative; }
+.print svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.print-hit { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; border-radius: var(--r2); background: none; cursor: pointer; } /* the button over the drawing: its hit area is the whole box (44 px tall in landscape) */
+.print-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }

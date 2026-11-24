@@ -21,6 +21,10 @@ export function PlayerProvider({ children }) {
   // Set when a round's opening bet is refused: the rest of that round's bets are then dropped unsent.
   const roundRefusedRef = useRef(false);
   const [reconnecting, setReconnecting] = useState(false);
+  // A saved session is being restored (up to a cold API start): the table shows Loading, not Home, until it is answered.
+  const [restoring, setRestoring] = useState(() => !!getToken());
+  // The restore got no answer (network, timeout, 5xx): the app shows its Error screen (Try again / Home) instead of acting signed out (#87).
+  const [restoreFailed, setRestoreFailed] = useState(false);
   // A message for the Login page (e.g. after a password change we could not sign back in from); cleared by the next sign-in.
   const [notice, setNotice] = useState(null);
   // Counts sign-ins and sign-outs: "same player" for queued work means the same count, not the same token,
@@ -43,13 +47,21 @@ export function PlayerProvider({ children }) {
     setPlayer(playerRef.current);
   }, []);
 
-  // Restore a session after a page refresh; an expired token (401) just leaves you signed out.
-  // Ignore a late answer if you logged out or in as someone else meanwhile (the session changed).
-  useEffect(() => {
+  // Restore a session after a page refresh; an expired token (401, which clears it) just leaves you signed out; any other failure keeps the token and
+  // sets `restoreFailed`. Ignore a late answer if you logged out or in as someone else meanwhile (the session changed).
+  const restore = useCallback(() => {
     if (!getToken()) return;
     const session = sessionRef.current;
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (sessionRef.current === session) signIn(p); }).catch(() => {});
+    const same = () => sessionRef.current === session && !!getToken(); // no sign-in or sign-out since, and the token was not cleared (a 401)
+    setRestoring(true);
+    setRestoreFailed(false);
+    // then(ok, fail), not then().catch(): only getMe's own failure means "no answer"; an error while signing in is a bug, logged, not an Error screen.
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (same()) signIn(p); }, () => { if (same()) setRestoreFailed(true); })
+      .catch((error) => console.error("Restoring the session failed", error))
+      .finally(() => setRestoring(false));
   }, [signIn]);
+  useEffect(restore, [restore]);
+  const skipRestore = useCallback(() => setRestoreFailed(false), []);
 
   // Any signed-in request that gets 401 signs you out here.
   useEffect(() => {
@@ -84,8 +96,9 @@ export function PlayerProvider({ children }) {
 
   const getCredits = useCallback(() => playerRef.current?.credits ?? 0, []);
 
+  // The badge says what the balance just did; a change of nothing (a settled loss) takes an older badge away: nothing shows after a loss.
   const showChange = useCallback((delta) => {
-    if (delta !== 0) setCreditChange((prev) => ({ delta, seq: (prev?.seq ?? 0) + 1 }));
+    setCreditChange((prev) => (delta !== 0 ? { delta, seq: (prev?.seq ?? 0) + 1 } : null));
   }, []);
 
   // Sends one ledger call after the ones before it (the queue stays serial, so a retrying call blocks the rest),
@@ -200,13 +213,13 @@ export function PlayerProvider({ children }) {
   // The +/- badge next to the balance fades after a moment. //
   useEffect(() => {
     if (!creditChange) return;
-    const timer = setTimeout(() => setCreditChange(null), 2500);
+    const timer = setTimeout(() => setCreditChange(null), 3000);
     return () => clearTimeout(timer);
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, notice, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, notice, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, notice, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, notice, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

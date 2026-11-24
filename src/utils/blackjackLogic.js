@@ -127,6 +127,20 @@ export function canSurrender(hand, dealer, settings) {
     && !(surrender === SurrenderOptions.EARLY_NO_ACE && dealer.cards[0].value === 11) && !earlyOffer(dealer.cards[0], settings);
 }
 
+// What the dock may offer on one hand during the player's turn (the caller checks whose turn it is): hit, double, triple, split, surrender.
+// A double, triple or split also needs the stake in credits; a hand whose own stake was refused (bet 0) can't add to it. //
+export function handActions(hand, dealer, handCount, credits, settings) {
+  const canAddStake = hand.bet > 0 && credits >= hand.bet;
+  const double = canDouble(hand, settings) && canAddStake;
+  return {
+    hit: canHit(hand, settings),
+    double,
+    triple: double && credits >= 2 * hand.bet,
+    split: canSplit(hand, handCount, settings.maxSplitHands, settings.resplitAces) && canAddStake,
+    surrender: canSurrender(hand, dealer, settings),
+  };
+}
+
 // ---- OFFERS (insurance, even money, early surrender) ----
 
 // Insurance costs half the bet, to the cent. //
@@ -256,3 +270,6 @@ export function settleHand(hand, dealer, { blackjackPayout = BlackjackPayouts.TH
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+
+// What the round paid or cost: every hand's payout less its stake and insurance. Meaningful once the hands are settled. //
+export const roundNet = (hands) => cents(hands.reduce((sum, h) => sum + h.payout - h.bet - (h.insurance ?? 0), 0));

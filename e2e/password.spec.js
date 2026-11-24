@@ -4,6 +4,7 @@ import { test, expect, stubApi, login } from './fixtures';
 async function changePassword(page, current, next) {
   await login(page);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: /^Account/ }).click();
   await page.getByLabel('Current password').fill(current);
   await page.getByLabel('New password').fill(next);
   await page.getByRole('button', { name: 'Change password' }).click();
@@ -14,7 +15,7 @@ test('a password change signs in again with the new password, keeps the session 
   await changePassword(page, 'old-pass-1', 'new-pass-12');
 
   // PUT the change, then POST the login with the new password: the app, not the user, does the second step.
-  await expect(page.getByRole('status')).toHaveText('Password changed');
+  await expect(page.getByRole('status').filter({ hasText: 'Password changed' })).toBeVisible();
   expect(api.passwords).toEqual([{ currentPassword: 'old-pass-1', newPassword: 'new-pass-12' }]);
   expect(api.logins).toEqual([expect.anything(), { usernameOrEmail: 'tester', password: 'new-pass-12' }]);
   const calls = api.requests.map((r) => r.endpoint);
@@ -22,17 +23,16 @@ test('a password change signs in again with the new password, keeps the session 
   expect(api.requests.find((r) => r.endpoint === 'PUT /player/me/password').auth).toBe('Bearer e2e-token'); // the change itself uses the old token
 
   // Still signed in: no redirect, no sign-out, and a request made afterwards carries the token from the second login.
-  await expect(page.getByRole('button', { name: 'tester' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Game' }).click();
-  await page.locator('summary', { hasText: 'Customize rules' }).click();
-  await page.getByRole('group', { name: 'Blackjack Pays', exact: true }).getByRole('button', { name: /^6:5/ }).click();
+  await expect(page.getByText('Please log in to manage settings.')).toHaveCount(0);
+  await page.getByRole('button', { name: /^Gameplay/ }).click();
+  await page.getByRole('switch', { name: /^Show hand totals/ }).click({ force: true });
+  await page.getByRole('button', { name: 'Save changes' }).click();
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.requests.findLast((r) => r.endpoint === 'PUT /player/me/settings').auth).toBe('Bearer e2e-token-2');
 
   // The balance is the same one (no reload of a different player, nothing lost).
-  await page.getByRole('button', { name: 'Home' }).click();
-  await page.getByRole('button', { name: 'Start Game' }).click();
-  await expect(page.getByText('Credits:').locator('..')).toHaveText('Credits: $1,000');
+  await page.getByRole('button', { name: 'Table', exact: true }).click();
+  await expect(page.locator('#bal')).toHaveText('$1,000');
   expect(api.unknown).toEqual([]);
 });
 
@@ -45,7 +45,6 @@ for (const status of [500, 401]) {
     const message = 'Your password was changed, but we could not sign you in again. Please sign in with your new password.';
     await expect(page.getByText('Please log in to manage settings.')).toBeVisible();
     await expect(page.getByRole('alert')).toHaveText(message);
-    await expect(page.getByRole('button', { name: 'tester' })).toHaveCount(0);
     await page.getByRole('link', { name: 'Log in' }).click();
     await expect(page.getByRole('alert')).toHaveText(message);
     expect(api.passwords).toHaveLength(1);

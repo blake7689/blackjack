@@ -1,21 +1,23 @@
 :root { 
-    --bg: transparent;
     --card-bg: #06160e; 
 }
 
 html, body, #root, .app-root { 
     height: 100%; 
     margin: 0; 
-    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; 
+    font-family: var(--font-ui); 
     background: var(--bg); 
-    color: #e6f0ea; 
-    width: 100vw;
-    min-height: 100vh;
+    color: var(--tx); 
+    width: 100%;
+    min-height: 100dvh;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     padding-bottom: 0;
 }
+
+/* safe areas, left and right (once, here); the top is each page's own bar's and the bottom the pages' */
+.app-root { padding-left: var(--safe-l); padding-right: var(--safe-r); }
 
 a { 
     color: inherit; 

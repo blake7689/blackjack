@@ -94,3 +94,7 @@ export function trueCount(runningCount, shoe) {
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+// Cards in the discard pile (#81): dealt from the shoe and no longer on the table. Never below 0: a refill in the middle of a round starts the count again. //
+export function discardCount(deckCount, shoe, onTable) {
+  return Math.max(0, deckCount * 52 - cardsRemaining(shoe) - onTable);
+}
