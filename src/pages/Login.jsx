@@ -18,7 +18,7 @@ const SIGNUP_FIELDS = [
 const signupError = (name, value) => (name === "password" && !value ? "Password is required." : validateField(name, value));
 
 export default function Login() {
-  const { login, addPlayer } = usePlayer();
+  const { login, addPlayer, notice } = usePlayer();
   const nav = useNavigate();
   const [tab, setTab] = useState("login");
   const [form, setForm] = useState({
@@ -95,6 +95,7 @@ export default function Login() {
     <div className="page-bg">
       <div className="page-body">
         <div className="login-panel">
+          {notice && <div role="alert" className="notice error">{notice}</div>}
           <div className="tabs">
             <button onClick={() => setTab("login")} className={`tab-btn${tab === "login" ? " active" : ""}`}>Login</button>
             <button onClick={() => setTab("signup")} className={`tab-btn${tab === "signup" ? " active" : ""}`}>Add player</button>

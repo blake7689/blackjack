@@ -91,7 +91,7 @@ describe("session", () => {
     engine.getMe.mockReturnValueOnce(me.promise);
     const { ctx } = setup();
 
-    api.getToken.mockReturnValue(null); // logged out: the token is gone
+    act(() => ctx.logout()); // logged out meanwhile
     await act(async () => { me.resolve(player); });
     await settleQueue();
 
@@ -131,7 +131,7 @@ describe("account", () => {
   it("passes password changes through and signs out after deleting", async () => {
     const { ctx } = await signedIn();
     await act(async () => { await ctx.changePassword("old", "new"); });
-    expect(engine.changePassword).toHaveBeenCalledWith("old", "new");
+    expect(engine.changePassword).toHaveBeenCalledWith("old", "new", "tester");
     await act(async () => { await ctx.deletePlayer(); });
     expect(engine.deleteMe).toHaveBeenCalled();
     expect(ctx.player).toBeNull();
@@ -594,13 +594,14 @@ describe("ledger retries and refusals (#23)", () => {
       act(() => ctx.applyCreditEvent(betEvent(1), report));
       act(() => ctx.applyCreditEvent(betEvent(2), report));
       await tick(0); // the first call is on its way
-      api.getToken.mockReturnValue("token-b"); // somebody else signed in
+      engine.loginPlayer.mockResolvedValue(player);
+      await act(async () => { await ctx.login({}); }); // somebody else signed in
       await act(async () => { first.resolve({ credits: 990 }); });
       await tick(0);
 
       expect(engine.placeBet).toHaveBeenCalledOnce(); // A's second bet is never charged to B
       expect(report.mock.calls).toEqual([[1, "confirmed"], [2, "confirmed"]]);
-      expect(ctx.player.credits).toBe(980); // neither answer was applied: only the two optimistic stakes show
+      expect(ctx.player.credits).toBe(player.credits); // neither answer was applied to the new player
     });
 
     it("stops retrying and reports confirmed when the token changes while it waits", async () => {
@@ -611,7 +612,8 @@ describe("ledger retries and refusals (#23)", () => {
       act(() => ctx.applyCreditEvent(betEvent(1), report));
       await tick(0);
       expect(ctx.reconnecting).toBe(true);
-      api.getToken.mockReturnValue("token-b");
+      engine.loginPlayer.mockResolvedValue(player);
+      await act(async () => { await ctx.login({}); }); // the token changed: a new sign-in
       await tick(1000);
       expect(engine.placeBet).toHaveBeenCalledTimes(1);
       expect(report.mock.calls).toEqual([[1, "confirmed"]]);
@@ -663,6 +665,154 @@ describe("ledger retries and refusals (#23)", () => {
     expect(ctx.reconnecting).toBe(true);
     await tick(1000);
     expect(ctx.reconnecting).toBe(false);
+  });
+});
+
+describe("password change keeps the session (#171)", () => {
+  const betEvent = (seq) => ({ seq, kind: "bet", amount: 10, newRound: false, alreadyDeducted: false, handTag: 1 });
+
+  it("a change that signs in again keeps the player, the balance and what is on the table, and shows no notice", async () => {
+    const { ctx } = await signedIn();
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn())); // 10 chips on the circle
+    engine.changePassword.mockResolvedValue(false);
+
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+
+    expect(engine.changePassword).toHaveBeenCalledWith("old", "new-pass1", "tester");
+    expect(ctx.player).toMatchObject({ userName: "tester", credits: 990 });
+    expect(ctx.notice).toBeNull();
+    expect(engine.logoutPlayer).not.toHaveBeenCalled();
+  });
+
+  it("a ledger bet queued behind another is still sent after the token swap (same session)", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const first = deferred();
+    api.getToken.mockReturnValue("token-old");
+    engine.placeBet.mockReturnValueOnce(first.promise).mockResolvedValue({ credits: 980 });
+    act(() => ctx.applyCreditEvent(betEvent(1), report));
+    act(() => ctx.applyCreditEvent(betEvent(2), report));
+    await settleQueue(); // the first call is on its way, the second waits behind it
+
+    api.getToken.mockReturnValue("token-new"); // the password change swapped the token
+    engine.changePassword.mockResolvedValue(false);
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+    await act(async () => { first.resolve({ credits: 990 }); });
+    await settleQueue();
+
+    expect(engine.placeBet).toHaveBeenCalledTimes(2);
+    expect(report.mock.calls).toEqual([[1, "confirmed"], [2, "confirmed"]]);
+    expect(ctx.player.credits).toBe(980);
+  });
+
+  it("a failed silent sign-in signs the player out and leaves a notice for the Login page", async () => {
+    const { ctx } = await signedIn();
+    engine.changePassword.mockResolvedValue(true);
+
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+
+    expect(ctx.player).toBeNull();
+    expect(ctx.notice).toMatch(/password was changed, but we could not sign you in again/);
+  });
+
+  it("a failed silent sign-in drops the calls still queued (the player is gone)", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const first = deferred();
+    engine.placeBet.mockReturnValueOnce(first.promise).mockResolvedValue({ credits: 1 });
+    act(() => ctx.applyCreditEvent(betEvent(1), report));
+    act(() => ctx.applyCreditEvent(betEvent(2), report));
+    await settleQueue();
+    engine.changePassword.mockResolvedValue(true);
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+    await act(async () => { first.resolve({ credits: 990 }); });
+    await settleQueue();
+
+    expect(engine.placeBet).toHaveBeenCalledOnce();
+    expect(ctx.player).toBeNull();
+  });
+
+  it("a refused change throws, and the player stays signed in with no notice", async () => {
+    const { ctx } = await signedIn();
+    engine.changePassword.mockRejectedValue(refusal(400, "Incorrect password."));
+
+    await expect(act(async () => { await ctx.changePassword("wrong", "new-pass1"); })).rejects.toThrow("Incorrect password.");
+
+    expect(ctx.player).toMatchObject({ userName: "tester" });
+    expect(ctx.notice).toBeNull();
+  });
+
+  it("the notice stays through a plain sign-out and is cleared by the next sign-in or sign-up", async () => {
+    const { ctx } = await signedIn();
+    engine.changePassword.mockResolvedValue(true);
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+    act(() => ctx.logout());
+    expect(ctx.notice).not.toBeNull();
+
+    await act(async () => { await ctx.login({}); });
+    expect(ctx.notice).toBeNull();
+
+    act(() => ctx.logout());
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); }); // signed out: still sets the notice, harmless
+    expect(ctx.notice).not.toBeNull();
+    await act(async () => { await ctx.addPlayer({}); });
+    expect(ctx.notice).toBeNull();
+  });
+
+  it("logging out, or in as someone else, still drops a queued call", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const first = deferred();
+    api.getToken.mockReturnValue("token-a");
+    engine.placeBet.mockReturnValueOnce(first.promise).mockResolvedValue({ credits: 1 });
+    act(() => ctx.applyCreditEvent(betEvent(1), report));
+    act(() => ctx.applyCreditEvent(betEvent(2), report));
+    await settleQueue();
+    act(() => ctx.logout());
+    await act(async () => { await ctx.login({}); }); // even the same account and the same token is a new session
+    await act(async () => { first.resolve({ credits: 990 }); });
+    await settleQueue();
+
+    expect(engine.placeBet).toHaveBeenCalledOnce();
+    expect(report.mock.calls).toEqual([[1, "confirmed"], [2, "confirmed"]]);
+  });
+
+  it("a top-up in flight across the token swap still succeeds (same session)", async () => {
+    vi.useFakeTimers();
+    const { ctx } = await signedIn();
+    const call = deferred();
+    api.getToken.mockReturnValue("token-old");
+    engine.topUp.mockReturnValue(call.promise);
+    const out = {};
+    act(() => { ctx.topUp("dummy-code-123").then((res) => { out.res = res; }); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    api.getToken.mockReturnValue("token-new");
+    engine.changePassword.mockResolvedValue(false);
+    await act(async () => { await ctx.changePassword("old", "new-pass1"); });
+    await act(async () => { call.resolve({ credits: 10000 }); await vi.advanceTimersByTimeAsync(0); });
+
+    expect(out.res).toEqual({ ok: true });
+    expect(ctx.player.credits).toBe(10000);
+  });
+
+  it("a session restore still applies after the token swap, but not after a sign-in", async () => {
+    api.getToken.mockReturnValue("tok");
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    const { ctx } = setup();
+    api.getToken.mockReturnValue("tok-new"); // swapped meanwhile
+    await act(async () => { me.resolve(player); });
+    await settleQueue();
+    expect(ctx.player).toEqual(player);
+
+    const late = deferred();
+    engine.getMe.mockReturnValueOnce(late.promise);
+    const second = setup();
+    engine.loginPlayer.mockResolvedValue({ ...player, userName: "other" });
+    await act(async () => { await second.ctx.login({}); });
+    await act(async () => { late.resolve(player); });
+    await settleQueue();
+    expect(second.ctx.player.userName).toBe("other");
   });
 });
 

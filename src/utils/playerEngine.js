@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut, apiDelete, setToken, clearToken, COLD_START_TIMEOUT_MS } from "./api";
+import { apiGet, apiPost, apiPut, apiDelete, getToken, setToken, clearToken, swapToken, COLD_START_TIMEOUT_MS } from "./api";
 
 // The API's /api/player/me profile; it never includes a password or a player id. //
 export function normalizePlayer(profile) {
@@ -32,7 +32,21 @@ export async function updateProfile({ userName, email, firstName, lastName }) {
   return normalizePlayer(await apiPut("/player/me", { userName, email, firstName: firstName || null, lastName: lastName || null }));
 }
 
-export const changePassword = (currentPassword, newPassword) => apiPut("/player/me/password", { currentPassword, newPassword });
+// The API revokes the token on a password change (#171), so sign in again at once with the new password and keep the
+// new token, holding every other request meanwhile. The password is only in this call's arguments. Resolves true when
+// that sign-in failed (the token is cleared; the caller signs out).
+export const changePassword = (currentPassword, newPassword, userName) => swapToken(async () => {
+  await apiPut("/player/me/password", { currentPassword, newPassword }, true);
+  if (!getToken()) return false; // signed out while the change was in flight: stay signed out
+  try {
+    const { accessToken } = await apiPost("/auth/login", { usernameOrEmail: userName, password: newPassword }, COLD_START_TIMEOUT_MS, true);
+    setToken(accessToken);
+    return false;
+  } catch {
+    clearToken();
+    return true;
+  }
+});
 
 export async function deleteMe() {
   await apiDelete("/player/me");
