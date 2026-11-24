@@ -60,6 +60,12 @@ describe("Settings: the page", () => {
     expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Log in" }).getAttribute("href")).toBe("/login"); // no header any more: a visitor still has a way out
     expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("shows the provider's sign-in notice to a signed-out visitor (#171)", () => {
+    renderUI(<Settings />, { player: { player: null, notice: "Please sign in with your new password." } });
+    expect(screen.getByRole("alert").textContent).toBe("Please sign in with your new password.");
   });
 
   it("has a Table button, a title, six sections and no tabs; nothing is changed, so there is no save bar", () => {
@@ -1061,21 +1067,21 @@ describe("Settings: Account", () => {
     const button = screen.getByRole("button", { name: "Change password" });
     expect(button.getAttribute("aria-disabled")).toBe("true");
     type("Current password", "old-pass");
-    type("New password", "123");
-    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    type("New password", "1234567");
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
     expect(field("New password").getAttribute("aria-invalid")).toBe("true");
     fireEvent.click(button);
     expect(changePassword).not.toHaveBeenCalled();
-    type("New password", "new-pass");
+    type("New password", "new-pass1");
     expect(bar()).toBeNull();
     fireEvent.click(button);
     await flush();
-    expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass");
+    expect(changePassword).toHaveBeenCalledWith("old-pass", "new-pass1");
     expect(field("Current password").value).toBe("");
     const shown = [note().textContent];
     for (let i = 0; i < 2; i++) {
       type("Current password", "wrong");
-      type("New password", "new-pass");
+      type("New password", "new-pass1");
       fireEvent.click(button);
       await flush();
       shown.push(note().textContent);

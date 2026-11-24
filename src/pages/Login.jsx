@@ -21,7 +21,7 @@ const signupError = (name, value) => (name === "password" && !value ? "Password 
 
 // Log in (/login) and Create an account (/signup): two screens, one component (DESIGN section 8). //
 export default function Login({ signup: creating = false }) {
-  const { player, login, addPlayer } = usePlayer();
+  const { player, login, addPlayer, notice } = usePlayer();
   const nav = useNavigate();
   const [form, setForm] = useState({
     usernameOrEmail: "", password: "",
@@ -95,6 +95,7 @@ export default function Login({ signup: creating = false }) {
     <Page>
       <Wordmark className="wm" />
       <h1>{creating ? "Create an account" : "Log in"}</h1>
+      {notice && <p className="alert" role="alert">{notice}</p>}
       {loading && <div className="waking" role="status"><span className="spin" aria-hidden="true" /><span>{statusMsg}</span></div>}
       {error && <p className="alert" role="alert">{error}</p>}
       {creating ? (

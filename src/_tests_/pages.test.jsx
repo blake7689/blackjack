@@ -167,13 +167,13 @@ describe("Log in (/login)", () => {
     const login = vi.fn().mockResolvedValue(testPlayer);
     renderUI(<Login />, { path: "/login", player: { player: null, login } });
     type("Username or Email", "tester");
-    type("Password", "secret1");
+    type("Password", "secret12");
     fireEvent.click(logInButton());
     expect(screen.getByText("Contacting server...")).toBeTruthy();
     expect(logInButton().textContent).toBe("Logging in...");
     expect(logInButton().disabled).toBe(true);
     await flush();
-    expect(login).toHaveBeenCalledWith({ usernameOrEmail: "tester", password: "secret1" });
+    expect(login).toHaveBeenCalledWith({ usernameOrEmail: "tester", password: "secret12" });
     expect(location()).toBe("/");
   });
 
@@ -287,7 +287,7 @@ describe("Create an account (/signup)", () => {
   const fillAll = () => {
     type("Username", "newbie");
     type("Email", "n@example.com");
-    type("Password", "secret1");
+    type("Password", "secret12");
     type("First name", "New");
     type("Last name", "Bie");
   };
@@ -317,8 +317,38 @@ describe("Create an account (/signup)", () => {
     fireEvent.click(createButton());
     expect(createButton().textContent).toBe("Creating account...");
     await flush();
-    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret1", email: "n@example.com", firstName: "New", lastName: "Bie" });
+    expect(addPlayer).toHaveBeenCalledWith({ userName: "newbie", password: "secret12", email: "n@example.com", firstName: "New", lastName: "Bie" });
     expect(location()).toBe("/");
+  });
+
+  it("shows the provider's notice as an alert (e.g. a password change we could not sign back in from, #171), and none without one", () => {
+    const { unmount } = renderUI(<Login />, { path: "/login", player: { player: null, notice: "Please sign in with your new password." } });
+    expect(screen.getByRole("alert").textContent).toBe("Please sign in with your new password.");
+    unmount();
+    renderUI(<Login />, { path: "/login", player: { player: null } });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("applies no length rule when logging in, so a 6 or 7 character password from before the 8-character rule still works", async () => {
+    const login = vi.fn().mockResolvedValue(testPlayer);
+    for (const password of ["secret", "secret1"]) {
+      const view = renderUI(<Login />, { path: "/login", player: { player: null, login } });
+      type("Username or Email", "tester");
+      type("Password", password);
+      expect(screen.queryByText(/at least/)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: /^Log(ging)? in/ }));
+      await flush();
+      expect(login).toHaveBeenLastCalledWith({ usernameOrEmail: "tester", password });
+      view.unmount();
+    }
+  });
+
+  it("signup refuses a 7 character password and accepts 8", () => {
+    signup({ addPlayer: vi.fn() });
+    type("Password", "1234567");
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
+    type("Password", "12345678");
+    expect(screen.queryByText(/at least 8/)).toBeNull();
   });
 
   it("shows each field's error (linked with aria-describedby) once touched, and blocks the form until it is valid", () => {
@@ -339,7 +369,7 @@ describe("Create an account (/signup)", () => {
     type("Email", "not-an-email");
     expect(screen.getByText("Invalid email format.")).toBeTruthy();
     type("Password", "123");
-    expect(screen.getByText("Password must be at least 6 characters.")).toBeTruthy();
+    expect(screen.getByText("Password must be at least 8 characters.")).toBeTruthy();
     type("Password", "");
     expect(screen.getByText("Password is required.")).toBeTruthy();
     fireEvent.blur(screen.getByPlaceholderText("First name"));
@@ -375,8 +405,8 @@ describe("validateField", () => {
     expect(validateField("email", "nope")).toBe("Invalid email format.");
     expect(validateField("email", "a@b.co")).toBe("");
     expect(validateField("password", "")).toBe("");
-    expect(validateField("password", "12345")).toBe("Password must be at least 6 characters.");
-    expect(validateField("password", "123456")).toBe("");
+    expect(validateField("password", "1234567")).toBe("Password must be at least 8 characters.");
+    expect(validateField("password", "12345678")).toBe("");
     expect(validateField("firstName", "")).toBe("First name is required.");
     expect(validateField("lastName", "")).toBe("Last name is required.");
     expect(validateField("lastName", "X")).toBe("");

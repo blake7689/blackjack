@@ -41,7 +41,7 @@ const sectionOf = (key) => (PROFILE.includes(key) ? "account" : key === "chipVal
 const on = (v) => (v ? "on" : "off");
 
 export default function Settings() {
-  const { player, updatePlayer, changePassword, deletePlayer } = usePlayer();
+  const { player, notice: signInNotice, updatePlayer, changePassword, deletePlayer } = usePlayer();
   const { settings, phase } = useGameState();
   const { changeSettings, resetGame } = useGameActions();
   const { logOut, confirm } = useNavActions();
@@ -93,7 +93,7 @@ export default function Settings() {
     return () => { leaveGuard.ask = null; window.removeEventListener("beforeunload", warn); };
   }, [dirty]);
 
-  if (!player) return <div className="page-bg"><div className="page-message"><p>Please log in to manage settings.</p><p className="signed"><Link to="/login">Log in</Link> · <Link to="/">Home</Link></p></div></div>; // no header any more: a visitor still needs a way out
+  if (!player) return <div className="page-bg"><div className="page-message">{signInNotice && <p className="alert" role="alert">{signInNotice}</p>}<p>Please log in to manage settings.</p><p className="signed"><Link to="/login">Log in</Link> · <Link to="/">Home</Link></p></div></div>; // no header any more: a visitor still needs a way out
 
   const edit = (patch) => { setNotice(null); setEdits((e) => ({ ...e, ...patch })); };
   const editProfile = (name) => (e) => { setProfileError(""); edit({ [name]: e.target.value }); };
