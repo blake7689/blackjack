@@ -54,11 +54,12 @@ jobs:
       - name: Post-deploy probe
         if: github.event_name == 'push'
         env:
-          SITE_URL: ${{ steps.builddeploy.outputs.static_web_app_url }}
+          # Not static_web_app_url: with "Set default domain" on, the azurestaticapps host answers 301.
+          SITE_URL: https://blakejack.win
         run: |
           # Each check retries every 5 s until its own 90 s deadline, then fails naming the check and the last reason.
           API=https://blackjack-api-blake.azurewebsites.net/api/auth/login
-          ORIGIN=https://lively-sky-084c84203.2.azurestaticapps.net
+          ORIGIN=https://blakejack.win
           tmp=$(mktemp -d)
           check() { # check <name> <fn>; fn sets $why and returns 1 on failure, $ok on success
             local start=$SECONDS end=$((SECONDS+90))

@@ -11,7 +11,7 @@ export default defineConfig({
   workers: 1, // one real account: parallel tests would race on its balance
   reporter: [['list']], // no html report: nothing is uploaded and a trace could hold the sign-in
   use: {
-    baseURL: process.env.LIVE_SITE_URL ?? 'https://lively-sky-084c84203.2.azurestaticapps.net',
+    baseURL: process.env.LIVE_SITE_URL ?? 'https://blakejack.win',
     // Off: traces, videos and screenshots of the signed-in page could leak the account.
     trace: 'off',
     video: 'off',
