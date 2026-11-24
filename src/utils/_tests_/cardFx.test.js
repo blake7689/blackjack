@@ -18,7 +18,7 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); document.body.inner
 function table() {
   document.body.innerHTML = `
     <div class="stage-in">
-      <div class="discard"><div class="mouth"></div></div>
+      <div class="discard"><div class="discard-card"></div></div>
       <div class="dealer-hand"><div class="fan-row"><div class="card" id="d1"><div class="cf"><img src="/cards/king.webp" alt="king of hearts"></div></div></div></div>
       <div class="seats"><div class="fan-row">
         <div class="card" id="p1"><div class="cf"></div></div>
@@ -26,7 +26,7 @@ function table() {
       </div></div>
     </div>`;
   place(document.querySelector(".stage-in"), { left: 10, top: 20, width: 800, height: 500 });
-  place(document.querySelector(".discard .mouth"), { left: 30, top: 40, width: 40, height: 58 });
+  place(document.querySelector(".discard .discard-card"), { left: 30, top: 40, width: 40, height: 58 }); // its middle is (50, 69)
   place(document.getElementById("d1"), { left: 300, top: 60, width: 60, height: 87 });
   place(document.getElementById("p1"), { left: 300, top: 300, width: 60, height: 87 });
   place(document.getElementById("p2"), { left: 380, top: 300, width: 60, height: 87 });
@@ -58,8 +58,9 @@ describe("sweepCards (end of round)", () => {
     const slides = animations.filter((a) => a.options.duration === SWEEP_MS);
     expect(slides.map((a) => a.options.delay)).toEqual([0, 45, 90]);
     expect(slides.every((a) => a.options.fill === "both")).toBe(true);
-    // The dealer's card travels from its centre (330, 103.5) to the pile's corner (30, 40): the pile's top left, in px.
-    expect(slides[0].frames[1].translate).toBe("-300px -63.5px");
+    // The dealer's card travels from its centre (330, 103.5) to the middle of the pile's top card (50, 69), so it lands exactly on it (L2-10), in px.
+    expect(slides[0].frames[1].translate).toBe("-280px -34.5px");
+    expect(slides[2].frames[1].translate).toBe("-360px -274.5px"); // the sideways card, from its centre (410, 343.5)
     expect(slides[0].frames[1].rotate).toBe("0deg");
     expect(slides[2].frames[0].rotate).toBe("90deg"); // the sideways card squares up as it goes
     expect(slides[0].frames[0].rotate).toBe("0deg");

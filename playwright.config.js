@@ -17,10 +17,10 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   // E2E_CHANNEL=chrome uses the installed Google Chrome where Playwright's own download cannot run (e.g. blocked by security software).
-  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art, chips, animations, sound and screens tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
+  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art, chips, animations, sound, screens, loop1 and loop2 tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.E2E_CHANNEL } },
-    { name: 'phone', testMatch: /(smoke|topup|a11y|split|layout|tableart|chips|animations|sound|screens|loop1)\.spec\.js/, use: { ...devices['Pixel 7'], channel: process.env.E2E_CHANNEL } },
+    { name: 'phone', testMatch: /(smoke|topup|a11y|split|layout|tableart|chips|animations|sound|screens|loop1|loop2)\.spec\.js/, use: { ...devices['Pixel 7'], channel: process.env.E2E_CHANNEL } },
   ],
   webServer: {
     // Port 4174, so a local production preview on 4173 (real API) is never picked up.

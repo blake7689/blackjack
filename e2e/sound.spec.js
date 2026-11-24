@@ -42,7 +42,7 @@ test('turning Sound on enables Volume, Save writes the sound settings, and a han
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect.poll(() => api.saves.length).toBe(1);
   expect(api.saves[0]).toMatchObject({ v: 5, soundOn: true, soundVolume: 70, hapticsOn: true });
-  await expect(page.getByRole('region', { name: 'Save bar' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Unsaved changes', exact: true })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Table', exact: true }).click();
   await placeBet(page);

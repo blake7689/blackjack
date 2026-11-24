@@ -48,6 +48,9 @@ export const initialGameState = {
     soundOn: false, // table sounds and vibration (#86, utils/sound.js): display settings, not rules
     soundVolume: 50, // 0-100
     hapticsOn: false,
+    tableMessages: "hints", // the message line (L2-1, CenterMessage): "all", "hints" (prompts after 5 s idle, results and notices) or "results" (results and notices only)
+    currency: "auto", // the symbol on every amount (L2-2, utils/money.js): "auto" follows the device's language; play money, so only the symbol changes
+    showKeyHints: false, // the keyboard shortcut hints on the dock keys and the rack (L2-3, 900 px and wider; the keys work either way)
   },
   phase: GamePhases.NONE,
   shoe: [],
@@ -109,6 +112,8 @@ const ENUM_SETTINGS = {
   feltTheme: ["green", "blue", "red"],
   accent: ["emerald", "sapphire", "ember", "orchid"],
   mode: ["dark", "light", "system"],
+  tableMessages: ["all", "hints", "results"],
+  currency: ["auto", "USD", "GBP", "EUR"],
 };
 
 // Settings saved on the server (#36) are untrusted: keep known keys of the right type, clamp numbers into range,
@@ -445,11 +450,11 @@ export function gameReducer(state, action) {
       if (bet.side === "insurance") {
         // Only the insurance is void: the hand's own stake is untouched.
         const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, insurance: 0 } : h));
-        return { ...state, hands, pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused your $${bet.amount} insurance bet; the hand is not insured.` };
+        return { ...state, hands, pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused your ${money(bet.amount)} insurance bet; the hand is not insured.` };
       }
       const hands = state.hands.map((h) => (h.tag === bet.handTag ? { ...h, bet: h.bet - bet.amount } : h));
       return { ...state, hands, betCircle: hands.reduce((sum, h) => sum + h.bet, 0),
-        pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused $${bet.amount} of your stake; that hand plays for less.` };
+        pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused ${money(bet.amount)} of your stake; that hand plays for less.` };
     }
 
     case "SETTLE":

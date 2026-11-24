@@ -5,6 +5,7 @@ import { SurrenderOptions } from "../../utils/constants/ruleOptions";
 import { handActions, insuranceStake, roundNet } from "../../utils/blackjackLogic";
 import { effectiveChip, visibleChips } from "../../utils/chips";
 import { money, signed } from "../../utils/money";
+import { OPEN_LAYER } from "../../utils/constants/layers";
 import { Chip } from "../Chip/Chip";
 import { usePlayer } from "../../hooks/usePlayer";
 import { useGameState, useGameActions } from "../../hooks/useGame";
@@ -15,7 +16,6 @@ const NOTHING = { hit: false, double: false, triple: false, split: false, surren
 // Keys never act from these (typing, a dialog); Space and Enter also keep their own action on a focused control. `OPEN_LAYER`: a dialog or the menu is open.
 const NOT_FOR_THE_TABLE = "input, textarea, select, dialog, [role='dialog'], [contenteditable]";
 const OWN_ACTION = "button, a, summary, [role='button']";
-const OPEN_LAYER = "[role='dialog'], .menu:not([hidden])";
 
 const Icon = ({ id }) => <svg aria-hidden="true" focusable="false"><use href={`#${id}`} /></svg>;
 
@@ -24,7 +24,7 @@ const Icon = ({ id }) => <svg aria-hidden="true" focusable="false"><use href={`#
 // shortcut: its `aria-keyshortcuts`, and the hint shown on desktop) are decoration: the label or `name` is the accessible name. A `name` that does not hold the
 // label's words (2x) gets the label as generated content (.glyph), so axe's label-content-name-mismatch has no visible text to compare. The hotkey hint is
 // generated content too (kbd[data-text]): as real text it would count as visible label text and mismatch `name` (Deal). //
-function Key({ label, name, sub, kind = "", off = false, focus = false, icon, hotkey, onClick }) {
+function Key({ label, name, sub, kind = "", off = false, focus = false, icon, hotkey, bar, onClick }) {
   return (
     <button type="button" className={`key ${kind}`} aria-label={name} aria-keyshortcuts={hotkey} aria-disabled={off || undefined} data-focus={focus || undefined}
       onClick={off ? undefined : onClick}>
@@ -32,6 +32,7 @@ function Key({ label, name, sub, kind = "", off = false, focus = false, icon, ho
       <span>{label}</span>
       {sub && <small>{sub}</small>}
       {hotkey && <kbd aria-hidden="true" data-text={hotkey} />}
+      {bar && <span className="bar" aria-hidden="true"><i key={bar.at} style={{ animationDuration: `${bar.ms}ms` }} /></span>}
     </button>
   );
 }
@@ -91,11 +92,13 @@ function ChipRack({ chips, chip, onTap, off }) {
 // and results (the net, the balance, Next hand). `busy`: a card is still flying, so the keys that act wait.
 // Betting (#82): the chip rack, then Undo, Clear, Rebet, 2x and Deal. `chip` is the selected chip (GameBoard holds it: the bet circle bets it too) and
 // `onChip` picks one. A tap on a chip selects it; a second tap on it within 400 ms (timed by hand: a touch fires no dblclick) bets it on the first
-// circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. `shuffling` (#83): the Deal key says
-// "Shuffling" and the betting keys wait; a tap on the dock skips the shuffle (useShuffle listens for it); the rack and keys are dimmed and refuse bets (#147). //
+// circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. `shuffling` (#83): the betting keys
+// wait (the Deal key still says "Deal", L2-4); a tap on the dock skips the shuffle (useShuffle listens for it); the rack and keys are dimmed and refuse bets (#147).
+// While auto deal waits to deal or to continue, GameProvider's `autoBar` ({ type, ms, at }) gives Deal or Next hand a bar that fills over that wait (L2-4);
+// the keyboard hints show only with the `showKeyHints` setting (L2-3, the `hints` class: Dock.css). //
 export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false }) {
   const { player } = usePlayer();
-  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPending, autoDealPaused, cutCardFound } = useGameState();
+  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPaused, autoBar } = useGameState();
   const actions = useGameActions();
   const ref = useRef(null);
   const credits = player ? player.credits : 0; // a signed-out player has nothing to bet or double with
@@ -104,7 +107,6 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   const ending = phase === GamePhases.END_ROUND;
   const betting = phase === GamePhases.PRE_DEAL || ending;
   const wait = shuffling || ending;
-  const shuffleWord = shuffling || (ending && cutCardFound); // the cut card was out: the table shuffles next
   const chips = visibleChips(settings.chipValues, credits);
   const chip = effectiveChip(chips, picked);
   const lastTap = useRef({ chip: 0, at: 0 });
@@ -176,8 +178,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
         <Key label="Rebet" icon="i-rebet" {...bind("B", wait || betCircle > 0 || initialBet <= 0 || credits < initialBet, () => actions.addBet(initialBet))} />
         <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", wait || betCircle === 0 || credits < betCircle, () => actions.addBet(betCircle))} />
         {pause}
-        <Key label={shuffleWord ? "Shuffling" : "Deal"} name={shuffleWord ? "Shuffling" : "Deal"} kind="primary big wider" sub={autoDealPending && !shuffleWord ? "auto" : undefined}
-          {...bind("Space", wait || betCircle === 0 || !player, actions.deal)} />
+        <Key label="Deal" kind="primary big wider" bar={autoBar?.type === "DEAL" ? autoBar : undefined} {...bind("Space", wait || betCircle === 0 || !player, actions.deal)} />
       </>
     );
   } else if (phase === GamePhases.OFFERS) {
@@ -206,7 +207,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     rowB = (
       <>
         {pause}
-        <Key label="Next hand" icon="i-next" kind="primary big wider" focus {...bind("Space", false, actions.continueRound)} />
+        <Key label="Next hand" icon="i-next" kind="primary big wider" focus bar={autoBar?.type === "CONTINUE" ? autoBar : undefined} {...bind("Space", false, actions.continueRound)} />
       </>
     );
   } else {
@@ -234,8 +235,8 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
 
   // .options-wrap: the hook for "the keys that act wait while cards fly" (the e2e tests watch it; .board.busy .options-wrap is inert).
   return (
-    <footer className="dock" aria-label="Controls">
-      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face} data-shuffling={shuffleWord || undefined}
+    <footer className={`dock${settings.showKeyHints ? " hints" : ""}`} aria-label="Controls">
+      <div ref={ref} className={`dock-in${acting ? " options-wrap" : ""}`} data-face={face}
         role={face === "offers" ? "group" : undefined} aria-label={face === "offers" ? "Offers" : undefined}>
         <div className="dock-row">{rowA}</div>
         <div className="dock-row">{rowB}</div>

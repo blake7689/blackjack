@@ -90,12 +90,16 @@ export default function GameBoard() {
   // go with the round's state a moment later). The light follows the hand in play; the verdict and the result light show once the hands are settled.
   const speed = Number(settings.playTimeout);
   const { peek, hideHole } = usePeek({ phase, dealer, dealerHole, settings, round: nextHandTag, speed });
+  // The pile counts the swept cards from the moment the last one lands (`swept`), not when the round's state follows a beat later: the pile is already there, at its
+  // level, under the copies when they go, so nothing flickers or jumps (L2-10).
+  const [swept, setSwept] = useState(false);
   useLayoutEffect(() => {
     if (phase !== GamePhases.END_ROUND) return;
     const fx = sweepCards();
     if (!fx) return;
     const undo = reserve(performance.now() + fx.ms + 50);
-    return () => { undo(); fx.cancel(); };
+    const landedAt = setTimeout(() => setSwept(true), fx.ms);
+    return () => { undo(); fx.cancel(); clearTimeout(landedAt); setSwept(false); };
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
   const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
@@ -107,7 +111,7 @@ export default function GameBoard() {
     playSound(result);
     vibrate(result);
   }, [kind]);
-  const shownDiscard = shuf && !shuf.emptied ? shuf.pile : discard;
+  const shownDiscard = shuf && !shuf.emptied ? shuf.pile : swept ? discard + onTable : discard;
 
   // The seats: the hands, or (before the deal) one empty seat holding the chips in the circle. Keyed by tag, never by index.
   const seats = hands.length ? hands : [{ tag: "bet", cards: [], hiddenCards: [], bet: betCircle, result: HandResult.NONE }];
@@ -174,6 +178,8 @@ export default function GameBoard() {
               heard={verdict && resultsLine(hands, dealer, settings.showTotals)}
               shuffling={!!shuf}
               peek={peek}
+              messages={settings.tableMessages}
+              hand={selectedHandIndex}
             />
           </div>
 

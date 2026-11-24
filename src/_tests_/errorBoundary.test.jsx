@@ -18,20 +18,22 @@ describe("ErrorBoundary", () => {
     expect(screen.queryByText("Can't reach the table")).toBeNull();
   });
 
-  it("shows the Error screen instead of a blank page when a child throws, and logs the error", () => {
+  it("shows the crash screen instead of a blank page when a child throws, and logs the error (L2-13: not the connection wording)", () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     render(<ErrorBoundary><Boom /></ErrorBoundary>);
-    expect(screen.getByRole("heading", { level: 1, name: "Can't reach the table" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.getByText("The table hit an error. Reload to keep playing; your balance is safe on your account.")).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table|connection/)).toBeNull();
     expect(error).toHaveBeenCalledWith(expect.objectContaining({ message: "render failed" }));
   });
 
-  it("Try again reloads the page and Home goes to / with a full load", () => {
+  it("Reload reloads the page and Home goes to / with a full load", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
     const reload = vi.fn();
     const assign = vi.fn();
     vi.stubGlobal("location", { reload, assign });
     render(<ErrorBoundary><Boom /></ErrorBoundary>);
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
     expect(reload).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByRole("link", { name: "Home" }));
     expect(assign).toHaveBeenCalledWith("/");

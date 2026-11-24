@@ -162,13 +162,23 @@ describe("Dock", () => {
       expect([dimmed("Clear"), dimmed("Deal")]).toEqual([false, false]);
     });
 
-    it("says 'auto' on Deal while an automatic deal is armed", () => {
+    it("shows the countdown bar on Deal while an automatic deal waits, and never an 'auto' line (L2-4)", () => {
       const { container, rerender, gameState } = show(betting({ betCircle: 5 }));
-      expect(key("Deal").querySelector("small")).toBeNull();
-      gameState.autoDealPending = true;
+      expect(key("Deal").querySelector(".bar")).toBeNull();
+      gameState.autoBar = { type: "DEAL", ms: 3000, at: 1 };
       rerender(<Dock busy={false} />);
-      expect(key("Deal").querySelector("small").textContent).toBe("auto");
-      expect(key("Deal").getAttribute("aria-label")).toBe("Deal"); // the name does not change
+      const bar = key("Deal").querySelector(".bar");
+      expect(bar.getAttribute("aria-hidden")).toBe("true");
+      expect(bar.firstChild.style.animationDuration).toBe("3000ms"); // the real remaining wait of the one timer
+      expect(key("Deal").querySelector("small")).toBeNull();
+      expect(key("Deal").textContent).toBe("Deal"); // the name does not change
+      gameState.autoBar = { type: "DEAL", ms: 3000, at: 2 }; // the timer restarted: a new bar element, so the animation starts over
+      const first = bar.firstChild;
+      rerender(<Dock busy={false} />);
+      expect(key("Deal").querySelector(".bar i")).not.toBe(first);
+      gameState.autoBar = { type: "CONTINUE", ms: 1000, at: 3 }; // the other timer step belongs to Next hand
+      rerender(<Dock busy={false} />);
+      expect(key("Deal").querySelector(".bar")).toBeNull();
       expect(container.querySelector(".options-wrap")).toBeNull(); // betting is not a busy-hidden face
     });
 

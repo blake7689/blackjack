@@ -74,7 +74,11 @@ const bump = () => { landed.version++; landed.listeners.forEach((l) => l()); };
 export const markLanded = (id) => { if (!landed.ids.has(id)) { landed.ids.add(id); bump(); } };
 export const clearLanded = () => { if (landed.ids.size) { landed.ids.clear(); bump(); } };
 
+// The shoe (state.shoeSeq) the board last played or skipped its shuffle for (useShuffle): a board that mounts again for the same shoe, back from Settings, plays nothing (L2-11).
+export const shuffled = { seq: null };
+
 export function resetCardStage() {
+  shuffled.seq = null;
   queue.free = 0;
   queue.gate = 0;
   queue.holds.clear();

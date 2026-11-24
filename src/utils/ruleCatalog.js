@@ -20,7 +20,7 @@ export const GROUPS = ["Shoe", "Dealer", "Payouts", "Doubling", "Splitting", "Su
 export const RULES_TITLE = "Table rules";
 export const VARIATIONS_TITLE = "House variations";
 export const ADVANCED_TITLE = "Advanced";
-export const EDGE_NOTE = "House edge is an estimate for a player who uses basic strategy and declines insurance: published rule-by-rule figures added together, so it is approximate. A plus sign means a worse deal for you. Insurance, House variations and Advanced options are not counted.";
+export const EDGE_NOTE = "House edge is an estimated house edge over the player who uses basic strategy and declines insurance. Figure is approximate. A plus sign means a worse deal for you, as the house would gain advantage. Insurance, House variations and Advanced options are not counted.";
 
 // A change of dealer mode also moves blackjackPaysImmediately to the new mode's preset pairing (true with a peek, false without a hole
 // card or with no peek), but only while it still holds the pairing of the current mode: a value the player set on purpose stays.
@@ -118,7 +118,18 @@ export const APP_SETTINGS = {
   feltTheme: { label: "Felt", hint: "Colour of the table cloth" },
   accent: { label: "Accent", hint: "Colour of keys and highlights" },
   mode: { label: "Mode", hint: "Dark, light or follow your device" },
+  tableMessages: { label: "Table messages", hint: "What the line on the felt says" },
+  showKeyHints: { label: "Show keyboard shortcuts", sub: "Key hints on the controls", hint: "Shortcut keys on the buttons" },
+  currency: { label: "Currency", hint: "Symbol on every amount (play money)" },
 };
+
+// The choices of the two list settings above (label, and for Table messages a line of what it does): Settings' radio groups read them.
+export const TABLE_MESSAGES = [
+  { value: "all", label: "All", hint: "Every message, as it happens" },
+  { value: "hints", label: "Hints", hint: "Prompts after a few idle seconds, plus results and notices" },
+  { value: "results", label: "Celebrations only", hint: "Only results and notices" },
+];
+export const CURRENCIES = [{ value: "auto", label: "Auto" }, { value: "USD", label: "$" }, { value: "GBP", label: "£" }, { value: "EUR", label: "€" }];
 
 // The rules that apply to these settings (a rule that does not apply has no effect and is not shown).
 export const visibleIn = (settings) => RULE_CATALOG.filter((rule) => rule.showWhen?.(settings) ?? true);

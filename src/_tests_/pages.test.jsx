@@ -95,11 +95,10 @@ describe("Home", () => {
     expect(container.querySelector("h1 svg").getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("hides the decorative hero from assistive tech and points its cards at the .webp faces", () => {
+  it("has no felt hero (L2-5): the wordmark, the actions and nothing decorative", () => {
     const { container } = renderUI(<Home />);
-    const hero = container.querySelector(".hero");
-    expect(hero.getAttribute("aria-hidden")).toBe("true");
-    expect([...hero.querySelectorAll("img")].map((img) => img.getAttribute("src"))).toEqual(["/cards/ace_of_spades.webp", "/cards/king_of_hearts.webp"]);
+    expect(container.querySelector(".hero, img")).toBeNull();
+    expect(container.querySelector("main.page.home h1 svg")).toBeTruthy();
   });
 
   it("shows Loading, not Home, while the table is about to start (DESIGN section 8)", () => {
@@ -141,10 +140,11 @@ describe("Game", () => {
     expect(screen.getByText("Place your bets")).toBeTruthy();
   });
 
-  it("opens with the shuffle when the round has not started (#83): the line and the Deal key say Shuffling", () => {
+  it("opens with the shuffle when the round has not started (#83): the line says Shuffling, the dock waits and Deal still says Deal", () => {
     renderUI(<Game />, { path: "/game", game: { phase: GamePhases.PRE_DEAL } });
     expect(screen.getByText("Shuffling", { selector: ".msg" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Shuffling" }).getAttribute("aria-disabled")).toBe("true");
+    expect(screen.getByRole("button", { name: "Deal" }).getAttribute("aria-disabled")).toBe("true");
+    expect(document.querySelector(".rack-wrap").classList.contains("off")).toBe(true);
   });
 });
 
@@ -234,6 +234,19 @@ describe("Log in (/login)", () => {
     await flush();
     expect(location()).toBe("/");
   });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
+  });
 });
 
 describe("Log in and Create an account when already signed in", () => {
@@ -253,6 +266,19 @@ describe("Log in and Create an account when already signed in", () => {
     expect(location()).toBe("/login");
     await act(async () => finish(testPlayer));
     expect(location()).toBe("/");
+  });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
   });
 });
 
@@ -441,5 +467,18 @@ describe("the Loading and Error screens (#87)", () => {
     fireEvent.click(screen.getByRole("link", { name: "Home" }));
     expect(onHome).toHaveBeenCalledOnce();
     expect(location()).toBe("/");
+  });
+
+  it("the crash variant says something went wrong, offers Reload and Home, and shares the Error screen's frame (L2-13)", () => {
+    const onRetry = vi.fn();
+    const onHome = vi.fn();
+    const { container } = renderUI(<ErrorScreen crash onRetry={onRetry} onHome={onHome} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Something went wrong" })).toBeTruthy();
+    expect(screen.queryByText(/Can't reach the table/)).toBeNull();
+    expect(container.querySelector("main.page .btn-col .btn.primary").textContent).toBe("Reload");
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+    expect(onRetry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole("link", { name: "Home" }));
+    expect(onHome).toHaveBeenCalledOnce();
   });
 });

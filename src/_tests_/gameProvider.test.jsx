@@ -9,6 +9,7 @@ import { GamePhases } from "../utils/constants/gamePhases";
 import { stackedShoe } from "../utils/_tests_/stackedShoe";
 import * as cards from "../utils/cards";
 import { queue } from "../utils/cardAnimation";
+import { money, setCurrency } from "../utils/money";
 
 // Saved settings on the server (#36), controlled per test.
 const remote = vi.hoisted(() => ({ getSettings: vi.fn(), saveSettings: vi.fn(), token: null }));
@@ -786,6 +787,63 @@ describe("GameProvider auto deal (#88)", () => {
       expect(JSON.parse(localStorage.getItem("bj.look")).feltTheme).toBe("blue");
     });
   });
+
+  // The countdown bar's data (L2-4): GameProvider gives `autoBar` while the DEAL or CONTINUE step waits, with the real length of that wait.
+  describe("the countdown bar's data (L2-4)", () => {
+    it("is null until an automatic deal waits, then { DEAL, the wait, when it began } for the delay, and null again once it deals", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      expect(ctx.state.autoBar).toBeNull();
+      playOut(ctx);
+      expect(ctx.state.autoBar).toMatchObject({ type: "CONTINUE", ms: 1000 }); // the results move on after one Rate of Play
+      toArmed(ctx);
+      expect(ctx.state.autoBar).toMatchObject({ type: "DEAL", ms: DELAY });
+      const began = ctx.state.autoBar.at;
+      expect(typeof began).toBe("number");
+      advance(DELAY);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+      expect(ctx.state.autoBar).toBeNull();
+    });
+
+    it("the wait is the real one: a card still in the air makes the DEAL wait (and its bar) longer, and a restarted timer is a new bar", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      const first = ctx.state.autoBar;
+      queue.free = performance.now() + 6000;
+      act(() => { ctx.actions.changeSettings({ autoDealDelay: 2000 }); }); // re-arms the DEAL timer
+      expect(ctx.state.autoBar).not.toBe(first);
+      expect(ctx.state.autoBar.ms).toBe(6000 + 600); // max(2000, 6000 + 0.3 x 2000), as the timer itself waits
+    });
+
+    it("goes when auto deal is paused, a bet changes or the player leaves the table, and has none without auto deal", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      playOut(ctx);
+      toArmed(ctx);
+      expect(ctx.state.autoBar).not.toBeNull();
+      act(() => ctx.actions.pauseAutoDeal());
+      expect(ctx.state.autoBar).toBeNull();
+      act(() => ctx.actions.resumeAutoDeal());
+      act(() => ctx.navigate("/settings"));
+      expect(ctx.state.autoBar).toBeNull();
+      shoes.push(threeRounds());
+      cleanup();
+      const manual = startAuto({ settings: { resetInitialBet: true } });
+      playOut(manual.ctx);
+      expect(manual.ctx.state.autoBar).toBeNull();
+    });
+
+    it("the step timers that are not auto deal's (the dealer, settling) have no bar", () => {
+      shoes.push(threeRounds());
+      const { ctx } = startAuto();
+      tick(); // DEAL_DONE
+      act(() => ctx.actions.stand(0));
+      expect(ctx.state.phase).not.toBe(GamePhases.POST_ROUND);
+      expect(ctx.state.autoBar).toBeNull();
+    });
+  });
 });
 
 describe("GameProvider saved table rules (#91)", () => {
@@ -1401,5 +1459,89 @@ describe("a reload on /game while signed in (L1-14)", () => {
     await flush();
     expect(ctx.pathname).toBe("/game");
     expect(container.textContent).toContain("the table");
+  });
+});
+
+describe("GameProvider: the reload warning while a hand is in play (L2-12)", () => {
+  // A page unload asks the browser's "Leave site?" through beforeunload: preventDefault and a returnValue. `asks` fires one and says whether it did.
+  const asks = () => {
+    const event = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  const start = (codes = ["10", "10", "9", "6", "K"]) => {
+    shoes.push(stackedShoe(codes));
+    const view = setup();
+    act(() => view.ctx.actions.startGame());
+    return view;
+  };
+
+  it("does not ask before a hand is dealt, with a bet on the table, or on a table not started", () => {
+    const view = setup();
+    expect(asks()).toBe(false); // nothing started
+    const { ctx } = start();
+    expect(asks()).toBe(false);
+    act(() => ctx.actions.addBet(10));
+    expect(asks()).toBe(false); // a bet is only chips on the felt until it is dealt
+    view.unmount();
+  });
+
+  it("asks from the deal until the round is settled: dealing, the turn, the dealer, the results", () => {
+    const { ctx } = start();
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    expect(asks()).toBe(true);
+    tick(); // DEAL_DONE
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+    expect(asks()).toBe(true);
+    act(() => ctx.actions.stand(0));
+    expect(asks()).toBe(true); // the dealer plays
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(asks()).toBe(false); // settled: between rounds
+  });
+
+  it("asks while the offers wait too, and stops when the round is swept away (Next hand)", () => {
+    const { ctx } = start(["10", "A", "9", "6", "K"]);
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    tick();
+    expect(ctx.state.phase).toBe(GamePhases.OFFERS);
+    expect(asks()).toBe(true);
+    act(() => ctx.actions.declineOffers());
+    for (let i = 0; i < 4 && ctx.state.phase !== GamePhases.PLAYER_TURN; i++) tick();
+    act(() => ctx.actions.stand(0));
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    act(() => ctx.actions.continueRound());
+    expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+    expect(asks()).toBe(false);
+  });
+
+  it("asks on any page (a hand left in play behind Settings is lost by a reload too), and the listener goes with the provider", () => {
+    const view = start();
+    act(() => view.ctx.actions.addBet(10));
+    act(() => view.ctx.actions.deal());
+    act(() => view.ctx.navigate("/settings"));
+    expect(asks()).toBe(true);
+    view.unmount();
+    expect(asks()).toBe(false);
+  });
+});
+
+describe("GameProvider: the currency setting reaches money() (L2-2)", () => {
+  const SYMBOLS = (n) => `${money(n)}`;
+  afterEach(() => setCurrency("USD"));
+
+  it("a saved currency sets the symbol every amount shows, and changing it changes it at once", async () => {
+    remote.getSettings.mockResolvedValue({ v: 5, currency: "GBP" });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.currency).toBe("GBP");
+    expect(SYMBOLS(10)).toBe("£10");
+    act(() => { ctx.actions.changeSettings({ currency: "EUR" }); });
+    expect(SYMBOLS(10)).toBe("€10");
+    act(() => { ctx.actions.changeSettings({ currency: "auto" }); });
+    expect(SYMBOLS(10)).toBe("$10"); // jsdom\x27s language is en-US
   });
 });

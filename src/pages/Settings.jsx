@@ -6,7 +6,7 @@ import { useNavActions } from "../hooks/useNavActions";
 import { useTheme } from "../hooks/useTheme";
 import { GamePhases } from "../utils/constants/gamePhases";
 import { SETTING_RANGES } from "../utils/gameReducer";
-import { RULES_TITLE, APP_SETTINGS, resetsTable } from "../utils/ruleCatalog";
+import { RULES_TITLE, APP_SETTINGS, TABLE_MESSAGES, CURRENCIES, resetsTable } from "../utils/ruleCatalog";
 import { rulePresetOf } from "../utils/rulePresets";
 import { houseEdge, formatEdge } from "../utils/houseEdge";
 import { SPEED_STOPS, posToMs, msToPos, speedName, speedText } from "../utils/gameSpeed";
@@ -15,7 +15,7 @@ import { leaveGuard } from "../utils/leaveGuard";
 import { validateField } from "../utils/validation";
 import { ALLOWED_CHIPS } from "../utils/constants/chips";
 import { parseChipValues, formatChipValues } from "../utils/chips";
-import { money } from "../utils/money";
+import { money, symbolOf } from "../utils/money";
 import { Chip } from "../components/Chip/Chip";
 import RulesSection from "../components/RulesSection/RulesSection";
 import ConfirmDialog from "../components/SettingsControls/ConfirmDialog";
@@ -30,8 +30,8 @@ import "./pages.css";
 const SECTIONS = ["rules", "play", "chips", "look", "sound", "account"];
 const PROFILE = ["userName", "email", "firstName", "lastName"];
 const PROFILE_FIELDS = { userName: ["Username", "username"], email: ["Email", "email"], firstName: ["First name", "given-name"], lastName: ["Last name", "family-name"] };
-const PLAY_KEYS = ["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay"];
-const LOOK_KEYS = ["feltTheme", "accent", "mode"];
+const PLAY_KEYS = ["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "tableMessages", "showKeyHints"];
+const LOOK_KEYS = ["feltTheme", "accent", "mode", "currency"];
 const SOUND_KEYS = ["soundOn", "soundVolume", "hapticsOn"];
 const MODES = [["dark", "Dark"], ["light", "Light"], ["system", "Device"]];
 const FAILED_SAVE = "Couldn't save your settings to your account. They apply here until you reload.";
@@ -168,7 +168,7 @@ export default function Settings() {
     rules: `${rulePresetOf(draft)} · ${formatEdge(houseEdge(draft))} house edge`,
     play: `${speedName(draft.playTimeout)} speed · totals ${on(draft.showTotals)} · count ${on(draft.showCardCount)}${draft.autoDeal ? " · auto deal" : ""}`,
     chips: `${chosenChips.length} of ${ALLOWED_CHIPS.length} chips`,
-    look: `${FELTS.find(([k]) => k === draft.feltTheme)[1]} felt · ${ACCENTS.find(([k]) => k === draft.accent)[1]} · ${MODES.find(([k]) => k === draft.mode)[1]}`,
+    look: `${FELTS.find(([k]) => k === draft.feltTheme)[1]} felt · ${ACCENTS.find(([k]) => k === draft.accent)[1]} · ${MODES.find(([k]) => k === draft.mode)[1]} · ${symbolOf(draft.currency)}`,
     sound: `Sound ${on(draft.soundOn)}${draft.soundOn ? ` ${draft.soundVolume}%` : ""} · vibration ${on(draft.hapticsOn)}`,
     account: `${draft.firstName} ${draft.lastName}`.trim() || "No name",
   };
@@ -203,6 +203,10 @@ export default function Settings() {
             <Slider id="autoDealDelay" label={text("autoDealDelay").label} hint={text("autoDealDelay").hint} min={SETTING_RANGES.autoDealDelay[0]} max={SETTING_RANGES.autoDealDelay[1]}
               step={500} value={draft.autoDealDelay} text={`${(draft.autoDealDelay / 1000).toFixed(1)} s`} onChange={(v) => edit({ autoDealDelay: v })} />
           )}
+          <Row id="tableMessages" label={text("tableMessages").label} hint={text("tableMessages").hint}>
+            {TABLE_MESSAGES.map(({ value, label, hint }) => <Radio key={value} checked={draft.tableMessages === value} data-pick-messages={value} title={hint} onClick={() => edit({ tableMessages: value })}><span>{label}</span></Radio>)}
+          </Row>
+          <div className="pc-only">{flag("showKeyHints")}</div>
         </>)}
 
         {section("chips", (
@@ -237,6 +241,9 @@ export default function Settings() {
           </Row>
           <Row id="mode" label={text("mode").label} hint={text("mode").hint} layout="look">
             {MODES.map(([key, name]) => <Radio key={key} checked={draft.mode === key} data-pick-mode={key} onClick={() => edit({ mode: key })}><span>{name}</span></Radio>)}
+          </Row>
+          <Row id="currency" label={text("currency").label} hint={text("currency").hint} layout="look">
+            {CURRENCIES.map(({ value, label }) => <Radio key={value} checked={draft.currency === value} data-pick-currency={value} onClick={() => edit({ currency: value })}><span>{label}</span></Radio>)}
           </Row>
         </>)}
 
@@ -287,7 +294,7 @@ export default function Settings() {
       </div>
 
       {count > 0 && (
-        <div className="dirty" role="region" aria-label="Save bar">
+        <div className="dirty" role="region" aria-label="Unsaved changes">
           <span className="dirty-txt" aria-live="polite">{count} unsaved change{count === 1 ? "" : "s"}</span>
           <button type="button" className="btn plain" onClick={discard}>Discard</button>
           <button type="button" className="btn primary" aria-disabled={!canSave || saving} onClick={onSave}>Save changes</button>

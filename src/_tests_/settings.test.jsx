@@ -17,7 +17,7 @@ const flush = async () => { for (let i = 0; i < 4; i++) await act(async () => {}
 const sectionButton = (name) => screen.getByRole("button", { name: new RegExp(`^${name}`) });
 const show = (name) => { if (sectionButton(name).getAttribute("aria-expanded") === "false") fireEvent.click(sectionButton(name)); };
 const expanded = () => SECTION_NAMES.filter((n) => sectionButton(n).getAttribute("aria-expanded") === "true");
-const bar = () => screen.queryByRole("region", { name: "Save bar" });
+const bar = () => screen.queryByRole("region", { name: "Unsaved changes" });
 const saveButton = () => screen.getByRole("button", { name: "Save changes" });
 const discardButton = () => screen.getByRole("button", { name: "Discard" });
 const countText = () => within(bar()).getByText(/unsaved change/).textContent;
@@ -62,7 +62,7 @@ describe("Settings: the page", () => {
     expect(screen.getByRole("link", { name: "Home" }).getAttribute("href")).toBe("/");
   });
 
-  it("has a Table button, a title, six sections and no tabs; nothing is changed, so there is no Save bar", () => {
+  it("has a Table button, a title, six sections and no tabs; nothing is changed, so there is no save bar", () => {
     open();
     expect(screen.getByRole("button", { name: "Table" })).toBeTruthy();
     expect(screen.queryByText("Back to game")).toBeNull();
@@ -275,7 +275,7 @@ describe("Settings: the Table rules section is part of the draft", () => {
     expect(gameActions.changeSetting).not.toHaveBeenCalled();
   });
 
-  it("a rule changed and changed back is not a change: no Save bar, nothing to send", () => {
+  it("a rule changed and changed back is not a change: no save bar, nothing to send", () => {
     open();
     show("Table rules");
     fireEvent.click(radio("Deck size", "8"));
@@ -1288,5 +1288,60 @@ describe("Settings: hints", () => {
     expect(document.querySelector(".hint-tip").textContent).toBe("Hand totals on the table");
     expect(screen.getByRole("switch", { name: /^Show hand totals/ }).checked).toBe(true);
     expect(bar()).toBeNull();
+  });
+});
+
+describe("Settings: Table messages, Show keyboard shortcuts and Currency (L2-1, L2-2, L2-3)", () => {
+  const messages = () => within(screen.getByRole("radiogroup", { name: "Table messages" })).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked"), r.getAttribute("data-pick-messages")]);
+  const currencies = () => within(screen.getByRole("radiogroup", { name: "Currency" })).getAllByRole("radio").map((r) => [r.textContent, r.getAttribute("aria-checked"), r.getAttribute("data-pick-currency")]);
+
+  it("Gameplay has Table messages as a three-way choice, Hints chosen, and saves the pick with the rest", () => {
+    const { gameActions } = open({}, { messages: "hints" }); // renderUI makes the fake table say "all" unless asked
+    show("Gameplay");
+    expect(messages()).toEqual([["All", "false", "all"], ["Hints", "true", "hints"], ["Celebrations only", "false", "results"]]);
+    fireEvent.click(screen.getByRole("radio", { name: "Celebrations only" }));
+    expect(messages()[2][1]).toBe("true");
+    expect(countText()).toBe("1 unsaved change");
+    fireEvent.click(saveButton());
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ tableMessages: "results" }]]);
+  });
+
+  it("Table messages shows the saved choice, and is a Gameplay setting (it is counted there, not under Table rules)", () => {
+    open(withSettings({ tableMessages: "all" }));
+    show("Gameplay");
+    expect(messages()[0][1]).toBe("true");
+    fireEvent.click(screen.getByRole("radio", { name: "Hints" }));
+    expect(within(sectionButton("Gameplay")).getByText(/unsaved changes/)).toBeTruthy();
+    expect(within(sectionButton("Table rules")).queryByText(/unsaved changes/)).toBeNull();
+  });
+
+  it("Show keyboard shortcuts is a switch, off by default, in Gameplay inside the desktop-only wrapper (the phone layout hides it), and saves", () => {
+    const { gameActions } = open();
+    show("Gameplay");
+    const hints = screen.getByRole("switch", { name: /^Show keyboard shortcuts/ });
+    expect(hints.checked).toBe(false);
+    expect(hints.closest(".pc-only")).not.toBeNull();
+    fireEvent.click(hints);
+    expect(hints.checked).toBe(true);
+    fireEvent.click(saveButton());
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ showKeyHints: true }]]);
+  });
+
+  it("Appearance has Currency (Auto, $, £, €), Auto chosen, saves the pick, and the summary names it", () => {
+    const { gameActions } = open();
+    show("Appearance");
+    expect(currencies()).toEqual([["Auto", "true", "auto"], ["$", "false", "USD"], ["£", "false", "GBP"], ["€", "false", "EUR"]]);
+    expect(sectionButton("Appearance").textContent).toContain("Green felt · Emerald · Dark · $"); // Auto shows what it resolves to (jsdom: en-US)
+    fireEvent.click(document.querySelector("[data-pick-currency=GBP]"));
+    expect(sectionButton("Appearance").textContent).toContain("Green felt · Emerald · Dark · £");
+    fireEvent.click(saveButton());
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ currency: "GBP" }]]);
+  });
+
+  it("Currency shows the saved choice", () => {
+    open(withSettings({ currency: "EUR" }));
+    show("Appearance");
+    expect(currencies().find(([, on]) => on === "true")[2]).toBe("EUR");
+    expect(sectionButton("Appearance").textContent).toContain("· €");
   });
 });

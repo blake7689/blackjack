@@ -36,11 +36,14 @@ function Location() {
   return <div data-testid="location">{pathname + search + hash}</div>;
 }
 
-// Renders ui with fake player and game contexts at `path`; returns the fakes for assertions.
-export function renderUI(ui, { player = {}, game = {}, actions = {}, path = "/" } = {}) {
+// Renders ui with fake player and game contexts at `path`; returns the fakes for assertions. `messages` is the Table messages setting (L2-1): "all" here, so a test that
+// reads the message line sees every line as it happens; a test of the Hints or Celebrations only modes passes it.
+export function renderUI(ui, { player = {}, game = {}, actions = {}, path = "/", messages = "all" } = {}) {
   const playerCtx = fakePlayer(player);
   const gameActions = fakeActions(actions);
   const gameState = { ...initialGameState, ...game };
+  let settings = { ...gameState.settings, tableMessages: messages };
+  Object.defineProperty(gameState, "settings", { enumerable: true, get: () => settings, set: (next) => { settings = { ...next, tableMessages: messages }; } }); // a test that swaps the whole state in (Object.assign) keeps the setting
   // A wrapper (not inline JSX) so rerender() keeps the providers.
   const wrapper = ({ children }) => (
     <MemoryRouter initialEntries={[path]}>

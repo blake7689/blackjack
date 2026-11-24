@@ -230,10 +230,11 @@ test('Undo takes the armed auto deal back, and the round is not dealt (#88)', as
   await page.getByRole('button', { name: 'Hit', exact: true }).click({ timeout: 15_000 });
   await page.getByRole('button', { name: 'Stay', exact: true }).click({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: /^Bet spot 1, \$10/ })).toBeVisible({ timeout: 30_000 }); // the rebet is on the table, a deal armed
-  await expect(key(page, 'Deal')).toContainText('auto');
+  await expect(key(page, 'Deal').locator('.bar')).toHaveCount(1); // the countdown bar (L2-4): a deal is armed
+  await expect(key(page, 'Deal')).not.toContainText('auto');
   await key(page, 'Undo').click();
   await expect(page.getByRole('button', { name: /^Bet spot 1, \$0/ })).toBeVisible();
-  await expect(key(page, 'Deal')).not.toContainText('auto'); // disarmed
+  await expect(key(page, 'Deal').locator('.bar')).toHaveCount(0); // disarmed
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible(); // and it stays there: no deal follows
   expect(api.bets, 'only round 1 reached the ledger').toHaveLength(1);
 });
@@ -248,8 +249,8 @@ test('no bet while the table shuffles: the rack is dimmed, a chip tap, the keys 
   const rack = page.locator('.rack-wrap');
   await expect(rack).toHaveClass(/off/); // the shuffle is on
   for (const v of [5, 10, 25]) await dimmed(chip(page, v));
-  await expect(key(page, 'Shuffling')).toBeVisible();
-  await dimmed(key(page, 'Shuffling'));
+  await expect(key(page, 'Deal')).toBeVisible(); // it never says Shuffling (L2-4)
+  await dimmed(key(page, 'Deal'));
   await expect(spot(page)).toBeDisabled();
   await expect(page.getByText('Shuffling', { exact: true }).first()).toBeVisible();
   for (const k of ['3', '3', 'b', 'x']) await page.keyboard.press(k); // none of them bets (the key listener may not be attached yet: the taps below check it too)

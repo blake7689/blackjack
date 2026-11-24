@@ -149,8 +149,10 @@
 /* the hint bubble and the "i": an 18 px mark in a 44 px tap area (::before) */
 .hint-tip { position: fixed; z-index: var(--z-hint); transform: translate(-50%, -100%); max-width: min(320px, calc(100vw - 16px)); padding: 6px 10px; border-radius: var(--r1); background: var(--surf-3); color: var(--tx); font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-shadow: 0 8px 24px rgb(0 0 0 / .35); pointer-events: none; }
 .hint-tip.below { transform: translate(-50%, 0); }
-.hint-i { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; margin-left: 8px; vertical-align: 1px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--tx-3); color: var(--tx-2); font: italic 700 12px/1 var(--font-ui); cursor: help; -webkit-tap-highlight-color: transparent; }
-.hint-i::before { content: ""; position: absolute; inset: -13px; border-radius: 50%; }
+.hint-i { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; margin-left: 8px; vertical-align: 1px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--tx-3); color: var(--tx-2); font: italic 700 12px/1 var(--font-ui); cursor: help; -webkit-tap-highlight-color: transparent; }
+.hint-i::before { content: ""; position: absolute; inset: -15px; border-radius: 50%; } /* a 14 px mark with a 44 px tap area (L2-6) */
+.pc-only { display: none; } /* a setting that only matters with a keyboard (Show keyboard shortcuts, L2-3): 900 px and wider, like the hints themselves */
+@media (min-width: 900px) and (min-height: 521px) { .pc-only { display: block; } }
 .hint-i:hover { color: var(--tx); box-shadow: inset 0 0 0 1.5px var(--tx-2); }
 
 /* the save bar: appears with the first unsaved change */
