@@ -21,7 +21,9 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
 // loginError: { status, message } makes POST /auth/login fail with it (a sign-in refusal).
 // meFailures: how many GET /player/me calls answer 503 before it answers normally (a restore that gets no answer: the Error screen, #87).
-// settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real).
+// settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real). Whatever is passed,
+// the account's saved settings carry tableMessages "all" (every prompt shows at once, so the specs can wait on "Place your bets" and "Your move", L2-1) and currency "USD"
+// (the "$10 chip" names do not depend on the runner's locale, L2-2) unless a spec sets its own.
 export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   let meFailuresLeft = meFailures;
@@ -45,7 +47,7 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, meDel
         if (meFailuresLeft-- > 0) return json({ message: 'e2e stub: the API is unavailable' }, 503);
         return json({ ...PLAYER, credits });
       case 'GET /player/me/settings':
-        return json(settings);
+        return json({ tableMessages: 'all', currency: 'USD', ...settings });
       case 'PUT /player/me/settings':
         stub.saves.push(req.postDataJSON());
         return json({});
@@ -108,7 +110,7 @@ export async function login(page) {
   await (await settingsLoaded).finished();
   // idle, before the deal. The table opens with its shuffle (#83: 4.5 s at Normal speed, 1.5 s on the fixture's fastest), the line says Shuffling until it is over.
   await page.locator('.felt').dispatchEvent('click'); // a tap on the felt skips the opening shuffle (#83), so no test pays its 1.5 s on a slow CI runner
-  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/^(Place your bets|Out of credits)$/)).toBeVisible({ timeout: 15_000 }); // a table with no credits says Out of credits (L1-18)
 }
 
 export const openTable = login;

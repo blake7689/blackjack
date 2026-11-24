@@ -47,8 +47,9 @@ export function PlayerProvider({ children }) {
     if (!token) return;
     setRestoring(true);
     setRestoreFailed(false);
-    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); })
-      .catch(() => { if (getToken() === token) setRestoreFailed(true); })
+    // then(ok, fail), not then().catch(): only getMe's own failure means "no answer"; an error while signing in is a bug, logged, not an Error screen.
+    getMe(COLD_START_TIMEOUT_MS).then((p) => { if (getToken() === token) signIn(p); }, () => { if (getToken() === token) setRestoreFailed(true); })
+      .catch((error) => console.error("Restoring the session failed", error))
       .finally(() => setRestoring(false));
   }, [signIn]);
   useEffect(restore, [restore]);

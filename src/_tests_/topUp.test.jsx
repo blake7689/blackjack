@@ -86,13 +86,13 @@ describe("The balance (TopBar): hidden taps", () => {
   it("renders the overlay as a direct child of document.body, outside the panel; clicks inside it are not taps and 7 do not reopen it", () => {
     const { container } = renderUI(<TopBar tapEnabled />, low);
     tap(7);
-    const overlay = document.querySelector(".topup-overlay");
+    const overlay = document.querySelector(".dlg-overlay");
     expect(overlay.parentElement).toBe(document.body);
     expect(container.contains(overlay)).toBe(false);
-    expect(screen.getByRole("dialog").closest(".topup-overlay")).toBe(overlay);
+    expect(screen.getByRole("dialog").closest(".dlg-overlay")).toBe(overlay);
     for (let i = 0; i < 7; i++) fireEvent.click(screen.getByLabelText("Code")); // would be a 2nd prompt if they counted
     fireEvent.click(screen.getByText("Cancel"));
-    expect(document.querySelectorAll(".topup-overlay")).toHaveLength(0);
+    expect(document.querySelectorAll(".dlg-overlay")).toHaveLength(0);
     for (let i = 0; i < 6; i++) fireEvent.click(screen.getByText("Balance"));
     expect(dialog()).toBeNull(); // only 6 real taps since the reopen: the inside clicks did not add up
   });
@@ -183,8 +183,9 @@ describe("TopUpPrompt", () => {
     expect(input().getAttribute("autocomplete")).toBe("new-password"); // "off" is ignored by browsers: they would offer to save the code
     for (const a of ["data-lpignore", "data-1p-ignore", "data-bwignore"]) expect(input().getAttribute(a), a).toBe("true");
     expect(input().maxLength).toBe(200);
-    expect(within(d).getByRole("button", { name: "Submit" })).toBeTruthy();
-    expect(within(d).getByRole("button", { name: "Cancel" })).toBeTruthy();
+    const [cancel, submit] = within(d).getAllByRole("button"); // Cancel (plain), then Submit (primary), as in the mockup
+    expect([cancel.textContent, submit.textContent]).toEqual(["Cancel", "Submit"]);
+    expect([d.className, cancel.className, submit.className]).toEqual(["dlg topup", "btn plain", "btn primary"]); // the token-styled confirm classes (L1-13)
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByRole("status")).toBeNull();
   });
@@ -215,17 +216,17 @@ describe("TopUpPrompt", () => {
 
     it("Tab on the last control wraps to the first, shift-Tab on the first wraps to the last", () => {
       show();
-      screen.getByRole("button", { name: "Cancel" }).focus();
+      screen.getByRole("button", { name: "Submit" }).focus(); // the last one: Cancel comes first, then Submit (the mockup's order)
       expect(tab()).toBe(false);
       expect(document.activeElement).toBe(input());
       expect(tab(true)).toBe(false);
-      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Submit" }));
     });
 
     it("leaves Tab alone between the ends", () => {
       show();
       expect(tab()).toBe(true); // input is first, not last
-      screen.getByRole("button", { name: "Submit" }).focus();
+      screen.getByRole("button", { name: "Cancel" }).focus();
       expect(tab()).toBe(true);
       expect(tab(true)).toBe(true);
     });

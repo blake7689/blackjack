@@ -281,9 +281,21 @@ describe("centrePrint (#81): the print and the message are centred between the d
     at(".dealer-container", 0, 250); at(".seat", 290, 400); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248);
     centrePrint(stage);
     expect(stage.style.getPropertyValue("--py")).toBe("14px"); // 290 - 8 - 268, though the middle of the gap is further
-    at(".dealer-container", 0, 100); at(".seat", 200, 400); // the block is taller than the gap: it stays where the layout put it
+    stage.style.setProperty("--py", "0px");
+    at(".dealer-container", 0, 100); at(".seat", 200, 400); // the block (150 to 268) is taller than the gap, and the dealer's hand ends at 100: it moves up
+    centrePrint(stage); // to 8 px above the seat would be -76, but not above the dealer's bottom: -50
+    expect(stage.style.getPropertyValue("--py")).toBe("-50px");
+  });
+
+  it("moves up just far enough to keep 8 px from the player's cards when the dealer leaves room (L1-24)", () => {
+    const { stage, at } = build();
+    at(".dealer-container", 0, 100); at("text", 150, 190); at(".msg", 200, 230); at(".mid", 200, 248); at(".seat", 270, 400); // block bottom 268: 6 px too close
     centrePrint(stage);
-    expect(stage.style.getPropertyValue("--py")).toBe("0px");
+    expect(stage.style.getPropertyValue("--py")).toBe("-6px"); // 270 - 8 - 268 = -6
+    stage.style.setProperty("--py", "-6px"); // measured again: unshifted, the same answer
+    at("text", 144, 184); at(".msg", 194, 224); at(".mid", 194, 242);
+    centrePrint(stage);
+    expect(stage.style.getPropertyValue("--py")).toBe("-6px");
   });
 
   it("does nothing before there is a seat or any printed text", () => {

@@ -16,7 +16,7 @@ export function ChipStack({ amount }) {
   if (!list.length) return null;
   const n = list.length;
   return (
-    <svg viewBox={`0 0 100 ${100 + n * THICK}`} style={{ "--k": (n - 1) * THICK + 50 }} aria-hidden="true" focusable="false">
+    <svg viewBox={`0 0 100 ${100 + n * THICK}`} style={{ "--k": (n - 1) * THICK + 50, "--h": 100 + n * THICK }} aria-hidden="true" focusable="false">
       {list.map((v, i) => {
         const y = (n - 1 - i) * THICK;
         const top = i === n - 1;

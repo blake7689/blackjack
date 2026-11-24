@@ -4,10 +4,10 @@ import "../../pages/pages.css";
 
 // The standalone screens (#87, DESIGN section 8): the page frame Home, Log in and Create an account share, Loading ("Shuffling up...", while a saved
 // session is restored, which can take a cold API start) and Error ("Can't reach the table"). Each screen puts the (decorative) wordmark first and names itself. //
-export function Page({ children }) {
+export function Page({ className = "", children }) {
   return (
     <div className="page-screen">
-      <main className="page">{children}</main>
+      <main className={`page ${className}`.trim()}>{children}</main>
     </div>
   );
 }
@@ -26,15 +26,16 @@ export function LoadingScreen() {
   );
 }
 
-// Try again asks the session restore once more; Home gives up on it and shows the signed-out Home (the saved sign-in stays until a new one replaces it).
-export function ErrorScreen({ onRetry, onHome }) {
+// The Error screen, in two wordings. The default (the session restore got no answer): Try again asks it once more; Home gives up on it and shows the signed-out Home
+// (the saved sign-in stays until a new one replaces it). `crash` (the error boundary, L2-13, L1-41): the app itself failed, so it says so and offers Reload. //
+export function ErrorScreen({ onRetry, onHome, crash = false }) {
   return (
     <Page>
       <Wordmark className="wm" />
-      <h1>Can't reach the table</h1>
-      <p>Check your connection and try again. Your balance is safe.</p>
+      <h1>{crash ? "Something went wrong" : "Can't reach the table"}</h1>
+      <p>{crash ? "The table hit an error. Reload to keep playing; your balance is safe on your account." : "Check your connection and try again. Your balance is safe."}</p>
       <div className="btn-col">
-        <button type="button" className="btn primary" onClick={onRetry}>Try again</button>
+        <button type="button" className="btn primary" onClick={onRetry}>{crash ? "Reload" : "Try again"}</button>
         <Link className="btn" to="/" onClick={onHome}>Home</Link>
       </div>
     </Page>

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { hold, reducedMotion, reserve, speedK } from "../utils/cardAnimation";
+import { hold, reducedMotion, reserve, shuffled, speedK } from "../utils/cardAnimation";
 import { playSound } from "../utils/sound";
 
 // The shuffle (#83, DESIGN section 3), in the centre, in order, nothing fading: the shoe slides away (the discard pile with it, emptied), the deck comes
@@ -25,7 +25,9 @@ export function useShuffle({ set: setShuf, seq, mid, speed, enter, pile }) {
     const before = shown.current;
     if (before === seq) return;
     shown.current = seq;
-    if ((before === null && !enter) || reducedMotion()) return;
+    const had = shuffled.seq; // kept outside the board (cardAnimation.js): a board that mounts again for the same shoe, back from Settings, has had its shuffle (L2-11)
+    shuffled.seq = seq;
+    if ((before === null && (!enter || had === seq)) || reducedMotion()) return;
     const stage = document.querySelector(".stage-in");
     if (!stage) return;
     const k = mid ? MID_K : speedK(speed);
@@ -115,7 +117,7 @@ export function useShuffle({ set: setShuf, seq, mid, speed, enter, pile }) {
       clearTimeout(safety);
       const finished = ended;
       end();
-      if (!finished) shown.current = before; // cancelled (StrictMode, a newer shoe): the next run plays it
+      if (!finished) { shown.current = before; shuffled.seq = had; } // cancelled (StrictMode, a newer shoe, leaving the table): the next run plays it
     };
     // Once per shoe: what it reads (speed, enter, mid) is what the board saw when the shoe was made.
     // eslint-disable-next-line react-hooks/exhaustive-deps

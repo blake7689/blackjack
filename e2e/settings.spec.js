@@ -5,7 +5,7 @@ import { test, expect, stubApi, login, seedRandom, placeBet } from './fixtures';
 const section = (page, name) => page.getByRole('button', { name: new RegExp(`^${name}`) });
 const settingsButton = (page) => page.getByRole('button', { name: 'Settings', exact: true });
 const saveChanges = (page) => page.getByRole('button', { name: 'Save changes' });
-const unsaved = (page) => page.getByRole('region', { name: 'Save bar' });
+const unsaved = (page) => page.getByRole('region', { name: 'Unsaved changes', exact: true });
 
 async function openSettings(page, name = 'Table rules') {
   await login(page);
@@ -357,6 +357,7 @@ test('on a phone the page does not scroll sideways and every control is at least
     const found = [];
     const count = await locator.count();
     for (let i = 0; i < count; i++) {
+      if (!(await locator.nth(i).isVisible())) continue; // not rendered at this size (Show keyboard shortcuts is a desktop-only setting, L2-3)
       const box = await locator.nth(i).boundingBox();
       if (!box || box.height < 44) found.push(`${(await locator.nth(i).innerText()).slice(0, 30)} ${box?.height}`);
     }
@@ -371,7 +372,7 @@ test('on a phone the page does not scroll sideways and every control is at least
     const [docScroll, docClient, screenScroll, screenClient] = await overflow();
     expect(docScroll, `${name}: page`).toBeLessThanOrEqual(docClient);
     expect(screenScroll, `${name}: settings`).toBeLessThanOrEqual(screenClient);
-    const controls = await tooSmall(page.locator('.settings-screen .sec-b:not([hidden]) :is([data-rule], .sw, .pdd-b, .cp, .fs, .ac, [data-pick-mode], .btn, input:not([type=checkbox]):not([type=range]))'));
+    const controls = await tooSmall(page.locator('.settings-screen .sec-b:not([hidden]) :is([data-rule], .sw, .pdd-b, .cp, .fs, .ac, [data-pick-mode], [data-pick-messages], [data-pick-currency], .btn, input:not([type=checkbox]):not([type=range]))'));
     expect(controls.found, `${name}: controls under 44px`).toEqual([]);
     if (name === 'Table rules') expect(controls.count).toBeGreaterThan(30);
     if (name === 'Sound & haptics') expect((await page.getByRole('slider', { name: 'Volume' }).boundingBox()).height, 'Volume slider height').toBeGreaterThanOrEqual(44); // ranges are not in the selector above

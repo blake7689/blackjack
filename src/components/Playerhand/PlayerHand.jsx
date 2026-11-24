@@ -132,7 +132,7 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
         <Pill totals={shown.totals} natural={natural} on={playing} />
       </div>
       <div className="spot-row">
-        {ins > 0 && <div className="side-spot ins"><span className="stack"><ChipStack amount={insShown} /></span><i>INS {money(ins)}</i></div>}
+        {ins > 0 && <div className="side-spot ins"><span className="stack"><ChipStack amount={insShown} /></span><i>INS<span className="sr-only"> {money(ins)}</span></i></div>}
         <button type="button" className={`spot${hand.bet > 0 ? " has" : ""}${canBet && !hand.bet ? " open" : ""}`} aria-label={spotName} disabled={!betting || !canBet}
           onClick={() => onBet(chip)}>
           <span className="bet-lbl">BET</span>

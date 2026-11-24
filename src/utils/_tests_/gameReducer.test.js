@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
+import { setCurrency } from "../money";
 import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES, RESET_SETTINGS } from "../gameReducer";
 import { RULE_PRESETS } from "../rulePresets";
 import { GamePhases } from "../constants/gamePhases";
@@ -493,6 +494,25 @@ describe("saved settings (#36)", () => {
       .toMatchObject({ feltTheme: "green", accent: "emerald", mode: "dark", showTotals: true });
   });
 
+  it("Table messages, Currency and Show keyboard shortcuts (L2-1, L2-2, L2-3) default to Hints, Auto and off, are display settings, and need no version bump", () => {
+    expect(defaults).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings(undefined)).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings({ v: 1 })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false }); // an old save has no legacy value to restore
+    for (const key of ["tableMessages", "currency", "showKeyHints"]) {
+      expect(RESET_SETTINGS).not.toContain(key); // changing them never deals a new shoe
+      expect(Object.keys(LEGACY_RULES)).not.toContain(key);
+    }
+    expect(SETTINGS_VERSION).toBe(5);
+  });
+
+  it("keeps valid Table messages, Currency and Show keyboard shortcuts values and drops anything else to the defaults (L2-1, L2-2, L2-3)", () => {
+    for (const tableMessages of ["all", "hints", "results"]) expect(sanitizeSettings({ tableMessages }).tableMessages).toBe(tableMessages);
+    for (const currency of ["auto", "USD", "GBP", "EUR"]) expect(sanitizeSettings({ currency }).currency).toBe(currency);
+    expect(sanitizeSettings({ showKeyHints: true }).showKeyHints).toBe(true);
+    expect(sanitizeSettings({ tableMessages: "everything", currency: "JPY", showKeyHints: "yes" })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+    expect(sanitizeSettings({ tableMessages: 1, currency: ["GBP"], showKeyHints: 1 })).toMatchObject({ tableMessages: "hints", currency: "auto", showKeyHints: false });
+  });
+
   it("sound and haptics (#86) default to off, at volume 50, and are not table rules", () => {
     expect(defaults).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
     expect(sanitizeSettings(undefined)).toMatchObject({ soundOn: false, soundVolume: 50, hapticsOn: false });
@@ -546,6 +566,20 @@ describe("server answers to bets (#23)", () => {
       expect(s.nextHandTag).toBe(2);
       expect(s.creditEvents.at(-1)).toMatchObject({ kind: "bet", newRound: true, handTag: null });
       expect(s.pendingBets).toEqual([{ seq: s.creditEvents.at(-1).seq, handTag: null, amount: 10, newRound: true }]);
+    });
+
+    it("a refused opening bet voids the round but its cards stay out of the shoe: the next deal draws different ones (L1-27, by design)", () => {
+      const before = run(started(["10", "10", "9", "7", "2", "3", "4", "5", "6"]), { type: "ADD_BET", amount: 10 });
+      const dealtRound = run(before, { type: "DEAL" });
+      const seen = dealtRound.hands[0].cards.map((c) => c.id);
+      const voided = rejectAt(dealtRound, 0);
+      expect(voided.phase).toBe(GamePhases.PRE_DEAL);
+      expect(voided.notice).toBe("The server refused your bet, so the round was cancelled.");
+      expect(voided.shoe).toBe(dealtRound.shoe); // nothing is put back
+      expect(voided.seenIds).toBe(dealtRound.seenIds); // the count keeps what was seen
+      expect(voided.runningCount).toBe(dealtRound.runningCount);
+      const again = run(voided, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+      expect(again.hands[0].cards.map((c) => c.id).some((id) => seen.includes(id))).toBe(false);
     });
 
     it("never reuses a tag across rounds", () => {
@@ -626,6 +660,14 @@ describe("server answers to bets (#23)", () => {
   });
 
   describe("a refused extra stake", () => {
+    afterEach(() => setCurrency("USD"));
+
+    it("the notice names the amount in the player's currency (L2-2)", () => {
+      setCurrency("GBP");
+      const doubled = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
+      expect(rejectAt(doubled, 1).notice).toBe("The server refused £10 of your stake; that hand plays for less.");
+    });
+
     it("a refused double keeps the cards, drops the bet by the double's amount and says so", () => {
       const doubled = run(dealt(["5", "10", "6", "7", "10"]), { type: "DOUBLE", handIdx: 0 });
       const s = rejectAt(doubled, 1);
@@ -845,7 +887,7 @@ describe("auto deal (#88)", () => {
 
     it("writes a four-digit bet with its thousands separator", () => {
       const s = run({ ...finished(), initialBet: 1500 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
-      expect(s.notice).toBe(`Not enough credits to rebet $${(1500).toLocaleString()}: auto deal paused`);
+      expect(s.notice).toBe("Not enough credits to rebet $1,500: auto deal paused");
       expect(s.notice).toMatch(/^Not enough credits to rebet \$1\D?500: auto deal paused$/);
     });
 

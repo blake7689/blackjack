@@ -29,3 +29,8 @@
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) { .verdict b { font-size: 40px; } .verdict span { font-size: 26px; } }
 @keyframes verdict { 0% { opacity: 0; transform: translateY(10px) scale(.92); letter-spacing: .3em; } 100% { opacity: 1; transform: none; } }
 @keyframes flash { 0% { filter: brightness(1); } 25% { filter: brightness(1.9); } 100% { filter: brightness(1); } }
+
+/* A prompt that waited for the player (Table messages: Hints, L2-1) fades in; with reduced motion it just appears. */
+.msg .prompt { animation: promptIn 700ms var(--e-io) both; }
+@keyframes promptIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .msg .prompt { animation: none; } }

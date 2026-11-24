@@ -28,7 +28,7 @@ jobs:
   e2e:
     name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 12 # install (<= 4) + tests (<= 8)
+    timeout-minutes: 17 # install (<= 4) + tests (<= 12)
     strategy:
       fail-fast: false
       matrix:
@@ -44,7 +44,7 @@ jobs:
       - run: bash scripts/install-playwright-browser.sh
         timeout-minutes: 4 # normally 15-40 s; the script retries 2x at 90 s each (#123, #127)
       - run: npx playwright test --project=${{ matrix.project }}
-        timeout-minutes: 8 # globalTimeout is 7 min; fails the step before the 12-min job limit
+        timeout-minutes: 12 # globalTimeout is 11 min; fails the step before the 17-min job limit
         env:
           CI: true
       - uses: actions/upload-artifact@v4

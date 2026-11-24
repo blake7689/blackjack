@@ -46,6 +46,7 @@ describe('the web app manifest', () => {
     expect(html).toMatch(/<link rel="icon" type="image\/svg\+xml" href="\/favicon\.svg"/);
     expect(existsSync(path('public', 'favicon.svg'))).toBe(true);
     expect(html).toMatch(/<title>Blakejack<\/title>/);
+    expect(html).toMatch(/<meta name="description" content="[^"]{20,}"/);
     expect(existsSync(path('public', 'vite.svg'))).toBe(false);
     expect(existsSync(path('src', 'assets', 'react.svg'))).toBe(false);
   });
@@ -102,14 +103,32 @@ describe('staticwebapp.config.json', () => {
     expect(JSON.stringify(config)).not.toMatch(/"404"/);
   });
 
-  it('serves .webmanifest as application/manifest+json and keeps the .json type', () => {
+  it('serves .webmanifest as application/manifest+json and .json as application/json', () => {
     expect(config.mimeTypes['.webmanifest']).toBe('application/manifest+json');
-    expect(config.mimeTypes['.json']).toBe('text/json');
+    expect(config.mimeTypes['.json']).toBe('application/json');
   });
 
-  it('keeps its CORS headers and routes', () => {
-    expect(config.globalHeaders['Access-Control-Allow-Origin']).toBe('https://blackjack-api-blake.azurewebsites.net');
+  it('keeps its routes, and sends no CORS headers (the API sets its own; an Allow-Origin on the site does nothing useful)', () => {
     expect(Array.isArray(config.routes)).toBe(true);
+    expect(Object.keys(config.globalHeaders).filter((name) => name.startsWith('Access-Control-'))).toEqual([]);
+  });
+
+  it('sends the security headers: nosniff, a referrer policy and a CSP that allows only itself and the API', () => {
+    const headers = config.globalHeaders;
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(headers['Referrer-Policy']).toBe('strict-origin-when-cross-origin');
+    const csp = Object.fromEntries(headers['Content-Security-Policy'].split(';').map((part) => part.trim().split(/\s+/)).map(([name, ...values]) => [name, values]));
+    expect(csp['default-src']).toEqual(["'self'"]);
+    expect(csp['script-src']).toEqual(["'self'"]); // no inline script, no eval
+    expect(csp['connect-src']).toEqual(["'self'", 'https://blackjack-api-blake.azurewebsites.net']);
+    expect(csp['frame-ancestors']).toEqual(["'none'"]);
+    expect(csp['object-src']).toEqual(["'none'"]);
+    for (const name of ['base-uri', 'form-action', 'font-src', 'manifest-src']) expect(csp[name], name).toEqual(["'self'"]);
+  });
+
+  it('keeps robots.txt out of the SPA fallback, and the file allows crawling', () => {
+    expect(config.navigationFallback.exclude).toContain('/robots.txt');
+    expect(read('public', 'robots.txt')).toMatch(/^User-agent: \*\r?\nAllow: \/\s*$/);
   });
 });
 

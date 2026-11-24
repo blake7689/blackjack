@@ -78,7 +78,7 @@ test('a tap on the table skips the shuffle: the board is ready within a second i
   const settingsLoaded = page.waitForResponse('**/player/me/settings');
   await submitLogin(page);
   await (await settingsLoaded).finished();
-  const shuffling = page.getByRole('button', { name: 'Shuffling' }); // the Deal key says it while the shuffle plays
+  const shuffling = page.locator('.rack-wrap.off'); // the dock waits (its rack is dimmed) while the shuffle plays; the Deal key still says Deal (L2-4)
   await expect(shuffling).toBeVisible();
   await page.getByRole('region', { name: 'Your seats' }).click({ position: { x: 4, y: 4 } });
   await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 1500 }); // 4.5 s if it were played out

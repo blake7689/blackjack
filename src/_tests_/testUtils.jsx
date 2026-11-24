@@ -7,6 +7,7 @@ import { cardTiming } from "../utils/cardAnimation";
 import { MemoryRouter, Routes, Route, useLocation } from "react-router-dom";
 import { PlayerContext } from "../context/PlayerContext";
 import { GameStateContext, GameActionsContext } from "../context/GameContext";
+import { useNavActions } from "../hooks/useNavActions";
 import { initialGameState } from "../utils/gameReducer";
 import { GamePhases } from "../utils/constants/gamePhases";
 
@@ -35,11 +36,14 @@ function Location() {
   return <div data-testid="location">{pathname + search + hash}</div>;
 }
 
-// Renders ui with fake player and game contexts at `path`; returns the fakes for assertions.
-export function renderUI(ui, { player = {}, game = {}, actions = {}, path = "/" } = {}) {
+// Renders ui with fake player and game contexts at `path`; returns the fakes for assertions. `messages` is the Table messages setting (L2-1): "all" here, so a test that
+// reads the message line sees every line as it happens; a test of the Hints or Celebrations only modes passes it.
+export function renderUI(ui, { player = {}, game = {}, actions = {}, path = "/", messages = "all" } = {}) {
   const playerCtx = fakePlayer(player);
   const gameActions = fakeActions(actions);
   const gameState = { ...initialGameState, ...game };
+  let settings = { ...gameState.settings, tableMessages: messages };
+  Object.defineProperty(gameState, "settings", { enumerable: true, get: () => settings, set: (next) => { settings = { ...next, tableMessages: messages }; } }); // a test that swaps the whole state in (Object.assign) keeps the setting
   // A wrapper (not inline JSX) so rerender() keeps the providers.
   const wrapper = ({ children }) => (
     <MemoryRouter initialEntries={[path]}>
@@ -85,4 +89,10 @@ export function settleDeal(ms = 10_000) {
   act(() => { vi.advanceTimersByTime(ms); });
   finishAnimations();
   act(() => { vi.advanceTimersByTime(ms); });
+}
+
+// The three moves useNavActions gives Home, Settings and the table's menu (the global Header is gone, L1-12), as plain buttons with its confirm dialog.
+export function NavButtons() {
+  const { goHome, goSettings, logOut, confirm } = useNavActions();
+  return <><button onClick={goHome}>Nav Home</button><button onClick={() => goSettings()}>Nav Settings</button><button onClick={logOut}>Nav Log out</button>{confirm}</>;
 }

@@ -25,7 +25,7 @@ const stage = () => document.querySelector(".stage-in");
 const shoe = () => document.querySelector(".shoe");
 const rcards = () => animations.filter((a) => a.el.classList.contains("rcard"));
 const ofEl = (el) => animations.filter((a) => a.el === el).map((a) => a.options.duration);
-const shuffling = () => screen.queryByRole("button", { name: "Shuffling" }) !== null;
+const shuffling = () => document.querySelector(".rack-wrap.off") !== null; // the dock waits (its rack is dimmed) while the table shuffles; the Deal key still says Deal (L2-4)
 
 const step = (s, a) => gameReducer(s, { refill: outOfCards, credits: 1000, ...a });
 // A table in the player's turn (a ten and a six against a seven), so there are cards on it.
@@ -38,8 +38,8 @@ describe("the shuffle plays when the board opens at the start of a round (#83)",
   it("in order at Normal speed: the shoe slides away, the deck comes down, riffles, goes up, the shoe slides back, about 4.5 s; nothing fades", async () => {
     board();
     expect(line()).toBe("Shuffling");
-    expect(shuffling()).toBe(true); // the Deal key says it too
-    expect(screen.getByRole("button", { name: "Shuffling" }).getAttribute("aria-disabled")).toBe("true");
+    expect(shuffling()).toBe(true); // the dock waits too
+    expect(screen.getByRole("button", { name: "Deal" }).getAttribute("aria-disabled")).toBe("true"); // and its Deal key still says Deal (L2-4)
     expect(shoe().classList.contains("shuffling")).toBe(true); // 1: the shoe slides away
     expect(stage().style.getPropertyValue("--shoe-t")).toBe("780ms");
     expect(riffle()).toBeNull();
@@ -193,7 +193,7 @@ describe("a tap skips the shuffle", () => {
   it("a tap on the dock skips it too", async () => {
     board();
     await tick(100);
-    fireEvent.click(screen.getByRole("button", { name: "Shuffling" })); // a key in the dock
+    fireEvent.click(screen.getByRole("button", { name: "Deal" })); // a key in the dock
     await tick(0);
     expect(shuffling()).toBe(false);
     expect(queue.holds.size).toBe(0);
@@ -323,5 +323,73 @@ describe("StrictMode's second effect run", () => {
     await tick(TOTAL + 5);
     expect(set).toHaveBeenLastCalledWith(null);
     expect(queue.holds.size).toBe(0);
+  });
+});
+
+describe("the shuffle plays once for a shoe, not again when the board comes back (L2-11)", () => {
+  it("back from Settings before the first hand: the opening shuffle is not replayed, nothing is held", async () => {
+    const first = board();
+    expect(shuffling()).toBe(true);
+    await tick(TOTAL + 10);
+    expect(shuffling()).toBe(false);
+    first.unmount(); // Settings: the table is not on screen
+    board(); // and back: the same shoe, still nothing dealt
+    expect(shuffling()).toBe(false);
+    expect(line()).toBe("Place your bets");
+    expect(riffle()).toBeNull();
+    expect(queue.holds.size).toBe(0);
+    expect(queue.free).toBe(0);
+  });
+
+  it("a shuffle that was skipped counts as played", async () => {
+    const first = board();
+    await tick(100);
+    fireEvent.click(document.querySelector(".felt"));
+    await tick(0);
+    expect(shuffling()).toBe(false);
+    first.unmount();
+    board();
+    expect(shuffling()).toBe(false);
+  });
+
+  it("with reduced motion there is no shuffle, and none appears on the way back either", () => {
+    vi.stubGlobal("matchMedia", () => ({ matches: true }));
+    board().unmount();
+    vi.unstubAllGlobals();
+    board();
+    expect(shuffling()).toBe(false);
+  });
+
+  it("leaving in the middle of the shuffle cancels it, and it plays again on the way back", async () => {
+    const first = board();
+    await tick(500);
+    first.unmount();
+    expect(queue.holds.size).toBe(0);
+    board();
+    expect(shuffling()).toBe(true);
+    await tick(TOTAL + 10);
+    expect(shuffling()).toBe(false);
+  });
+
+  it("a new shoe still plays it after the board comes back (a changed table rule, a refill, the cut card)", async () => {
+    const first = board();
+    await tick(TOTAL + 10);
+    first.unmount();
+    const { gameState, rerender } = board();
+    expect(shuffling()).toBe(false);
+    Object.assign(gameState, { shoeSeq: 1, seenIds: [] }); // Settings changed a rule: a new shoe
+    rerender(<GameBoard />);
+    expect(shuffling()).toBe(true);
+    expect(line()).toBe("Shuffling");
+    await tick(TOTAL + 10);
+    expect(shuffling()).toBe(false);
+  });
+
+  it("a board that comes back to a different shoe plays that shoe\x27s shuffle", async () => {
+    const first = board();
+    await tick(TOTAL + 10);
+    first.unmount();
+    board({ shoeSeq: 5 }); // another shoe was made while the table was away
+    expect(shuffling()).toBe(true);
   });
 });
