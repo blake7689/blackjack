@@ -26,7 +26,7 @@
 .felt {
   --lx: 50%; --ly: 52%; --lamp: 1;
   position: relative; overflow: hidden; width: 100%; max-width: var(--col); justify-self: center; min-height: 0;
-  color: #fff;
+  color: #eef2ef; /* the dark mode's --tx (the mockup's base ink): the felt stays dark in every mode, so --tx would turn dark in light mode */
   background: radial-gradient(130% 95% at 50% 55%, var(--felt-hi) 0%, var(--felt) 42%, var(--felt-lo) 100%);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / .03);
 }
@@ -87,11 +87,10 @@
 .riffle .rcard svg { width: 100%; height: 100%; display: block; }
 .shoe .mouth { position: absolute; left: 30%; top: 44%; width: 1px; height: 1px; }
 .discard { position: absolute; z-index: var(--z-shoe); left: 0; top: calc(var(--rail) * -1); width: calc(var(--cw) * 1.1); height: calc(var(--cw) * .9); pointer-events: none; }
-.discard-card { left: calc(var(--cw) * -.46); top: calc(var(--cw) * -.86); border-radius: calc(var(--cw) * .06); filter: drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); transition: opacity var(--t-ui), transform var(--shoe-t, 780ms) var(--e-weight); }
-.discard .mouth { position: absolute; left: 4%; top: 6%; width: 1px; height: 1px; } /* the visible part of the top card: the sweep lands here */
+.discard-card { left: calc(var(--cw) * -.46); top: calc(var(--cw) * -.86); border-radius: calc(var(--cw) * .06); filter: drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); transition: transform var(--shoe-t, 780ms) var(--e-weight); }
 .discard[data-lv="2"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(2px 4px 3px rgb(0 0 0 / .45)); }
 .discard[data-lv="3"] .discard-card, .discard[data-lv="4"] .discard-card { filter: drop-shadow(1px 1px 0 rgb(0 0 0 / .5)) drop-shadow(1px 2px 0 rgb(0 0 0 / .4)) drop-shadow(2px 5px 4px rgb(0 0 0 / .45)); }
-.discard.empty .discard-card { opacity: 0; }
+.discard.empty .discard-card { opacity: 0; transition: opacity var(--t-ui), transform var(--shoe-t, 780ms) var(--e-weight); } /* it fades out when emptied (the shuffle) but is there at once when the first cards land on it (L2-10: the copies go over it) */
 .cut-rest {
   position: absolute; z-index: var(--z-dealer); left: calc(var(--cw) * -.52); top: calc(var(--cw) * .62 + 28px); /* well clear below the discard pile */
   width: var(--cw); aspect-ratio: 250 / 363; border-radius: calc(var(--cw) * .06);
@@ -184,6 +183,10 @@
   .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); --stage-pt: 26px; --stage-pb: 12px; }
   .stage-in.multi { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 124px); }
   .stage-in.multi.many { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 110px); }
+  /* PC: hands closer together (L2-8). The card width is capped, so a tall window left a wide empty middle between the dealer's hand (top) and the seats (bottom).
+     The middle may now keep only --mid-room of what --fixed and --rows (the room the rows need) leave; the rest goes above the dealer and under the seats, equally,
+     so the group sits in the middle of the felt. The shoe and the pile stay in the felt's corners (they are positioned against the stage, not the padding). */
+  .stage-in { --mid-room: clamp(40px, 11cqb, 110px); --slack: max(0px, calc(100cqb - var(--fixed) - var(--rows) * var(--cw) - var(--mid-room))); padding-top: calc(var(--stage-pt) + var(--slack) / 2); padding-bottom: calc(var(--stage-pb) + var(--slack) / 2); }
 }
 @media (max-height: 520px) {
   .stage-in, .stage-in.multi { --fixed: 88px; }

@@ -22,7 +22,7 @@ beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
 
 describe("no bet during the opening shuffle (#147)", () => {
-  it("the rack is dimmed, every chip is aria-disabled, the circle is disabled and Deal says Shuffling", () => {
+  it("the rack is dimmed, every chip is aria-disabled, the circle is disabled and Deal still says Deal", () => {
     renderUI(<GameBoard />, { game: betting() });
     expect(wrap().classList.contains("off")).toBe(true);
     const chips = [...document.querySelectorAll(".rc")];
@@ -30,7 +30,7 @@ describe("no bet during the opening shuffle (#147)", () => {
     expect(chips.every((c) => c.getAttribute("aria-disabled") === "true")).toBe(true);
     expect(spot().disabled).toBe(true);
     expect(document.querySelector(".dock-in").getAttribute("data-face")).toBe("betting");
-    expect(key("Shuffling").getAttribute("aria-disabled")).toBe("true");
+    expect(key("Deal").getAttribute("aria-disabled")).toBe("true");
     for (const name of ["Undo", "Clear", "Double every bet"]) expect(key(name).getAttribute("aria-disabled"), name).toBe("true");
   });
 
@@ -40,7 +40,7 @@ describe("no bet during the opening shuffle (#147)", () => {
     fireEvent.click(chip(10)); // a double tap
     for (const k of ["1", "1", "3", "3", "9", "u", "c", "x", " "]) press(k);
     fireEvent.click(spot());
-    for (const name of ["Undo", "Clear", "Double every bet", "Shuffling"]) fireEvent.click(key(name));
+    for (const name of ["Undo", "Clear", "Double every bet", "Deal"]) fireEvent.click(key(name));
     nothingHappened(gameActions);
     expect(chip(25).getAttribute("aria-pressed")).toBe("true"); // a tap on a dimmed chip does not even select it
   });
@@ -98,14 +98,12 @@ describe("the sweep at the end of a round (END_ROUND, #147)", () => {
     expect([...document.querySelectorAll(".rc")].every((c) => c.getAttribute("aria-disabled") === "true")).toBe(true);
     for (const name of BETTING_KEYS) expect(key(name).getAttribute("aria-disabled"), name).toBe("true");
     expect(screen.queryByRole("button", { name: "Shuffling" })).toBeNull();
-    expect(document.querySelector(".dock-in").getAttribute("data-shuffling")).toBeNull();
   });
 
-  it("Deal reads Shuffling when the cut card was out", () => {
+  it("Deal still reads Deal when the cut card was out, and stays dimmed (L2-4)", () => {
     end({ cutCardFound: true });
-    expect(key("Shuffling").getAttribute("aria-disabled")).toBe("true");
-    expect(screen.queryByRole("button", { name: "Deal" })).toBeNull();
-    expect(document.querySelector(".dock-in").getAttribute("data-shuffling")).toBe("true");
+    expect(key("Deal").getAttribute("aria-disabled")).toBe("true");
+    expect(screen.queryByRole("button", { name: "Shuffling" })).toBeNull();
   });
 
   it("nothing bets, deals or continues from the chips, keys, Rebet, 2x or the circle", () => {

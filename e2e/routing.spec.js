@@ -102,3 +102,18 @@ test('/game without a started game goes to Home, and a signed-out / stays Home: 
   await page.waitForLoadState('networkidle');
   await expect(page).toHaveURL(/\/$/);
 });
+
+// L1-14: a reload on /game while signed in lands on the table, whether the saved settings answer at once or late (WebKit used to land on Home when they were instant).
+for (const delay of [0, 300]) {
+  test(`a reload on /game lands on the table, never on Home, with the settings answering after ${delay} ms (L1-14)`, async ({ page }) => {
+    await page.route('http://api.e2e.test/**', async (route) => {
+      if (delay && route.request().method() === 'GET' && route.request().url().endsWith('/player/me/settings')) await new Promise((resolve) => setTimeout(resolve, delay));
+      return route.fallback();
+    });
+    await openGame(page);
+    await page.reload();
+    await expect(page.getByText('Place your bets', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/game$/);
+    await expect(page.getByRole('link', { name: 'Play' })).toHaveCount(0);
+  });
+}

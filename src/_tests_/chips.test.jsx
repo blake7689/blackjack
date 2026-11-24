@@ -93,9 +93,11 @@ describe("ChipStack", () => {
     const one = stack(25);
     expect(one.getAttribute("viewBox")).toBe("0 0 100 106");
     expect(one.style.getPropertyValue("--k")).toBe("50");
+    expect(one.style.getPropertyValue("--h")).toBe("106"); // the viewBox height: CSS lifts the svg by --k / --h of its own height (L1-11: --chip has cqi units, wrong inside .stack)
     const three = stack(135);
     expect(three.getAttribute("viewBox")).toBe("0 0 100 118");
     expect(three.style.getPropertyValue("--k")).toBe("62"); // (3 - 1) * 6 + 50
+    expect(three.style.getPropertyValue("--h")).toBe("118");
     const faces = [...three.querySelectorAll("use")].filter((u) => u.getAttribute("href").startsWith("#chip-"));
     expect(faces.map((u) => u.getAttribute("y"))).toEqual(["12", "6", "0", "0"]); // the bottom chip lowest, the top one (both faces) highest
     expect(faces.every((u) => u.getAttribute("width") === "100" && u.getAttribute("height") === "100")).toBe(true);
@@ -267,6 +269,8 @@ describe("PlayerHand: the bet circle and its stacks (#82)", () => {
       const { container } = view(dealt({ bet: 10, insurance: 5 }), { gamePhase: GamePhases.PLAYER_TURN });
       const ins = container.querySelector(".side-spot.ins");
       expect(ins.querySelector("i").textContent).toBe("INS $5");
+      expect(ins.querySelector("i").firstChild.textContent).toBe("INS"); // only "INS" is drawn (the mockup); the amount is screen-reader text (L1-39)
+      expect(ins.querySelector("i .sr-only").textContent).toBe(" $5");
       expect(hrefs(ins.querySelector("svg")).filter((h) => h.startsWith("#side-"))).toEqual(["#side-5"]);
       expect([...container.querySelector(".spot-row").children].map((el) => el.className.split(" ")[0])).toEqual(["side-spot", "spot"]); // left of the circle
       expect(container.querySelector(".seat").classList.contains("sides")).toBe(true);

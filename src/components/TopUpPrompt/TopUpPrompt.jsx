@@ -72,10 +72,10 @@ export default function TopUpPrompt({ onClose }) {
 
   // A portal to body so the overlay's z-index is not trapped inside the stats panel's stacking context.
   return createPortal(
-    <div className="topup-overlay">
-      <form ref={dialogRef} className="topup-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
+    <div className="dlg-overlay">
+      <form ref={dialogRef} className="dlg topup" role="dialog" aria-modal="true" aria-labelledby={titleId} onSubmit={submit}>
         <h2 id={titleId}>Enter code</h2>
-        <label htmlFor={inputId}>Code</label>
+        <label htmlFor={inputId}>Code
         <input
           id={inputId}
           ref={inputRef}
@@ -89,11 +89,12 @@ export default function TopUpPrompt({ onClose }) {
           readOnly={busy}
           onChange={(e) => setCode(e.target.value)}
         />
-        {error && <div role="alert">{error}</div>}
-        {busy && reconnecting && <div role="status">Reconnecting...</div>}
-        <div className="topup-buttons">
-          <button type="submit" disabled={busy}>Submit</button>
-          <button type="button" disabled={busy} onClick={onClose}>Cancel</button>
+        </label>
+        {error && <p className="ferr" role="alert">{error}</p>}
+        {busy && reconnecting && <p role="status">Reconnecting...</p>}
+        <div className="dlg-act">
+          <button type="button" className="btn plain" disabled={busy} onClick={onClose}>Cancel</button>
+          <button type="submit" className="btn primary" disabled={busy}>Submit</button>
         </div>
       </form>
     </div>,

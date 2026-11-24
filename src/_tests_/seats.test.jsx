@@ -41,6 +41,15 @@ describe("the betting seat", () => {
   });
 });
 
+describe("out of credits (L1-18)", () => {
+  it("the line says Out of credits, and the disabled circle offers no chip in its name", () => {
+    renderUI(<GameBoard />, { player: { player: { userName: "t", credits: 0 } }, game: { phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0, seenIds: ["x"] } });
+    expect(screen.getByText("Out of credits", { selector: ".msg" })).toBeTruthy();
+    expect(screen.queryByText("Place your bets")).toBeNull();
+    expect(screen.getByRole("button", { name: "Bet spot 1, $0" }).disabled).toBe(true);
+  });
+});
+
 describe("hands", () => {
   it("hands not in play dim (the .turns row), the one in play is active", () => {
     const { container } = renderUI(<GameBoard />, { game: table([hand(), hand()], { selectedHandIndex: 1 }) });

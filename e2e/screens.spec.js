@@ -33,7 +33,8 @@ test.describe('the Table rules sheet', () => {
     await expect(sheet(page).getByText(/House edge .*% est\./)).toBeVisible();
     for (const group of ['Payouts', 'Dealer', 'Doubling', 'Splitting', 'Surrender']) await expect(sheet(page).getByRole('heading', { name: group })).toBeVisible();
     await expect(sheet(page).getByText('Blackjack pays 3 to 2')).toBeVisible(); // the Vegas fixture
-    await expect(sheet(page).getByText('Dealer peeks.', { exact: false })).toBeVisible();
+    await expect(sheet(page).getByText('The dealer hits soft 17', { exact: true })).toBeVisible(); // the sheet's own sentences (L1-23)
+    await expect(sheet(page).getByText('The dealer peeks for blackjack before you play', { exact: true })).toBeVisible();
     await expect(sheet(page).getByText('Late surrender')).toBeVisible();
     await expect(sheet(page).getByRole('link', { name: 'Change rules' })).toBeVisible(); // signed in
     await expect(page).toHaveURL(/\/game$/); // opening it leaves the table where it is

@@ -563,7 +563,7 @@ describe("Offers (#91): insurance, even money and early surrender", () => {
   const props = { active: true, gamePhase: OFFERS };
   const INSURANCE = { insurance: true, evenMoney: false, surrender: false, peek: true };
   const EVEN = { insurance: false, evenMoney: true, surrender: false, peek: true };
-  const offerKeys = () => within(screen.getByRole("group", { name: "Offers" })).getAllByRole("button").map((b) => b.firstElementChild.textContent); // each key's label span, without its shortcut hint (#85)
+  const offerKeys = () => within(screen.getByRole("group", { name: "Offers" })).getAllByRole("button").map((b) => b.querySelector("span").textContent); // each key's label span, without its shortcut hint (#85)
   const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: 1000, ...action });
   // A real table at the offers: Vegas rules, a bet of 10, the cards dealt and settled in front of the player.
   const table = (codes, settings = {}, upTo = "DEAL_DONE") => {

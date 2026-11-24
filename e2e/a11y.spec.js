@@ -36,7 +36,7 @@ test('Home, signed out and signed in, and the Error screen have no serious acces
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
   await expect(page.getByText('Signed in as tester')).toBeVisible();
-  await expect(page.locator('.hero')).toHaveCSS('opacity', '1'); // the hero pops in: never scan it blended
+  await expect(page.locator('main.page.home')).toBeVisible(); // Home has no hero any more (L2-5): nothing on it pops in
   await expectNoSeriousA11y(page, 'home, signed in');
 });
 
@@ -73,6 +73,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // the keys wake up once the cards have landed
   await expect(page.locator('.board.busy')).toHaveCount(0);
+  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // the label fades back after the bet badge: never scan it blended
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
@@ -168,10 +169,10 @@ test.describe('settings', () => {
     await expectNoSeriousA11y(page, 'settings, Sound & haptics open, Sound on');
   });
 
-  test('Settings with unsaved changes and the Save bar has no serious accessibility violations (#84)', async ({ page }) => {
+  test('Settings with unsaved changes and the save bar has no serious accessibility violations (#84)', async ({ page }) => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
     await page.getByRole('radiogroup', { name: 'Surrender', exact: true }).getByRole('radio', { name: /^None/ }).click();
-    await expect(page.getByRole('region', { name: 'Save bar' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Unsaved changes', exact: true })).toBeVisible();
     await settled(page);
     await expectNoSeriousA11y(page, 'settings, unsaved changes');
   });

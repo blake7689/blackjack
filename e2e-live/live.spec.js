@@ -33,14 +33,18 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   await page.getByPlaceholder('Password').fill(process.env.E2E_LIVE_PASSWORD);
   await page.getByRole('button', { name: 'Log in', exact: true }).click();
 
-  const chips = page.getByRole('button', { name: /^\$[\d,]+ chip$/ }); // the rack's chips, "$10 chip" (#82)
-  await expect(page.getByRole('button', { name: 'Deal', exact: true })).toBeVisible({ timeout: COLD }); // the table is up
+  // The account's own saved settings apply here (nothing is stubbed): Table messages may be Hints, so the line on the felt is empty until a prompt's 5 s pass, and the
+  // currency may be any symbol (L2-1, L2-2). So nothing below waits on a message or reads a symbol: it waits on the dock (its betting face with the rack awake, the
+  // Deal key, Next hand) and #bal, and reads chip values from the rack's data-chip.
+  const chips = page.locator('.rack .rc'); // the rack's chips (#82)
+  const bettingOpen = page.locator('.dock-in[data-face="betting"]').locator('.rack-wrap:not(.off), .dock-note'); // the betting face, and not shuffling or sweeping (the rack is dimmed then); a broke account shows its note instead of the rack, and fails on the clear message below
+  await expect(bettingOpen).toBeVisible({ timeout: COLD }); // the table is up and its opening shuffle is over
   const start = await readBalance(page);
-  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.getAttribute('aria-label').replace(/\D/g, ''))))).sort((a, b) => a - b);
+  const chipValues = (await chips.evaluateAll((els) => els.map((e) => Number(e.dataset.chip)))).sort((a, b) => a - b);
   if (!chipValues.length || start < chipValues[0]) {
     throw new Error(`The test account has too little play money (balance ${start}, smallest bet ${chipValues[0] ?? 'none'}): top it up through the app's normal flow.`);
   }
-  await page.getByRole('button', { name: `$${chipValues[0].toLocaleString('en-US')} chip`, exact: true }).click(); // pick the smallest chip, then bet it on the circle
+  await page.locator(`.rack .rc[data-chip="${chipValues[0]}"]`).click(); // pick the smallest chip, then bet it on the circle
   await page.getByRole('button', { name: /^Bet spot 1,/ }).click();
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
 
@@ -55,7 +59,7 @@ test('live site: sign in, play one round, the ledger and the balance agree (#119
   }, { timeout: COLD, intervals: [250], message: 'the round never reached its results' }).toBe('done');
 
   await results.click();
-  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 }); // the sweep, and a shuffle (4.5 s at Normal) when the cut card came out (#83)
+  await expect(bettingOpen).toBeVisible({ timeout: 15_000 }); // the sweep, and a shuffle (4.5 s at Normal) when the cut card came out (#83), are over
   await expect.poll(() => settles.length, { timeout: 30_000, message: 'the settle call never returned' }).toBe(1);
 
   expect(bets, 'exactly one ledger bet').toHaveLength(1);

@@ -11,14 +11,16 @@ export const PEEK = { up: 420, hold: 450, down: 420 }; // x k (speed / 1000, 0.3
 const CARD_BACK = '<svg viewBox="0 0 250 363" focusable="false"><use href="#cardback"/></svg>';
 
 // End of round: every card on the table sweeps off to the discard pile (top left), the dealer's first, 45 ms apart, turning face down as it starts and
-// landing square. The real cards hide in the frame their copy appears and go with the round's state a moment later. The copies are swept inside the felt
+// landing square, centre on the pile's top card (L2-10: not on its visible corner: a copy landing lower than the card it covers jumped up when it went, and showed a
+// logo the pile never shows). The real cards hide in the frame their copy appears and go with the round's state a moment later. The copies are swept inside the felt
 // (in the table, which the felt clips): the pile's corner and the cards end at its edge, never over the top bar. Returns { ms, cancel } or null.
 export function sweepCards() {
   const layer = document.querySelector(".stage-in");
-  const pile = document.querySelector(".discard .mouth");
+  const pile = document.querySelector(".discard .discard-card");
   const cards = [...document.querySelectorAll(".dealer-hand .fan-row .card, .seats .fan-row .card")];
   if (!layer || !pile || !cards.length || reducedMotion()) return null;
   const m = pile.getBoundingClientRect();
+  const px = m.left + m.width / 2, py = m.top + m.height / 2; // where each copy ends: the middle of the pile's top card
   const o = layer.getBoundingClientRect();
   const made = [];
   cards.forEach((el, i) => {
@@ -35,7 +37,7 @@ export function sweepCards() {
     layer.appendChild(copy);
     el.style.visibility = "hidden";
     const delay = i * SWEEP_GAP;
-    copy.animate([{ translate: "0 0", rotate: sideways ? "90deg" : "0deg" }, { translate: `${m.left - cx}px ${m.top - cy}px`, rotate: "0deg" }],
+    copy.animate([{ translate: "0 0", rotate: sideways ? "90deg" : "0deg" }, { translate: `${px - cx}px ${py - cy}px`, rotate: "0deg" }],
       { duration: SWEEP_MS, delay, easing: "cubic-bezier(.5,0,.2,1)", fill: "both" });
     if (img) copy.firstChild.animate([{ transform: "rotateY(180deg)" }, { transform: "rotateY(0deg)" }], { duration: TURN, delay, easing: FLIP_EASING, fill: "both" });
     made.push({ el, copy });

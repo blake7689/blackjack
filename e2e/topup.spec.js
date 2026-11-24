@@ -107,9 +107,35 @@ test('the backdrop covers the whole viewport, header and betting footer included
     [2, height - 3], [width / 2, height - 3], [width - 3, height - 3], // bottom edge
   ];
   const outside = await page.evaluate(
-    (pts) => pts.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('.topup-overlay')),
+    (pts) => pts.filter(([x, y]) => !document.elementFromPoint(x, y)?.closest('.dlg-overlay')),
     points,
   );
   expect(outside).toEqual([]);
-  expect(await page.evaluate(() => document.querySelector('.topup-overlay').parentElement === document.body)).toBe(true);
+  expect(await page.evaluate(() => document.querySelector('.dlg-overlay').parentElement === document.body)).toBe(true);
+});
+
+test('the code dialog is styled like the other dialogs: surface, radius 22, Cancel then a primary Submit, 358 px wide on a phone (L1-13)', async ({ page }) => {
+  await stubApi(page, { startCredits: 40 });
+  await openTable(page);
+  await tapBalance(page);
+  const dialog = page.getByRole('dialog', { name: 'Enter code' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveCSS('border-radius', '22px');
+  await expect(dialog).toHaveCSS('border-top-width', '1px');
+  const { width } = page.viewportSize();
+  const box = await dialog.boundingBox();
+  expect(box.width).toBe(Math.min(380, width - 32)); // 358 at 390 wide; the shared .dlg max-width
+  const [cancel, submit] = await dialog.getByRole('button').all();
+  await expect(cancel).toHaveText('Cancel');
+  await expect(submit).toHaveText('Submit');
+  const colours = await page.evaluate(() => {
+    const dlg = document.querySelector('.dlg.topup');
+    const primary = dlg.querySelector('button[type=submit]');
+    const root = getComputedStyle(document.documentElement);
+    const probe = (v) => { const e = document.createElement('i'); e.style.background = `var(${v})`; document.body.append(e); const c = getComputedStyle(e).backgroundColor; e.remove(); return c; };
+    return { bg: getComputedStyle(dlg).backgroundColor, surf: probe('--surf'), btn: getComputedStyle(primary).backgroundColor, accent: probe('--accent'), font: getComputedStyle(dlg.querySelector('h2')).fontFamily, display: root.getPropertyValue('--font-display').trim() };
+  });
+  expect(colours.bg).toBe(colours.surf);
+  expect(colours.btn).toBe(colours.accent);
+  expect(colours.font).toContain(colours.display.split(',')[0].replace(/["']/g, '')); // the title is in the display face
 });

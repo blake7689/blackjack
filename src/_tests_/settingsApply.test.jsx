@@ -23,7 +23,7 @@ const open = (phase) => {
   const view = renderUI(<Settings />, { path: "/settings#rules", game: { phase } });
   return view;
 };
-const bar = () => screen.queryByRole("region", { name: "Save bar" });
+const bar = () => screen.queryByRole("region", { name: "Unsaved changes" });
 const save = () => fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
 
 describe("Settings and the rules section's patches", () => {

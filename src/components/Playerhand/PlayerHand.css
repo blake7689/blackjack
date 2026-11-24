@@ -28,9 +28,9 @@
 @keyframes breathe { 0%, 100% { opacity: .5; } 50% { opacity: .95; } }
 @media (prefers-reduced-motion: reduce) { .spot.open::before { animation: none; } }
 
-/* CHIPS (#82): one SVG per stack; its bottom chip is centred on the circle (--k, set by ChipStack), each chip above lifted up the screen by its thickness */
+/* CHIPS (#82): one SVG per stack; its bottom chip is centred on the circle (--k and the viewBox height --h, set by ChipStack; a percentage of the svg's own height, because --chip holds cqi units and inside .stack, a query container, it would resolve to another width), each chip above lifted up the screen by its thickness */
 .stack { display: block; position: absolute; left: 50%; top: 50%; width: var(--chip); transform: translateX(-50%); pointer-events: none; container-type: inline-size; }
-.stack svg { display: block; width: 100%; height: auto; overflow: visible; transform: translateY(calc(var(--k, 50) / -100 * var(--chip))); filter: drop-shadow(var(--shx, 1px) var(--shy, 3px) 2px rgb(var(--shadow-c) / .55)); } /* shadows fall away from the lamp (useLight) */
+.stack svg { display: block; width: 100%; height: auto; overflow: visible; transform: translateY(calc(var(--k, 50) / var(--h, 106) * -100%)); filter: drop-shadow(var(--shx, 1px) var(--shy, 3px) 2px rgb(var(--shadow-c) / .55)); } /* shadows fall away from the lamp (useLight) */
 .stack .plain-face { display: none; }
 @container (max-width: 43.9px) { .stack .num-face { display: none; } .stack .plain-face { display: inline; } } /* a numeral under 12 px is no use: the diamond face */
 /* side stacks (a double's second stake, the insurance): never over the bet. Beside the circle: insurance left, the double right. */

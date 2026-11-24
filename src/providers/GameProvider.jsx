@@ -9,11 +9,13 @@ import { getToken } from "../utils/api";
 import { getSettings, saveSettings } from "../utils/playerEngine";
 import { stepWait } from "../utils/cardAnimation";
 import { useTheme } from "../hooks/useTheme";
+import { readLook, saveLook } from "../utils/theme";
+import { setCurrency } from "../utils/money";
 
 const ENTRY_ROUTES = new Set(["/", "/login", "/signup"]);
 
 export function GameProvider({ children }) {
-  const [state, dispatch] = useReducer(gameReducer, initialGameState);
+  const [state, dispatch] = useReducer(gameReducer, initialGameState, (s) => ({ ...s, settings: readLook(s.settings) })); // starts with the last look, so no flash before the saved settings load
   const { player, getCredits, applyCreditEvent } = usePlayer();
   const signedIn = player != null;
   const { deckCount, includeCutCard, playTimeout, autoDealDelay } = state.settings;
@@ -23,6 +25,9 @@ export function GameProvider({ children }) {
   // Signed in and the table not yet started: the player is about to land on it (see the settings effect below).
   const [started, setStarted] = useState(false);
   useTheme(state.settings); // <html> data-felt / data-accent / data-mode / .no-totals follow the saved settings
+  const { feltTheme, accent, mode, showTotals } = state.settings;
+  setCurrency(state.settings.currency); // in render, like setSoundPrefs: every money string below this provider reads the symbol it sets
+  useEffect(() => saveLook({ feltTheme, accent, mode, showTotals }), [feltTheme, accent, mode, showTotals]); // read back at boot (main.jsx)
 
   // Read only from event handlers (never during render), so lagging one commit behind is fine.
   const stateRef = useRef(state);
@@ -76,14 +81,27 @@ export function GameProvider({ children }) {
   const next = nextAutoAction(state);
   const auto = (next === "CONTINUE" || next === "DEAL") && !onGame ? null : next;
   const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}|${state.selectedHandIndex}`; // the hand: two split hands can wait for a card one after the other
+  // `autoBar` (L2-4): while auto deal's own DEAL or CONTINUE step waits, the length of that wait for the countdown bar on the Deal / Next hand key, and when it began (a new object each time the timer restarts).
+  const [autoBar, setAutoBar] = useState(null);
   useEffect(() => {
     if (!autoKey) return;
     const type = autoKey.split("|")[0];
+    const wait = stepWait(Number(type === "DEAL" ? autoDealDelay : playTimeout));
     const timer = setTimeout(() => {
       dispatch({ type, auto: true, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
-    }, stepWait(Number(type === "DEAL" ? autoDealDelay : playTimeout)));
-    return () => clearTimeout(timer);
+    }, wait);
+    if (type === "DEAL" || type === "CONTINUE") setAutoBar({ type, ms: wait, at: performance.now() });
+    return () => { clearTimeout(timer); setAutoBar(null); };
   }, [autoKey, playTimeout, autoDealDelay, makeShoe, getCredits]);
+
+  // A hand in play is lost by a reload (L2-12): the browser asks first. Between rounds (nothing dealt yet, or the round settled) it does not.
+  const inPlay = ![GamePhases.NONE, GamePhases.PRE_DEAL, GamePhases.POST_ROUND, GamePhases.END_ROUND].includes(state.phase);
+  useEffect(() => {
+    if (!inPlay) return undefined;
+    const warn = (e) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [inPlay]);
 
   // Leaving the game page cancels a pending deal (it is not a pause: coming back carries on with the next round). //
   useEffect(() => {
@@ -124,7 +142,7 @@ export function GameProvider({ children }) {
 
   // `starting`: signed in but the table not started yet, so Home shows Loading instead of its Start Game button (a provider flag, not round state).
   const starting = signedIn && !started;
-  const shown = useMemo(() => ({ ...state, starting }), [state, starting]);
+  const shown = useMemo(() => ({ ...state, starting, autoBar }), [state, starting, autoBar]);
 
   return (
     <GameActionsContext.Provider value={actions}>

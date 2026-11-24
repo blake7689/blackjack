@@ -1,6 +1,5 @@
 :root {
   --app-vh: 100dvh;
-  --header-height: 0px;
 }
 
 @keyframes spin {
@@ -8,17 +7,17 @@
 }
 
 .page-bg {
-  height: calc(var(--app-vh) - var(--header-height));
+  height: var(--app-vh);
   padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
-  background: radial-gradient(1200px 600px at 50% 100%, #083d22, #02160c);
-  color: #fff;
+  background: var(--bg);
+  color: var(--tx);
 }
 /* ---- Shared page pieces (moved from inline styles, #5) ---- */
 .page-body { padding: 24px; }
-.page-message { padding: 16px; color: #fff; }
+.page-message { padding: 16px; color: var(--tx); }
 
 /* ---- Home, Log in, Create an account, Loading, Error (#87, the mockup's page screens) ---- */
 .page-screen { box-sizing: border-box; height: var(--app-vh); overflow-y: auto; display: grid; place-items: center; padding: calc(24px + var(--safe-t)) 16px calc(24px + var(--safe-b));
@@ -29,15 +28,13 @@
 .page p { margin: 0; color: var(--tx-2); font-size: 15px; }
 .page .btn { box-sizing: border-box; width: 100%; min-height: 52px; font-size: 17px; }
 .page .btn-col { width: 100%; display: grid; gap: 10px; }
+/* Home (L2-5): no hero, so the wordmark carries the page: bigger, with room round it and the actions set apart */
+.page.home { gap: 20px; }
+.page.home .wm { height: 56px; margin-bottom: 18px; }
+.page.home .btn-col { margin-top: 8px; }
 .page .loading { display: flex; flex-direction: column; align-items: center; gap: 18px; }
-.hero { position: relative; width: 100%; height: 170px; border-radius: var(--r4); overflow: hidden; background: radial-gradient(120% 100% at 50% 30%, var(--felt-hi), var(--felt) 50%, var(--felt-lo)); box-shadow: inset 0 0 0 1px rgb(255 255 255 / .06); }
-.hero .hc { position: absolute; width: 74px; border-radius: 5px; overflow: hidden; background: #fff; box-shadow: 2px 8px 12px rgb(0 0 0 / .45); }
-.hero .hc img { display: block; width: 94%; margin: 2.2% 3%; }
-.hero .hc, .hero .hchip { left: round(down, 50%, 1px); top: round(down, 50%, 1px); } /* flat, on whole pixels: a dealt hand, no tilt */
-.hero .hchip { position: absolute; width: 50px; filter: drop-shadow(1px 4px 3px rgb(0 0 0 / .5)); }
-.hero .hchip svg { display: block; width: 100%; }
 .signed { font-size: 13px; color: var(--tx-3); }
-.signed :is(a, button) { display: inline-block; padding: 12px 8px; margin: -12px -8px; border: 0; background: none; font: inherit; color: var(--tx-2); cursor: pointer; } /* a 44 px tap area; the negative margin keeps the line and the look unchanged */
+.signed :is(a, button) { display: inline-block; padding: 12px 8px; margin: -12px -8px; border: 0; background: none; font: inherit; color: var(--tx-2); text-decoration: underline; cursor: pointer; } /* a 44 px tap area; the negative margin keeps the line and the look unchanged */
 .form { width: 100%; display: grid; gap: 14px; text-align: left; }
 .form > div { display: grid; gap: 6px; }
 .form label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; color: var(--tx-2); }
