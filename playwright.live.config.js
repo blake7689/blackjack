@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Post-deploy smoke test against the real site and API (#119). Run by the deploy workflow's live_smoke job,
-// or by hand: `npm run e2e:live` (needs E2E_LIVE_USERNAME and E2E_LIVE_PASSWORD in the environment).
+// on demand by the live-smoke.yml workflow (#170: `gh workflow run live-smoke.yml`), or by hand: `npm run e2e:live` (needs E2E_LIVE_USERNAME and E2E_LIVE_PASSWORD in the environment).
 export default defineConfig({
   testDir: 'e2e-live',
   testMatch: '*.spec.js',
