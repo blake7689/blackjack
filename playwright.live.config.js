@@ -9,10 +9,10 @@ export default defineConfig({
   globalTimeout: 5 * 60_000, // ends before the 6-min step limit in the workflow so Playwright fails with a report
   retries: 0, // an alarm: a retry would hide a flaky live site
   workers: 1, // one real account: parallel tests would race on its balance
-  reporter: [['list']], // no html report: nothing is uploaded and a trace could hold the sign-in
+  reporter: [['list']], // no html report; on failure CI uploads only the text ARIA snapshot (error-context.md), never a trace
   use: {
     baseURL: process.env.LIVE_SITE_URL ?? 'https://blakejack.win',
-    // Off: traces, videos and screenshots of the signed-in page could leak the account.
+    // Off: traces, videos and screenshots of the signed-in page could leak the account. (error-context.md, a text snapshot, is still written to test-results.)
     trace: 'off',
     video: 'off',
     screenshot: 'off',

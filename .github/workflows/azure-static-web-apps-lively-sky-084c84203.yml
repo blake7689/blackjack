@@ -157,6 +157,12 @@ jobs:
       # Chromium shell only, no browser cache (same as the e2e job in ci.yml).
       - run: bash scripts/install-playwright-browser.sh
         timeout-minutes: 4
+      # SWA swaps the new build in after the deploy job ends, so the smoke test could run against the old one (#190).
+      # The build is deterministic (same hash as the live site), so building here tells us which entry script to wait for.
+      - name: Build, to learn the hash the deploy serves
+        run: npm run build
+      - run: bash scripts/wait-for-build.sh
+        timeout-minutes: 4
       # The login secrets are set on this step only, so no other step can read them.
       - run: npx playwright test -c playwright.live.config.js
         timeout-minutes: 6
@@ -164,5 +170,13 @@ jobs:
           E2E_LIVE_USERNAME: ${{ secrets.E2E_LIVE_USERNAME }}
           E2E_LIVE_PASSWORD: ${{ secrets.E2E_LIVE_PASSWORD }}
           CI: true
+      # A text ARIA snapshot of the page at the failure (Playwright's error-context.md), no image or trace.
       - if: failure()
-        run: echo "::error::Post-deploy live smoke test failed - the deploy already happened; this is an alarm, not a rollback. See the test step log."
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-smoke-snapshot
+          path: test-results/**/error-context.md
+          if-no-files-found: ignore
+          retention-days: 7
+      - if: failure()
+        run: echo "::error::Post-deploy live smoke test failed - the deploy already happened; this is an alarm, not a rollback. See the failing step's log (the wait for the new build, or the smoke test)."
