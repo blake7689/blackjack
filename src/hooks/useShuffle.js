@@ -32,7 +32,7 @@ export function useShuffle({ set: setShuf, seq, mid, speed, enter, pile }) {
     if (!stage) return;
     const k = mid ? MID_K : speedK(speed);
     const total = (AWAY + DOWN + RIFFLE + UP + BACK) * k;
-    playSound("shuffle");
+    playSound("shuffle", undefined, total); // the recording stops with the on-screen shuffle
     const undo = reserve(performance.now() + total + 100, true);
     const release = hold(total + 1500);
     let skipped = false, ended = false, box = null;
