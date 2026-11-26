@@ -48,6 +48,25 @@ describe("CardWidthSync / useCardWidthNow (#147)", () => {
     expect(seen).toEqual([undefined, "60px"]); // the seat's own layout effect already saw the new width, not the old one
   });
 
+  it("re-applies the width before syncScroll when decideTight makes a new decision at the same seat count (#193: tight seats narrow the probe)", () => {
+    let width = 100;
+    const probeRead = vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => ({ width }));
+    const stage = { current: document.createElement("div") };
+    const probe = { current: document.createElement("div") };
+    const seen = []; // the --cw syncScroll sees: it measures for overflow, so it must be the final one
+    let decides = false;
+    const decideTight = () => { if (decides) width = 60; return decides; };
+    const syncScroll = () => seen.push(stage.current.style.getPropertyValue("--cw"));
+    const ui = () => <CardWidthSync stageRef={stage} probeRef={probe} seats={2} decideTight={decideTight} syncScroll={syncScroll} />;
+    const { rerender } = render(ui());
+    const reads = probeRead.mock.calls.length;
+    rerender(ui()); // no new decision: the probe is not read again
+    expect(probeRead.mock.calls.length).toBe(reads);
+    decides = true;
+    rerender(ui());
+    expect(seen).toEqual(["100px", "100px", "60px"]);
+  });
+
   it("does nothing when the same seat count renders again, and when the elements are not there", () => {
     const spy = mockProbe();
     const seen = [];

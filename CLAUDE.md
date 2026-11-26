@@ -160,6 +160,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   it has), and a player still on `/` is sent to `/game` (replace); the provider flag `starting` (and `restoring` in PlayerProvider) makes Home show "Shuffling up..." instead of a flash of Home. Home's "Play" is a link to `/game` that calls `startGame`.
 - Fan layout (#81): each card is a `.fan-slot[data-fk]` (`data-fk` = the card's stable key, which `useSmoothRow` reads; never key it by anything that changes) as wide as `--step` (0.27 of `--cw`, floored to whole
   pixels by `useCardWidth`); `--room` (set by `useDealerRoom`) is how far the dealer's hand may reach before it slides left of the shoe's corner card. Never put these in per-card inline style.
+  Remembered card positions (`spots`, #193) are written and compared only through `spotOf`, whose x leaves out the seats row's scroll. Anything that resizes or moves
+  cards (`--cw`, `.seats.tight` / `.scroll`) must be final in the DOM before the cards' layout effects run (#193): `CardWidthSync`, rendered before the seats, applies the
+  width, then calls `useTightSeats`' and `useSeatsScroll`'s decide functions (each hook returns `[value, decide]`; it puts the class on `.seats` at once); the hooks' own
+  parent effects run after the seats and cover the first mount, plus a size a seat's own effect sets (a sideways double's margin). The memoized `DealerArea` and `PlayerHand` take `seats` so they measure in a split's commit.
 - FeltPrint (#81): the rules drawn on the cloth are an `aria-hidden` svg with a separate transparent `<button class="print-hit" aria-label="Table rules">` laid over it. Do not put the printed words in the button
   (axe label-content-name-mismatch); its click stops propagation (a click on the felt continues the round). The words come from `ruleCatalog.js` (`feltPrint`).
 - Top bar balance and top-up (#81, #90): the balance is `<b id="bal">` inside `.bal` (the live smoke reads `#bal`); the 7-tap top-up hangs on that `.bal` div, still with no role, tabindex or aria. `tapEnabled` still comes from GameBoard.

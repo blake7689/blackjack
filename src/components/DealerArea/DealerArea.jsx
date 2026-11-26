@@ -33,5 +33,6 @@ function DealerArea({ dealer, hiddenCount = 0, showTotals = true, holdHole = fal
   );
 }
 
-// Re-renders only when the dealer's hand changes, or a card lands (#5).
+// Re-renders only when the dealer's hand changes, or a card lands (#5), or the seat count does (the `seats` prop, unread: a split resizes and moves
+// these cards, and useSmoothRow must measure in that commit, or it later glides them from a stale spot, #193).
 export default memo(DealerArea);

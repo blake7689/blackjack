@@ -54,7 +54,7 @@ export default function GameBoard() {
   const probeRef = useRef(null);
   useCardWidth(stageInRef, probeRef);
   useDealerRoom(stageInRef, probeRef);
-  const tight = useTightSeats(seatsRef, stageInRef, Math.max(1, hands.length));
+  const [tight, decideTight] = useTightSeats(seatsRef, stageInRef, Math.max(1, hands.length));
   // The chip picked in the rack (#82) is UI state, not round state: the rack picks it, the bet circle bets it. What is shown is always a chip the
   // rack offers (the balance fell below it: the largest one below it).
   const [picked, setPicked] = useState(DEFAULT_CHIP);
@@ -128,7 +128,7 @@ export default function GameBoard() {
     seats.map((h) => [h.tag, h.cards.length, h.hiddenCards.length, h.bet, h.result, h.isDouble ? 1 : 0, h.baseStake ?? 0, h.insurance ?? 0, h.insurancePayout ?? 0].join(".")).join("|"),
     dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!notice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
   ].join(",");
-  const scroll = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1, layoutKey);
+  const [scroll, syncScroll] = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1, layoutKey);
   useCentrePrint(stageInRef, `${layoutKey},${scroll},${tight}`); // scroll and tight change the seats' boxes too
 
   // A click on the felt moves on from the results (the dock has its own Next hand key) //
@@ -158,10 +158,10 @@ export default function GameBoard() {
          {/* .stage-in holds --cw / --ch / --step / --room; its probe is the one element whose width is the formula's result */}
          <div className={stageClass} ref={stageInRef} style={{ "--n": seats.length }}>
           <div className="cw-probe" ref={probeRef} aria-hidden="true" />
-          <CardWidthSync stageRef={stageInRef} probeRef={probeRef} seats={seats.length} />
+          <CardWidthSync stageRef={stageInRef} probeRef={probeRef} seats={seats.length} decideTight={decideTight} syncScroll={syncScroll} />
           <Shoe discard={shownDiscard} cutOut={cutCardFound} away={!!shuf?.away} />
           <div className="dealer-container">
-            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} />}
+            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} seats={seats.length} />}
           </div>
 
           <FeltPrint settings={settings} onOpen={openRules} onDraw={centrePrint} />
@@ -198,6 +198,7 @@ export default function GameBoard() {
                 canBet={canBet}
                 onBet={addBet}
                 multi={seats.length > 1}
+                seats={seats.length}
               />
             ))}
           </section>
