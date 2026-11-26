@@ -151,4 +151,5 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
 }
 
 // Only plain props and stable actions, so a hand re-renders only when it (or the phase) changes (#5).
+// The `seats` prop is unread: it only re-renders the hand in the commit where the seat count changes, so useSmoothRow measures then (#193).
 export default memo(PlayerHand);

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
+import { StrictMode, useLayoutEffect } from "react";
 import { Flight, finishAnimations } from "./testUtils";
 import { animations } from "./setup";
 import FlyCard from "../components/Card/FlyCard";
@@ -129,6 +130,34 @@ describe("FlyCard: a new card", () => {
     expect(copy.isConnected).toBe(false);
   });
 
+  describe("a card that changes size while it flies (#193: a split makes the seats tight)", () => {
+    afterEach(() => { delete HTMLElement.prototype.offsetWidth; delete HTMLElement.prototype.offsetHeight; });
+
+    it("the copy takes the card's current unrotated size and stays centred on it", () => {
+      const size = { w: 63, h: 92 };
+      const centre = { x: 200, y: 400 };
+      Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get: () => size.w });
+      Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, get: () => size.h });
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+        if (!this.classList.contains("fly-card")) return { left: 0, top: 0, width: 0, height: 0 };
+        // a sideways double: its rect is turned (w and h swapped), offsetWidth / offsetHeight are not
+        return { left: centre.x - size.h / 2, top: centre.y - size.w / 2, width: size.h, height: size.w };
+      });
+      const { container } = mount({ card: king, sideways: true });
+      const copy = layer(container).querySelector(".fly-copy");
+      const box = () => [copy.style.width, copy.style.height, copy.style.left, copy.style.top, copy.style.translate];
+      advance(0);
+      expect(box()).toEqual(["63px", "92px", "168.5px", "354px", "0px 0px"]);
+      expect(parseFloat(copy.style.borderRadius)).toBeCloseTo(63 * 0.07);
+      Object.assign(size, { w: 47, h: 68 });
+      Object.assign(centre, { x: 150, y: 390 });
+      advance(16); // the next animation frame
+      // left / top: the ORIGINAL centre (200, 400) minus half the new size; translate: how far the centre has moved
+      expect(box()).toEqual(["47px", "68px", "176.5px", "366px", "-50px -10px"]);
+      expect(parseFloat(copy.style.borderRadius)).toBeCloseTo(47 * 0.07);
+    });
+  });
+
   it("unmounting mid-flight removes the copy, cancels the flight and gives the queue back", () => {
     const { container, unmount } = mount({ card: king });
     advance(0);
@@ -248,6 +277,26 @@ describe("FlyCard: no flight", () => {
     expect(glide.options.duration).toBe(GLIDE);
     unmount();
     expect(glide.cancelled).toBe(true);
+  });
+
+  it("a moved card's glide leaves out the seats row's scroll (#193): it covers the layout move only", () => {
+    spots.set("a", { x: 305, y: 30 }); // remembered without the scroll
+    vi.spyOn(Element.prototype, "scrollLeft", "get").mockImplementation(function left() { return this.classList.contains("seats") ? 285 : 0; });
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(() => ({ left: 10, top: 30, width: 50, height: 70 }));
+    render(<Flight><div className="seats"><FlyCard fk="a" card={king} moved /></div></Flight>);
+    expect(animations.filter((a) => a.frames[0].translate !== undefined).map((a) => a.frames[0].translate)).toEqual(["10px 0px"]); // 305 - (10 + 285)
+  });
+
+  it("under StrictMode a moved card still glides from where it lay, although its new row has overwritten the spot (#193)", () => {
+    spots.set("a", { x: 50, y: 30 });
+    // Stands for the new hand's useSmoothRow: its layout effect, after the card's, notes the new spot. StrictMode then runs the card's effect again.
+    function NewRow({ children }) {
+      useLayoutEffect(() => { spots.set("a", { x: 0, y: 0 }); });
+      return children;
+    }
+    render(<StrictMode><Flight><NewRow><FlyCard fk="a" card={king} moved /></NewRow></Flight></StrictMode>);
+    const live = animations.filter((a) => a.frames[0].translate !== undefined && !a.cancelled);
+    expect(live.map((a) => a.frames[0].translate)).toEqual(["50px 30px"]);
   });
 
   it("a moved card with nowhere to glide from, or under reduced motion, just stays", () => {

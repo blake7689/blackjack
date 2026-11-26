@@ -1,6 +1,6 @@
 import { useContext, useLayoutEffect, useRef, useState } from "react";
 import { FlightContext } from "../../context/FlightContext";
-import { EASING, FLIP_EASING, GLIDE, SIDE_ROOM, TURN_AT, flightFrames, hold, markLanded, queue, reducedMotion, reserve, spots } from "../../utils/cardAnimation";
+import { EASING, FLIP_EASING, GLIDE, SIDE_ROOM, TURN_AT, flightFrames, hold, markLanded, queue, reducedMotion, reserve, spotOf, spots } from "../../utils/cardAnimation";
 import { playSound } from "../../utils/sound";
 import "./Card.css";
 
@@ -32,11 +32,13 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
   });
 
   // A card that changed hands in a split lies where it did a moment ago (useSmoothRow remembers it): it glides from there.
+  // Read at the first render: the new hand's useSmoothRow overwrites it, and StrictMode (dev) runs the effect again after that.
+  const [from] = useState(() => (moved ? spots.get(fk) : null));
   useLayoutEffect(() => {
-    const old = moved && enabled && !reducedMotion() ? spots.get(fk) : null;
+    const old = enabled && !reducedMotion() ? from : null;
     if (!old) return;
-    const r = ref.current.getBoundingClientRect();
-    const glide = ref.current.animate([{ translate: `${old.x - r.left}px ${old.y - r.top}px` }, { translate: "0 0" }], { duration: GLIDE, easing: EASING });
+    const at = spotOf(ref.current);
+    const glide = ref.current.animate([{ translate: `${old.x - at.x}px ${old.y - at.y}px` }, { translate: "0 0" }], { duration: GLIDE, easing: EASING });
     return () => glide.cancel();
     // Once per mount: the glide is fixed by where the card was.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,7 +49,6 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     const el = ref.current;
     const s = document.querySelector(".deck-stack").getBoundingClientRect();
     const r = el.getBoundingClientRect();
-    const w = el.offsetWidth, h = el.offsetHeight;
     const tx = r.left + r.width / 2, ty = r.top + r.height / 2;
     const dx = s.left + s.width / 2 - tx, dy = s.top + s.height / 2 - ty;
     const faced = !!card; // a dealt card turns on landing; the hole card and a face-down double stay down
@@ -56,8 +57,7 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     copy.className = "fly-copy";
     copy.setAttribute("aria-hidden", "true");
     copy.innerHTML = '<div class="cin fly-inner"><div class="cf"></div><div class="cb"><svg viewBox="0 0 250 363" focusable="false"><use href="#cardback"/></svg></div></div>';
-    Object.assign(copy.style, { position: "fixed", left: `${tx - w / 2}px`, top: `${ty - h / 2}px`, width: `${w}px`, height: `${h}px`,
-      borderRadius: `${w * 0.07}px`, visibility: "hidden", willChange: "transform" });
+    Object.assign(copy.style, { position: "fixed", visibility: "hidden", willChange: "transform" });
     layerRef.current.appendChild(copy);
     copyRef.current = copy;
     const now = performance.now();
@@ -68,9 +68,14 @@ export default function FlyCard({ card, fk, dealOrder, moved = false, sideways =
     const total = faced ? Math.max(timing.slide, turnAt + timing.flip) : timing.slide;
     const undo = reserve(start + total);
     let anim, turn, lift, raf;
-    // The copy follows the real card's live spot (the separate `translate` property, on top of the flight), so if the
-    // layout moves while it flies (a total changing width, a row re-centring) it still lands exactly on the card.
-    const follow = () => { const c = el.getBoundingClientRect(); copy.style.translate = `${c.left - r.left}px ${c.top - r.top}px`; };
+    // The copy follows the real card's live size and centre (the separate `translate` property, on top of the flight), so if the
+    // layout moves or resizes the card while it flies (a re-centring row, narrower seats) it still lands exactly on it.
+    const follow = () => {
+      const c = el.getBoundingClientRect();
+      const w = el.offsetWidth, h = el.offsetHeight; // unrotated, unlike the rect of a sideways double
+      Object.assign(copy.style, { left: `${tx - w / 2}px`, top: `${ty - h / 2}px`, width: `${w}px`, height: `${h}px`, borderRadius: `${w * 0.07}px`,
+        translate: `${c.left + c.width / 2 - tx}px ${c.top + c.height / 2 - ty}px` });
+    };
     const tick = () => { follow(); raf = requestAnimationFrame(tick); };
     const land = () => { cancelAnimationFrame(raf); follow(); setShown(true); };
     const done = () => { land(); if (faced) setFlipped(true); }; // the turn is over: the real card is face up

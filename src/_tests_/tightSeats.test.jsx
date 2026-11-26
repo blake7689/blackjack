@@ -14,7 +14,7 @@ Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true
 function Seats({ count = 1, seats = 1 }) {
   const seatsRef = useRef(null);
   const stageRef = useRef(null);
-  const tight = useTightSeats(seatsRef, stageRef, count);
+  const [tight] = useTightSeats(seatsRef, stageRef, count);
   return (
     <div className="stage" ref={stageRef}>
       <div className="seats" ref={seatsRef} data-tight={String(tight)}>

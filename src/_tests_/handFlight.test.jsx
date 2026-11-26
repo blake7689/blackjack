@@ -5,7 +5,7 @@ import { animations } from "./setup";
 import DealerArea from "../components/DealerArea/DealerArea";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import GameBoard from "../components/GameBoard/GameBoard";
-import { EASING, GLIDE, cardTiming, hold, landed, queue, reserve } from "../utils/cardAnimation";
+import { EASING, GLIDE, cardTiming, hold, landed, queue, reserve, spots } from "../utils/cardAnimation";
 import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
@@ -225,6 +225,38 @@ describe("useSmoothRow", () => {
     lefts[a.id] = 60;
     rerender(ui([a, b]));
     expect(animations).toHaveLength(0);
+  });
+
+  // #193: the seats row scrolls between renders (useSeatsScroll, with no re-render of the hand): every rect moves, no card does.
+  describe("in a scrolled seats row (#193)", () => {
+    let scrolled;
+    const row = (cards) => <Flight><div className="seats"><PlayerHand {...handProps} hand={mkHand(cards, { tag: "row" })} /></div></Flight>;
+    const settled = () => {
+      scrolled = 0;
+      vi.spyOn(Element.prototype, "scrollLeft", "get").mockImplementation(function left() { return this.classList.contains("seats") ? scrolled : 0; });
+      lefts[a.id] = 300;
+      const view = renderUI(row([a]));
+      settleDeal();
+      view.rerender(row([a]));
+      return view;
+    };
+
+    it("a card added after the row scrolled glides nothing: rect and scrollLeft moved equal and opposite", () => {
+      const { rerender } = settled();
+      scrolled = 285;
+      lefts[a.id] = 15;
+      rerender(row([a, b]));
+      expect(glides()).toHaveLength(0);
+      expect(spots.get(a.id).x).toBe(300); // remembered without the scroll
+    });
+
+    it("a real layout move still glides, by the layout move alone", () => {
+      const { rerender } = settled();
+      scrolled = 285;
+      lefts[a.id] = 15 - 30; // scrolled by 285, and the hand re-centred 30 px to the left
+      rerender(row([a, b]));
+      expect(glides().map((g) => g.frames[0].translate)).toEqual(["30px 0px"]);
+    });
   });
 
   it("does not glide on the board's first render", () => {
@@ -451,5 +483,62 @@ describe("offers and the peek (#91)", () => {
     finishAnimations();
     expect(screen.getByAltText("king of hearts")).toBeTruthy();
     expect(pill(container)).toBe("Blackjack!");
+  });
+});
+
+// #193: a split can narrow the cards (tight seats) and turn scrolling on. Both must be in the DOM before any card measures itself, or the cards remember
+// (and glide or fly to) a layout that is replaced in the same commit.
+describe("GameBoard: the layout is final before the cards measure (#193)", () => {
+  const SEAT_WIDTH = [0, 360, 180, 100]; // px, by seat count: only three seats are too narrow for the side stacks
+  let offsetWidth;
+  beforeEach(() => {
+    offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth");
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, get() { return this.classList.contains("spot") ? 60 : this.classList.contains("stack") ? 30 : 0; } });
+    vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function width() {
+      return this.classList.contains("seat") ? SEAT_WIDTH[this.parentElement.children.length] : 375;
+    });
+  });
+  afterEach(() => {
+    if (offsetWidth) Object.defineProperty(HTMLElement.prototype, "offsetWidth", offsetWidth);
+    else delete HTMLElement.prototype.offsetWidth;
+  });
+
+  const hands = ["a", "b", "c"].map((tag) => mkHand(stackedShoe(["8", "3"]), { tag }));
+  const dealer = { cards: stackedShoe(["10"]), dealerDisplayTotal: 10 }; // like the reducer, a split keeps the dealer object: only the seat count tells DealerArea
+  const table = (n) => ({ phase: GamePhases.PLAYER_TURN, hands: hands.slice(0, n), dealer, shoe: stackedShoe(["2", "3"]) });
+
+  it("on a split that makes the seats tight and scrolling, every card measures with .tight, .scroll and the narrower --cw applied, and the dealer's card glides in that commit", () => {
+    const measured = [];
+    let record = false;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function rect() {
+      const box = { left: 0, top: 0, width: 50, height: 70, right: 100, bottom: 70 };
+      const stage = this.closest(".stage-in");
+      const seats = stage?.querySelector(".seats");
+      if (this.classList.contains("cw-probe")) return { ...box, width: seats?.classList.contains("tight") ? 47 : 63 }; // GameBoard.css: tight seats narrow the cards
+      if (this === seats) return { ...box, right: 375 };
+      if (this.classList.contains("hand") && seats?.children.length === 3) return { ...box, right: 9999 }; // three seats spill past the row
+      if (this.classList.contains("fan-slot")) {
+        if (record && this.closest(".seats")) {
+          measured.push({ tight: seats.classList.contains("tight"), scroll: seats.classList.contains("scroll"), cw: stage.style.getPropertyValue("--cw") });
+        }
+        if (this.closest(".dealer-area")) return { ...box, left: stage.style.getPropertyValue("--n") === "3" ? 170 : 200 };
+      }
+      return box;
+    });
+    const { container, gameState, rerender } = renderUI(<GameBoard />, { game: table(2) });
+    advance(10_000);
+    finishAnimations();
+    const seats = container.querySelector(".seats");
+    expect(seats.className).not.toMatch(/tight|scroll/);
+    expect(container.querySelector(".stage-in").style.getPropertyValue("--cw")).toBe("63px");
+    animations.length = 0;
+    record = true;
+    Object.assign(gameState, table(3));
+    rerender(<GameBoard />);
+    expect(seats.classList.contains("tight") && seats.classList.contains("scroll")).toBe(true);
+    expect(measured.length).toBeGreaterThanOrEqual(2); // the split-off hand's cards at least (memoized hands with unchanged props do not re-render)
+    expect(measured.filter((m) => !m.tight || !m.scroll || m.cw !== "47px")).toEqual([]);
+    // the memoized dealer area measures in this commit too: its card glides now, not from a stale spot at the dealer's next card
+    expect(glides().filter((g) => g.el.closest(".dealer-area")).map((g) => g.frames[0].translate)).toEqual(["30px 0px"]);
   });
 });

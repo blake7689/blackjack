@@ -65,8 +65,13 @@ export function stepWait(T) {
   return Math.max(T, queue.free - performance.now() + BEAT_SHARE * T);
 }
 
-// Where each card on the table lay at its last render (by its key, viewport px): a card that changes hands in a split glides from there (useSmoothRow, FlyCard).
+// Where each card on the table lay at its last render (by its key, spotOf px): a card that changes hands in a split glides from there (useSmoothRow, FlyCard).
 export const spots = new Map();
+// x leaves out the seats row's scroll: it scrolls between renders (useSeatsScroll), and that must not read as the card having moved.
+export const spotOf = (el) => {
+  const r = el.getBoundingClientRect();
+  return { x: r.left + (el.closest(".seats")?.scrollLeft ?? 0), y: r.top };
+};
 
 // Cards that have landed and finished flipping: a hand's total counts only these.
 export const landed = { ids: new Set(), version: 0, listeners: new Set() };
