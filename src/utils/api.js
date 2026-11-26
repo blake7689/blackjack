@@ -84,4 +84,4 @@ function errorMessage(text) {
 export const apiGet = (url, timeout) => request("GET", url, undefined, timeout);
 export const apiPost = (url, body, timeout, ungated) => request("POST", url, body, timeout, ungated);
 export const apiPut = (url, body, ungated) => request("PUT", url, body, undefined, ungated);
-export const apiDelete = (url) => request("DELETE", url);
+export const apiDelete = (url, body) => request("DELETE", url, body);

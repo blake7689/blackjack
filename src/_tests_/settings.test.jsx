@@ -27,6 +27,16 @@ const noNote = () => expect(within(screen.getByRole("heading", { level: 1 }).clo
 const radio = (group, name) => within(screen.getByRole("radiogroup", { name: group })).getByRole("radio", { name: new RegExp(`^${name}`) });
 const field = (label) => screen.getByLabelText(label);
 const type = (label, value) => fireEvent.change(field(label), { target: { value } });
+// A username or email change needs the current password (BlackJackAPI#71).
+const NEW_PASSWORD_LABEL = "Password to save this change";
+const MISSING = "Enter your current password to change your username or email.";
+const MY_PASSWORD = "secret12";
+const typePassword = (value = MY_PASSWORD) => type(NEW_PASSWORD_LABEL, value);
+const askToDelete = () => { fireEvent.click(screen.getByRole("button", { name: "Delete profile" })); return screen.getByRole("dialog", { name: "Delete profile?" }); };
+const dialogField = () => within(screen.getByRole("dialog")).getByLabelText("Current password"); // Account's own "Current password" is behind the overlay
+const typeInDialog = (value = MY_PASSWORD) => fireEvent.change(dialogField(), { target: { value } });
+const deleteForGood = () => fireEvent.click(screen.getByRole("button", { name: "Delete for good" }));
+const described = (el) => (el.getAttribute("aria-describedby") ?? "").split(" ").filter(Boolean).map((id) => document.getElementById(id)?.textContent);
 const pickPreset = (name) => {
   fireEvent.click(screen.getByRole("button", { name: /^Preset/ }));
   fireEvent.click(screen.getByRole("option", { name: new RegExp(`^${name}`) }));
@@ -130,6 +140,7 @@ describe("Settings: the page", () => {
       openLive({}, { player: { updatePlayer } });
       show("Account");
       type("Username", "taken");
+      typePassword();
       show("Gameplay");
       scrolls.length = 0;
       fireEvent.click(saveButton());
@@ -137,6 +148,21 @@ describe("Settings: the page", () => {
       expect(last().el.id).toBe("sec-account");
       expect(last().options).toEqual({ block: "start", behavior: "auto" }); // never smooth: the hint bubble hides on any scroll (L1-38)
       expect(scrolls).toHaveLength(1);
+    });
+
+    it("a Save held back for the password scrolls to Account, then centres the password field", async () => {
+      openLive();
+      show("Account");
+      type("Username", "renamed");
+      show("Gameplay");
+      scrolls.length = 0;
+      fireEvent.click(saveButton());
+      await flush();
+      expect(scrolls).toHaveLength(2);
+      expect(scrolls[0].el.id).toBe("sec-account");
+      expect(scrolls[0].options).toEqual({ block: "start", behavior: "auto" });
+      expect(scrolls[1].el).toBe(field(NEW_PASSWORD_LABEL).closest("div"));
+      expect(scrolls[1].options).toEqual({ block: "center", behavior: "auto" });
     });
 
     it("a link to another #section while here scrolls to it", () => {
@@ -469,9 +495,10 @@ describe("Settings: profile fields are part of the draft too", () => {
     expect(saveButton().getAttribute("aria-disabled")).toBe("true");
     type("Username", "renamed");
     expect(saveButton().getAttribute("aria-disabled")).toBe("false");
+    typePassword();
     fireEvent.click(saveButton());
     await flush();
-    expect(updatePlayer).toHaveBeenCalledWith({ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er" });
+    expect(updatePlayer.mock.calls).toStrictEqual([[{ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er", currentPassword: MY_PASSWORD }]]);
     expect(gameActions.changeSettings).not.toHaveBeenCalled();
     expect(note().textContent).toBe("Saved");
     expect(bar()).toBeNull();
@@ -514,9 +541,11 @@ describe("Settings: profile fields are part of the draft too", () => {
     fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
     show("Account");
     type("Username", "taken");
+    typePassword();
     show("Gameplay");
     fireEvent.click(saveButton());
     await flush();
+    expect(updatePlayer).toHaveBeenCalledTimes(1);
     expect(gameActions.changeSettings.mock.calls).toEqual([[{ showCardCount: false }]]);
     expect(expanded()).toEqual(["Account"]);
     expect(screen.getByRole("alert").textContent).toBe("Name taken");
@@ -548,11 +577,12 @@ describe("Settings: profile fields are part of the draft too", () => {
     show("Account");
     type("First name", "");
     type("Username", "renamed");
+    typePassword();
     show("Gameplay");
     fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
     fireEvent.click(saveButton());
     await flush();
-    expect(updatePlayer).toHaveBeenCalledWith({ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er" });
+    expect(updatePlayer.mock.calls).toStrictEqual([[{ userName: "renamed", email: "t@example.com", firstName: "Test", lastName: "Er", currentPassword: MY_PASSWORD }]]);
     expect(gameActions.changeSettings).toHaveBeenCalledWith({ showCardCount: false });
     expect(expanded()).toEqual(["Account"]);
     expect(screen.getByText("First name is required.")).toBeTruthy();
@@ -581,9 +611,10 @@ describe("Settings: profile fields are part of the draft too", () => {
     open({}, { player: { updatePlayer } });
     show("Account");
     type("Username", "taken");
+    typePassword();
     fireEvent.click(saveButton());
     await flush();
-    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toBe("Name taken");
     type("Username", "taken2");
     expect(screen.queryByRole("alert")).toBeNull();
   });
@@ -1120,24 +1151,36 @@ describe("Settings: Delete profile", () => {
   it("'Delete for good' deletes the profile, resets the game and goes home", async () => {
     const deletePlayer = vi.fn().mockResolvedValue(true);
     const { gameActions } = open({}, { player: { deletePlayer } });
-    fireEvent.click(screen.getByRole("button", { name: "Delete profile" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete for good" }));
+    askToDelete();
+    typeInDialog();
+    deleteForGood();
     await flush();
-    expect(deletePlayer).toHaveBeenCalledTimes(1);
+    expect(deletePlayer.mock.calls).toEqual([[MY_PASSWORD]]);
     expect(gameActions.resetGame).toHaveBeenCalled();
     expect(location()).toBe("/");
   });
 
-  it("shows a failed delete in the notice, with a fallback message, and stays on the page", async () => {
+  it("shows a failed delete in the dialog, with a fallback message, and stays on the page", async () => {
     const deletePlayer = vi.fn().mockRejectedValueOnce(new Error("Gone")).mockRejectedValueOnce(new Error(""));
-    open({}, { player: { deletePlayer } });
+    const { gameActions } = open({}, { player: { deletePlayer } });
+    const dialog = askToDelete();
     for (const expected of ["Gone", "Delete failed"]) {
-      fireEvent.click(screen.getByRole("button", { name: "Delete profile" }));
-      fireEvent.click(screen.getByRole("button", { name: "Delete for good" }));
+      typeInDialog();
+      dialogField().blur();
+      deleteForGood();
       await flush();
-      expect(note().textContent).toBe(expected);
-      expect(note().className).toContain("error");
+      expect(screen.getByRole("dialog")).toBe(dialog); // it stays open
+      const alert = within(dialog).getByRole("alert");
+      expect(alert.textContent).toBe(expected);
+      expect(dialogField().value).toBe("");
+      expect(dialogField().getAttribute("aria-invalid")).toBe("true");
+      expect(described(dialogField())).toEqual([expected]);
+      expect(document.activeElement).toBe(dialogField());
+      for (const button of within(dialog).getAllByRole("button")) expect(button.hasAttribute("aria-disabled")).toBe(false);
     }
+    noNote(); // the page's own line says nothing
+    expect(deletePlayer).toHaveBeenCalledTimes(2);
+    expect(gameActions.resetGame).not.toHaveBeenCalled();
     expect(location()).toBe("/settings");
   });
 
@@ -1146,10 +1189,356 @@ describe("Settings: Delete profile", () => {
     open({}, { player: { deletePlayer } });
     show("Gameplay");
     fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete profile" }));
-    fireEvent.click(screen.getByRole("button", { name: "Delete for good" }));
+    askToDelete();
+    typeInDialog();
+    deleteForGood();
     await flush();
-    expect(deletePlayer).toHaveBeenCalled();
+    expect(deletePlayer.mock.calls).toEqual([[MY_PASSWORD]]);
+    expect(location()).toBe("/");
+    expect(screen.queryByRole("dialog", { name: "Discard your changes?" })).toBeNull(); // (the fake keeps the player, so Delete's own dialog stays mounted)
+  });
+
+  it("the field is a labelled current-password input between the text and the buttons, in no form", () => {
+    open();
+    const dialog = askToDelete();
+    const input = dialogField();
+    expect([input.type, input.getAttribute("autocomplete"), input.value, input.getAttribute("aria-invalid"), input.hasAttribute("aria-describedby")])
+      .toEqual(["password", "current-password", "", "false", false]);
+    const follows = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(within(dialog).getByText(/cannot be undone/), input)).toBe(true);
+    expect(follows(input, within(dialog).getByRole("button", { name: "Keep my profile" }))).toBe(true);
+    expect(input.closest("form")).toBeNull();
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+  });
+
+  it("Tab wraps over the field and both buttons: from Delete for good to the field, Shift+Tab back", () => {
+    open();
+    const dialog = askToDelete();
+    const [safe, danger] = within(dialog).getAllByRole("button");
+    const tab = (shiftKey = false) => {
+      const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
+      act(() => { document.dispatchEvent(event); });
+      return event.defaultPrevented;
+    };
+    danger.focus();
+    expect(tab()).toBe(true);
+    expect(document.activeElement).toBe(dialogField());
+    expect(tab(true)).toBe(true);
+    expect(document.activeElement).toBe(danger);
+    // inside the dialog the browser moves focus itself: the trap leaves Shift+Tab from the safe button (to the field) and Tab from the field alone
+    safe.focus();
+    expect(tab(true)).toBe(false);
+    dialogField().focus();
+    expect(tab()).toBe(false);
+  });
+
+  it("Enter in the field deletes nothing and leaves the dialog open", () => {
+    const deletePlayer = vi.fn();
+    open({}, { player: { deletePlayer } });
+    askToDelete();
+    typeInDialog();
+    for (const kind of ["keyDown", "keyPress", "keyUp"]) fireEvent[kind](dialogField(), { key: "Enter", code: "Enter", charCode: 13 });
+    expect(deletePlayer).not.toHaveBeenCalled();
+    expect(screen.getByRole("dialog", { name: "Delete profile?" })).toBeTruthy();
+  });
+
+  it("'Delete for good' with an empty field sends nothing, says why inline and focuses the field; typing clears it", () => {
+    const deletePlayer = vi.fn();
+    open({}, { player: { deletePlayer } });
+    const dialog = askToDelete();
+    deleteForGood();
+    const text = "Enter your current password to delete your account.";
+    expect(deletePlayer).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole("alert").textContent).toBe(text);
+    expect(dialogField().getAttribute("aria-invalid")).toBe("true");
+    expect(described(dialogField())).toEqual([text]);
+    expect(document.activeElement).toBe(dialogField());
+    typeInDialog("s");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(dialogField().getAttribute("aria-invalid")).toBe("false");
+    expect(dialogField().hasAttribute("aria-describedby")).toBe(false);
+  });
+
+  it("while the delete runs, both buttons are aria-disabled, clicks and Escape do nothing, and only one DELETE goes out", async () => {
+    let fail;
+    const deletePlayer = vi.fn(() => new Promise((_, reject) => { fail = reject; }));
+    open({}, { player: { deletePlayer } });
+    const dialog = askToDelete();
+    typeInDialog("  spaces kept  ");
+    deleteForGood();
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.map((b) => b.getAttribute("aria-disabled"))).toEqual(["true", "true"]);
+    expect(dialogField().readOnly).toBe(true);
+    for (const button of buttons) fireEvent.click(button);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(deletePlayer.mock.calls).toEqual([["  spaces kept  "]]); // never trimmed
+    await act(async () => { fail(new Error("Incorrect password.")); });
+    expect(within(dialog).getByRole("alert").textContent).toBe("Incorrect password.");
+    expect(dialogField().readOnly).toBe(false);
+    fireEvent.keyDown(document, { key: "Escape" }); // Escape means "keep" again
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("a reopened dialog starts clean: no password, no error", async () => {
+    const deletePlayer = vi.fn().mockRejectedValue(new Error("Incorrect password."));
+    open({}, { player: { deletePlayer } });
+    askToDelete();
+    typeInDialog("wrong");
+    deleteForGood();
+    await flush();
+    typeInDialog("half typed");
+    fireEvent.click(screen.getByRole("button", { name: "Keep my profile" }));
+    const dialog = askToDelete();
+    expect(dialogField().value).toBe("");
+    expect(dialogField().getAttribute("aria-invalid")).toBe("false");
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    // and after an inline "enter your password" too
+    deleteForGood();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(within(askToDelete()).queryByRole("alert")).toBeNull();
+  });
+
+  it("a 401 signs out as before: the provider drops the player, then the call rejects; nothing is thrown", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    let view;
+    const deletePlayer = vi.fn(async () => {
+      view.playerCtx.player = null;
+      view.rerender(<Settings />);
+      throw Object.assign(new Error("Unauthorized."), { status: 401 });
+    });
+    view = open({}, { player: { deletePlayer } });
+    askToDelete();
+    typeInDialog();
+    deleteForGood();
+    await flush();
+    expect(screen.getByText("Please log in to manage settings.")).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(view.gameActions.resetGame).not.toHaveBeenCalled();
+    expect(consoleError).not.toHaveBeenCalled();
+  });
+});
+
+describe("Settings: the password for a username or email change (BlackJackAPI#71)", () => {
+  const pw = () => screen.queryByLabelText(NEW_PASSWORD_LABEL);
+  const openAccount = (extra = {}, game = {}) => { const view = openLive(game, extra); show("Account"); return view; };
+  const save = async () => { fireEvent.click(saveButton()); await flush(); };
+
+  it.each([["Username", "renamed"], ["Email", "new@example.com"], ["Username", "TESTER"], ["Email", "t@EXAMPLE.com"]])(
+    "appears while %s differs from the saved value (%s), described and typed as the current password", (label, value) => {
+      openAccount();
+      expect(pw()).toBeNull();
+      type(label, value);
+      expect([pw().type, pw().getAttribute("autocomplete"), pw().value, pw().getAttribute("aria-invalid")]).toEqual(["password", "current-password", "", "false"]);
+      expect(described(pw())).toEqual(["Needed to change your username or email."]);
+      expect(Boolean(field("Last name").compareDocumentPosition(pw()) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true); // under the profile fields
+      expect(saveButton().getAttribute("aria-disabled")).toBe("false"); // an empty password never disables Save
+    });
+
+  it("is not there for a name change", () => {
+    openAccount();
+    type("First name", "Ada");
+    type("Last name", "Lovelace");
+    expect(pw()).toBeNull();
+  });
+
+  it("is not an unsaved change and sets no leave guard of its own; typing username and email back clears it", () => {
+    openAccount();
+    type("Username", "renamed");
+    type("Email", "new@example.com");
+    typePassword();
+    expect(countText()).toBe("2 unsaved changes");
+    type("Username", testPlayer.userName); // the email still differs, so the field and its text stay
+    expect(pw().value).toBe(MY_PASSWORD);
+    type("Email", testPlayer.email);
+    expect(pw()).toBeNull();
+    expect(bar()).toBeNull();
+    expect(leaveGuard.ask).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Table" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    cleanup();
+    openAccount();
+    type("Username", "again");
+    expect(pw().value).toBe("");
+  });
+
+  it("a missing-password error does not survive typing the username back", async () => {
+    openAccount();
+    type("Username", "renamed");
+    await save();
+    type("Username", testPlayer.userName);
+    type("Username", "renamed");
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(pw().getAttribute("aria-invalid")).toBe("false");
+  });
+
+  it("Discard clears it", () => {
+    openAccount();
+    type("Username", "renamed");
+    typePassword();
+    fireEvent.click(discardButton());
+    expect(pw()).toBeNull();
+    type("Username", "renamed");
+    expect(pw().value).toBe("");
+  });
+
+  it("a good save clears it", async () => {
+    const updatePlayer = vi.fn().mockResolvedValue(true);
+    openAccount({ player: { updatePlayer } });
+    type("Email", "new@example.com");
+    typePassword("  pass word  ");
+    await save();
+    expect(updatePlayer.mock.calls).toStrictEqual([[{ userName: "tester", email: "new@example.com", firstName: "Test", lastName: "Er", currentPassword: "  pass word  " }]]);
+    // the fake player keeps the old email, so the field comes back with the next edit, empty
+    type("Email", "other@example.com");
+    expect(pw().value).toBe("");
+  });
+
+  it("a password typed for a new edit while a save is on its way stays", async () => {
+    let answer;
+    const updatePlayer = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    openAccount({ player: { updatePlayer } });
+    type("Username", "first");
+    typePassword("first-password");
+    fireEvent.click(saveButton());
+    type("Username", "second");
+    typePassword("second-password");
+    await act(async () => { answer(); });
+    await flush();
+    expect(pw().value).toBe("second-password");
+  });
+
+  it("keeps it out of the settings, storage and the other saves", async () => {
+    const updatePlayer = vi.fn().mockResolvedValue(true);
+    const { gameActions } = openAccount({ player: { updatePlayer } });
+    type("Username", "renamed");
+    typePassword("s3cret-marker");
+    show("Gameplay");
+    fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
+    await save();
+    expect(gameActions.changeSettings.mock.calls).toStrictEqual([[{ showCardCount: false }]]);
+    expect(JSON.stringify([{ ...localStorage }, { ...sessionStorage }])).not.toContain("s3cret-marker");
+  });
+
+  it.each([["Username", "renamed"], ["Email", "new@example.com"]])("Save without it, with only %s changed: nothing is sent, the field says why and gets the focus, from another section", async (label, value) => {
+    const updatePlayer = vi.fn();
+    const { gameActions } = openAccount({ player: { updatePlayer } });
+    type(label, value);
+    show("Gameplay");
+    await save();
+    expect(updatePlayer).not.toHaveBeenCalled();
+    expect(gameActions.changeSettings).not.toHaveBeenCalled();
+    expect(expanded()).toEqual(["Account"]);
+    expect(screen.getByText(MISSING)).toBeTruthy();
+    expect(pw().getAttribute("aria-invalid")).toBe("true");
+    expect(described(pw())).toEqual(["Needed to change your username or email.", MISSING]);
+    expect(note().textContent).toBe("Your profile isn't saved yet.");
+    expect(note().className).toContain("error");
+    expect(document.activeElement).toBe(pw());
+    expect(field(label).value).toBe(value);
+    expect(countText()).toBe("1 unsaved change");
+    // a second press, with Account already open, sends the player back to the field
+    pw().blur();
+    await save();
+    expect(document.activeElement).toBe(pw());
+    // typing clears the error, and the next Save goes through
+    typePassword("s");
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(pw().getAttribute("aria-invalid")).toBe("false");
+    expect(described(pw())).toEqual(["Needed to change your username or email."]);
+  });
+
+  it("Save without it from a collapsed page opens Account and focuses the field", async () => {
+    openAccount();
+    type("Username", "renamed");
+    fireEvent.click(sectionButton("Account"));
+    expect(expanded()).toEqual([]);
+    await save();
+    expect(expanded()).toEqual(["Account"]);
+    expect(document.activeElement).toBe(pw());
+  });
+
+  it("Save without it still saves names and settings, with the OLD username and email and no currentPassword key", async () => {
+    const updatePlayer = vi.fn().mockResolvedValue(true);
+    const { gameActions } = openAccount({ player: { updatePlayer } });
+    type("Username", "renamed");
+    type("Email", "new@example.com");
+    type("First name", "Ada");
+    show("Gameplay");
+    fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
+    await save();
+    expect(updatePlayer.mock.calls).toStrictEqual([[{ userName: "tester", email: "t@example.com", firstName: "Ada", lastName: "Er" }]]);
+    expect(Object.keys(updatePlayer.mock.calls[0][0])).not.toContain("currentPassword");
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ showCardCount: false }]]);
+    expect([field("Username").value, field("Email").value]).toEqual(["renamed", "new@example.com"]);
+    expect(screen.getByText(MISSING)).toBeTruthy();
+    expect(note().textContent).toBe("Your profile isn't saved yet.");
+    expect(expanded()).toEqual(["Account"]);
+    expect(document.activeElement).toBe(pw());
+  });
+
+  it("is sent only when the username or email is in the request: not when an invalid email holds it back", async () => {
+    const updatePlayer = vi.fn().mockResolvedValue(true);
+    openAccount({ player: { updatePlayer } });
+    type("Email", "nope");
+    typePassword();
+    type("First name", "Ada");
+    await save();
+    expect(updatePlayer.mock.calls).toStrictEqual([[{ userName: "tester", email: "t@example.com", firstName: "Ada", lastName: "Er" }]]);
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(pw().value).toBe(""); // any good profile save clears it, used or not
+  });
+
+  it("through 'Start a new shoe?' mid-round, the field still gets the focus (not the Save button behind the dialog)", async () => {
+    const updatePlayer = vi.fn();
+    const { gameActions } = openAccount({ player: { updatePlayer } }, { phase: GamePhases.PLAYER_TURN });
+    type("Username", "renamed");
+    show("Table rules");
+    fireEvent.click(radio("Deck size", "8"));
+    saveButton().focus();
+    fireEvent.click(saveButton());
+    fireEvent.click(screen.getByRole("button", { name: "Save and reset" }));
+    await flush();
+    expect(updatePlayer).not.toHaveBeenCalled();
+    expect(gameActions.changeSettings.mock.calls).toEqual([[{ deckCount: 8 }]]);
+    expect(expanded()).toEqual(["Account"]);
+    expect(document.activeElement).toBe(pw());
+  });
+
+  it("a refusal on 'Incorrect password.' shows the API's words, keeps the edits, and clears, marks and focuses the field", async () => {
+    // The literal the page matches on; the API pins the same one (ReauthEndpointTests).
+    const updatePlayer = vi.fn().mockRejectedValue(new Error("Incorrect password."));
+    openAccount({ player: { updatePlayer } });
+    type("Username", "renamed");
+    typePassword("wrong-one");
+    show("Gameplay");
+    await save();
+    expect(screen.getByRole("alert").textContent).toBe("Incorrect password.");
+    expect(note().textContent).toBe("Your profile isn't saved yet.");
+    expect(expanded()).toEqual(["Account"]);
+    expect(field("Username").value).toBe("renamed");
+    expect(pw().value).toBe("");
+    expect(pw().getAttribute("aria-invalid")).toBe("true");
+    expect(described(pw())).toEqual(["Needed to change your username or email.", "Incorrect password."]);
+    expect(document.activeElement).toBe(pw());
+    typePassword("n");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(pw().getAttribute("aria-invalid")).toBe("false");
+    expect(described(pw())).toEqual(["Needed to change your username or email."]);
+  });
+
+  it("any other refusal keeps the password and does not mark or focus the field", async () => {
+    const updatePlayer = vi.fn().mockRejectedValue(new Error("Username 'taken' is already taken."));
+    openAccount({ player: { updatePlayer } });
+    type("Username", "taken");
+    typePassword();
+    await save();
+    expect(screen.getByRole("alert").textContent).toBe("Username 'taken' is already taken.");
+    expect(note().textContent).toBe("Your profile isn't saved yet.");
+    expect(pw().value).toBe(MY_PASSWORD);
+    expect(pw().getAttribute("aria-invalid")).toBe("false");
+    expect(described(pw())).toEqual(["Needed to change your username or email."]);
+    expect(document.activeElement).not.toBe(pw());
   });
 });
 

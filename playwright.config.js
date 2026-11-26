@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 const ci = !!process.env.CI;
 
 // The specs the narrow-screen projects (phone, webkit) re-run; one regex so they cannot drift.
-const narrowSpecs = /(smoke|topup|a11y|split|layout|tableart|chips|animations|sound|screens|loop1|loop2)\.spec\.js/;
+const narrowSpecs = /(smoke|topup|a11y|split|layout|tableart|chips|animations|sound|screens|loop1|loop2|reauth)\.spec\.js/;
 
 // Smoke tests run against the e2e build (.env.e2e -> fake API origin that page.route answers).
 // Headless by default; `npx playwright test --headed` shows the browser.
@@ -20,7 +20,7 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   // E2E_CHANNEL=chrome uses the installed Google Chrome where Playwright's own download cannot run (e.g. blocked by security software).
-  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art, chips, animations, sound, screens, loop1 and loop2 tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
+  // 'phone' re-runs the smoke, top-up, a11y, split, layout, table-art, chips, animations, sound, screens, loop1, loop2 and reauth tests at Pixel 7 size (touch, mobile viewport); `--project=phone` runs only it.
   // 'webkit' (#167) runs the same specs in WebKit at iPhone 14 size (Safari's engine; no channel exists for it).
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], channel: process.env.E2E_CHANNEL } },

@@ -28,8 +28,9 @@ export const loginPlayer = ({ usernameOrEmail, password }) => signInWith("/auth/
 export const registerPlayer = ({ userName, email, password, firstName, lastName }) =>
   signInWith("/auth/register", { userName, email, password, firstName: firstName || null, lastName: lastName || null });
 
-export async function updateProfile({ userName, email, firstName, lastName }) {
-  return normalizePlayer(await apiPut("/player/me", { userName, email, firstName: firstName || null, lastName: lastName || null }));
+// currentPassword is needed only to change the username or email (BlackJackAPI#71); without one the field is not sent.
+export async function updateProfile({ userName, email, firstName, lastName, currentPassword }) {
+  return normalizePlayer(await apiPut("/player/me", { userName, email, firstName: firstName || null, lastName: lastName || null, currentPassword: currentPassword || undefined }));
 }
 
 // The API revokes the token on a password change (#171), so sign in again at once with the new password and keep the
@@ -48,8 +49,8 @@ export const changePassword = (currentPassword, newPassword, userName) => swapTo
   }
 });
 
-export async function deleteMe() {
-  await apiDelete("/player/me");
+export async function deleteMe(currentPassword) {
+  await apiDelete("/player/me", { currentPassword });
   clearToken();
 }
 

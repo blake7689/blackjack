@@ -65,9 +65,16 @@ describe("signing in", () => {
 
     setToken("tok-3");
     fetchMock.mockResolvedValueOnce(respond(null, 204));
-    await deleteMe();
-    expect(call()).toMatchObject({ method: "DELETE", auth: "Bearer tok-3" });
+    await deleteMe("my-password");
+    expect(call()).toMatchObject({ method: "DELETE", auth: "Bearer tok-3", body: { currentPassword: "my-password" } });
     expect(getToken()).toBeNull();
+  });
+
+  it("deleteMe keeps the token when the API refuses", async () => {
+    setToken("tok-4");
+    fetchMock.mockResolvedValueOnce(respond({ message: "Account deletion failed.", errors: ["Incorrect password."] }, 400));
+    await expect(deleteMe("wrong")).rejects.toThrow("Incorrect password.");
+    expect(getToken()).toBe("tok-4");
   });
 });
 
@@ -105,6 +112,16 @@ describe("account changes", () => {
     expect(p.userName).toBe("tester");
     await updateProfile({ userName: "renamed", email: "r@example.com", firstName: "", lastName: "L" });
     expect(call().body).toMatchObject({ firstName: null, lastName: "L" });
+  });
+
+  it("updateProfile sends currentPassword only when given one, exactly as typed (BlackJackAPI#71)", async () => {
+    const fields = { userName: "renamed", email: "r@example.com", firstName: "R", lastName: "L" };
+    await updateProfile({ ...fields, currentPassword: " pass word " });
+    expect(call().body).toStrictEqual({ ...fields, currentPassword: " pass word " });
+    for (const currentPassword of [undefined, ""]) {
+      await updateProfile({ ...fields, currentPassword });
+      expect(Object.keys(call().body)).toEqual(["userName", "email", "firstName", "lastName"]);
+    }
   });
 
   it("changePassword sends the current and the new password", async () => {

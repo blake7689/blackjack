@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
@@ -26,9 +26,12 @@ import "./pages.css";
 // /settings#rules opens its section). Every setting and profile field is a draft in `edits`, the rules included; a sticky bar shows the
 // change count and Save / Discard. Save sends only the keys that changed, the profile first (its failure never blocks the settings), and
 // a changed RESET_SETTINGS key asks "Start a new shoe?" first during a round. A dirty draft asks "Discard your changes?" before leaving.
+// Changing the username or email, and deleting the profile, need the current password (BlackJackAPI#71). It is never part of the draft.
 
 const SECTIONS = ["rules", "play", "chips", "look", "sound", "account"];
 const PROFILE = ["userName", "email", "firstName", "lastName"];
+const IDENTITY = ["userName", "email"]; // changing one needs the current password
+const WRONG_PASSWORD = "Incorrect password."; // the API's words, for a wrong password and a lockout alike
 const PROFILE_FIELDS = { userName: ["Username", "username"], email: ["Email", "email"], firstName: ["First name", "given-name"], lastName: ["Last name", "family-name"] };
 const PLAY_KEYS = ["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "tableMessages", "showKeyHints"];
 const LOOK_KEYS = ["feltTheme", "accent", "mode", "currency"];
@@ -39,6 +42,48 @@ const FAILED_SAVE = "Couldn't save your settings to your account. They apply her
 // The section a key belongs to: every key that is not listed is a table rule (or a House variation).
 const sectionOf = (key) => (PROFILE.includes(key) ? "account" : key === "chipValues" ? "chips" : LOOK_KEYS.includes(key) ? "look" : SOUND_KEYS.includes(key) ? "sound" : PLAY_KEYS.includes(key) ? "play" : "rules");
 const on = (v) => (v ? "on" : "off");
+
+// Delete profile asks for the current password. It lives in this dialog's state only, so closing the dialog forgets it.
+function DeleteDialog({ onKeep, onDelete }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const input = useRef(null);
+  const errorId = useId();
+
+  const refuse = (text) => {
+    setError(text);
+    input.current?.focus(); // gone after a 401: signing out takes the dialog with it
+  };
+  const remove = async () => {
+    if (!password) return refuse("Enter your current password to delete your account.");
+    setBusy(true);
+    setError("");
+    try {
+      await onDelete(password);
+    } catch (err) {
+      setBusy(false);
+      setPassword("");
+      refuse(err.message || "Delete failed");
+    }
+  };
+
+  // No <form>: Enter in the field must not delete.
+  return (
+    <ConfirmDialog title="Delete profile?" body="This removes your account, balance and history. It cannot be undone." safe="Keep my profile" danger="Delete for good"
+      busy={busy} onSafe={onKeep} onDanger={remove}>
+      <div className="inputs">
+        <div>
+          <label>Current password
+            <input ref={input} type="password" value={password} autoComplete="current-password" readOnly={busy} aria-invalid={Boolean(error)} aria-describedby={error ? errorId : undefined}
+              onChange={(e) => { setError(""); setPassword(e.target.value); }} />
+          </label>
+          {error && <span className="ferr" id={errorId} role="alert">{error}</span>}
+        </div>
+      </div>
+    </ConfirmDialog>
+  );
+}
 
 export default function Settings() {
   const { player, notice: signInNotice, updatePlayer, changePassword, deletePlayer } = usePlayer();
@@ -64,12 +109,27 @@ export default function Settings() {
   const [profileError, setProfileError] = useState("");
   const [saving, setSaving] = useState(false);
   const [passwords, setPasswords] = useState({ current: "", next: "" });
+  // The password for a username or email change: component state only, never part of the draft.
+  const [identityPassword, setIdentityPassword] = useState("");
+  const [needPassword, setNeedPassword] = useState(false); // Save was pressed without it
+  const passwordField = useRef(null);
+  const toFocus = useRef(false); // like toScroll: the field can be focused only once Account is open
+  useEffect(() => {
+    if (!toFocus.current || open !== "account") return;
+    // Centred by hand: focus() counts a field under the fixed save bar as visible and leaves it there (a phone).
+    passwordField.current?.focus({ preventScroll: true });
+    passwordField.current?.closest("div").scrollIntoView({ block: "center", behavior: "auto" });
+    toFocus.current = false;
+  });
 
   const profile = Object.fromEntries(PROFILE.map((k) => [k, player?.[k] ?? ""]));
   const base = { ...settings, ...profile };
   const draft = { ...base, ...edits };
   const changed = Object.keys(edits).filter((k) => edits[k] !== base[k]);
   const profileChanged = changed.filter((k) => PROFILE.includes(k));
+  const identityChanged = profileChanged.some((k) => IDENTITY.includes(k));
+  // Username and email both back to saved (typed back, Discard, a good save): the field goes, and its password with it.
+  if (!identityChanged && (identityPassword || needPassword)) { setIdentityPassword(""); setNeedPassword(false); }
   const settingsChanged = changed.filter((k) => !PROFILE.includes(k));
   const errors = Object.fromEntries(PROFILE.map((k) => [k, validateField(k, draft[k])]));
   const invalid = profileChanged.filter((k) => errors[k]);
@@ -113,17 +173,31 @@ export default function Settings() {
     const problems = [];
     let failed = false;
     if (profileChanged.length) {
-      const sendable = profileChanged.filter((k) => !errors[k]);
+      const password = identityPassword;
+      // Without the password the username and email wait, like invalid fields: the rest still saves, with the old ones.
+      const valid = profileChanged.filter((k) => !errors[k]);
+      const sendable = valid.filter((k) => password || !IDENTITY.includes(k));
+      const missing = sendable.length < valid.length;
+      let wrong = false;
+      setNeedPassword(missing);
       if (sendable.length) {
         try {
-          await updatePlayer({ ...profile, ...pick(sendable) });
+          await updatePlayer({ ...profile, ...pick(sendable), ...(sendable.some((k) => IDENTITY.includes(k)) && { currentPassword: password }) });
           forget(pick(sendable));
+          setIdentityPassword((p) => (p === password ? "" : p)); // one typed while it saved stays
         } catch (err) {
           setProfileError(err.message || "Save failed");
           failed = true;
+          wrong = err.message === WRONG_PASSWORD;
+          if (wrong) setIdentityPassword("");
         }
       }
-      if (failed || invalid.length) { problems.push("Your profile isn't saved yet."); toScroll.current = "account"; setOpen("account"); }
+      if (failed || missing || invalid.length) {
+        problems.push("Your profile isn't saved yet.");
+        toFocus.current = missing || wrong;
+        toScroll.current = "account";
+        setOpen("account");
+      }
     }
     if (settingsChanged.length) {
       const sent = pick(settingsChanged);
@@ -152,15 +226,10 @@ export default function Settings() {
   const newPasswordError = validateField("password", passwords.next);
   const canChangePassword = passwords.current !== "" && passwords.next !== "" && !newPasswordError;
 
-  const remove = async () => {
-    setAsking(null);
-    try {
-      await deletePlayer();
-      resetGame();
-      nav("/");
-    } catch (err) {
-      setNotice({ text: err.message || "Delete failed", error: true });
-    }
+  const remove = async (password) => {
+    await deletePlayer(password);
+    resetGame();
+    nav("/");
   };
 
   const chosenChips = parseChipValues(draft.chipValues);
@@ -266,7 +335,21 @@ export default function Settings() {
               </div>
             ))}
           </div>
-          {profileError && <div role="alert" className="ferr">{profileError}</div>}
+          {identityChanged && (
+            <div className="inputs">
+              <div>
+                <label>Password to save this change
+                  <input ref={passwordField} type="password" name="identityPassword" value={identityPassword} autoComplete="current-password"
+                    aria-invalid={needPassword || profileError === WRONG_PASSWORD}
+                    aria-describedby={["desc-identityPassword", needPassword && "err-identityPassword", profileError === WRONG_PASSWORD && "err-profile"].filter(Boolean).join(" ")}
+                    onChange={(e) => { setProfileError(""); setNeedPassword(false); setIdentityPassword(e.target.value); }} />
+                </label>
+                <small id="desc-identityPassword">Needed to change your username or email.</small>
+                {needPassword && <span className="ferr" id="err-identityPassword">Enter your current password to change your username or email.</span>}
+              </div>
+            </div>
+          )}
+          {profileError && <div role="alert" className="ferr" id="err-profile">{profileError}</div>}
           <div className="inputs">
             <label>Current password
               <input type="password" name="currentPassword" value={passwords.current} autoComplete="current-password" onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} />
@@ -310,10 +393,7 @@ export default function Settings() {
         <ConfirmDialog title="Start a new shoe?" body="New table rules start with a fresh shoe. The hand in play ends and any bets on it are lost." safe="Cancel" danger="Save and reset"
           onSafe={() => setAsking(null)} onDanger={save} />
       )}
-      {asking?.kind === "delete" && (
-        <ConfirmDialog title="Delete profile?" body="This removes your account, balance and history. It cannot be undone." safe="Keep my profile" danger="Delete for good"
-          onSafe={() => setAsking(null)} onDanger={remove} />
-      )}
+      {asking?.kind === "delete" && <DeleteDialog onKeep={() => setAsking(null)} onDelete={remove} />}
     </HintLayer>
   );
 }

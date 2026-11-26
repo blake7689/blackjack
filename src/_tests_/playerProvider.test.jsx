@@ -153,9 +153,24 @@ describe("account", () => {
     const { ctx } = await signedIn();
     await act(async () => { await ctx.changePassword("old", "new"); });
     expect(engine.changePassword).toHaveBeenCalledWith("old", "new", "tester");
-    await act(async () => { await ctx.deletePlayer(); });
-    expect(engine.deleteMe).toHaveBeenCalled();
+    await act(async () => { await ctx.deletePlayer("my-password"); });
+    expect(engine.deleteMe).toHaveBeenCalledWith("my-password");
     expect(ctx.player).toBeNull();
+  });
+
+  it("a refused delete rejects and stays signed in (BlackJackAPI#71)", async () => {
+    const { ctx } = await signedIn();
+    engine.deleteMe.mockRejectedValue(refusal(400, "Incorrect password."));
+    await act(async () => { await expect(ctx.deletePlayer("wrong")).rejects.toThrow("Incorrect password."); });
+    expect(ctx.player).toEqual(player);
+  });
+
+  it("passes the password with a profile change, and does not keep it on the player (BlackJackAPI#71)", async () => {
+    const { ctx } = await signedIn();
+    engine.updateProfile.mockResolvedValue({ ...player, userName: "renamed" });
+    await act(async () => { await ctx.updatePlayer({ userName: "renamed", currentPassword: "my-password" }); });
+    expect(engine.updateProfile).toHaveBeenCalledWith({ userName: "renamed", currentPassword: "my-password" });
+    expect(ctx.player).not.toHaveProperty("currentPassword");
   });
 });
 
