@@ -322,7 +322,7 @@ test('an empty name never blocks the settings: they save, Account opens with its
 });
 
 test('Delete profile sits apart below the sections and asks first; Keep my profile deletes nothing (#84)', async ({ page }) => {
-  await stubApi(page); // the stub has no DELETE: deleting would fail the test as an unknown endpoint
+  const api = await stubApi(page);
   await openSettings(page, null);
   const del = page.getByRole('button', { name: 'Delete profile' });
   await expect(del).toBeVisible();
@@ -334,6 +334,7 @@ test('Delete profile sits apart below the sections and asks first; Keep my profi
   await dialog.getByRole('button', { name: 'Keep my profile' }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page).toHaveURL(/\/settings$/);
+  expect(api.deletes).toEqual([]);
 });
 
 test('every setting has its "i" hint, wired as the control\'s description (#84)', async ({ page }) => {

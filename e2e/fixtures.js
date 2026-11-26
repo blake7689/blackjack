@@ -11,12 +11,18 @@ const CORS = {
 const PLAYER = { userName: 'tester', email: 'tester@e2e.test', firstName: 'Test', lastName: 'Er' };
 const hold = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The one password the stubbed PUT and DELETE /player/me accept (BlackJackAPI#71); any other is "Incorrect password.".
+export const ACCOUNT_PASSWORD = 'e2e-account-password';
+
 export { VEGAS }; // the Vegas rules live in ./vegas.js (no Playwright import, so vitest can load them)
 
 const stubs = new WeakMap(); // page -> stub, so the auto fixture below can check it after the test
 
 // Answers every API call the app makes. The deliberate holds live here, in the handler, not in the tests.
 // Returns what the tests assert on: the ledger calls, the saved settings, requests that failed, endpoints nobody stubbed.
+// PUT and DELETE /player/me follow the real API (BlackJackAPI#71): a changed username or email, and every delete, need ACCOUNT_PASSWORD, else 400
+// { status, message, errors }. `profiles` records the PUT bodies, `deletes` the DELETE bodies and Content-Type. A good PUT is what GET /player/me answers next.
+// deleteGate: a promise the DELETE answer waits for, so a spec can look at the dialog while the request is in flight.
 // startCredits: the balance /player/me answers with. topUps: the replies to POST /ledger/topup, one per call, in order:
 // { status: 200, credits } sets the balance; any other status sends { message } (and headers, e.g. Retry-After).
 // loginError: { status, message } makes POST /auth/login fail with it (a sign-in refusal).
@@ -26,17 +32,20 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real). Whatever is passed,
 // the account's saved settings carry tableMessages "all" (every prompt shows at once, so the specs can wait on "Place your bets" and "Your move", L2-1) and currency "USD"
 // (the "$10 chip" names do not depend on the runner's locale, L2-2) unless a spec sets its own.
-export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], settings = { ...VEGAS, playTimeout: 250 } } = {}) {
+export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], deleteGate = null, settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   let meFailuresLeft = meFailures;
   const replies = [...topUps];
-  const stub = { bets: [], settles: [], topups: [], saves: [], logins: [], passwords: [], requests: [], failed: [], unknown: [] };
+  const stub = { bets: [], settles: [], topups: [], saves: [], logins: [], passwords: [], profiles: [], deletes: [], requests: [], failed: [], unknown: [] };
+  let profile = { ...PLAYER };
   stubs.set(page, stub);
   page.on('requestfailed', (r) => { if (r.url().startsWith('http://api.e2e.test')) stub.failed.push(`${r.method()} ${r.url()} ${r.failure()?.errorText}`); });
 
   await page.route(API, async (route) => {
     const req = route.request();
     const json = (body, status = 200) => route.fulfill({ status, headers: CORS, contentType: 'application/json', body: JSON.stringify(body) });
+    // The API's re-auth answer: null when the password is right.
+    const refusal = (message, password, missing) => (password === ACCOUNT_PASSWORD ? null : json({ status: 400, message, errors: [password ? 'Incorrect password.' : missing] }, 400));
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS }); // CORS preflight (Authorization / Content-Type)
     const endpoint = `${req.method()} ${new URL(req.url()).pathname.replace(/^\/api/, '')}`;
     stub.requests.push({ endpoint, auth: req.headers().authorization });
@@ -55,7 +64,24 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, relog
       case 'GET /player/me':
         await hold(meDelayMs);
         if (meFailuresLeft-- > 0) return json({ message: 'e2e stub: the API is unavailable' }, 503);
-        return json({ ...PLAYER, credits });
+        return json({ ...profile, credits });
+      case 'PUT /player/me': {
+        const body = req.postDataJSON();
+        stub.profiles.push(body);
+        const [userName, email] = [body.userName.trim(), body.email.trim()];
+        if (userName !== profile.userName || email !== profile.email) {
+          const refused = refusal('Profile update failed.', body.currentPassword, 'Enter your current password to change your username or email.');
+          if (refused) return refused;
+        }
+        profile = { userName, email, firstName: body.firstName, lastName: body.lastName };
+        return json({ ...profile, credits });
+      }
+      case 'DELETE /player/me': {
+        const body = req.postDataJSON();
+        stub.deletes.push({ body, contentType: req.headers()['content-type'] });
+        await deleteGate;
+        return refusal('Account deletion failed.', body?.currentPassword, 'Enter your current password to delete your account.') ?? route.fulfill({ status: 204, headers: CORS });
+      }
       case 'GET /player/me/settings':
         return json({ tableMessages: 'all', currency: 'USD', ...settings });
       case 'PUT /player/me/settings':

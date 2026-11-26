@@ -36,6 +36,13 @@ describe("requests", () => {
     expect(fetch.mock.calls.map(([, init]) => [init.method, init.body])).toEqual([["GET", undefined], ["DELETE", undefined]]);
   });
 
+  it("a DELETE sends its body as JSON when given one (the account delete, BlackJackAPI#71)", async () => {
+    const fetch = respond({});
+    await apiDelete("/x", { currentPassword: " p w " });
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: "DELETE", body: '{"currentPassword":" p w "}' });
+    expect(fetch.mock.calls[0][1].headers["Content-Type"]).toBe("application/json");
+  });
+
   it("adds the bearer token when signed in", async () => {
     const fetch = respond({});
     setToken("tok-1");

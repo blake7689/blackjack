@@ -83,8 +83,8 @@ export function PlayerProvider({ children }) {
       setNotice("Your password was changed, but we could not sign you in again. Please sign in with your new password.");
     }
   }, [signIn]);
-  const deletePlayer = useCallback(async () => {
-    await deleteMe();
+  const deletePlayer = useCallback(async (currentPassword) => {
+    await deleteMe(currentPassword);
     signIn(null);
   }, [signIn]);
   const logout = useCallback(() => {

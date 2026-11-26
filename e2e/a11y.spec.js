@@ -1,4 +1,4 @@
-import { test, expect, stubApi, seedRandom, login, submitLogin, openTable, placeBet } from './fixtures';
+import { test, expect, stubApi, seedRandom, login, submitLogin, openTable, placeBet, VEGAS } from './fixtures';
 import { expectNoSeriousA11y } from './a11y';
 
 // Automated accessibility scans (#120): axe on each screen; serious and critical violations fail (see e2e/a11y.js).
@@ -194,6 +194,60 @@ test.describe('settings', () => {
     await expectNoSeriousA11y(page, 'settings, discard dialog');
   });
 });
+
+// Re-auth for account changes (BlackJackAPI#71): the new Settings field and the Delete profile dialog, each with its errors showing, in both modes.
+for (const mode of ['dark', 'light']) {
+  test.describe(`settings re-auth, ${mode}`, () => {
+    test.beforeEach(async ({ page }) => {
+      await stubApi(page, { settings: { ...VEGAS, playTimeout: 250, mode } });
+      await login(page);
+      await page.getByRole('button', { name: 'Settings', exact: true }).click();
+      await expect(page.getByRole('button', { name: /^Gameplay/ })).toContainText('Very fast');
+      await expect(page.locator('html')).toHaveAttribute('data-mode', mode);
+    });
+
+    test('the password for a username change: shown, missing and wrong have no serious accessibility violations (BlackJackAPI#71)', async ({ page }) => {
+      await page.getByRole('button', { name: /^Account/ }).click();
+      await page.getByLabel('Username', { exact: true }).fill('renamed');
+      const password = page.getByLabel('Password to save this change');
+      await expect(password).toBeVisible();
+      await settled(page);
+      await expectNoSeriousA11y(page, 'settings, identity password field');
+
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(password).toBeFocused();
+      await expect(password).toHaveAttribute('aria-invalid', 'true');
+      await settled(page);
+      await expectNoSeriousA11y(page, 'settings, identity password missing');
+
+      await password.fill('wrong-dummy-password');
+      await page.getByRole('button', { name: 'Save changes' }).click();
+      await expect(page.getByRole('alert')).toHaveText('Incorrect password.');
+      await expect(password).toBeFocused();
+      await settled(page);
+      await expectNoSeriousA11y(page, 'settings, identity password wrong');
+    });
+
+    test('the Delete profile dialog, open, with the field empty and refused, has no serious accessibility violations (BlackJackAPI#71)', async ({ page }) => {
+      await page.getByRole('button', { name: 'Delete profile' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Delete profile?' });
+      await expect(dialog.getByLabel('Current password')).toBeVisible();
+      await settled(page);
+      await expectNoSeriousA11y(page, 'delete dialog, open');
+
+      await dialog.getByRole('button', { name: 'Delete for good' }).click();
+      await expect(dialog.getByRole('alert')).toHaveText('Enter your current password to delete your account.');
+      await settled(page);
+      await expectNoSeriousA11y(page, 'delete dialog, missing password');
+
+      await dialog.getByLabel('Current password').fill('wrong-dummy-password');
+      await dialog.getByRole('button', { name: 'Delete for good' }).click();
+      await expect(dialog.getByRole('alert')).toHaveText('Incorrect password.');
+      await settled(page);
+      await expectNoSeriousA11y(page, 'delete dialog, wrong password');
+    });
+  });
+}
 
 test('top-up dialog has no serious accessibility violations (#120)', async ({ page }) => {
   await stubApi(page, { startCredits: 40 });

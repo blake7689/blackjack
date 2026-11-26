@@ -136,3 +136,23 @@ describe("goSettings", () => {
     expect(location()).toBe("/settings#rules");
   });
 });
+
+// Delete profile gave ConfirmDialog `children` and `busy` (BlackJackAPI#71); the other confirms pass neither and must not change.
+describe("a confirm without a field or a busy state", () => {
+  it.each([["Nav Home", ["Keep playing", "Leave"]], ["Nav Log out", ["Stay logged in", "Log out"]]])("%s: two plain buttons, no field, no aria-disabled; Tab wraps between them and Escape closes", (opener, labels) => {
+    renderUI(<NavButtons />, inRound);
+    fireEvent.click(screen.getByRole("button", { name: opener }));
+    const dialog = screen.getByRole("dialog");
+    const buttons = within(dialog).getAllByRole("button");
+    expect(buttons.map((b) => [b.textContent, b.hasAttribute("aria-disabled")])).toEqual(labels.map((l) => [l, false]));
+    expect(dialog.querySelector("input")).toBeNull();
+    const [safe, danger] = buttons;
+    expect(document.activeElement).toBe(safe);
+    fireEvent.keyDown(safe, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(danger);
+    fireEvent.keyDown(danger, { key: "Tab" });
+    expect(document.activeElement).toBe(safe);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
