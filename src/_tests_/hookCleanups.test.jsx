@@ -188,7 +188,7 @@ describe("#140 useSeatsScroll decisions", () => {
   const Harness = ({ count, layoutKey = "k" }) => {
     const seatsRef = useRef(null);
     const stageRef = useRef(null);
-    const scroll = useSeatsScroll(seatsRef, stageRef, count, 0, layoutKey);
+    const [scroll] = useSeatsScroll(seatsRef, stageRef, count, 0, layoutKey);
     return (
       <div ref={stageRef}>
         <div ref={seatsRef} data-scroll={scroll}>
@@ -251,6 +251,25 @@ describe("#140 useSeatsScroll decisions", () => {
     expect(on(container)).toBe(true);
     rerender(<Harness count={4} layoutKey="again" />); // a new pair is decided afresh: it fits
     expect(on(container)).toBe(false);
+  });
+
+  it("a scrolling row measured again for a new hand count, and still spilling, keeps .scroll and its scrollLeft (#193)", () => {
+    spill.on = true;
+    const { container, rerender } = render(<Harness count={3} />);
+    const row = container.querySelector("[data-scroll]");
+    expect(row.classList.contains("scroll")).toBe(true);
+    let left = 120;
+    Object.defineProperty(row, "scrollLeft", { get: () => left, set: (v) => { left = v; } });
+    let unscrolledReads = 0;
+    Element.prototype.getBoundingClientRect.mockImplementation(function box() {
+      if (this === row && !row.classList.contains("scroll")) { left = 0; unscrolledReads++; } // as in a browser: a row that stops scrolling loses its position
+      const hand = this.classList.contains("hand");
+      return { left: 0, top: 0, bottom: 10, width: hand ? 50 : 100, height: 10, right: hand && spill.on ? 9999 : 100 };
+    });
+    rerender(<Harness count={4} />); // a resplit: measured as one centred row again, and it still spills
+    expect(unscrolledReads).toBeGreaterThan(0);
+    expect(row.classList.contains("scroll")).toBe(true);
+    expect(left).toBe(120);
   });
 
   it("a one-hand row is never measured", () => {

@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect } from "react";
 import { cardSize, cardStep } from "../utils/cardWidth";
 
-const applyCardWidth = (stage, probe) => {
+export const applyCardWidth = (stage, probe) => {
   const { cw, ch } = cardSize(probe.getBoundingClientRect().width);
   stage.style.setProperty("--cw", `${cw}px`);
   stage.style.setProperty("--ch", `${ch}px`);
