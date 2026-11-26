@@ -75,7 +75,8 @@ const MULTI_SPLIT = [
   { name: '375x667, four hands, the seats go tight', viewport: { width: 375, height: 667 }, maxSplitHands: 4, actions: 'PPSPSSS', rows: 'tight', hands: FOUR },
 ];
 
-// Runs in the page. No check depends on how fast the frames come (a loaded runner drops them). Once per animation frame it records every face-up card (x without
+// Runs in the page. No check depends on how fast the frames come (a loaded runner drops them, and can miss a whole flight, so every flying copy is also measured as
+// its flight starts). Once per animation frame it records every face-up card (x without
 // the seats row's scroll; rx / ry from its own seat; `glides`: a translate animation is running on it, or began since the last frame) and every flying copy's width beside the cards'. It also
 // notes where each glide puts its card at its start, read once the commit that started it is over. `window.__step` is the action being played.
 function recordFrames() {
@@ -84,7 +85,9 @@ function recordFrames() {
   let painted = {}; // the cards as of the last frame
   const begun = new Set(); // glides begun since then: a late frame can outlast a whole glide
   let copies = 0;
+  const flights = (window.__flights = []); // one sample per flight, taken as it starts
   window.__step = -1;
+  const measure = (c) => ({ id: (c.qaId ??= ++copies), w: c.offsetWidth, cardWidth: document.querySelector('.fan-slot > .card')?.offsetWidth });
   const spotOf = (card) => {
     const r = card.getBoundingClientRect();
     return { x: r.left + (card.closest('.seats')?.scrollLeft ?? 0), y: r.top };
@@ -101,6 +104,8 @@ function recordFrames() {
       const now = spotOf(slot.firstElementChild);
       starts.push({ step: window.__step, key: slot.dataset.fk, off: Math.hypot(now.x - was.x, now.y - was.y) });
     });
+    // The flight is the copy's transform animation (its lift is a scale, its turn runs on the child). FlyCard sizes the copy right after, in the same task.
+    if (keyframes?.[0]?.transform !== undefined && this.matches('.fly-copy:not(.sweep)')) queueMicrotask(() => flights.push({ step: window.__step, ...measure(this) }));
     return animation;
   };
   const sample = () => {
@@ -114,9 +119,7 @@ function recordFrames() {
     }
     painted = cards;
     begun.clear();
-    const cardWidth = document.querySelector('.fan-slot > .card')?.offsetWidth;
-    const flying = [...document.querySelectorAll('.flight-layer .fly-copy:not(.sweep)')].filter((c) => c.style.visibility !== 'hidden')
-      .map((c) => ({ id: (c.qaId ??= ++copies), w: c.offsetWidth, cardWidth }));
+    const flying = [...document.querySelectorAll('.flight-layer .fly-copy:not(.sweep)')].filter((c) => c.style.visibility !== 'hidden').map(measure);
     frames.push({ step: window.__step, cards, flying });
     requestAnimationFrame(sample);
   };
@@ -125,7 +128,7 @@ function recordFrames() {
 
 const FAR = 40; // px: more than a one-frame card resize moves a card, far less than any of the jumps (about 160 px and up)
 
-function findJumps({ frames, starts }, actions) {
+function findJumps({ frames, starts, flights }, actions) {
   const jumps = [];
   const at = (step) => `action ${step} ${actions[step]}`;
   // 1. A glide starts where its card was last painted, never from a remembered spot the row has since scrolled or moved away from.
@@ -156,6 +159,11 @@ function findJumps({ frames, starts }, actions) {
       if (wrongSize.get(c.id) === 2) jumps.push(`${at(f.step)}: flying copy ${c.id} is ${c.w} px wide, the cards are ${c.cardWidth}`);
     }
     prev = f;
+  }
+  // A flight's own sample is taken right after the copy is sized, so it gets no frame of grace.
+  for (const c of flights) {
+    copyWidths.set(c.id, (copyWidths.get(c.id) ?? new Set()).add(c.w));
+    if (c.w !== c.cardWidth) jumps.push(`${at(c.step)}: flying copy ${c.id} began ${c.w} px wide, the cards are ${c.cardWidth}`);
   }
   for (const [id, widths] of copyWidths) if (widths.size > 1) jumps.push(`flying copy ${id} changed width: ${[...widths].join(' -> ')}`);
   return { jumps: [...new Set(jumps)], copies: copyWidths.size };
@@ -199,7 +207,7 @@ for (const size of MULTI_SPLIT) {
       for (const [i, names] of size.hands.entries()) for (const card of names) await expect(hands.nth(i).getByRole('img', { name: card })).toBeVisible();
       await expect(page.locator('.seats')).toHaveClass(new RegExp(`\\b${size.rows}\\b`));
 
-      const { jumps, copies } = findJumps(await page.evaluate(() => ({ frames: window.__frames, starts: window.__starts })), size.actions);
+      const { jumps, copies } = findJumps(await page.evaluate(() => ({ frames: window.__frames, starts: window.__starts, flights: window.__flights })), size.actions);
       expect(copies, 'flying copies were sampled').toBeGreaterThanOrEqual(size.actions.length - 1);
       expect(jumps).toEqual([]);
     });
