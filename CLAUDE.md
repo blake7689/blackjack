@@ -61,6 +61,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Epic #4 (UI revamp) PRs use `--base release/ui-revamp`, never `main`, and say `Part of #4` with no closing keyword; close the child issue by hand after merge (ADR-0006).
 - Sign-out (#195): every sign-out path ends in `signIn(null)`, and GameProvider then dispatches `SIGN_OUT`: a clean table with no credit event (a refund would reach the next account), built from `initialGameState`.
   A new reducer field that must survive sign-out is kept in that case (today `settings`, `creditSeq`, `shoeSeq`).
+- One sign-in at a time (#204): every `signIn(player)` assumes the account only changes through a sign-out (GameProvider keys on `signedIn`), so PlayerProvider allows one login / sign-up at a time; any new sign-in path must go through the same guard (`signInOnce`).
 - Game flow (#196): `START_GAME` acts only from phase `NONE` (Home's Play also reaches it with a round live, where it is a no-op); `RESET_GAME` restarts a table. A failed first settings load still starts the table, then
   GameProvider retries after 1, 2, 4, 8, 16, 30 s and every 30 s; a late answer is held and applied only in `NONE` / `PRE_DEAL` (never under a round), and `settingsUnloaded` is true until then (message-line notice; it never hides a verdict).
   `PlayerProvider.changePassword` runs one at a time (a ref; a second request would 401 and sign out): an ignored call resolves `false` and sends nothing; `changingPassword` dims the Settings button. A refused settle is in no `pendingBets`:

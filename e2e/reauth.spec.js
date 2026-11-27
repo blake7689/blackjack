@@ -1,4 +1,4 @@
-import { test, expect, stubApi, login, placeBet, ACCOUNT_PASSWORD } from './fixtures';
+import { test, expect, stubApi, login, submitLogin, placeBet, ACCOUNT_PASSWORD } from './fixtures';
 
 // BlackJackAPI#71: changing the username or email, and deleting the profile, need the current password. The stub follows the API's rules and records
 // every body. Runs in all three projects: where the focused field ends up depends on the screen's size and engine.
@@ -255,6 +255,48 @@ for (const [who, next] of [['the same account', { userName: 'tester', credits: 1
     expect(api.bets).toEqual([]);
   });
 }
+
+// #204: a second sign-in while the first still waits (a cold API start). Both would share the one stored token, so the second is refused unsent.
+test('signing up while a log-in is still waiting is refused and sends nothing; the log-in then lands on the table (#204)', async ({ page }) => {
+  const api = await stubApi(page);
+  let release;
+  const answer = new Promise((resolve) => { release = resolve; });
+  // In front of the stub: the log-in answers only when released; a sign-up would be answered at once, as another account.
+  await page.route('http://api.e2e.test/api/auth/login', async (route) => {
+    if (route.request().method() === 'POST') await answer;
+    await route.fallback();
+  });
+  const registers = [];
+  await page.route('http://api.e2e.test/api/auth/register', (route) => {
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
+    registers.push(route.request().postDataJSON());
+    return route.fulfill({ status: 200, headers, contentType: 'application/json', body: JSON.stringify({ accessToken: 'e2e-token-other' }) });
+  });
+
+  const loginSent = page.waitForRequest((r) => r.url().endsWith('/api/auth/login') && r.method() === 'POST');
+  await submitLogin(page);
+  await loginSent;
+  await page.getByRole('link', { name: 'Create an account' }).click();
+  for (const [field, value] of [['Username', 'second'], ['Email', 'second@e2e.test'], ['Password', 'not-a-real-password'], ['First name', 'Sec'], ['Last name', 'Ond']]) {
+    await page.getByPlaceholder(field, { exact: true }).fill(value);
+  }
+  await page.getByRole('button', { name: 'Create account' }).click();
+
+  // soft: when the refusal is missing, the next line also says whether the sign-up went out
+  await expect.soft(page.getByRole('alert')).toHaveText('Another sign-in is still in progress. Please wait for it to finish.');
+  expect(registers).toEqual([]);
+  await expect(page).toHaveURL(/\/signup$/);
+
+  release();
+  await expect(page).toHaveURL(/\/game$/);
+  await page.locator('.felt').dispatchEvent('click'); // skips the new table's shuffle
+  await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('#bal')).toHaveText('$1,000');
+  expect(api.logins.map((body) => body.usernameOrEmail)).toEqual(['tester']);
+  expect(await page.evaluate(() => sessionStorage.getItem('bj.token'))).toBe('e2e-token');
+  expect(registers).toEqual([]);
+});
 
 // #196: the first password change revokes the token, so a second request would 401 and sign the player out (the stub answers like that).
 test('pressing Change password twice, and again after leaving Settings, sends one change and stays signed in (#196)', async ({ page }) => {

@@ -69,8 +69,19 @@ export function PlayerProvider({ children }) {
     return () => setUnauthorizedHandler(() => {});
   }, [signIn]);
 
-  const login = useCallback(async (credentials) => signIn(await loginPlayer(credentials)), [signIn]);
-  const addPlayer = useCallback(async (payload) => signIn(await registerPlayer(payload)), [signIn]);
+  // One sign-in at a time (#204): two would share the one stored token, and GameProvider only resets between accounts through a sign-out.
+  const signingInRef = useRef(false);
+  const signInOnce = useCallback(async (request, payload) => {
+    if (signingInRef.current) throw new Error("Another sign-in is still in progress. Please wait for it to finish.");
+    signingInRef.current = true;
+    try {
+      return signIn(await request(payload));
+    } finally {
+      signingInRef.current = false;
+    }
+  }, [signIn]);
+  const login = useCallback((credentials) => signInOnce(loginPlayer, credentials), [signInOnce]);
+  const addPlayer = useCallback((payload) => signInOnce(registerPlayer, payload), [signInOnce]);
   const updatePlayer = useCallback(async (profile) => {
     const updated = await updateProfile(profile);
     playerRef.current = { ...updated, credits: playerRef.current.credits };
