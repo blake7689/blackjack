@@ -3,7 +3,7 @@ import { setCurrency } from "../money";
 import { gameReducer, initialGameState, nextAutoAction, sanitizeSettings, autoDealOn, SETTING_RANGES, SETTINGS_VERSION, LEGACY_RULES, RESET_SETTINGS } from "../gameReducer";
 import { RULE_PRESETS } from "../rulePresets";
 import { GamePhases } from "../constants/gamePhases";
-import { stackedShoe, outOfCards, playRound, confirmBets, HandResult, HandStatus } from "./stackedShoe";
+import { stackedShoe, realCards, outOfCards, playRound, confirmBets, HandResult, HandStatus } from "./stackedShoe";
 
 const run = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1000, ...a }), state);
 const started = (cards) => run(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
@@ -2240,5 +2240,25 @@ describe("the newest message wins the line (#196)", () => {
     it("says so when no payout was refused", () => {
       expect(broke(null)).toMatchObject({ notice: "Not enough credits to rebet $10: auto deal paused", autoDealPaused: true });
     });
+  });
+});
+
+describe("a refill in the middle of a round, with real shoes (#197)", () => {
+  // Player 2h 3d, dealer 10s and a hidden 9c empty the old shoe. The first hit refills (4c); the second draws another 2h from the new shoe.
+  const hitTwice = () => {
+    const shoe = realCards(["2", "hearts"], ["10", "spades"], ["3", "diamonds"], ["9", "clubs"]);
+    const s = run(initialGameState, { type: "START_GAME", shoe }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" }, { type: "DEAL_DONE" });
+    return run(s, { type: "HIT", handIdx: 0, refill: () => realCards(["4", "clubs"], ["2", "hearts"]) }, { type: "HIT", handIdx: 0 });
+  };
+
+  it("a face on the table can come again, but no two cards on the table share an id", () => {
+    const s = hitTwice();
+    expect(s.hands[0].cards.map((c) => `${c.rank} ${c.suit}`)).toEqual(["2 hearts", "3 diamonds", "4 clubs", "2 hearts"]);
+    const ids = [...s.hands[0].cards, ...s.dealer.cards, ...s.dealerHole.cards].map((c) => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("the running count takes the repeated face on the step after the refill", () => {
+    expect(hitTwice().runningCount).toBe(3); // 2 +1, 3 +1, 10 -1, 4 +1, 2 +1
   });
 });

@@ -23,6 +23,12 @@ describe('createShoe', () => {
         expect(shoe.some(card => card.type === 'cut')).toBe(false);
     });
 
+    it('gives every card an id of its own, across shoes too (#197: a mid-round refill meets cards still on the table)', () => {
+        const ids = [createShoe(2, true), createShoe(2, false), createShoe(1, false)].flat().filter(c => c.type === 'card').map(c => c.id);
+        expect(ids).toHaveLength(260);
+        expect(new Set(ids).size).toBe(260);
+    });
+
     it('all cards in shoe have required properties', () => {
         const shoe = createShoe(1, false);
         for (const card of shoe) {

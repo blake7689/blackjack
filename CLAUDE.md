@@ -81,6 +81,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Dealing (#6): `DEAL` sets `DEALING`; the auto step `DEAL_DONE` (one Rate of Play later) moves on to `PLAYER_TURN` or `DEALER_TURN` (or `OFFERS`, see Offers).
   Totals, labels and the count are hidden (`visibility`, so no layout shift) and the centre says "Dealing..." meanwhile. Tests step `DEAL_DONE`
   after `DEAL` (`playRound` does). The engine puts animation hints on card copies (`dealOrder`, `revealed`, `moved`), never in place.
+- Card ids are unique across shoes (`createShoe` adds a shoe number): the running count, `landed.ids` and React keys rely on it. Compare ids, never parse them.
 - Rule changes start as a scenario in `src/utils/_tests_/rules.test.js` (`playRound` + `stackedShoe`).
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
