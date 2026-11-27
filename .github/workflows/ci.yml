@@ -26,13 +26,21 @@ jobs:
 
   # Playwright smoke tests against a route-stubbed API (playwright.config.js builds and serves the app).
   e2e:
-    name: e2e (${{ matrix.project }})
+    name: e2e (${{ matrix.project }}${{ matrix.shard && format(' {0}/2', matrix.shard) || '' }})
     runs-on: ubuntu-latest
     timeout-minutes: 20 # install (<= 4) + tests (<= 15)
     strategy:
       fail-fast: false
       matrix:
-        project: [chromium, phone, webkit] # one leg per Playwright project; the deploy gate waits for all (#146, #167)
+        # One leg per Playwright project; the deploy gate waits for all (#146, #167).
+        # webkit is 2 shards: unsharded it ran up to the 14-min globalTimeout (#208).
+        include:
+          - project: chromium
+          - project: phone
+          - project: webkit
+            shard: 1
+          - project: webkit
+            shard: 2
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
@@ -40,19 +48,19 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The leg's own browser only, no browser cache (Playwright's CI guide): the script's default is the Chromium shell; the webkit leg overrides it (#167).
+      # The leg's own browser only, no browser cache (Playwright's CI guide): the script's default is the Chromium shell; the webkit legs override it (#167).
       - run: bash scripts/install-playwright-browser.sh
         env:
           PW_INSTALL_CMD: ${{ matrix.project == 'webkit' && 'npx playwright install --with-deps webkit' || '' }}
         timeout-minutes: 4 # normally 15-40 s; the script retries 2x at 90 s each (#123, #127)
-      - run: npx playwright test --project=${{ matrix.project }}
+      - run: npx playwright test --project=${{ matrix.project }}${{ matrix.shard && format(' --shard={0}/2', matrix.shard) || '' }}
         timeout-minutes: 15 # globalTimeout is 14 min; fails the step before the 20-min job limit
         env:
           CI: true
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
-          name: playwright-results-${{ matrix.project }}
+          name: playwright-results-${{ matrix.project }}${{ matrix.shard && format('-{0}', matrix.shard) || '' }}
           path: |
             playwright-report/
             test-results/
