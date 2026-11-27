@@ -299,16 +299,30 @@ test('hovered and keyboard-focused controls while betting have no serious access
   await expectNoSeriousA11y(page, 'board, keyboard focus');
 });
 
-// The helper itself (#205). The fade lasts an hour, so it is certainly still running while axe reads: no timing involved.
+// The helper itself (#205). The fade lasts an hour, so it is certainly still running when the helper is called: no timing involved.
+// Its text sits on a real app page. On a made-up page (no viewport meta) axe on CI's Linux WebKit only called it "incomplete"
+// (elmPartiallyObscured, read from the CI trace), so neither scan checked its colour. The scan of the faint text at rest guards that.
 test('the axe helper scans where a running fade ends: a good end colour passes, a low-contrast one still fails (#205)', async ({ page }) => {
-  await page.setContent('<!doctype html><html lang="en"><title>fade</title><style>body { background: #000; color: #fff } p { opacity: .3; transition: opacity 3600s linear } p.on { opacity: 1 }</style><main><h1>Fade</h1><p>Balance</p></main></html>');
-  const label = page.locator('p');
-  const fade = (on) => label.evaluate((el, to) => { getComputedStyle(el).opacity; el.classList.toggle('on', to); }, on);
-  await fade(true); // still about .3 (too faint), ending at 1
+  await stubApi(page);
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  await page.addStyleTag({ content: '#probe-box { background: #000 } #probe { color: #fff; font-size: 16px; opacity: .3; transition: opacity 3600s linear } #probe.on { opacity: 1 }' });
+  await page.locator('main').evaluate((el) => el.insertAdjacentHTML('afterbegin', '<div id="probe-box"><p id="probe">Fade probe</p></div>')); // opaque box: over the page's gradient axe only says "incomplete"
+  const probe = page.locator('#probe');
+  const styles = await page.locator('style').count();
+  const faint = /color-contrast.*Fade probe/; // one violation line, about this text and no other
+  // Control, nothing moving: this engine's axe reports the faint text at all.
+  await expect(expectNoSeriousA11y(page, 'faint, at rest')).rejects.toThrow(faint);
+  // Starts a fade; answers how many are then running on the text.
+  const fade = (on) => probe.evaluate((el, to) => { getComputedStyle(el).opacity; el.classList.toggle('on', to); return el.getAnimations().length; }, on);
+  expect(await fade(true)).toBe(1); // still about .3 (too faint), ending at 1
   await expectNoSeriousA11y(page, 'fading in');
-  await expect(page.locator('style')).toHaveCount(1); // the helper took its own style away again
-  await expect(label).toHaveCSS('transition-duration', '3600s');
-  await fade(false); // still about 1 (readable), ending at .3
-  await expect(expectNoSeriousA11y(page, 'fading out')).rejects.toThrow(/color-contrast/);
-  await expect(page.locator('style')).toHaveCount(1); // after a failed scan too
+  await expect(probe).toHaveCSS('opacity', '1');
+  await expect(page.locator('style')).toHaveCount(styles); // the helper took its own style away again
+  await expect(probe).toHaveCSS('transition-duration', '3600s');
+  expect(await fade(false)).toBe(1); // still about 1 (readable), ending at .3
+  const outcome = await expectNoSeriousA11y(page, 'fading out').then(() => 'the scan passed', (e) => e.message);
+  await expect(probe).toHaveCSS('opacity', '0.3'); // first where the text ended up, then what axe made of it
+  expect(outcome).toMatch(faint);
+  await expect(page.locator('style')).toHaveCount(styles); // after a failed scan too
 });
