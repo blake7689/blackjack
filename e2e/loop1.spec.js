@@ -24,7 +24,8 @@ test('the chip in the bet circle is centred on the ring (L1-11)', async ({ page 
   await stubApi(page);
   await login(page);
   await placeBet(page, 25);
-  await expect(page.locator('.flight-layer > *')).toHaveCount(0); // the chip has landed
+  // The chip has landed when the circle draws its stack. Not when the flying copy has gone: that leaves on the animation's clock, the stack comes on a timer (#202).
+  await expect(page.locator('.spot .stack svg')).toBeVisible();
   const off = () => page.evaluate(() => {
     const spot = document.querySelector('.spot').getBoundingClientRect();
     const svg = document.querySelector('.spot .stack svg').getBoundingClientRect();

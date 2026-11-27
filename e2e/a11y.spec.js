@@ -46,14 +46,13 @@ test('the Table rules sheet has no serious accessibility violations, over the ta
   await page.getByRole('button', { name: 'Table rules' }).click();
   const sheet = page.getByRole('dialog', { name: 'Table rules' });
   await expect(sheet).toBeVisible();
-  await expect(sheet).toHaveCSS('opacity', '1'); // it fades up as it opens: never scan it mid-animation (colours blend and fail color-contrast)
   await expectNoSeriousA11y(page, 'rules sheet, over the table');
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
   await page.getByRole('button', { name: 'Rules' }).click();
-  await expect(sheet).toHaveCSS('opacity', '1');
+  await expect(sheet).toBeVisible();
   await expectNoSeriousA11y(page, 'rules sheet, over Home');
 });
 
@@ -73,7 +72,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // the keys wake up once the cards have landed
   await expect(page.locator('.board.busy')).toHaveCount(0);
-  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // the label fades back after the bet badge: never scan it blended
+  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // on a phone the bet badge hides the label for 3 s: axe skips a hidden one
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
@@ -88,8 +87,8 @@ test('game board at the results has no serious accessibility violations, and ann
   await page.getByRole('button', { name: 'Stay', exact: true }).click({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.board.busy')).toHaveCount(0);
-  await expect(page.locator('.msg .verdict')).toHaveCSS('opacity', '1'); // the verdict pops in: never scan it blended
-  await expect(page.locator('.bal .delta')).toHaveCSS('opacity', '1'); // so does the balance badge (it blended in WebKit's slower frames)
+  await expect(page.locator('.msg .verdict')).toBeVisible();
+  await expect(page.locator('.bal .delta')).toHaveCSS('opacity', '1'); // the balance badge is on show for the scan: axe skips a faded-out one
   await expect(page.getByText('Hand 1: push, 19. Dealer: 19.')).toBeAttached(); // what a screen reader hears
   await expect(page.locator('[aria-live]')).toHaveCount(1); // one live region on the table
   await expectNoSeriousA11y(page, 'board, results');
@@ -133,9 +132,7 @@ test('the sign-in form has 44 px targets (#85)', async ({ page }) => {
   expect(await tooSmall(page.locator('main').getByRole('textbox').or(page.locator('main input')).or(page.locator('main').getByRole('button'))), 'sign-in').toEqual([]);
 });
 
-// Settings is one page (#84): scan it closed, then once per section opened. Opening and the switches ease for a moment (chevron, switch track),
-// so wait until every running animation or transition has finished before axe reads the colours.
-const settled = (page) => page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+// Settings is one page (#84): scan it closed, then once per section opened.
 
 test.describe('settings', () => {
   test.beforeEach(async ({ page }) => {
@@ -148,7 +145,6 @@ test.describe('settings', () => {
 
   test('Settings with every section closed has no serious accessibility violations (#84)', async ({ page }) => {
     await expect(page.getByRole('button', { name: /^Table rules/ })).toHaveAttribute('aria-expanded', 'false');
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, closed');
   });
 
@@ -156,7 +152,6 @@ test.describe('settings', () => {
     test(`Settings with ${name} open has no serious accessibility violations (#84)`, async ({ page }) => {
       await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
       await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-expanded', 'true');
-      await settled(page);
       await expectNoSeriousA11y(page, `settings, ${name} open`);
     });
   }
@@ -165,7 +160,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Sound & haptics/ }).click();
     await page.locator('label.sw', { hasText: 'Sound' }).click(); // the checkbox sits under its track: tap the row
     await expect(page.getByRole('slider', { name: 'Volume' })).toBeEnabled();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, Sound & haptics open, Sound on');
   });
 
@@ -173,7 +167,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
     await page.getByRole('radiogroup', { name: 'Surrender', exact: true }).getByRole('radio', { name: /^None/ }).click();
     await expect(page.getByRole('region', { name: 'Unsaved changes', exact: true })).toBeVisible();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, unsaved changes');
   });
 
@@ -181,7 +174,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
     await page.getByRole('button', { name: /^Preset/ }).click();
     await expect(page.getByRole('listbox')).toBeFocused();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, preset dropdown');
   });
 
@@ -190,7 +182,6 @@ test.describe('settings', () => {
     await page.locator('label.sw', { hasText: 'Show the count' }).click(); // the checkbox sits under its track: tap the row
     await page.getByRole('button', { name: 'Table', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Discard your changes?' })).toBeVisible();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, discard dialog');
   });
 });
@@ -211,20 +202,17 @@ for (const mode of ['dark', 'light']) {
       await page.getByLabel('Username', { exact: true }).fill('renamed');
       const password = page.getByLabel('Password to save this change');
       await expect(password).toBeVisible();
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password field');
 
       await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(password).toBeFocused();
       await expect(password).toHaveAttribute('aria-invalid', 'true');
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password missing');
 
       await password.fill('wrong-dummy-password');
       await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByRole('alert')).toHaveText('Incorrect password.');
       await expect(password).toBeFocused();
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password wrong');
     });
 
@@ -232,18 +220,15 @@ for (const mode of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Delete profile' }).click();
       const dialog = page.getByRole('dialog', { name: 'Delete profile?' });
       await expect(dialog.getByLabel('Current password')).toBeVisible();
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, open');
 
       await dialog.getByRole('button', { name: 'Delete for good' }).click();
       await expect(dialog.getByRole('alert')).toHaveText('Enter your current password to delete your account.');
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, missing password');
 
       await dialog.getByLabel('Current password').fill('wrong-dummy-password');
       await dialog.getByRole('button', { name: 'Delete for good' }).click();
       await expect(dialog.getByRole('alert')).toHaveText('Incorrect password.');
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, wrong password');
     });
   });
@@ -305,12 +290,39 @@ test('hovered and keyboard-focused controls while betting have no serious access
   await chip.hover();
   await expectNoSeriousA11y(page, 'board, chip hovered');
   await chip.dblclick(); // a double click selects the chip and bets it
-  // the bet's "-$10" badge pops in over 420 ms (opacity 0 to 1): axe must not scan its blended colour mid-pop
-  await expect(page.locator('.delta.down')).toHaveCSS('opacity', '1');
+  await expect(page.locator('.delta.down')).toHaveCSS('opacity', '1'); // the bet's "-$10" badge is on show for the next scan: axe skips a hidden one
   const deal = page.getByRole('button', { name: 'Deal', exact: true });
   await deal.hover();
   await expectNoSeriousA11y(page, 'board, Deal hovered');
   await page.keyboard.press('Tab'); // real keyboard focus, so :focus-visible styles apply
   await expect(page.locator(':focus-visible')).toHaveCount(1);
   await expectNoSeriousA11y(page, 'board, keyboard focus');
+});
+
+// The helper itself (#205). The fade lasts an hour, so it is certainly still running when the helper is called: no timing involved.
+// Its text sits on a real app page. On a made-up page (no viewport meta) axe on CI's Linux WebKit only called it "incomplete"
+// (elmPartiallyObscured, read from the CI trace), so neither scan checked its colour. The scan of the faint text at rest guards that.
+test('the axe helper scans where a running fade ends: a good end colour passes, a low-contrast one still fails (#205)', async ({ page }) => {
+  await stubApi(page);
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  await page.addStyleTag({ content: '#probe-box { background: #000 } #probe { color: #fff; font-size: 16px; opacity: .3; transition: opacity 3600s linear } #probe.on { opacity: 1 }' });
+  await page.locator('main').evaluate((el) => el.insertAdjacentHTML('afterbegin', '<div id="probe-box"><p id="probe">Fade probe</p></div>')); // opaque box: over the page's gradient axe only says "incomplete"
+  const probe = page.locator('#probe');
+  const styles = await page.locator('style').count();
+  const faint = /color-contrast.*Fade probe/; // one violation line, about this text and no other
+  // Control, nothing moving: this engine's axe reports the faint text at all.
+  await expect(expectNoSeriousA11y(page, 'faint, at rest')).rejects.toThrow(faint);
+  // Starts a fade; answers how many are then running on the text.
+  const fade = (on) => probe.evaluate((el, to) => { getComputedStyle(el).opacity; el.classList.toggle('on', to); return el.getAnimations().length; }, on);
+  expect(await fade(true)).toBe(1); // still about .3 (too faint), ending at 1
+  await expectNoSeriousA11y(page, 'fading in');
+  await expect(probe).toHaveCSS('opacity', '1');
+  await expect(page.locator('style')).toHaveCount(styles); // the helper took its own style away again
+  await expect(probe).toHaveCSS('transition-duration', '3600s');
+  expect(await fade(false)).toBe(1); // still about 1 (readable), ending at .3
+  const outcome = await expectNoSeriousA11y(page, 'fading out').then(() => 'the scan passed', (e) => e.message);
+  await expect(probe).toHaveCSS('opacity', '0.3'); // first where the text ended up, then what axe made of it
+  expect(outcome).toMatch(faint);
+  await expect(page.locator('style')).toHaveCount(styles); // after a failed scan too
 });
