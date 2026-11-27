@@ -6,6 +6,14 @@ import { GameProvider } from "../providers/GameProvider";
 import { usePlayer } from "../hooks/usePlayer";
 import { useGameState, useGameActions } from "../hooks/useGame";
 import { GamePhases } from "../utils/constants/gamePhases";
+import { stackedShoe } from "../utils/_tests_/stackedShoe";
+
+// A test that needs a scripted round sets shoes.next; every other shoe is a real one.
+const shoes = vi.hoisted(() => ({ next: null }));
+vi.mock("../utils/cards", async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, createShoe: (...args) => shoes.next ?? actual.createShoe(...args) };
+});
 
 // #195: the real PlayerProvider, GameProvider, playerEngine and api.js (so the real 401 handler); only fetch is fake.
 // The fake server has one balance per account, and the token is the account's name.
@@ -122,5 +130,60 @@ describe.each(["alice", "bob"])("signing in as %s after a sign-out shows that ac
 
     expectCleanTable(ctx);
     expect(server.ledger).toHaveLength(1);
+  });
+});
+
+// The real providers again: a settle the server refuses (#196).
+describe("a refused payout and sign-out (#196)", () => {
+  const advance = () => act(async () => { await vi.advanceTimersByTimeAsync(1000); for (let i = 0; i < 50; i++) await Promise.resolve(); });
+
+  // Bets, deals and surrenders (half the stake back, so the payout is above 0). The settle is refused; with `hold`, the balance re-read after it waits for release().
+  async function refusedSettle({ hold = false } = {}) {
+    let refused = false;
+    let release;
+    vi.stubGlobal("fetch", async (url, init) => {
+      if (url.endsWith("/ledger/settle")) {
+        refused = true;
+        return reply(400, { message: "over the cap" });
+      }
+      if (refused && hold && !release && url.endsWith("/player/me") && init.method === "GET") {
+        await new Promise((resolve) => { release = resolve; });
+      }
+      return fakeFetch(url, init);
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    // 10, 7 against a 9 up: a plain hand, no offers
+    shoes.next = stackedShoe(["10", "9", "7", "8"]);
+    const ctx = await setup();
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    await advance();
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+    act(() => ctx.actions.surrender(0));
+    for (let i = 0; i < 20 && ctx.state.phase !== GamePhases.POST_ROUND; i++) await advance();
+    await flush();
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    expect(ctx.state.creditEvents.at(-1)).toMatchObject({ kind: "settle", amount: 5 });
+    return { ctx, release: () => release() };
+  }
+  afterEach(() => { shoes.next = null; vi.restoreAllMocks(); });
+
+  it("signed in, the notice names the payout and the balance is the server's", async () => {
+    const { ctx } = await refusedSettle();
+    expect(ctx.state.payoutNotice).toBe("The server refused your $5 payout; it was not paid.");
+    expect(ctx.player.player.credits).toBe(990);
+  });
+
+  it("signed out and into another account while the balance re-read is pending: the new session sees no notice", async () => {
+    const { ctx, release } = await refusedSettle({ hold: true });
+    expect(ctx.state.payoutNotice).toBeNull(); // not reported until the re-read answers
+    act(() => { ctx.actions.resetGame(); ctx.player.logout(); });
+    await flush();
+    await ctx.signIn("bob");
+    await act(async () => { release(); });
+    await flush();
+    expect(ctx.player.player.userName).toBe("bob");
+    expect(ctx.player.player.credits).toBe(500);
+    expect(ctx.state.payoutNotice).toBeNull();
   });
 });

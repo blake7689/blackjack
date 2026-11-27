@@ -38,6 +38,7 @@ const LOOK_KEYS = ["feltTheme", "accent", "mode", "currency"];
 const SOUND_KEYS = ["soundOn", "soundVolume", "hapticsOn"];
 const MODES = [["dark", "Dark"], ["light", "Light"], ["system", "Device"]];
 const FAILED_SAVE = "Couldn't save your settings to your account. They apply here until you reload.";
+const UNLOADED_SAVE = "Your saved settings haven't loaded, so this wasn't saved. It applies here until they load."; // the retry will replace it (#196)
 
 // The section a key belongs to: every key that is not listed is a table rule (or a House variation).
 const sectionOf = (key) => (PROFILE.includes(key) ? "account" : key === "chipValues" ? "chips" : LOOK_KEYS.includes(key) ? "look" : SOUND_KEYS.includes(key) ? "sound" : PLAY_KEYS.includes(key) ? "play" : "rules");
@@ -86,8 +87,8 @@ function DeleteDialog({ onKeep, onDelete }) {
 }
 
 export default function Settings() {
-  const { player, notice: signInNotice, updatePlayer, changePassword, deletePlayer } = usePlayer();
-  const { settings, phase } = useGameState();
+  const { player, notice: signInNotice, updatePlayer, changePassword, changingPassword, deletePlayer } = usePlayer();
+  const { settings, phase, settingsUnloaded } = useGameState();
   const { changeSettings, resetGame } = useGameActions();
   const { logOut, confirm } = useNavActions();
   const nav = useNavigate();
@@ -203,7 +204,7 @@ export default function Settings() {
       const sent = pick(settingsChanged);
       const request = changeSettings(sent); // applies here at once; the promise is the save to the account
       forget(sent);
-      try { await request; } catch { problems.push(FAILED_SAVE); }
+      try { await request; } catch { problems.push(settingsUnloaded ? UNLOADED_SAVE : FAILED_SAVE); }
     }
     setNotice(problems.length ? { text: problems.join(" "), error: true } : { text: "Saved" });
     setSaving(false);
@@ -216,7 +217,7 @@ export default function Settings() {
 
   const savePassword = async () => {
     try {
-      await changePassword(passwords.current, passwords.next);
+      if (await changePassword(passwords.current, passwords.next) === false) return; // ignored: one is already running
       setPasswords({ current: "", next: "" });
       setNotice({ text: "Password changed" });
     } catch (err) {
@@ -363,7 +364,7 @@ export default function Settings() {
             </div>
           </div>
           <div className="btn-row">
-            <button type="button" className="btn" aria-disabled={!canChangePassword} onClick={() => canChangePassword && savePassword()}>Change password</button>
+            <button type="button" className="btn" aria-disabled={!canChangePassword || !!changingPassword} onClick={() => canChangePassword && savePassword()}>Change password</button>
             <button type="button" className="btn" onClick={logOut}>Log out</button>
           </div>
         </>)}

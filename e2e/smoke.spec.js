@@ -1,4 +1,5 @@
 import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS, placeBet } from './fixtures';
+import { expectNoSeriousA11y } from './a11y';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -193,4 +194,160 @@ test('early surrender is offered before the peek: the half bet is kept although 
   await expect.poll(() => api.settles.length).toBe(1);
   expect(api.bets).toEqual([{ amount: 10, newRound: true, requestId: expect.stringMatching(V4) }]);
   expect(api.settles).toEqual([{ payout: 5, requestId: expect.stringMatching(V4) }]);
+});
+
+// #196: the game-flow fixes, in a real browser (history, the retry timer, a held request, the 48 px line).
+// A notice on the message line: all of it inside the line's box and the screen, nothing cut off.
+const lineFits = (page) => page.locator('.msg .notice').evaluate((el) => {
+  const line = el.closest('.msg');
+  const [box, text] = [line.getBoundingClientRect(), el.getBoundingClientRect()];
+  return {
+    cutTop: Math.max(0, Math.round(box.top - text.top)), cutBottom: Math.max(0, Math.round(text.bottom - box.bottom)),
+    cutSide: line.scrollWidth > line.clientWidth || text.left < 0 || text.right > document.documentElement.clientWidth,
+    pageScrolls: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  };
+});
+const FITS = { cutTop: 0, cutBottom: 0, cutSide: false, pageScrolls: false };
+async function expectNoticeFitsSmallScreens(page) {
+  const own = page.viewportSize();
+  expect(await lineFits(page), `${own.width}x${own.height}`).toEqual(FITS);
+  for (const size of [{ width: 320, height: 568 }, { width: 375, height: 667 }, { width: 568, height: 320 }]) {
+    await page.setViewportSize(size);
+    await expect.poll(() => lineFits(page), { message: `${size.width}x${size.height}` }).toEqual(FITS);
+  }
+  await page.setViewportSize(own);
+}
+
+test('browser Back to Home, then Play, keeps the live round and its stake (#196)', async ({ page }) => {
+  const api = await stubApi(page);
+  await seedRandom(page, 183);
+  await login(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 });
+
+  // After a fresh sign-in the first Back is /login, which sends a signed-in player on to the table; the second is Home. Neither asks "Leave game?".
+  await page.goBack();
+  await expect(page).toHaveURL(/\/game$/);
+  await expect(page.getByRole('button', { name: 'Hit' })).toBeVisible();
+  await page.goBack();
+  const play = page.getByRole('link', { name: 'Play', exact: true });
+  await expect(play).toBeVisible();
+  await play.click();
+
+  await expect(page).toHaveURL(/\/game$/);
+  for (const card of ['king of diamonds', '4 of clubs', '6 of clubs']) await expect(page.getByRole('img', { name: card })).toBeVisible();
+  await expect(page.locator('#bal')).toHaveText('$990');
+  await page.getByRole('button', { name: 'Stay' }).click({ timeout: 15_000 });
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => api.settles.length).toBe(1);
+  expect(api.bets).toHaveLength(1);
+});
+
+// The first load fails; the table opens on the defaults. The shuffle is skipped once the table is there.
+async function openUnloadedTable(page) {
+  await submitLogin(page);
+  await expect(page.locator('.felt')).toBeVisible();
+  await page.locator('.felt').dispatchEvent('click');
+  await expect(page.locator('.rack-wrap:not(.off)')).toBeVisible({ timeout: 15_000 });
+}
+const UNLOADED = 'Saved settings not loaded. Rules may differ. Retrying...';
+const settingsGets = (api) => api.requests.filter((r) => r.endpoint === 'GET /player/me/settings').length;
+
+test('a settings load that fails once: the table says so, retries, and applies the saved table (#196)', async ({ page }) => {
+  let release;
+  const api = await stubApi(page, { settingsFailures: 1, settingsGate: new Promise((resolve) => { release = resolve; }), settings: { ...VEGAS, blackjackPayout: '6:5', playTimeout: 250 } });
+  await openUnloadedTable(page);
+  const line = page.locator('.msg');
+  await expect(line).toHaveText(UNLOADED);
+  await expect(line).toHaveAttribute('aria-live', 'polite');
+  await expect(page.locator('[aria-live]')).toHaveCount(1);
+  await expect(page.locator('.felt')).toContainText(/blackjack pays 3 to 2/i);
+  await expect.poll(() => settingsGets(api)).toBeGreaterThan(1); // the retry went out by itself; its answer is held
+  await expectNoSeriousA11y(page, 'table with the settings-not-loaded notice');
+  await expectNoticeFitsSmallScreens(page);
+
+  release();
+  await expect(line).toHaveText('Place your bets', { timeout: 20_000 }); // the saved settings say every message shows
+  await expect(page.locator('.felt')).toContainText(/blackjack pays 6 to 5/i);
+});
+
+test('saved settings that arrive mid-round wait for the next hand (#196)', async ({ page }) => {
+  let release;
+  const api = await stubApi(page, { settingsFailures: 1, settingsGate: new Promise((resolve) => { release = resolve; }), settings: { ...VEGAS, blackjackPayout: '6:5', playTimeout: 250 } });
+  await seedRandom(page, 183);
+  await openUnloadedTable(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  const stay = page.getByRole('button', { name: 'Stay' });
+  await expect(stay).toBeEnabled({ timeout: 15_000 });
+  await expect.poll(() => settingsGets(api)).toBeGreaterThan(1);
+  const answered = page.waitForResponse((r) => r.url().endsWith('/player/me/settings') && r.ok());
+  release();
+  await (await answered).finished();
+  await expect(page.locator('.msg')).toHaveText(UNLOADED); // held: the round keeps its rules
+  await expect(page.locator('.felt')).toContainText(/blackjack pays 3 to 2/i);
+
+  await stay.click();
+  await expect(page.locator('.msg .verdict')).toBeVisible({ timeout: 30_000 }); // never hidden by the notice
+  await expect(page.locator('.felt')).toContainText(/blackjack pays 3 to 2/i);
+  await page.getByRole('button', { name: 'Next hand' }).click();
+  await expect(page.locator('.msg')).toHaveText('Place your bets', { timeout: 15_000 });
+  await expect(page.locator('.felt')).toContainText(/blackjack pays 6 to 5/i);
+});
+
+test('a payout the server refuses is said in place of the verdict until the next deal (#196)', async ({ page }) => {
+  const api = await stubApi(page, { settleRefusal: { status: 400, message: 'The payout is over the cap.' } });
+  await seedRandom(page, 183);
+  await login(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
+
+  const line = page.locator('.msg');
+  const notice = 'The server refused your $5 payout; it was not paid.';
+  await expect(line).toHaveText(notice, { timeout: 30_000 });
+  await expect(line).toHaveAttribute('aria-live', 'polite');
+  await expect(page.locator('[aria-live]')).toHaveCount(1);
+  await expect(line.locator('.verdict')).toHaveCount(0);
+  await expect(page.locator('#bal')).toHaveText('$990'); // the server's balance
+  await expect(page.getByRole('button', { name: 'Next hand' })).toBeEnabled();
+  await expectNoSeriousA11y(page, 'results with the refused-payout notice');
+  await expectNoticeFitsSmallScreens(page);
+
+  await page.getByRole('button', { name: 'Next hand' }).click();
+  await expect(page.locator('.rack-wrap:not(.off)')).toBeVisible({ timeout: 15_000 });
+  await expect(line).toHaveText(notice); // still there between rounds
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await expect(line).not.toContainText('refused');
+  expect(api.settles).toHaveLength(1);
+});
+
+test('a refusal that arrives a round late never replaces the new round\'s verdict (#196)', async ({ page }) => {
+  let release;
+  const api = await stubApi(page, { settleRefusal: { status: 400, message: 'The payout is over the cap.', once: true, gate: new Promise((resolve) => { release = resolve; }) } });
+  await seedRandom(page, 183);
+  await login(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
+  await page.getByRole('button', { name: 'Next hand' }).click({ timeout: 30_000 }); // round 1's settle is still unanswered
+  await expect(page.locator('.rack-wrap:not(.off)')).toBeVisible({ timeout: 15_000 });
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  const stay = page.getByRole('button', { name: 'Stay' });
+  await expect(stay).toBeEnabled({ timeout: 15_000 });
+
+  release();
+  const line = page.locator('.msg');
+  const notice = 'The server refused your $5 payout; it was not paid.';
+  await expect(line).toHaveText(notice);
+  await stay.click();
+  await expect(line.locator('.verdict')).toBeVisible({ timeout: 30_000 });
+  await expect(line.locator('.sr-only')).toHaveText(/^Hand 1: .+ Dealer: .+\.$/);
+  await expect(line).not.toContainText('refused');
+  await page.getByRole('button', { name: 'Next hand' }).click();
+  await expect(line).toHaveText(notice, { timeout: 15_000 }); // back at the betting step
+  await expect.poll(() => api.settles.length).toBe(2);
 });

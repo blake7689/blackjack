@@ -13,6 +13,8 @@ import { readLook, saveLook } from "../utils/theme";
 import { setCurrency } from "../utils/money";
 
 const ENTRY_ROUTES = new Set(["/", "/login", "/signup"]);
+// A failed settings load is retried after 1, 2, 4, 8, 16 and 30 s, then every 30 s.
+const retryWait = (attempt) => Math.min(1000 * 2 ** attempt, 30000);
 
 export function GameProvider({ children }) {
   const [state, dispatch] = useReducer(gameReducer, initialGameState, (s) => ({ ...s, settings: readLook(s.settings) })); // starts with the last look, so no flash before the saved settings load
@@ -37,40 +39,63 @@ export function GameProvider({ children }) {
 
   const makeShoe = useCallback(() => createShoe(deckCount, includeCutCard), [deckCount, includeCutCard]);
 
-  // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there, and while
+  // On sign-in (or a restored session), load the player's saved settings. A failed load keeps what's there and is retried in the background (#196), and while
   // nothing has loaded a signed-in change is applied here but never saved: it would overwrite the stored table with defaults.
   // Then, once per sign-in or restore (never on a later visit to Home), the table starts and a player still on "/" lands on it (DESIGN
   // section 8); a failed load starts it with the settings it has. The sign-in pages count as entry routes too: whereRef lags the route commit
   // (Login's nav("/") may not have rendered yet), so a player can still read "/login" here (#144). //
   const loadedRef = useRef(false);
+  const load = useCallback((saved) => {
+    const settings = sanitizeSettings(saved);
+    dispatch({ type: "LOAD_SETTINGS", saved, shoe: createShoe(settings.deckCount, settings.includeCutCard) });
+    loadedRef.current = true;
+    return settings;
+  }, []);
+  // null: nothing wrong. {}: the first load failed, retrying. { saved }: a retry answered; it waits for a break between rounds.
+  const [late, setLate] = useState(null);
   useEffect(() => {
     loadedRef.current = false;
+    setLate(null);
     if (!signedIn) { setStarted(false); dispatch({ type: "SIGN_OUT" }); return; }
     let current = true;
+    let timer;
+    const retry = (attempt) => {
+      timer = setTimeout(() => getSettings().then(
+        (saved) => { if (current) setLate({ saved }); },
+        () => { if (current) retry(attempt + 1); },
+      ), retryWait(attempt));
+    };
     const begin = (settings) => {
-      if (!current) return;
       dispatch({ type: "START_GAME", shoe: createShoe(settings.deckCount, settings.includeCutCard) });
       setStarted(true);
       const { pathname: at, nav: go } = whereRef.current;
       if (ENTRY_ROUTES.has(at)) go("/game", { replace: true });
     };
     getSettings().then((saved) => {
+      if (current) begin(load(saved));
+    }, () => {
       if (!current) return;
-      const settings = sanitizeSettings(saved);
-      dispatch({ type: "LOAD_SETTINGS", saved, shoe: createShoe(settings.deckCount, settings.includeCutCard) });
-      loadedRef.current = true;
-      begin(settings);
-    }, () => begin(stateRef.current.settings));
-    return () => { current = false; };
-  }, [signedIn]);
+      setLate({});
+      begin(stateRef.current.settings);
+      retry(0);
+    });
+    return () => { current = false; clearTimeout(timer); };
+  }, [signedIn, load]);
+
+  // A late answer never changes the rules under a round in progress: it is applied only before a deal. `signedIn`: a sign-out in the same commit wins.
+  useEffect(() => {
+    if (!signedIn || !late || !("saved" in late) || (state.phase !== GamePhases.NONE && state.phase !== GamePhases.PRE_DEAL)) return;
+    load(late.saved);
+    setLate(null);
+  }, [signedIn, late, state.phase, load]);
 
   // Apply each credit event from the reducer exactly once. The server's answer to a bet comes back as an action. //
   const appliedSeq = useRef(0);
   useEffect(() => {
-    const report = (seq, outcome) => dispatch({ type: outcome === "rejected" ? "BET_REJECTED" : "BET_CONFIRMED", seq });
     for (const event of state.creditEvents) {
       if (event.seq <= appliedSeq.current) continue;
-      applyCreditEvent(event, report);
+      const payout = event.kind === "settle" ? event.amount : undefined; // kept here: state.creditEvents is cut to the last 20
+      applyCreditEvent(event, (seq, outcome) => dispatch({ type: outcome === "rejected" ? "BET_REJECTED" : "BET_CONFIRMED", seq, payout }));
       appliedSeq.current = event.seq;
     }
   }, [state.creditEvents, applyCreditEvent]);
@@ -142,7 +167,8 @@ export function GameProvider({ children }) {
 
   // `starting`: signed in but the table not started yet, so Home shows Loading instead of its Start Game button (a provider flag, not round state).
   const starting = signedIn && !started;
-  const shown = useMemo(() => ({ ...state, starting, autoBar }), [state, starting, autoBar]);
+  const settingsUnloaded = signedIn && late !== null; // from a failed first load until the saved settings are applied: the table says so
+  const shown = useMemo(() => ({ ...state, starting, settingsUnloaded, autoBar }), [state, starting, settingsUnloaded, autoBar]);
 
   return (
     <GameActionsContext.Provider value={actions}>

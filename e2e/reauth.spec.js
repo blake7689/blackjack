@@ -255,3 +255,35 @@ for (const [who, next] of [['the same account', { userName: 'tester', credits: 1
     expect(api.bets).toEqual([]);
   });
 }
+
+// #196: the first password change revokes the token, so a second request would 401 and sign the player out (the stub answers like that).
+test('pressing Change password twice, and again after leaving Settings, sends one change and stays signed in (#196)', async ({ page }) => {
+  let release;
+  const api = await stubApi(page, { passwordGate: new Promise((resolve) => { release = resolve; }) });
+  await openSettings(page);
+  const change = page.getByRole('button', { name: 'Change password' });
+  const fill = async () => {
+    await account(page).click();
+    await page.getByLabel('Current password').fill('old-dummy-pass');
+    await page.getByLabel('New password').fill('new-dummy-pass1');
+  };
+  await fill();
+  await change.dblclick();
+  await expect(change).toHaveAttribute('aria-disabled', 'true');
+  await expect.poll(() => api.passwords.length).toBe(1);
+
+  await page.getByRole('button', { name: 'Table', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await fill();
+  await expect(change).toHaveAttribute('aria-disabled', 'true'); // still running: the guard outlives the page
+  await change.click({ force: true }); // Playwright will not click an aria-disabled button by itself; a player can
+  await expect(page.getByText('Password changed')).toHaveCount(0);
+  await expect(page.getByLabel('Current password')).toHaveValue('old-dummy-pass'); // the ignored press clears nothing
+
+  release();
+  await expect(change).not.toHaveAttribute('aria-disabled', 'true');
+  await expect.poll(() => api.logins.length).toBe(2); // the sign-in, then the one silent sign-in after the change
+  expect(api.passwords).toHaveLength(1);
+  await expect(page.getByText('Please log in to manage settings.')).toHaveCount(0);
+  expect(await page.evaluate(() => sessionStorage.getItem('bj.token'))).toBe('e2e-token-2');
+});

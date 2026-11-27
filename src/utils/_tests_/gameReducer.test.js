@@ -987,10 +987,10 @@ describe("auto deal (#88)", () => {
       expect(s).toMatchObject({ autoDealPending: false, autoDealPaused: false });
     });
 
-    it("START_GAME and RESET_GAME clear the pause and the pending deal", () => {
+    it("START_GAME (from no table) and RESET_GAME clear the pause and the pending deal", () => {
       const paused = run(armed(), { type: "PAUSE_AUTO_DEAL" });
-      expect(run(paused, { type: "START_GAME", shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPaused: false, autoDealPending: false });
-      expect(run(armed(), { type: "START_GAME", shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPending: false, betCircle: 0 });
+      expect(run({ ...paused, phase: GamePhases.NONE }, { type: "START_GAME", shoe: stackedShoe(["2"]) })).toMatchObject({ autoDealPaused: false, autoDealPending: false });
+      expect(run(paused, { type: "START_GAME", shoe: stackedShoe(["2"]) })).toBe(paused); // a started table is left alone (#196)
       expect(run(paused, { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).toMatchObject({ autoDealPaused: false, autoDealPending: false });
       expect(run(armed(), { type: "RESET_GAME", shoe: [], phase: GamePhases.NONE })).toMatchObject({ autoDealPending: false });
     });
@@ -1617,10 +1617,10 @@ describe("offers: the reducer (#91)", () => {
       for (const type of ["TAKE_INSURANCE", "EVEN_MONEY", "DECLINE_OFFERS", "PEEK"]) expect(run(voided, { type })).toBe(voided);
     });
 
-    it("RESET_GAME and START_GAME clear the offers", () => {
+    it("RESET_GAME clears the offers; START_GAME leaves the live round alone", () => {
       const s = offered();
       expect(run(s, { type: "RESET_GAME", shoe: stackedShoe(["2"]), phase: GamePhases.PRE_DEAL }).offers).toBeNull();
-      expect(run(s, { type: "START_GAME", shoe: stackedShoe(["2"]) }).offers).toBeNull();
+      expect(run(s, { type: "START_GAME", shoe: stackedShoe(["2"]) })).toBe(s);
     });
   });
 
@@ -2018,12 +2018,11 @@ describe("betHistory and UNDO_BET (#82)", () => {
     expect(s.pendingBets).toHaveLength(1);
   });
 
-  it("resetTable (a new game, a reset, a settings reset) clears the history and refunds the circle", () => {
+  it("resetTable (a reset, a settings reset) clears the history and refunds the circle", () => {
     const s = betting(10, 5);
     const reset = run(s, { type: "RESET_GAME", shoe: stackedShoe(["5"]), phase: GamePhases.PRE_DEAL });
     expect([reset.betCircle, reset.betHistory]).toEqual([0, []]);
     expect(events(reset).at(-1)).toEqual(local(15));
-    expect(run(s, { type: "START_GAME", shoe: stackedShoe(["5"]) }).betHistory).toEqual([]);
   });
 
   it("a voided round (the server refuses the opening bet) clears the history", () => {
@@ -2095,5 +2094,151 @@ describe("SIGN_OUT (#195: nothing on the table follows the player into the next 
     const next = run(out, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
     expect(next.pendingBets).toHaveLength(1);
     expect(run(next, { type, seq })).toBe(next); // nor the new session's own pending bet
+  });
+});
+
+describe("START_GAME only starts a table (#196)", () => {
+  const start = { type: "START_GAME", shoe: stackedShoe(["2"]) };
+
+  it.each(Object.values(GamePhases).filter((p) => p !== GamePhases.NONE))("changes nothing in %s", (phase) => {
+    const s = { ...dealt(["10", "10", "9", "7"]), phase };
+    expect(run(s, start)).toBe(s);
+  });
+
+  it("starts a table from NONE, including after RESET_GAME left none", () => {
+    const left = run(dealt(["10", "10", "9", "7"]), { type: "RESET_GAME", shoe: stackedShoe(["5"]), phase: GamePhases.NONE });
+    const next = run(left, start);
+    expect(next).toMatchObject({ phase: GamePhases.PRE_DEAL, hands: [], betCircle: 0 });
+    expect(next.shoe).toBe(start.shoe);
+  });
+});
+
+describe("a refused payout (#196)", () => {
+  const TEXT = "The server refused your $20 payout; it was not paid.";
+  // A won round on the results screen: 19 against 16, the dealer draws a king and busts.
+  const won = () => {
+    let s = run(dealt(["10", "10", "9", "6", "K"]), { type: "STAND", handIdx: 0 });
+    s = confirmBets(s);
+    for (let i = 0; i < 10 && s.phase !== GamePhases.POST_ROUND; i++) s = run(s, { type: nextAutoAction(s) });
+    expect(s.phase).toBe(GamePhases.POST_ROUND);
+    return s;
+  };
+  const refused = (s, payout = 20) => run(s, { type: "BET_REJECTED", seq: s.creditEvents.at(-1).seq, payout });
+  afterEach(() => setCurrency("USD"));
+
+  it("sets a notice with the amount, and changes nothing else", () => {
+    const s = won();
+    expect(refused(s)).toEqual({ ...s, payoutNotice: TEXT });
+  });
+
+  it("names the amount in the player's currency, to the cent", () => {
+    setCurrency("GBP");
+    expect(refused(won(), 12.5).payoutNotice).toBe("The server refused your £12.50 payout; it was not paid.");
+  });
+
+  it("says nothing for a refused settle of 0, or for a rejection with no payout and no such bet", () => {
+    const s = won();
+    expect(refused(s, 0)).toBe(s);
+    expect(run(s, { type: "BET_REJECTED", seq: 999 })).toBe(s);
+  });
+
+  it("survives CONTINUE, the sweep, Resume, a bet, a table reset, and a Deal that is refused", () => {
+    let s = refused(won());
+    s = run(s, { type: "CONTINUE" });
+    expect(s.payoutNotice).toBe(TEXT);
+    s = run(s, { type: "END_ROUND", shoe: stackedShoe(["2"]) });
+    expect(s).toMatchObject({ phase: GamePhases.PRE_DEAL, payoutNotice: TEXT });
+    for (const action of [{ type: "RESUME_AUTO_DEAL" }, { type: "PAUSE_AUTO_DEAL" }, { type: "DEAL" }, { type: "ADD_BET", amount: 5 }]) {
+      expect(run(s, action).payoutNotice, action.type).toBe(TEXT);
+    }
+    expect(run(s, { type: "RESET_GAME", shoe: stackedShoe(["2"]), phase: GamePhases.NONE }).payoutNotice).toBe(TEXT);
+  });
+
+  it("is cleared by the next deal and by sign-out", () => {
+    const s = refused(won());
+    const ready = run(s, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["2"]) }, { type: "ADD_BET", amount: 10 });
+    expect(run({ ...ready, shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "DEAL" })).toMatchObject({ phase: GamePhases.DEALING, payoutNotice: null });
+    expect(run(s, { type: "SIGN_OUT" }).payoutNotice).toBeNull();
+  });
+});
+
+describe("an earlier round's late refusal never replaces this round's verdict (#196)", () => {
+  const TEXT = "The server refused your $20 payout; it was not paid.";
+  const late = { type: "BET_REJECTED", seq: 999, payout: 20 }; // the earlier round's settle: in no pendingBets
+  const playing = () => confirmBets(dealt(["10", "10", "9", "7"]));
+  // Stand, then every automatic step up to `phase`.
+  const to = (s, phase) => {
+    let next = s.phase === GamePhases.PLAYER_TURN ? run(s, { type: "STAND", handIdx: 0 }) : s;
+    for (let i = 0; i < 10 && next.phase !== phase; i++) next = run(next, { type: nextAutoAction(next) });
+    expect(next.phase).toBe(phase);
+    return next;
+  };
+
+  it("one that arrives during play is marked old at SETTLE, and lasts through the results to the next betting step", () => {
+    const during = run(playing(), late);
+    expect(during).toMatchObject({ payoutNotice: TEXT, payoutNoticeOld: false }); // shown during play
+    let s = to(during, GamePhases.RESULTS);
+    expect(s).toMatchObject({ payoutNotice: TEXT, payoutNoticeOld: true });
+    s = to(s, GamePhases.POST_ROUND);
+    expect(s.payoutNoticeOld).toBe(true);
+    s = run(s, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["2"]) });
+    expect(s).toMatchObject({ phase: GamePhases.PRE_DEAL, payoutNotice: TEXT });
+  });
+
+  it("with no refusal at SETTLE nothing is old, and this round's own refusal is not old either", () => {
+    const s = to(playing(), GamePhases.POST_ROUND);
+    expect(s).toMatchObject({ payoutNotice: null, payoutNoticeOld: false });
+    expect(run(s, late)).toMatchObject({ payoutNotice: TEXT, payoutNoticeOld: false });
+  });
+
+  it("this round's own refusal replaces an old one and is not old", () => {
+    const s = to(run(playing(), { ...late, payout: 5 }), GamePhases.POST_ROUND);
+    expect(s.payoutNoticeOld).toBe(true);
+    expect(run(s, late)).toMatchObject({ payoutNotice: TEXT, payoutNoticeOld: false });
+  });
+
+  it("the next deal and sign-out clear the mark with the notice", () => {
+    const old = to(run(playing(), late), GamePhases.POST_ROUND);
+    const ready = run(old, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["2"]) }, { type: "ADD_BET", amount: 10 });
+    expect(ready.payoutNoticeOld).toBe(true);
+    expect(run({ ...ready, shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "DEAL" })).toMatchObject({ payoutNotice: null, payoutNoticeOld: false });
+    expect(run(old, { type: "SIGN_OUT" })).toMatchObject({ payoutNotice: null, payoutNoticeOld: false });
+  });
+});
+
+describe("the newest message wins the line (#196)", () => {
+  const PAYOUT = "The server refused your $20 payout; it was not paid.";
+  const late = { type: "BET_REJECTED", seq: 999, payout: 20 };
+
+  it("a fresh payout refusal clears an earlier bet notice", () => {
+    const s = dealt(["5", "10", "6", "7", "K"]);
+    const doubled = run(confirmBets(s), { type: "DOUBLE", handIdx: 0 });
+    const refusedDouble = run(doubled, { type: "BET_REJECTED", seq: doubled.pendingBets[0].seq });
+    expect(refusedDouble.notice).toBe("The server refused $10 of your stake; that hand plays for less.");
+    expect(run(refusedDouble, late)).toMatchObject({ notice: null, payoutNotice: PAYOUT });
+  });
+
+  it("a settle of 0 that is refused leaves the bet notice alone", () => {
+    const s = { ...dealt(["10", "10", "9", "7"]), notice: "a bet notice" };
+    expect(run(s, { ...late, payout: 0 })).toBe(s);
+  });
+
+  it("an old payout notice, then a refused opening bet: the round's cancel notice is set beside it", () => {
+    const s = run(dealt(["10", "10", "9", "7"]), late);
+    const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
+    expect(voided).toMatchObject({ phase: GamePhases.PRE_DEAL, payoutNotice: PAYOUT, notice: "The server refused your bet, so the round was cancelled." });
+  });
+
+  describe("END_ROUND with a rebet auto deal cannot afford", () => {
+    const broke = (payoutNotice) => run({ ...dealt(["10", "10", "9", "7"]), phase: GamePhases.END_ROUND, payoutNotice,
+      settings: { ...initialGameState.settings, resetInitialBet: true, autoDeal: true } }, { type: "END_ROUND", credits: 0, shoe: stackedShoe(["2"]) });
+
+    it("says nothing over a refused payout, and still pauses", () => {
+      expect(broke(PAYOUT)).toMatchObject({ notice: null, payoutNotice: PAYOUT, autoDealPaused: true, autoDealPending: false, betCircle: 0 });
+    });
+
+    it("says so when no payout was refused", () => {
+      expect(broke(null)).toMatchObject({ notice: "Not enough credits to rebet $10: auto deal paused", autoDealPaused: true });
+    });
   });
 });

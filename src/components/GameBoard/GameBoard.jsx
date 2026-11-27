@@ -33,6 +33,7 @@ import "./GameBoard.css";
 
 // Mirrors the API's "balance under 100" top-up guard; the API is the authority.
 const TOP_UP_BELOW = 100;
+const SETTINGS_UNLOADED = "Saved settings not loaded. Rules may differ. Retrying...";
 // FeltPrint calls centrePrint (layout reads) after every one of its own renders; memoized, that is when its settings or box change, not on every board render (#140).
 const FeltPrint = memo(FeltPrintBase);
 const RulesSheet = lazyReload(() => import("../RulesSheet/RulesSheet")); // #169: loaded when first opened
@@ -41,7 +42,7 @@ const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "l
 
 export default function GameBoard() {
   const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound,
-    seenIds, shoeSeq, shoeMid, nextHandTag } = useGameState();
+    seenIds, shoeSeq, shoeMid, nextHandTag, payoutNotice, payoutNoticeOld, settingsUnloaded } = useGameState();
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
   const [rules, setRules] = useState(false); // the Table rules sheet (#87)
@@ -105,6 +106,9 @@ export default function GameBoard() {
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
   const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
+  // The message line's notice (it takes the verdict's place too). The newest wins: a refused payout clears `notice`, so one set here came after it. A payout refusal replaces
+  // its own verdict (it would be wrong), never a later round's. Unloaded settings never hide a verdict.
+  const lineNotice = notice || (payoutNoticeOld && verdict ? null : payoutNotice) || (settingsUnloaded && !verdict ? SETTINGS_UNLOADED : null);
   // The round's one win or lose sound and buzz, when the verdict first shows (a push has neither).
   const kind = phase === GamePhases.RESULTS ? verdict?.kind : null;
   useEffect(() => {
@@ -126,7 +130,7 @@ export default function GameBoard() {
   const layoutKey = [
     landedCounts,
     seats.map((h) => [h.tag, h.cards.length, h.hiddenCards.length, h.bet, h.result, h.isDouble ? 1 : 0, h.baseStake ?? 0, h.insurance ?? 0, h.insurancePayout ?? 0].join(".")).join("|"),
-    dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!notice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
+    dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!lineNotice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
   ].join(",");
   const [scroll, syncScroll] = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1, layoutKey);
   useCentrePrint(stageInRef, `${layoutKey},${scroll},${tight}`); // scroll and tight change the seats' boxes too
@@ -175,7 +179,7 @@ export default function GameBoard() {
               lastHand={cutCardFound}
               waiting={phase === GamePhases.SETTLING_HANDS && pendingBets.length > 0}
               reconnecting={reconnecting}
-              notice={notice}
+              notice={lineNotice}
               verdict={verdict}
               heard={verdict && resultsLine(hands, dealer, settings.showTotals)}
               shuffling={!!shuf}
