@@ -46,10 +46,12 @@ function buildDeck(deckIndex = 0) {
 export { buildDeck }; //for testing
 
 // Build a shoe with n decks and a cut card //
+let shoesBuilt = 0; // part of every card id, so no two shoes share one (a mid-round refill meets cards still on the table)
 export function createShoe(deckCount = 2, includeCutCard = true) {
   let shoe = [];
+  shoesBuilt++;
   for (let i = 0; i < deckCount; i++) {
-    shoe.push(...buildDeck(i));
+    shoe.push(...buildDeck(i).map((card) => ({ ...card, id: `${card.id}-${shoesBuilt}` })));
   }
   shoe = shuffle(shoe);
   shoe = shuffle(shoe); 
@@ -74,7 +76,7 @@ export function drawCardFromShoe(shoe, setCutCardFound, resetShoe) {
 
   do {
     // Refill in place so every caller holding this shoe keeps drawing from it.
-    // shortcut: a fresh shoe can repeat cards still on the table; fine for play, upgrade when discards are tracked.
+    // shortcut: a fresh shoe can repeat a card face (rank and suit) still on the table, never an id; fine for play, upgrade when discards are tracked.
     if (shoe.length === 0) shoe.push(...resetShoe(true));
     card = shoe.shift();
     if (card.type === "cut") setCutCardFound(true);

@@ -6,7 +6,7 @@ import DealerArea from "../components/DealerArea/DealerArea";
 import PlayerHand from "../components/Playerhand/PlayerHand";
 import GameBoard from "../components/GameBoard/GameBoard";
 import { EASING, GLIDE, cardTiming, hold, landed, queue, reserve, spots } from "../utils/cardAnimation";
-import { stackedShoe, outOfCards } from "../utils/_tests_/stackedShoe";
+import { stackedShoe, realCards, outOfCards } from "../utils/_tests_/stackedShoe";
 import { HandStatus } from "../utils/constants/handStatus";
 import { HandResult } from "../utils/constants/handResult";
 import { GamePhases } from "../utils/constants/gamePhases";
@@ -76,6 +76,24 @@ describe("PlayerHand with a face-down double", () => {
     const [six, five, king] = stackedShoe(["6", "5", "K"]);
     const { container } = renderUI(<Flight enabled={false}><PlayerHand {...handProps} hand={mkHand([six, five, king], { isDouble: true })} /></Flight>);
     expect([...container.querySelectorAll(".fly-card")].map((el) => el.style.rotate)).toEqual(["", "", "90deg"]);
+  });
+});
+
+describe("PlayerHand after a mid-round refill with real shoes (#197)", () => {
+  it("a card with the face of one already down is not in the total until it lands itself", () => {
+    const [two, three, four] = realCards(["2", "hearts"], ["3", "diamonds"], ["4", "clubs"]);
+    const [again] = realCards(["2", "hearts"]); // from the next shoe
+    const ui = (cards) => <Flight><PlayerHand {...handProps} hand={mkHand(cards, { tag: "refilled" })} /></Flight>;
+    const { container, rerender } = renderUI(ui([two, three, four]));
+    settleDeal();
+    expect(pill(container)).toBe("9");
+
+    rerender(ui([two, three, four, again]));
+    expect(pill(container)).toBe("9");
+    expect(landed.ids.has(again.id)).toBe(false);
+    settleDeal();
+    expect(landed.ids.has(again.id)).toBe(true);
+    expect(pill(container)).toBe("11");
   });
 });
 

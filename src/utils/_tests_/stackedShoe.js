@@ -1,4 +1,4 @@
-import { buildDeck } from "../cards";
+import { buildDeck, createShoe } from "../cards";
 import { HandStatus } from "../constants/handStatus";
 import { HandResult } from "../constants/handResult";
 import { GamePhases } from "../constants/gamePhases";
@@ -17,6 +17,12 @@ export function stackedShoe(codes) {
     if (!template) throw new Error(`Unknown card code ${code}`);
     return { ...template, id: `stacked-${rank}-${nextId++}` };
   });
+}
+
+// Cards of one new createShoe shoe, [rank, suit] in draw order: real ids, for what stackedShoe's always-unique ids cannot show (#197).
+export function realCards(...faces) {
+  const shoe = createShoe(1, false);
+  return faces.map(([rank, suit]) => shoe.find((c) => c.rank === rank && c.suit === suit));
 }
 
 export const outOfCards = () => { throw new Error("Scenario shoe ran out of cards"); };
