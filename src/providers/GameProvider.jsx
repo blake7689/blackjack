@@ -45,7 +45,7 @@ export function GameProvider({ children }) {
   const loadedRef = useRef(false);
   useEffect(() => {
     loadedRef.current = false;
-    if (!signedIn) { setStarted(false); return; }
+    if (!signedIn) { setStarted(false); dispatch({ type: "SIGN_OUT" }); return; }
     let current = true;
     const begin = (settings) => {
       if (!current) return;

@@ -2055,3 +2055,45 @@ describe("betHistory and UNDO_BET (#82)", () => {
     expect(run(undone, ...add(5)).betHistory).toEqual([5]);
   });
 });
+
+describe("SIGN_OUT (#195: nothing on the table follows the player into the next session)", () => {
+  // Settings the defaults do not have, so "kept" cannot pass by falling back to initialGameState.
+  const custom = (state) => ({ ...state, settings: { ...state.settings, feltTheme: "red", resetInitialBet: true, deckCount: 2 } });
+  // Chips in the circle with a Rebet amount: a finished round with the auto rebet, then one more chip.
+  const chipsInCircle = () => {
+    const done = playRound({ cards: ["10", "10", "9", "7"] }).state;
+    return run(custom(done), { type: "CONTINUE" }, { type: "END_ROUND" }, { type: "ADD_BET", amount: 90 });
+  };
+  const midRound = () => custom(dealt(["10", "10", "9", "7"], 100)); // the opening bet is still unanswered
+
+  it.each([
+    ["PRE_DEAL with chips in the circle", chipsInCircle, GamePhases.PRE_DEAL],
+    ["mid-round", midRound, GamePhases.PLAYER_TURN],
+  ])("from %s: a clean table with no credit event; settings and both counters are kept", (_, build, phase) => {
+    const before = build();
+    expect(before.phase).toBe(phase);
+    expect(before.initialBet).toBeGreaterThan(0);
+    expect(Math.min(before.creditSeq, before.shoeSeq)).toBeGreaterThan(0);
+
+    const after = run(before, { type: "SIGN_OUT" });
+    expect(after).toEqual({ ...initialGameState, settings: before.settings, creditSeq: before.creditSeq, shoeSeq: before.shoeSeq });
+    expect(after).toMatchObject({ phase: GamePhases.NONE, betCircle: 0, betHistory: [], initialBet: 0, pendingBets: [], creditEvents: [], hands: [] });
+    expect(after.settings).toBe(before.settings);
+
+    const next = run(after, { type: "START_GAME", shoe: stackedShoe(["5"]) });
+    expect(next.creditEvents).toEqual([]); // no refund into the new session
+    expect(next.shoeSeq).toBe(before.shoeSeq + 1); // the board plays the new table's shuffle
+    // the next bet's seq carries on, so GameProvider (which remembers the last applied seq) does not skip it
+    expect(run(next, { type: "ADD_BET", amount: 5 }).creditEvents.map((e) => e.seq)).toEqual([before.creditSeq + 1]);
+  });
+
+  it.each(["BET_CONFIRMED", "BET_REJECTED"])("a late %s for the old session's bet changes nothing", (type) => {
+    const before = midRound();
+    const { seq } = before.pendingBets[0];
+    const out = run(before, { type: "SIGN_OUT" });
+    expect(run(out, { type, seq })).toBe(out);
+    const next = run(out, { type: "START_GAME", shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "ADD_BET", amount: 10 }, { type: "DEAL" });
+    expect(next.pendingBets).toHaveLength(1);
+    expect(run(next, { type, seq })).toBe(next); // nor the new session's own pending bet
+  });
+});

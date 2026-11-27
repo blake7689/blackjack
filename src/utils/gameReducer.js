@@ -318,6 +318,9 @@ export function gameReducer(state, action) {
     case "RESET_GAME":
       return { ...resetTable(state, action.shoe, action.phase), autoDealPaused: false };
 
+    case "SIGN_OUT": // no credit event: the chips on the table leave with the player (#195); both counters are remembered outside this state, so they never restart
+      return { ...initialGameState, settings: state.settings, creditSeq: state.creditSeq, shoeSeq: state.shoeSeq };
+
     case "SET_SETTING": {
       // { key, value } for one setting, or { values } for several at once (a rules preset).
       const values = action.values ?? { [action.key]: action.value };

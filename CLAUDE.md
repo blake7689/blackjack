@@ -59,6 +59,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 
 ## Gotchas
 - Epic #4 (UI revamp) PRs use `--base release/ui-revamp`, never `main`, and say `Part of #4` with no closing keyword; close the child issue by hand after merge (ADR-0006).
+- Sign-out (#195): every sign-out path ends in `signIn(null)`, and GameProvider then dispatches `SIGN_OUT`: a clean table with no credit event (a refund would reach the next account), built from `initialGameState`.
+  A new reducer field that must survive sign-out is kept in that case (today `settings`, `creditSeq`, `shoeSeq`).
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),

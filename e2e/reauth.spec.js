@@ -1,4 +1,4 @@
-import { test, expect, stubApi, login, ACCOUNT_PASSWORD } from './fixtures';
+import { test, expect, stubApi, login, placeBet, ACCOUNT_PASSWORD } from './fixtures';
 
 // BlackJackAPI#71: changing the username or email, and deleting the profile, need the current password. The stub follows the API's rules and records
 // every body. Runs in all three projects: where the focused field ends up depends on the screen's size and engine.
@@ -204,5 +204,54 @@ for (const viewport of [{ width: 375, height: 667 }, { width: 320, height: 568 }
     }
     await expect(dialog).toBeInViewport({ ratio: 1 });
     await noSidewaysScroll('with the delete dialog open');
+  });
+}
+
+// #195: the chips in the circle must not follow the player into the next session. All in one page load (a reload would clear the round by itself).
+for (const [who, next] of [['the same account', { userName: 'tester', credits: 1000 }], ['another account', { userName: 'second', credits: 500 }]]) {
+  test(`a 401 with $100 in the circle, then signing in to ${who}: that server balance and an empty circle (#195)`, async ({ page }) => {
+    const api = await stubApi(page);
+    let revoked = false;
+    // In front of the stub: the profile save finds the session revoked, and from then on /player/me answers as the account signed in to next.
+    await page.route('http://api.e2e.test/api/player/me', (route) => {
+      const method = route.request().method();
+      const reply = (status, body) => route.fulfill({ status, headers: { 'Access-Control-Allow-Origin': '*' }, contentType: 'application/json', body: JSON.stringify(body) });
+      if (method === 'PUT') { revoked = true; return reply(401, { message: 'Unauthorized' }); }
+      if (method === 'GET' && revoked) return reply(200, { ...NAMES, ...next });
+      return route.fallback();
+    });
+    const balance = page.locator('#bal');
+    const spot = page.getByRole('button', { name: /^Bet spot 1,/ });
+    const dollars = (n) => `$${n.toLocaleString('en-US')}`;
+
+    await login(page);
+    await placeBet(page, 100);
+    await expect(balance).toHaveText('$900');
+    await expect(spot).toHaveAccessibleName(/^Bet spot 1, \$100\b/);
+    await page.evaluate(() => { window.sameDocument = true; });
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^Gameplay/ })).toContainText('Very fast');
+    await account(page).click();
+    await page.getByLabel('First name').fill('Ada');
+    await save(page).click();
+    await expect(page.getByText('Please log in to manage settings.')).toBeVisible();
+    expect(await page.evaluate(() => sessionStorage.getItem('bj.token'))).toBeNull();
+
+    await page.getByRole('link', { name: 'Log in', exact: true }).click();
+    await page.getByPlaceholder('Username or Email').fill(next.userName);
+    await page.getByPlaceholder('Password').fill('not-a-real-password');
+    await page.getByRole('button', { name: 'Log in', exact: true }).click();
+    await expect(page).toHaveURL(/\/game$/);
+    await page.locator('.felt').dispatchEvent('click'); // skips the new table's shuffle
+    await expect(page.getByText('Place your bets', { exact: true })).toBeVisible({ timeout: 15_000 });
+
+    await expect(balance).toHaveText(dollars(next.credits));
+    await expect(spot).toHaveAccessibleName(/^Bet spot 1, \$0\b/);
+    await expect(page.getByRole('button', { name: 'Rebet', exact: true })).toHaveAttribute('aria-disabled', 'true');
+    await placeBet(page, 10); // the new session's table takes a bet from the right balance
+    await expect(balance).toHaveText(dollars(next.credits - 10));
+    expect(await page.evaluate(() => window.sameDocument), 'no reload in between').toBe(true);
+    expect(api.bets).toEqual([]);
   });
 }
