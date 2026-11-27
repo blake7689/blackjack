@@ -1516,3 +1516,96 @@ describe("a restore that gets no answer (#87)", () => {
     expect(ctx.restoring).toBe(false);
   });
 });
+
+describe("one password change at a time (#196)", () => {
+  beforeEach(() => { engine.changePassword.mockReset(); });
+
+  it("a second call while one runs sends nothing and resolves false; changingPassword is true meanwhile", async () => {
+    const { ctx } = await signedIn();
+    const gate = deferred();
+    engine.changePassword.mockReturnValueOnce(gate.promise);
+    expect(ctx.changingPassword).toBe(false);
+    let first, second;
+    act(() => { first = ctx.changePassword("old-pass1", "new-pass1"); second = ctx.changePassword("old-pass1", "new-pass1"); }); // same tick: no re-render between
+    expect(ctx.changingPassword).toBe(true);
+    await expect(second).resolves.toBe(false);
+    await expect(ctx.changePassword("old-pass1", "new-pass1")).resolves.toBe(false); // after a re-render too
+    expect(engine.changePassword).toHaveBeenCalledTimes(1);
+    await act(async () => { gate.resolve(false); });
+    await expect(first).resolves.toBeUndefined();
+    expect(ctx.changingPassword).toBe(false);
+    expect(ctx.player).toMatchObject({ userName: "tester" });
+  });
+
+  it.each([
+    ["succeeds", () => Promise.resolve(false)],
+    ["is refused", () => Promise.reject(refusal(400, "Incorrect password."))],
+  ])("the guard is released after a change that %s", async (_, answer) => {
+    const { ctx } = await signedIn();
+    engine.changePassword.mockImplementationOnce(answer).mockResolvedValue(false);
+    await act(async () => { await ctx.changePassword("old-pass1", "new-pass1").catch(() => {}); });
+    expect(ctx.changingPassword).toBe(false);
+    await act(async () => { await ctx.changePassword("old-pass1", "new-pass1"); });
+    expect(engine.changePassword).toHaveBeenCalledTimes(2);
+  });
+
+  it("the guard is released after a change that signed the player out", async () => {
+    const { ctx } = await signedIn();
+    engine.changePassword.mockResolvedValueOnce(true).mockResolvedValue(false);
+    await act(async () => { await ctx.changePassword("old-pass1", "new-pass1"); });
+    expect(ctx.player).toBeNull();
+    expect(ctx.changingPassword).toBe(false);
+    await act(async () => { await ctx.login({}); });
+    await act(async () => { await ctx.changePassword("old-pass1", "new-pass1"); });
+    expect(engine.changePassword).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a refusal that outlives its session is reported confirmed (#196)", () => {
+  const settleEvent = { seq: 7, kind: "settle", amount: 20 };
+  let error;
+  beforeEach(() => {
+    engine.settleRound.mockReset().mockRejectedValue(refusal(400, "over the cap"));
+    engine.getMe.mockReset().mockResolvedValue(player);
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => error.mockRestore());
+
+  it("still signed in, a refused settle is reported rejected, after the balance is re-read", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    act(() => ctx.applyCreditEvent(settleEvent, report));
+    await settleQueue();
+    expect(report).not.toHaveBeenCalled();
+    await act(async () => { me.resolve({ ...player, credits: 1000 }); });
+    await settleQueue();
+    expect(report.mock.calls).toEqual([[7, "rejected"]]);
+  });
+
+  it.each(["signed out", "signed in again"])("%s while the balance reload is pending: confirmed", async (how) => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    act(() => ctx.applyCreditEvent(settleEvent, report));
+    await settleQueue();
+    expect(engine.getMe).toHaveBeenCalledOnce();
+    act(() => ctx.logout());
+    if (how === "signed in again") await act(async () => { await ctx.login({}); });
+    await act(async () => { me.resolve({ ...player, credits: 5 }); });
+    await settleQueue();
+    expect(report.mock.calls).toEqual([[7, "confirmed"]]);
+  });
+
+  it("signed out when a step throws (the catch path): confirmed, and the queue's balance is not touched", async () => {
+    const { ctx } = await signedIn();
+    const report = vi.fn();
+    error.mockImplementationOnce(() => { ctx.logout(); throw new Error("console.error blew up"); }); // the refusal log: signs out, then throws
+    act(() => ctx.applyCreditEvent(settleEvent, report));
+    await settleQueue();
+    expect(report.mock.calls).toEqual([[7, "confirmed"]]);
+    expect(ctx.player).toBeNull();
+  });
+});

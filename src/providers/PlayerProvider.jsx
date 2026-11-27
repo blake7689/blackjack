@@ -77,10 +77,22 @@ export function PlayerProvider({ children }) {
     setPlayer(playerRef.current);
     return playerRef.current;
   }, []);
+  // One change at a time (#196): the first revokes the token, so a second request would 401 and sign the player out. Held here, not in
+  // Settings, so it survives leaving that page. A press while one runs sends nothing and resolves false.
+  const changingRef = useRef(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const changePassword = useCallback(async (currentPassword, newPassword) => {
-    if (await changePasswordApi(currentPassword, newPassword, playerRef.current?.userName)) {
-      signIn(null);
-      setNotice("Your password was changed, but we could not sign you in again. Please sign in with your new password.");
+    if (changingRef.current) return false;
+    changingRef.current = true;
+    setChangingPassword(true);
+    try {
+      if (await changePasswordApi(currentPassword, newPassword, playerRef.current?.userName)) {
+        signIn(null);
+        setNotice("Your password was changed, but we could not sign you in again. Please sign in with your new password.");
+      }
+    } finally {
+      changingRef.current = false;
+      setChangingPassword(false);
     }
   }, [signIn]);
   const deletePlayer = useCallback(async (currentPassword) => {
@@ -141,12 +153,13 @@ export function PlayerProvider({ children }) {
         setCredits(playerRef.current.credits - undo); // undo the optimistic change even if the reload below fails
         undo = 0;
         if (!skipped) await reload();
-        report(seq, "rejected");
+        report(seq, stop() ? "confirmed" : "rejected"); // signed out during the reload: the refusal must not reach the next table (#195)
       } catch (err) {
         // sendLedgerCall handles its own errors, so this ran after the server answered. The chain must never reject:
         // that would skip every later bet, settle and top-up. A confirmed call was applied, so report it as such.
         console.error("Ledger step failed", seq, err);
         setReconnecting(false);
+        if (stop()) return report(seq, "confirmed"); // as above; the sign-out already reset the balances
         pendingRef.current -= held;
         if (outcome === "confirmed") {
           await reload();
@@ -218,8 +231,8 @@ export function PlayerProvider({ children }) {
   }, [creditChange]);
 
   const value = useMemo(
-    () => ({ player, creditChange, reconnecting, notice, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
-    [player, creditChange, reconnecting, notice, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
+    () => ({ player, creditChange, reconnecting, notice, restoring, restoreFailed, retryRestore: restore, skipRestore, login, addPlayer, updatePlayer, changePassword, changingPassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp }),
+    [player, creditChange, reconnecting, notice, restoring, restoreFailed, restore, skipRestore, login, addPlayer, updatePlayer, changePassword, changingPassword, deletePlayer, logout, getCredits, applyCreditEvent, topUp]
   );
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>;

@@ -158,10 +158,9 @@ describe("GameProvider", () => {
   });
 
   it("passes the player's balance to bets, doubles and splits", () => {
-    shoes.push(stackedShoe(["2"]), stackedShoe(["8", "10", "8", "7", "3", "10", "2"])); // the first is dealt by the rule change
+    shoes.push(stackedShoe(["8", "10", "8", "7", "3", "10", "2"])); // dealt by the rule change, which starts the table
     const { ctx, player } = setup();
     act(() => { ctx.actions.changeSetting("splitDeal", "both"); }); // both split hands dealt at once, the rule this scenario was written for
-    act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(500)); // more than the balance
     expect(ctx.state.betCircle).toBe(0);
     act(() => ctx.actions.addBet(10));
@@ -612,7 +611,7 @@ describe("GameProvider auto deal (#88)", () => {
       expect(newRoundBets(player)).toHaveLength(2);
     });
 
-    it("resetGame and startGame cancel it, and startGame also clears a pause", () => {
+    it("resetGame cancels it, and startGame leaves a started table alone", () => {
       const reset = armedGame();
       act(() => reset.ctx.actions.resetGame());
       expect(reset.ctx.state.phase).toBe(GamePhases.NONE);
@@ -624,8 +623,10 @@ describe("GameProvider auto deal (#88)", () => {
 
       const restart = armedGame();
       act(() => restart.ctx.actions.pauseAutoDeal());
-      act(() => restart.ctx.actions.startGame());
-      expect(restart.ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle: 0, autoDealPending: false, autoDealPaused: false });
+      const { betCircle, shoe } = restart.ctx.state;
+      act(() => restart.ctx.actions.startGame()); // Home's Play on a live table (#196)
+      expect(restart.ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, betCircle, autoDealPending: false, autoDealPaused: true });
+      expect(restart.ctx.state.shoe).toBe(shoe);
       staysUndealt(restart.ctx, restart.player);
     });
 
@@ -1091,11 +1092,10 @@ describe("GameProvider offers (#91)", () => {
   });
 
   it("auto deal waits at the offers: it neither declines nor pauses, and the round carries on after the player answers", () => {
+    shoes.push(aceUp("5"));
     const { ctx } = setup();
     act(() => ctx.actions.startGame());
     act(() => { ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true, autoDealDelay: 500 }); });
-    shoes.push(aceUp("5")); // the settings change dealt a new shoe; this one is for the round
-    act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
     tick();
@@ -1181,9 +1181,8 @@ describe("GameProvider offers (#91)", () => {
   it("early surrender at the offers goes through surrender(0): half the bet in the one settle, kept against a dealer blackjack", () => {
     const { ctx, player } = setup();
     act(() => ctx.actions.startGame());
+    shoes.push(stackedShoe(["10", "K", "6", "A", "9", "9"])); // for the round: the settings change deals it
     act(() => { ctx.actions.changeSettings({ surrender: "early", insurance: false }); });
-    shoes.push(stackedShoe(["10", "K", "6", "A", "9", "9"])); // for the round (the settings change dealt a shoe)
-    act(() => ctx.actions.startGame());
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.deal());
     tick();
@@ -1220,9 +1219,9 @@ describe("GameProvider offers (#91)", () => {
 
 describe("GameProvider split deal (#133)", () => {
   const ranks = (hand) => hand.cards.map((c) => c.rank[0]).join("");
-  // Starts a round and splits the first hand; `cards` is the whole shoe, `settings` any rule to change first (that deals its own shoe, so it takes the first one).
+  // Starts a round and splits the first hand; `cards` is the whole shoe, `settings` any table rule to change first.
   const splitRound = (cards, settings) => {
-    shoes.push(...(settings ? [stackedShoe(["2"])] : []), stackedShoe(cards));
+    shoes.push(stackedShoe(cards)); // a rule change deals it and starts the table; else startGame does
     const { ctx, player } = setup();
     if (settings) act(() => { ctx.actions.changeSettings(settings); });
     act(() => ctx.actions.startGame());
@@ -1543,5 +1542,221 @@ describe("GameProvider: the currency setting reaches money() (L2-2)", () => {
     expect(SYMBOLS(10)).toBe("€10");
     act(() => { ctx.actions.changeSettings({ currency: "auto" }); });
     expect(SYMBOLS(10)).toBe("$10"); // jsdom\x27s language is en-US
+  });
+});
+
+describe("GameProvider: Home's Play keeps a live round (#196)", () => {
+  it.each(["dealing", "the player's turn", "the results"])("startGame during %s changes nothing, and the round still settles once", (when) => {
+    shoes.push(stackedShoe(["10", "10", "9", "6", "K"]));
+    const { ctx, player } = setup();
+    act(() => ctx.actions.startGame());
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    if (when !== "dealing") tick();
+    if (when === "the results") {
+      act(() => ctx.actions.stand(0));
+      for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    }
+    const { phase, hands, shoe, betCircle } = ctx.state;
+    act(() => ctx.actions.startGame()); // browser Back to Home, then Play
+    expect(ctx.state).toMatchObject({ phase, betCircle });
+    expect(ctx.state.hands).toBe(hands);
+    expect(ctx.state.shoe).toBe(shoe);
+    if (ctx.state.phase === GamePhases.DEALING) tick();
+    if (ctx.state.phase === GamePhases.PLAYER_TURN) act(() => ctx.actions.stand(0));
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    expect(events(player).filter((e) => e.kind === "settle")).toEqual([{ kind: "settle", amount: 20 }]);
+  });
+});
+
+describe("GameProvider: a failed settings load is retried (#196)", () => {
+  const SAVED = { v: 5, blackjackPayout: "6:5", deckCount: 2 }; // two table rules differ from the defaults: a new shoe
+  const advance = (ms) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+  const ROUND = ["10", "10", "9", "6", "K"];
+  const offline = () => Promise.reject(new Error("offline"));
+  const cardsIn = (ctx) => ctx.state.shoe.filter((c) => c.type === "card").length;
+  const tree = (ctx, player, signedIn) => (
+    <MemoryRouter initialEntries={["/game"]}>
+      <PlayerContext.Provider value={signedIn ? player : { player: null, getCredits: () => 0, applyCreditEvent: () => {} }}>
+        <GameProvider><Probe ctx={ctx} /></GameProvider>
+      </PlayerContext.Provider>
+    </MemoryRouter>
+  );
+  // The first load fails and the table starts on the defaults; every later call is offline too until the test says otherwise.
+  async function failedLoad(options) {
+    remote.getSettings.mockImplementation(offline);
+    const view = setup({ signedIn: true, ...options });
+    await flush();
+    return view;
+  }
+
+  it("starts the table anyway, says the settings are unloaded, and retries after 1, 2, 4, 8, 16, 30 and then every 30 s", async () => {
+    const { ctx } = await failedLoad();
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, settingsUnloaded: true, starting: false });
+    expect(remote.getSettings).toHaveBeenCalledTimes(1);
+    for (const [i, seconds] of [1, 2, 4, 8, 16, 30, 30, 30].entries()) {
+      await advance(seconds * 1000 - 1);
+      expect(remote.getSettings, `before retry ${i + 1}`).toHaveBeenCalledTimes(i + 1);
+      await advance(1);
+      expect(remote.getSettings, `retry ${i + 1} after ${seconds} s`).toHaveBeenCalledTimes(i + 2);
+      expect(vi.getTimerCount()).toBe(1); // one chain only
+    }
+    expect(ctx.state.settingsUnloaded).toBe(true);
+  });
+
+  it("a retry that answers between rounds is applied at once, with its new shoe; the notice goes, saving works and no timer is left", async () => {
+    remote.token = "token";
+    const { ctx } = await failedLoad();
+    expect(cardsIn(ctx)).toBe(312);
+    remote.getSettings.mockResolvedValue(SAVED);
+    await advance(1000);
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, settingsUnloaded: false });
+    expect(ctx.state.settings).toMatchObject({ blackjackPayout: "6:5", deckCount: 2 });
+    expect(cardsIn(ctx)).toBe(104);
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(120_000);
+    expect(remote.getSettings).toHaveBeenCalledTimes(2);
+    await act(async () => { await ctx.actions.changeSetting("playTimeout", 750); });
+    expect(remote.saveSettings.mock.calls[0][0]).toMatchObject({ blackjackPayout: "6:5", playTimeout: 750 });
+  });
+
+  it("a retry that answers mid-round is held until the next break: never under a hand, the results or the sweep; saves stay refused meanwhile", async () => {
+    remote.token = "token";
+    shoes.push(stackedShoe(ROUND));
+    const { ctx, player } = await failedLoad();
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    remote.getSettings.mockResolvedValue(SAVED);
+    const held = () => {
+      expect(ctx.state.settingsUnloaded, ctx.state.phase).toBe(true);
+      expect(ctx.state.settings, ctx.state.phase).toMatchObject({ blackjackPayout: "3:2", deckCount: 6 });
+    };
+    expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    await advance(1000); // the retry answers, and the deal is done
+    expect(ctx.state.phase).toBe(GamePhases.PLAYER_TURN);
+    held();
+    await act(async () => { await expect(ctx.actions.changeSetting("playTimeout", 1000)).rejects.toThrow("Settings have not loaded yet"); });
+    expect(ctx.state.hands[0].cards).toHaveLength(2);
+    act(() => ctx.actions.stand(0));
+    held();
+    for (let i = 0; i < 10 && ctx.state.phase !== GamePhases.POST_ROUND; i++) { tick(); held(); }
+    expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+    act(() => ctx.actions.continueRound());
+    expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+    held();
+    tick(); // the sweep ends: between rounds
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, settingsUnloaded: false });
+    expect(ctx.state.settings).toMatchObject({ blackjackPayout: "6:5", deckCount: 2 });
+    expect(remote.getSettings).toHaveBeenCalledTimes(2);
+    expect(events(player).at(-1)).toEqual({ kind: "settle", amount: 20 });
+    expect(remote.saveSettings).not.toHaveBeenCalled();
+  });
+
+  it("is applied with no table (left the game): the next table is built from the loaded settings", async () => {
+    const { ctx } = await failedLoad();
+    act(() => ctx.actions.resetGame());
+    remote.getSettings.mockResolvedValue(SAVED);
+    await advance(1000);
+    expect(ctx.state).toMatchObject({ phase: GamePhases.NONE, settingsUnloaded: false });
+    act(() => ctx.actions.startGame());
+    expect(cardsIn(ctx)).toBe(104);
+  });
+
+  it("sign-out leaves no timer and asks no more", async () => {
+    const { ctx, player, rerender } = await failedLoad();
+    expect(vi.getTimerCount()).toBe(1);
+    rerender(tree(ctx, player, false));
+    expect(vi.getTimerCount()).toBe(0);
+    expect(ctx.state.settingsUnloaded).toBe(false);
+    await advance(120_000);
+    expect(remote.getSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["answers", "fails"])("a retry in flight at sign-out that later %s is ignored: nothing applied, no timer", async (how) => {
+    const { ctx, player, rerender } = await failedLoad();
+    let resolve, reject;
+    remote.getSettings.mockReturnValue(new Promise((res, rej) => { resolve = res; reject = rej; }));
+    await advance(1000); // the retry is on its way
+    rerender(tree(ctx, player, false));
+    await act(async () => { if (how === "answers") resolve(SAVED); else reject(new Error("offline")); });
+    expect(ctx.state.settings).toMatchObject({ blackjackPayout: "3:2", deckCount: 6 });
+    expect(ctx.state).toMatchObject({ phase: GamePhases.NONE, settingsUnloaded: false });
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(120_000);
+    expect(remote.getSettings).toHaveBeenCalledTimes(2);
+  });
+
+  it("an answer held mid-round is dropped by sign-out, and the next sign-in loads its own settings", async () => {
+    shoes.push(stackedShoe(ROUND));
+    const { ctx, player, rerender } = await failedLoad();
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.deal());
+    remote.getSettings.mockResolvedValue(SAVED);
+    await advance(1000); // held: PLAYER_TURN
+    rerender(tree(ctx, player, false)); // the table goes to NONE here: the held answer must not land on it
+    await flush();
+    expect(ctx.state.settings).toMatchObject({ blackjackPayout: "3:2", deckCount: 6 });
+    remote.getSettings.mockResolvedValue({ v: 5, deckCount: 4 });
+    rerender(tree(ctx, player, true));
+    await flush();
+    expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, settingsUnloaded: false });
+    expect(ctx.state.settings).toMatchObject({ blackjackPayout: "3:2", deckCount: 4 });
+  });
+
+  it.each(["waiting for a retry", "a retry in flight"])("unmounting while %s leaves no timer, and a late failure starts no new one", async (when) => {
+    const { unmount } = await failedLoad();
+    let reject;
+    if (when === "a retry in flight") {
+      remote.getSettings.mockReturnValue(new Promise((_, rej) => { reject = rej; }));
+      await advance(1000);
+    }
+    unmount();
+    await act(async () => { reject?.(new Error("offline")); });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("a first load that succeeds is never 'unloaded' and retries nothing; signed out neither", async () => {
+    const { ctx } = setup({ signedIn: true });
+    expect(ctx.state.settingsUnloaded).toBe(false); // still loading: no notice yet
+    await flush();
+    expect(ctx.state.settingsUnloaded).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    cleanup();
+    expect(setup().ctx.state.settingsUnloaded).toBe(false);
+  });
+});
+
+describe("GameProvider: a refused settle (#196)", () => {
+  // As setup(), but the ledger also answers the settle, through the report GameProvider hands it.
+  function playToSettle(outcome, codes = ["10", "10", "9", "6", "K"]) {
+    shoes.push(stackedShoe(codes));
+    const view = setup();
+    const inner = view.player.applyCreditEvent.getMockImplementation();
+    let answer;
+    view.player.applyCreditEvent.mockImplementation((event, report) => {
+      inner(event, report);
+      if (event.kind === "settle") answer = () => act(() => report(event.seq, outcome));
+    });
+    act(() => view.ctx.actions.startGame());
+    act(() => view.ctx.actions.addBet(10));
+    act(() => view.ctx.actions.deal());
+    tick();
+    act(() => view.ctx.actions.stand(0));
+    for (let i = 0; i < 10 && view.ctx.state.phase !== GamePhases.POST_ROUND; i++) tick();
+    answer();
+    return view;
+  }
+
+  it("says which payout was not paid", () => {
+    const { ctx } = playToSettle("rejected");
+    expect(ctx.state.payoutNotice).toBe("The server refused your $20 payout; it was not paid.");
+  });
+
+  it("says nothing when the settle is confirmed, or when a lost round's 0 settle is refused", () => {
+    expect(playToSettle("confirmed").ctx.state.payoutNotice).toBeNull();
+    cleanup();
+    const lost = playToSettle("rejected", ["10", "10", "7", "9"]);
+    expect(lost.player.applyCreditEvent.mock.calls.at(-1)[0]).toMatchObject({ kind: "settle", amount: 0 });
+    expect(lost.ctx.state.payoutNotice).toBeNull();
   });
 });

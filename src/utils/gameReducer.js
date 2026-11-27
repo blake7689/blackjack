@@ -74,6 +74,8 @@ export const initialGameState = {
   pendingBets: [], // bets sent to the server and not yet answered: { seq, handTag, amount, newRound }
   nextHandTag: 1,
   notice: null, // a message about the round, such as a refused bet
+  payoutNotice: null, // a refused payout (#196): outlives CONTINUE, the sweep and Resume; only the next DEAL (or sign-out) clears it
+  payoutNoticeOld: false, // it was already there at SETTLE, so it is an earlier round's: it must not hide this round's verdict
   autoDealPaused: false, // the player stopped auto deal, or a rebet was unaffordable; Resume clears it
   autoDealPending: false, // a rebet is on the table and the automatic DEAL step is armed
 };
@@ -312,7 +314,8 @@ function dealSplitCard(state, action) {
 
 export function gameReducer(state, action) {
   switch (action.type) {
-    case "START_GAME":
+    case "START_GAME": // only starts a table: Home's Play also reaches here with a round live, and must not throw it away (#196)
+      if (state.phase !== GamePhases.NONE) return state;
       return { ...resetTable(state, action.shoe, GamePhases.PRE_DEAL), autoDealPaused: false };
 
     case "RESET_GAME":
@@ -369,6 +372,8 @@ export function gameReducer(state, action) {
         offers: result.offers,
         initialBet: state.betCircle,
         betHistory: [],
+        payoutNotice: null,
+        payoutNoticeOld: false,
         autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
       };
@@ -441,6 +446,8 @@ export function gameReducer(state, action) {
         : state;
 
     case "BET_REJECTED": {
+      // A settle is never in pendingBets, so GameProvider sends its amount (`payout`). A refused 0 costs nothing: no notice.
+      if (action.payout > 0) return { ...state, payoutNotice: `The server refused your ${money(action.payout)} payout; it was not paid.`, payoutNoticeOld: false, notice: null }; // the newest message wins the line
       const bet = state.pendingBets.find((b) => b.seq === action.seq);
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
@@ -460,8 +467,8 @@ export function gameReducer(state, action) {
         pendingBets: state.pendingBets.filter((b) => b !== bet), notice: `The server refused ${money(bet.amount)} of your stake; that hand plays for less.` };
     }
 
-    case "SETTLE":
-      return { ...state, hands: engine.settleHands(state.hands, state.dealer, state.settings), phase: GamePhases.RESULTS };
+    case "SETTLE": // the ledger queue is serial and this waited for the round's own bets, so a payoutNotice here is an earlier round's
+      return { ...state, hands: engine.settleHands(state.hands, state.dealer, state.settings), phase: GamePhases.RESULTS, payoutNoticeOld: state.payoutNotice !== null };
 
     case "FINISH_RESULTS": {
       // Always settle, even a total loss, so the server closes the round.
@@ -479,7 +486,7 @@ export function gameReducer(state, action) {
       const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
       let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
         autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
-        notice: broke ? `Not enough credits to rebet ${money(initialBet)}: auto deal paused` : null };
+        notice: broke && !state.payoutNotice ? `Not enough credits to rebet ${money(initialBet)}: auto deal paused` : null };
       if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;

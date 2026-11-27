@@ -61,6 +61,12 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Epic #4 (UI revamp) PRs use `--base release/ui-revamp`, never `main`, and say `Part of #4` with no closing keyword; close the child issue by hand after merge (ADR-0006).
 - Sign-out (#195): every sign-out path ends in `signIn(null)`, and GameProvider then dispatches `SIGN_OUT`: a clean table with no credit event (a refund would reach the next account), built from `initialGameState`.
   A new reducer field that must survive sign-out is kept in that case (today `settings`, `creditSeq`, `shoeSeq`).
+- Game flow (#196): `START_GAME` acts only from phase `NONE` (Home's Play also reaches it with a round live, where it is a no-op); `RESET_GAME` restarts a table. A failed first settings load still starts the table, then
+  GameProvider retries after 1, 2, 4, 8, 16, 30 s and every 30 s; a late answer is held and applied only in `NONE` / `PRE_DEAL` (never under a round), and `settingsUnloaded` is true until then (message-line notice; it never hides a verdict).
+  `PlayerProvider.changePassword` runs one at a time (a ref; a second request would 401 and sign out): an ignored call resolves `false` and sends nothing; `changingPassword` dims the Settings button. A refused settle is in no `pendingBets`:
+  GameProvider sends its amount as `BET_REJECTED.payout`, and above 0 it sets `payoutNotice` (not in `emptyRound`: only the next DEAL or sign-out clears it), shown in place of the verdict. The newest message wins: it clears `notice`,
+  GameBoard shows `notice` first, and `END_ROUND` writes no "Not enough credits to rebet" over it. If it is already there at SETTLE it is an earlier round's (serial queue),
+  so `payoutNoticeOld` keeps it from hiding that verdict, and it returns at the next betting step.
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),

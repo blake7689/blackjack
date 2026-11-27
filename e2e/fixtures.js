@@ -29,12 +29,17 @@ const stubs = new WeakMap(); // page -> stub, so the auto fixture below can chec
 // reloginError: { status, message } makes only the 2nd and later logins fail (the sign-in after a password change, #171).
 // Each login after the first answers with a new token ('e2e-token-2', ...); `requests` lists every call with its Authorization header.
 // meFailures: how many GET /player/me calls answer 503 before it answers normally (a restore that gets no answer: the Error screen, #87).
+// #196: settingsFailures: how many GET /player/me/settings calls answer 503 first; settingsGate: a promise every later answer to it waits for.
+// settleRefusal: { status, message } makes POST /ledger/settle refuse (the balance does not move); once: only the first settle; gate: a promise the refusal waits for.
+// passwordGate: a promise the first PUT /player/me/password
+// answer waits for; any further PUT answers 401, as the API does once the first change has revoked the token.
 // settings: what GET /player/me/settings answers with (the fastest Rate of Play by default, so a round runs quickly but the flights are real). Whatever is passed,
 // the account's saved settings carry tableMessages "all" (every prompt shows at once, so the specs can wait on "Place your bets" and "Your move", L2-1) and currency "USD"
 // (the "$10 chip" names do not depend on the runner's locale, L2-2) unless a spec sets its own.
-export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], deleteGate = null, settings = { ...VEGAS, playTimeout: 250 } } = {}) {
+export async function stubApi(page, { loginDelayMs = 0, loginError = null, reloginError = null, meDelayMs = 0, meFailures = 0, startCredits = 1000, topUps = [], deleteGate = null, settingsFailures = 0, settingsGate = null, settleRefusal = null, passwordGate = null, settings = { ...VEGAS, playTimeout: 250 } } = {}) {
   let credits = startCredits;
   let meFailuresLeft = meFailures;
+  let settingsFailuresLeft = settingsFailures;
   const replies = [...topUps];
   const stub = { bets: [], settles: [], topups: [], saves: [], logins: [], passwords: [], profiles: [], deletes: [], requests: [], failed: [], unknown: [] };
   let profile = { ...PLAYER };
@@ -60,6 +65,10 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, relog
       }
       case 'PUT /player/me/password':
         stub.passwords.push(req.postDataJSON());
+        if (passwordGate) {
+          if (stub.passwords.length > 1) return json({ message: 'Unauthorized' }, 401);
+          await passwordGate;
+        }
         return route.fulfill({ status: 204, headers: CORS });
       case 'GET /player/me':
         await hold(meDelayMs);
@@ -83,6 +92,8 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, relog
         return refusal('Account deletion failed.', body?.currentPassword, 'Enter your current password to delete your account.') ?? route.fulfill({ status: 204, headers: CORS });
       }
       case 'GET /player/me/settings':
+        if (settingsFailuresLeft-- > 0) return json({ message: 'e2e stub: the settings are unavailable' }, 503);
+        await settingsGate;
         return json({ tableMessages: 'all', currency: 'USD', ...settings });
       case 'PUT /player/me/settings':
         stub.saves.push(req.postDataJSON());
@@ -96,6 +107,10 @@ export async function stubApi(page, { loginDelayMs = 0, loginError = null, relog
       case 'POST /ledger/settle': {
         const body = req.postDataJSON();
         stub.settles.push(body);
+        if (settleRefusal && !(settleRefusal.once && stub.settles.length > 1)) {
+          await settleRefusal.gate;
+          return json({ message: settleRefusal.message }, settleRefusal.status);
+        }
         credits += body.payout;
         return json({ credits });
       }

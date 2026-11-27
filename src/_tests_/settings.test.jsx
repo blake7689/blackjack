@@ -1740,3 +1740,40 @@ describe("Settings: Table messages, Show keyboard shortcuts and Currency (L2-1, 
     expect(sectionButton("Appearance").textContent).toContain("· €");
   });
 });
+
+describe("Settings: a password change already running (#196)", () => {
+  const fill = () => { show("Account"); type("Current password", "old-pass"); type("New password", "new-pass1"); };
+  const button = () => screen.getByRole("button", { name: "Change password" });
+
+  it("an ignored press (false) says nothing and keeps both fields", async () => {
+    const changePassword = vi.fn().mockResolvedValue(false);
+    open({}, { player: { changePassword } });
+    fill();
+    fireEvent.click(button());
+    await flush();
+    expect(changePassword).toHaveBeenCalledOnce();
+    noNote();
+    expect([field("Current password").value, field("New password").value]).toEqual(["old-pass", "new-pass1"]);
+  });
+
+  it.each([[true, "true"], [false, "false"]])("changingPassword %s: the filled form's button has aria-disabled %s", (changingPassword, disabled) => {
+    open({}, { player: { changingPassword } });
+    fill();
+    expect(button().getAttribute("aria-disabled")).toBe(disabled);
+  });
+});
+
+describe("Settings: a save while the saved settings have not loaded (#196)", () => {
+  const FAILED = "Couldn't save your settings to your account. They apply here until you reload.";
+  const UNLOADED = "Your saved settings haven't loaded, so this wasn't saved. It applies here until they load.";
+
+  it.each([[true, UNLOADED], [false, FAILED]])("settingsUnloaded %s: a failed save says so", async (settingsUnloaded, text) => {
+    open({ settingsUnloaded }, { actions: { changeSettings: vi.fn().mockRejectedValue(new Error("no")) } });
+    show("Gameplay");
+    fireEvent.click(screen.getByRole("switch", { name: /^Show the count/ }));
+    fireEvent.click(saveButton());
+    await flush();
+    expect(note().textContent).toBe(text);
+    expect(note().className).toContain("error");
+  });
+});
