@@ -46,14 +46,13 @@ test('the Table rules sheet has no serious accessibility violations, over the ta
   await page.getByRole('button', { name: 'Table rules' }).click();
   const sheet = page.getByRole('dialog', { name: 'Table rules' });
   await expect(sheet).toBeVisible();
-  await expect(sheet).toHaveCSS('opacity', '1'); // it fades up as it opens: never scan it mid-animation (colours blend and fail color-contrast)
   await expectNoSeriousA11y(page, 'rules sheet, over the table');
   await page.keyboard.press('Escape');
 
   await page.getByRole('button', { name: 'Menu' }).click();
   await page.getByRole('navigation', { name: 'Menu' }).getByRole('button', { name: 'Home' }).click();
   await page.getByRole('button', { name: 'Rules' }).click();
-  await expect(sheet).toHaveCSS('opacity', '1');
+  await expect(sheet).toBeVisible();
   await expectNoSeriousA11y(page, 'rules sheet, over Home');
 });
 
@@ -73,7 +72,7 @@ test('game board mid-round has no serious accessibility violations (#120)', asyn
   await expect(page.getByRole('img', { name: '6 of clubs' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Hit' })).toBeEnabled({ timeout: 15_000 }); // the keys wake up once the cards have landed
   await expect(page.locator('.board.busy')).toHaveCount(0);
-  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // the label fades back after the bet badge: never scan it blended
+  await expect(page.locator('.bal-lbl')).toHaveCSS('opacity', '1'); // on a phone the bet badge hides the label for 3 s: axe skips a hidden one
   await expectNoSeriousA11y(page, 'board, mid-round');
 });
 
@@ -88,8 +87,8 @@ test('game board at the results has no serious accessibility violations, and ann
   await page.getByRole('button', { name: 'Stay', exact: true }).click({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Next hand' })).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('.board.busy')).toHaveCount(0);
-  await expect(page.locator('.msg .verdict')).toHaveCSS('opacity', '1'); // the verdict pops in: never scan it blended
-  await expect(page.locator('.bal .delta')).toHaveCSS('opacity', '1'); // so does the balance badge (it blended in WebKit's slower frames)
+  await expect(page.locator('.msg .verdict')).toBeVisible();
+  await expect(page.locator('.bal .delta')).toHaveCSS('opacity', '1'); // the balance badge is on show for the scan: axe skips a faded-out one
   await expect(page.getByText('Hand 1: push, 19. Dealer: 19.')).toBeAttached(); // what a screen reader hears
   await expect(page.locator('[aria-live]')).toHaveCount(1); // one live region on the table
   await expectNoSeriousA11y(page, 'board, results');
@@ -133,9 +132,7 @@ test('the sign-in form has 44 px targets (#85)', async ({ page }) => {
   expect(await tooSmall(page.locator('main').getByRole('textbox').or(page.locator('main input')).or(page.locator('main').getByRole('button'))), 'sign-in').toEqual([]);
 });
 
-// Settings is one page (#84): scan it closed, then once per section opened. Opening and the switches ease for a moment (chevron, switch track),
-// so wait until every running animation or transition has finished before axe reads the colours.
-const settled = (page) => page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => {}))));
+// Settings is one page (#84): scan it closed, then once per section opened.
 
 test.describe('settings', () => {
   test.beforeEach(async ({ page }) => {
@@ -148,7 +145,6 @@ test.describe('settings', () => {
 
   test('Settings with every section closed has no serious accessibility violations (#84)', async ({ page }) => {
     await expect(page.getByRole('button', { name: /^Table rules/ })).toHaveAttribute('aria-expanded', 'false');
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, closed');
   });
 
@@ -156,7 +152,6 @@ test.describe('settings', () => {
     test(`Settings with ${name} open has no serious accessibility violations (#84)`, async ({ page }) => {
       await page.getByRole('button', { name: new RegExp(`^${name}`) }).click();
       await expect(page.getByRole('button', { name: new RegExp(`^${name}`) })).toHaveAttribute('aria-expanded', 'true');
-      await settled(page);
       await expectNoSeriousA11y(page, `settings, ${name} open`);
     });
   }
@@ -165,7 +160,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Sound & haptics/ }).click();
     await page.locator('label.sw', { hasText: 'Sound' }).click(); // the checkbox sits under its track: tap the row
     await expect(page.getByRole('slider', { name: 'Volume' })).toBeEnabled();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, Sound & haptics open, Sound on');
   });
 
@@ -173,7 +167,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
     await page.getByRole('radiogroup', { name: 'Surrender', exact: true }).getByRole('radio', { name: /^None/ }).click();
     await expect(page.getByRole('region', { name: 'Unsaved changes', exact: true })).toBeVisible();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, unsaved changes');
   });
 
@@ -181,7 +174,6 @@ test.describe('settings', () => {
     await page.getByRole('button', { name: /^Table rules/ }).click();
     await page.getByRole('button', { name: /^Preset/ }).click();
     await expect(page.getByRole('listbox')).toBeFocused();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, preset dropdown');
   });
 
@@ -190,7 +182,6 @@ test.describe('settings', () => {
     await page.locator('label.sw', { hasText: 'Show the count' }).click(); // the checkbox sits under its track: tap the row
     await page.getByRole('button', { name: 'Table', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Discard your changes?' })).toBeVisible();
-    await settled(page);
     await expectNoSeriousA11y(page, 'settings, discard dialog');
   });
 });
@@ -211,20 +202,17 @@ for (const mode of ['dark', 'light']) {
       await page.getByLabel('Username', { exact: true }).fill('renamed');
       const password = page.getByLabel('Password to save this change');
       await expect(password).toBeVisible();
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password field');
 
       await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(password).toBeFocused();
       await expect(password).toHaveAttribute('aria-invalid', 'true');
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password missing');
 
       await password.fill('wrong-dummy-password');
       await page.getByRole('button', { name: 'Save changes' }).click();
       await expect(page.getByRole('alert')).toHaveText('Incorrect password.');
       await expect(password).toBeFocused();
-      await settled(page);
       await expectNoSeriousA11y(page, 'settings, identity password wrong');
     });
 
@@ -232,18 +220,15 @@ for (const mode of ['dark', 'light']) {
       await page.getByRole('button', { name: 'Delete profile' }).click();
       const dialog = page.getByRole('dialog', { name: 'Delete profile?' });
       await expect(dialog.getByLabel('Current password')).toBeVisible();
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, open');
 
       await dialog.getByRole('button', { name: 'Delete for good' }).click();
       await expect(dialog.getByRole('alert')).toHaveText('Enter your current password to delete your account.');
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, missing password');
 
       await dialog.getByLabel('Current password').fill('wrong-dummy-password');
       await dialog.getByRole('button', { name: 'Delete for good' }).click();
       await expect(dialog.getByRole('alert')).toHaveText('Incorrect password.');
-      await settled(page);
       await expectNoSeriousA11y(page, 'delete dialog, wrong password');
     });
   });
@@ -305,12 +290,25 @@ test('hovered and keyboard-focused controls while betting have no serious access
   await chip.hover();
   await expectNoSeriousA11y(page, 'board, chip hovered');
   await chip.dblclick(); // a double click selects the chip and bets it
-  // the bet's "-$10" badge pops in over 420 ms (opacity 0 to 1): axe must not scan its blended colour mid-pop
-  await expect(page.locator('.delta.down')).toHaveCSS('opacity', '1');
+  await expect(page.locator('.delta.down')).toHaveCSS('opacity', '1'); // the bet's "-$10" badge is on show for the next scan: axe skips a hidden one
   const deal = page.getByRole('button', { name: 'Deal', exact: true });
   await deal.hover();
   await expectNoSeriousA11y(page, 'board, Deal hovered');
   await page.keyboard.press('Tab'); // real keyboard focus, so :focus-visible styles apply
   await expect(page.locator(':focus-visible')).toHaveCount(1);
   await expectNoSeriousA11y(page, 'board, keyboard focus');
+});
+
+// The helper itself (#205). The fade lasts an hour, so it is certainly still running while axe reads: no timing involved.
+test('the axe helper scans where a running fade ends: a good end colour passes, a low-contrast one still fails (#205)', async ({ page }) => {
+  await page.setContent('<!doctype html><html lang="en"><title>fade</title><style>body { background: #000; color: #fff } p { opacity: .3; transition: opacity 3600s linear } p.on { opacity: 1 }</style><main><h1>Fade</h1><p>Balance</p></main></html>');
+  const label = page.locator('p');
+  const fade = (on) => label.evaluate((el, to) => { getComputedStyle(el).opacity; el.classList.toggle('on', to); }, on);
+  await fade(true); // still about .3 (too faint), ending at 1
+  await expectNoSeriousA11y(page, 'fading in');
+  await expect(page.locator('style')).toHaveCount(1); // the helper took its own style away again
+  await expect(label).toHaveCSS('transition-duration', '3600s');
+  await fade(false); // still about 1 (readable), ending at .3
+  await expect(expectNoSeriousA11y(page, 'fading out')).rejects.toThrow(/color-contrast/);
+  await expect(page.locator('style')).toHaveCount(1); // after a failed scan too
 });
