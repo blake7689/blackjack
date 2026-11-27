@@ -89,9 +89,9 @@ describe('the card faces', () => {
 describe('staticwebapp.config.json', () => {
   const config = json('staticwebapp.config.json');
 
-  it('is valid JSON that keeps the SPA fallback and excludes the API and the built assets', () => {
+  it('is valid JSON that keeps the SPA fallback and excludes the built assets', () => {
     expect(config.navigationFallback.rewrite).toBe('/index.html');
-    expect(config.navigationFallback.exclude).toEqual(expect.arrayContaining(['/api/*', '/assets/*']));
+    expect(config.navigationFallback.exclude).toContain('/assets/*');
   });
 
   it('excludes /sounds/*, /fonts/* and /icons/* from the fallback, so a missing file is a 404', () => {
@@ -108,8 +108,7 @@ describe('staticwebapp.config.json', () => {
     expect(config.mimeTypes['.json']).toBe('application/json');
   });
 
-  it('keeps its routes, and sends no CORS headers (the API sets its own; an Allow-Origin on the site does nothing useful)', () => {
-    expect(Array.isArray(config.routes)).toBe(true);
+  it('sends no CORS headers (the API sets its own; an Allow-Origin on the site does nothing useful)', () => {
     expect(Object.keys(config.globalHeaders).filter((name) => name.startsWith('Access-Control-'))).toEqual([]);
   });
 

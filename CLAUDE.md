@@ -20,7 +20,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 
 - Live smoke (#119): `npm run e2e:live` (`playwright.live.config.js`, `e2e-live/`) signs in on the real site with a test account and plays one hand, checking bet, settle and balance; no stubs, traces/video/screenshots off. Only CI runs it: the `live_smoke` job in the SWA workflow, after each deploy to `main` (push only), with secrets `E2E_LIVE_USERNAME` / `E2E_LIVE_PASSWORD` set on that step alone. A failure is an alarm, not a rollback. It writes play-money ledger rows to production; it never uses the hidden top-up (fails with a message if the balance is too low). On demand (#170, e.g. after an API deploy): `gh workflow run live-smoke.yml` then `gh run watch` (workflow `.github/workflows/live-smoke.yml`, same job; never deploys). The deploy job's `live_smoke` first runs `npm run build` and `scripts/wait-for-build.sh` (#190: SWA swaps the build in after the deploy job ends, so it polls the site until it serves the entry script of this run's deterministic build, `WAIT_TIMEOUT` 180 s), and on failure uploads the `live-smoke-snapshot` artifact (Playwright's text `error-context.md`, 7 days; it may show the balance and account name).
 ## Architecture
-- Stack: React 19, react-router-dom 7, framer-motion, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
+- Stack: React 19, react-router-dom 7, Vite 7, vitest 5 (+ @vitest/coverage-v8, jsdom), ESLint 9. Node 22+.
 - `src/pages/` Home, Login, Game, Settings. `src/components/` one folder per UI piece.
 - Settings (#84) is one page with no tabs: five accordion sections (Table rules, Gameplay, Chips, Appearance, Account), closed on arrival, one open at a time; a deep link
   opens its section (`/settings#rules`, the hash is the section id; `goSettings("rules")`). A new setting needs: a default in `initialGameState.settings` (and a range if it is a
@@ -45,7 +45,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (deal, hit, settle), `cards.js` (shoe), `playerEngine.js`, `validation.js`. Constants in `src/utils/constants/`.
 - API client: `src/utils/api.js` (`apiPost/Put/Delete`), base URL from `VITE_API_URL`.
   `.env.development` -> `https://localhost:7248/api`; `.env.production` -> the Azure App Service
-  `blackjack-api-blake`. Vite also proxies `/api` to `localhost:5166`.
+  `blackjack-api-blake`.
 - Hosting: Azure Static Web App `blackjack-frontend`, deployed by GitHub Actions on push to `main`.
 
 ## Conventions
@@ -158,6 +158,8 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - PR bodies: any `close`/`fix`/`resolve` word followed by `#N` anywhere in the body, even in prose, closes that issue on merge (#93 closed early this way).
   Write `Closes #N` once, only on the PR that finishes the issue, `Part of #N` otherwise, and never put those words next to a `#N` when naming other PRs.
 - `ci.yml` is also the SWA deploy's test gate (`uses:` via `workflow_call`, deploy `needs: test`); keep that trigger.
+- CI hardening (#198, guarded by `scripts/workflows.test.js`): every action is pinned to a commit SHA with a version comment (Dependabot updates them). The SWA workflow's concurrency group is at workflow level: `main` runs go one at a time,
+  and a newer run on a PR (the close run included) cancels its preview run; never give `ci.yml` that group (a called workflow would deadlock). Deploy and close skip Dependabot PRs (no secrets). Re-running an old run can deploy an old commit or re-create a closed preview.
 - Game actions such as `changeSetting` return a promise: in tests write `act(() => { action(); })` (braces), or
   `act` turns async and the assertions run before the update.
 - Card animations (#6): the table shows cards only through `FlyCard`. A new card flies face down from `.deck-stack` (a copy in
