@@ -14,7 +14,10 @@ export function setToken(token) {
   try { sessionStorage.setItem(TOKEN_KEY, token); } catch { /* not kept; this tab stays signed in */ }
 }
 
+// Sign-outs so far: a request must not be re-sent once one has happened, because the token may be another account's (#212).
+let signOuts = 0;
 export function clearToken() {
+  signOuts += 1;
   try { sessionStorage.removeItem(TOKEN_KEY); } catch { /* nothing stored */ }
 }
 
@@ -36,6 +39,7 @@ export async function swapToken(run) {
 async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS, ungated = false, retried = false) {
   if (!ungated) await swap;
   const token = getToken();
+  const session = signOuts;
   const res = await fetch(`${API_BASE}${url}`, {
     method,
     headers: {
@@ -46,12 +50,13 @@ async function request(method, url, body, timeout = REQUEST_TIMEOUT_MS, ungated 
     signal: AbortSignal.timeout(timeout), // a request with no answer fails instead of hanging
   });
   if (!res.ok) {
-    if (res.status === 401 && token) {
+    // A 401 from the swap's own silent re-login (it carries the old token) is a refused login, not a revoked session: changePassword handles it.
+    if (res.status === 401 && token && !(ungated && url === "/auth/login")) {
       // Sent with the old token while a swap ran (or finished): wait for it and retry once with the new token.
       if (!ungated && !retried && (swap || getToken() !== token)) {
         await swap;
         const fresh = getToken();
-        if (fresh && fresh !== token) return request(method, url, body, timeout, ungated, true);
+        if (signOuts === session && fresh && fresh !== token) return request(method, url, body, timeout, ungated, true);
       }
       if (getToken() === token) {
         clearToken();

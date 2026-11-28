@@ -183,7 +183,8 @@ export default function Settings() {
       setNeedPassword(missing);
       if (sendable.length) {
         try {
-          await updatePlayer({ ...profile, ...pick(sendable), ...(sendable.some((k) => IDENTITY.includes(k)) && { currentPassword: password }) });
+          const answer = await updatePlayer({ ...profile, ...pick(sendable), ...(sendable.some((k) => IDENTITY.includes(k)) && { currentPassword: password }) });
+          if (answer === false) return setSaving(false); // signed out meanwhile: the rest of this draft is not the next account's (#212)
           forget(pick(sendable));
           setIdentityPassword((p) => (p === password ? "" : p)); // one typed while it saved stays
         } catch (err) {
@@ -228,7 +229,7 @@ export default function Settings() {
   const canChangePassword = passwords.current !== "" && passwords.next !== "" && !newPasswordError;
 
   const remove = async (password) => {
-    await deletePlayer(password);
+    if (await deletePlayer(password) === false) return; // signed out meanwhile: the table on show may be another account's (#212)
     resetGame();
     nav("/");
   };

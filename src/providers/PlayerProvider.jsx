@@ -82,8 +82,17 @@ export function PlayerProvider({ children }) {
   }, [signIn]);
   const login = useCallback((credentials) => signInOnce(loginPlayer, credentials), [signInOnce]);
   const addPlayer = useCallback((payload) => signInOnce(registerPlayer, payload), [signInOnce]);
+  // updatePlayer and deletePlayer resolve false when the session changed while the request was out: the answer is another account's (#212).
   const updatePlayer = useCallback(async (profile) => {
-    const updated = await updateProfile(profile);
+    const session = sessionRef.current;
+    let updated;
+    try {
+      updated = await updateProfile(profile);
+    } catch (err) {
+      if (sessionRef.current !== session) return false;
+      throw err;
+    }
+    if (sessionRef.current !== session) return false;
     playerRef.current = { ...updated, credits: playerRef.current.credits };
     setPlayer(playerRef.current);
     return playerRef.current;
@@ -107,7 +116,10 @@ export function PlayerProvider({ children }) {
     }
   }, [signIn]);
   const deletePlayer = useCallback(async (currentPassword) => {
+    const session = sessionRef.current;
     await deleteMe(currentPassword);
+    if (sessionRef.current !== session) return false;
+    logoutPlayer();
     signIn(null);
   }, [signIn]);
   const logout = useCallback(() => {

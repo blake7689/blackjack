@@ -3,7 +3,7 @@ import {
   normalizePlayer, getMe, loginPlayer, registerPlayer, updateProfile, changePassword,
   deleteMe, logoutPlayer, placeBet, settleRound, topUp, getSettings, saveSettings,
 } from "../playerEngine";
-import { getToken, setToken, clearToken, apiGet } from "../api";
+import { getToken, setToken, clearToken, apiGet, setUnauthorizedHandler } from "../api";
 
 const profile = { userName: "tester", email: "t@example.com", firstName: "T", lastName: null, credits: 1000 };
 
@@ -58,7 +58,20 @@ describe("signing in", () => {
     expect(call(-2).body).toMatchObject({ firstName: "F", lastName: null });
   });
 
-  it("logoutPlayer and deleteMe drop the token", async () => {
+  it.each([
+    ["loginPlayer", () => loginPlayer({ usernameOrEmail: "tester", password: "secret1" })],
+    ["registerPlayer", () => registerPlayer({ userName: "n", email: "n@example.com", password: "secret1" })],
+  ].flatMap(([name, run]) => [
+    [name, "a 500", async () => respond({ message: "down" }, 500), run],
+    [name, "a network error", async () => { throw new TypeError("Failed to fetch"); }, run],
+  ]))("%s leaves no token when the profile load gets %s (#212)", async (_, __, fail, run) => {
+    fetchMock.mockResolvedValueOnce(respond({ accessToken: "tok-1" })).mockImplementationOnce(fail);
+    await expect(run()).rejects.toThrow();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(getToken()).toBeNull();
+  });
+
+  it("logoutPlayer drops the token; deleteMe leaves it for the provider (#212)", async () => {
     setToken("tok-2");
     logoutPlayer();
     expect(getToken()).toBeNull();
@@ -67,7 +80,7 @@ describe("signing in", () => {
     fetchMock.mockResolvedValueOnce(respond(null, 204));
     await deleteMe("my-password");
     expect(call()).toMatchObject({ method: "DELETE", auth: "Bearer tok-3", body: { currentPassword: "my-password" } });
-    expect(getToken()).toBeNull();
+    expect(getToken()).toBe("tok-3");
   });
 
   it("deleteMe keeps the token when the API refuses", async () => {
@@ -197,6 +210,63 @@ describe("changePassword signs in again (#171)", () => {
     expect(await changing).toBe(false);
     expect(fetchMock).toHaveBeenCalledOnce(); // never signed in again
     expect(getToken()).toBeNull();
+  });
+
+  it.each([
+    ["succeeds", respond({ accessToken: "tok-new" })],
+    ["fails", respond({ message: "down" }, 500)],
+  ])("signing out during the silent re-login, which then %s: no token, resolves false (#212)", async (_, answer) => {
+    setToken("tok-old");
+    const login = gate();
+    fetchMock.mockResolvedValueOnce(respond(null, 204)).mockImplementationOnce(async () => { await login.promise; return answer; });
+    const changing = changePassword("old-pass", "new-pass1", "tester");
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    clearToken(); // logout meanwhile
+    login.open();
+    expect({ failed: await changing, token: getToken() }).toEqual({ failed: false, token: null });
+  });
+
+  it.each([
+    ["a ledger bet", () => placeBet(10, true, "id-a")],
+    ["a settings save", () => saveSettings({ v: 5 })],
+  ])("a late 401 on %s is not re-sent once another account has signed in (#212)", async (_, send) => {
+    setToken("tok-a");
+    const held = gate();
+    fetchMock.mockImplementationOnce(async () => { await held.promise; return respond({ message: "Unauthorized" }, 401); });
+    const outcome = send().then(() => "resolved", (err) => err.status);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    clearToken(); // A logs out
+    setToken("tok-b"); // B signs in
+    held.open();
+    const result = await outcome;
+    expect({ result, sentAs: fetchMock.mock.calls.map(([, init]) => init.headers.Authorization), token: getToken() })
+      .toEqual({ result: 401, sentAs: ["Bearer tok-a"], token: "tok-b" });
+  });
+
+  // Which 401s count as a revoked session (#212): all but the one answering the swap's own silent re-login.
+  describe("a 401 and the sign-out handler (#212)", () => {
+    const unauthorized = vi.fn();
+    const refused = respond({ message: "Unauthorized" }, 401);
+    beforeEach(() => { unauthorized.mockClear(); setUnauthorizedHandler(unauthorized); setToken("tok-old"); });
+    afterEach(() => setUnauthorizedHandler(() => {}));
+
+    it("on the silent re-login: resolves true with no token, and the handler is left to the caller", async () => {
+      fetchMock.mockResolvedValueOnce(respond(null, 204)).mockResolvedValueOnce(refused);
+      expect(await changePassword("old-pass", "new-pass1", "tester")).toBe(true);
+      expect(getToken()).toBeNull();
+      expect(unauthorized).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["the password PUT", () => changePassword("old-pass", "new-pass1", "tester")],
+      ["a normal log-in that carries an old stored token", () => loginPlayer({ usernameOrEmail: "tester", password: "secret1" })],
+    ])("on %s: signs out and clears the token", async (_, send) => {
+      fetchMock.mockResolvedValueOnce(refused);
+      await expect(send()).rejects.toThrow("Unauthorized");
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(unauthorized).toHaveBeenCalledOnce();
+      expect(getToken()).toBeNull();
+    });
   });
 
   it("holds other requests until the new token is stored, then sends them with it", async () => {
