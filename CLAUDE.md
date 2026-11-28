@@ -158,7 +158,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - PR bodies: any `close`/`fix`/`resolve` word followed by `#N` anywhere in the body, even in prose, closes that issue on merge (#93 closed early this way).
   Write `Closes #N` once, only on the PR that finishes the issue, `Part of #N` otherwise, and never put those words next to a `#N` when naming other PRs.
 - `ci.yml` is also the SWA deploy's test gate (`uses:` via `workflow_call`, deploy `needs: test`); keep that trigger.
-- CI hardening (#198, guarded by `scripts/workflows.test.js`): every action is pinned to a commit SHA with a version comment (Dependabot updates them). The SWA workflow's concurrency group is at workflow level: `main` runs go one at a time,
+- CI hardening (#198, guarded by `scripts/workflows.test.js`): every action is pinned to a commit SHA with a version comment (Dependabot updates them). The SWA workflow's concurrency group is at workflow level: `main` runs go one at a time, Dependabot (#223) runs monthly and ignores major version updates in both ecosystems (security updates are not blocked), so check for majors by hand; `@vitejs/plugin-react` 6 needs Vite 8.
   and a newer run on a PR (the close run included) cancels its preview run; never give `ci.yml` that group (a called workflow would deadlock). Deploy and close skip Dependabot PRs (no secrets). Re-running an old run can deploy an old commit or re-create a closed preview.
 - Game actions such as `changeSetting` return a promise: in tests write `act(() => { action(); })` (braces), or
   `act` turns async and the assertions run before the update.

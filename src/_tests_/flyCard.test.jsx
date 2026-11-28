@@ -147,7 +147,7 @@ describe("FlyCard: a new card", () => {
       const copy = layer(container).querySelector(".fly-copy");
       const box = () => [copy.style.width, copy.style.height, copy.style.left, copy.style.top, copy.style.translate];
       advance(0);
-      expect(box()).toEqual(["63px", "92px", "168.5px", "354px", "0px 0px"]);
+      expect(box()).toEqual(["63px", "92px", "168.5px", "354px", "0px"]); // CSSOM drops a zero second value of translate
       expect(parseFloat(copy.style.borderRadius)).toBeCloseTo(63 * 0.07);
       Object.assign(size, { w: 47, h: 68 });
       Object.assign(centre, { x: 150, y: 390 });
