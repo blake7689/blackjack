@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { useRef } from "react";
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 import { renderUI } from "./testUtils";
+import "../components/RulesSheet/RulesSheet"; // loads the lazy sheet (#169) now: a cold first import can outlast findByRole's 1 s on a busy run (#224)
 import FeltPrint from "../components/FeltPrint/FeltPrint";
 import Shoe from "../components/Shoe/Shoe";
 import GameBoard from "../components/GameBoard/GameBoard";

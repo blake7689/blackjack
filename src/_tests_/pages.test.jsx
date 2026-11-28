@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { screen, fireEvent, act, within } from "@testing-library/react";
 import { renderUI, testPlayer } from "./testUtils";
+import "../components/RulesSheet/RulesSheet"; // loads the lazy sheet (#169) now: a cold first import can outlast findByRole's 1 s on a busy run (#224)
 import Home from "../pages/Home";
 import Game from "../pages/Game";
 import Login from "../pages/Login";

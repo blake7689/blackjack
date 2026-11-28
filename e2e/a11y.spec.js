@@ -1,5 +1,5 @@
 import { test, expect, stubApi, seedRandom, login, submitLogin, openTable, placeBet, VEGAS } from './fixtures';
-import { expectNoSeriousA11y } from './a11y';
+import { expectNoSeriousA11y, expectScreenContrastInEveryLook } from './a11y';
 
 // Automated accessibility scans (#120): axe on each screen; serious and critical violations fail (see e2e/a11y.js).
 
@@ -19,6 +19,7 @@ test('Create an account has no serious accessibility violations, empty and with 
   await page.getByLabel('Email', { exact: true }).fill('nope');
   await expect(page.getByText('Invalid email format.')).toBeVisible();
   await expectNoSeriousA11y(page, 'create an account, with errors');
+  await expectScreenContrastInEveryLook(page, 'create an account, with errors');
 });
 
 test('Home, signed out and signed in, and the Error screen have no serious accessibility violations (#87)', async ({ page }) => {
@@ -38,6 +39,19 @@ test('Home, signed out and signed in, and the Error screen have no serious acces
   await expect(page.getByText('Signed in as tester')).toBeVisible();
   await expect(page.locator('main.page.home')).toBeVisible(); // Home has no hero any more (L2-5): nothing on it pops in
   await expectNoSeriousA11y(page, 'home, signed in');
+  await expectScreenContrastInEveryLook(page, 'home, signed in');
+});
+
+test('the Loading screen has no serious accessibility violations (#214)', async ({ page }) => {
+  await stubApi(page);
+  let answer;
+  const held = new Promise((resolve) => { answer = resolve; });
+  await page.route('http://api.e2e.test/**/player/me', async (route) => { await held; await route.fallback(); });
+  await page.addInitScript(() => sessionStorage.setItem('bj.token', 'e2e-token'));
+  await page.goto('/');
+  await expect(page.getByText('Shuffling up...')).toBeVisible();
+  await expectNoSeriousA11y(page, 'loading');
+  answer();
 });
 
 test('the Table rules sheet has no serious accessibility violations, over the table and over Home (#87)', async ({ page }) => {
@@ -249,6 +263,7 @@ test('sign-in error has no serious accessibility violations (#125)', async ({ pa
   await submitLogin(page);
   await expect(page.getByRole('alert')).toHaveText('Invalid username or password.');
   await expectNoSeriousA11y(page, 'sign-in, error');
+  await expectScreenContrastInEveryLook(page, 'sign-in, error');
 });
 
 test('top-up dialog error has no serious accessibility violations (#125)', async ({ page }) => {
@@ -325,4 +340,18 @@ test('the axe helper scans where a running fade ends: a good end colour passes, 
   await expect(probe).toHaveCSS('opacity', '0.3'); // first where the text ended up, then what axe made of it
   expect(outcome).toMatch(faint);
   await expect(page.locator('style')).toHaveCount(styles); // after a failed scan too
+});
+
+// Text straight on the gradient, no box (#214). #7d7d7d is 4.8:1 on the dark --bg and 4.2:1 on the green top colour, so only the scan of the top end can catch it.
+test('the axe helper checks text lying on the page gradient, and fails on text it cannot check (#214)', async ({ page }) => {
+  await stubApi(page);
+  await page.goto('/login');
+  await expect(page.getByRole('button', { name: 'Log in', exact: true })).toBeVisible();
+  await page.locator('main').evaluate((el) => el.insertAdjacentHTML('afterbegin', '<p id="probe">Gradient probe</p>'));
+  const probe = page.locator('#probe');
+  await probe.evaluate((el) => { el.style.color = '#7d7d7d'; });
+  await expect(expectNoSeriousA11y(page, 'faint on the gradient')).rejects.toThrow(/color-contrast \(serious\) #probe/);
+  // Readable text over a gradient of its own: axe cannot judge it, and that must not pass either.
+  await probe.evaluate((el) => { el.style.color = '#fff'; el.style.backgroundImage = 'linear-gradient(#000, #111)'; });
+  await expect(expectNoSeriousA11y(page, 'unreadable to axe')).rejects.toThrow(/color-contrast could not be checked \(bgGradient\) #probe/);
 });
