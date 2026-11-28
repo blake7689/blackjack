@@ -66,8 +66,11 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   GameProvider retries after 1, 2, 4, 8, 16, 30 s and every 30 s; a late answer is held and applied only in `NONE` / `PRE_DEAL` (never under a round), and `settingsUnloaded` is true until then (message-line notice; it never hides a verdict).
   `PlayerProvider.changePassword` runs one at a time (a ref; a second request would 401 and sign out): an ignored call resolves `false` and sends nothing; `changingPassword` dims the Settings button. A refused settle is in no `pendingBets`:
   GameProvider sends its amount as `BET_REJECTED.payout`, and above 0 it sets `payoutNotice` (not in `emptyRound`: only the next DEAL or sign-out clears it), shown in place of the verdict. The newest message wins: it clears `notice`,
-  GameBoard shows `notice` first, and `END_ROUND` writes no "Not enough credits to rebet" over it. If it is already there at SETTLE it is an earlier round's (serial queue),
+  GameBoard shows `notice` first. If it is already there at SETTLE it is an earlier round's (serial queue),
   so `payoutNoticeOld` keeps it from hiding that verdict, and it returns at the next betting step.
+  Loose ends (#207): when the payout notice meets a refused opening bet or an unaffordable rebet (either order; `autoDealBroke` marks the second, amounts in `refusedPayout` / `initialBet`), `notice` is one line saying both.
+  While the payout is this round's, the dock summary reads "Payout refused / Not paid"; a refused settle takes back its own balance badge (`creditChange.settle`), never a newer one; and auto deal's DEAL step waits at least 4 s
+  while a payout notice is up (a late refusal restarts the wait; no pause). `.msg .notice` has `line-height: 1.2`: a new notice must fit 320x568 and 568x320 with a 1,234,567.50 amount.
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
   the player acts. Rule toggles in `settings` (#35 A1-A4): `dealerDrawsOnceOn21` (EU), `dealerDrawsOnPlayerBlackjack`
   (EU; off = no second card, so the blackjack pays at once), `dealerDrawsOnPlayerBust` (second card only),

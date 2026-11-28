@@ -742,6 +742,27 @@ describe("Dock", () => {
       expect([s.label, s.net.textContent, s.net.className]).toEqual(["Even round", "$0", ""]);
     });
 
+    // #207: a refused payout means the round's net is not what happened to the balance.
+    it.each([
+      ["a win", { payout: 20 }],
+      ["a surrender (half back)", { payout: 5, surrendered: true, result: HandResult.SURRENDER }],
+      ["a push (the stake back)", { payout: 10, result: HandResult.PUSH }],
+    ])("%s whose payout is refused: 'Payout refused' / 'Not paid', with no up or down colour (#207)", (_, extra) => {
+      const { container } = show(settled([hand(["10", "9"], extra)], { payoutNotice: "refused", payoutNoticeOld: false }));
+      const s = summary(container);
+      expect([s.label, s.net.textContent, s.net.className, s.balance]).toEqual(["Payout refused", "Not paid", "", "$1,000"]);
+    });
+
+    it.each([
+      ["a win", 20, ["You won", "+$10", "up"]],
+      ["a surrender", 5, ["You lost", "-$5", "down"]],
+      ["a push", 10, ["Even round", "$0", ""]],
+    ])("an earlier round's refusal leaves %s with its normal net (#207)", (_, payout, expected) => {
+      const { container } = show(settled([hand(["10", "9"], { payout })], { payoutNotice: "refused", payoutNoticeOld: true }));
+      const s = summary(container);
+      expect([s.label, s.net.textContent, s.net.className]).toEqual(expected);
+    });
+
     it("shows cents when there are some", () => {
       const { container } = show(settled([hand(["A", "K"], { payout: 22.5 })]), { player: { ...testPlayer, credits: 1234.5 } });
       expect(summary(container).net.textContent).toBe("+$12.50");

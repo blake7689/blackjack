@@ -4,7 +4,7 @@
   font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; text-align: center;
   color: var(--print-strong); text-shadow: 0 1px 2px rgb(0 0 0 / .4);
 }
-.msg .notice { color: var(--alert-tx); } /* a refused bet, in coral */
+.msg .notice { color: var(--alert-tx); line-height: 1.2; } /* a refused bet or payout, in coral; the tight leading keeps the longest (3 lines at 320 px, 2 on the 30 px short-landscape line) inside the line (#207) */
 .msg .reconnecting::before {
   content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 10px; border-radius: 50%; vertical-align: 1px;
   background: var(--surr); animation: msg-pulse 1.2s var(--e-io) infinite;

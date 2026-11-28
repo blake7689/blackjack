@@ -789,6 +789,82 @@ describe("GameProvider auto deal (#88)", () => {
     });
   });
 
+  // The next DEAL wipes a refused payout's notice, so the automatic one leaves time to read it (#207).
+  describe("a refused payout holds the automatic deal for at least 4 s (#207)", () => {
+    // The settle of the round just played is refused, as PlayerProvider reports it.
+    const refusePayout = (player) => {
+      const [event, report] = player.applyCreditEvent.mock.calls.filter(([e]) => e.kind === "settle").at(-1);
+      act(() => report(event.seq, "rejected"));
+    };
+    // On the results screen of round 1, auto deal on.
+    const atResults = (autoDealDelay) => {
+      shoes.push(threeRounds());
+      const result = startAuto({ settings: { ...AUTO, autoDealDelay } });
+      playOut(result.ctx);
+      return result;
+    };
+    const dealsAfterExactly = (ctx, ms) => {
+      expect(ctx.state.autoBar).toMatchObject({ type: "DEAL", ms });
+      advance(ms - 1);
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+      advance(1);
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    };
+
+    it.each([[0, 4000], [DELAY, 4000], [10000, 10000]])("with a delay of %i ms it waits %i ms, does not pause, and the deal clears the notice", (delay, wait) => {
+      const { ctx, player } = atResults(delay);
+      refusePayout(player);
+      toArmed(ctx);
+      expect(ctx.state).toMatchObject({ payoutNotice: "The server refused your $20 payout; it was not paid.", autoDealPaused: false, autoDealPending: true });
+      dealsAfterExactly(ctx, wait);
+      expect(ctx.state.payoutNotice).toBeNull();
+    });
+
+    it("the next round, with no notice, waits only its own delay again", () => {
+      const { ctx, player } = atResults(DELAY);
+      refusePayout(player);
+      toArmed(ctx);
+      advance(4000);
+      playOut(ctx);
+      toArmed(ctx);
+      dealsAfterExactly(ctx, DELAY);
+    });
+
+    it.each([[0, 4000], [DELAY, 4000], [10000, 10000]])("a refusal part-way through a pending wait (delay %i ms) starts a wait of %i ms over", (delay, wait) => {
+      const { ctx, player } = atResults(delay);
+      toArmed(ctx);
+      const first = ctx.state.autoBar;
+      if (delay) advance(delay - 100); // nearly dealt
+      refusePayout(player);
+      expect(ctx.state.autoBar).not.toBe(first);
+      expect(ctx.state).toMatchObject({ phase: GamePhases.PRE_DEAL, autoDealPaused: false, autoDealPending: true });
+      dealsAfterExactly(ctx, wait);
+    });
+
+    it("the Deal key's own action still deals at once", () => {
+      const { ctx, player } = atResults(0);
+      refusePayout(player);
+      toArmed(ctx);
+      act(() => ctx.actions.deal());
+      expect(ctx.state.phase).toBe(GamePhases.DEALING);
+    });
+
+    it("the CONTINUE step keeps its own timing, and a refusal during it does not restart it", () => {
+      const { ctx, player } = atResults(0);
+      advance(600);
+      const bar = ctx.state.autoBar;
+      refusePayout(player);
+      expect(ctx.state.autoBar).toBe(bar);
+      expect(bar).toMatchObject({ type: "CONTINUE", ms: 1000 });
+      advance(399);
+      expect(ctx.state.phase).toBe(GamePhases.POST_ROUND);
+      advance(1);
+      expect(ctx.state.phase).toBe(GamePhases.END_ROUND);
+      tick(); // the sweep too is one Rate of Play
+      expect(ctx.state.phase).toBe(GamePhases.PRE_DEAL);
+    });
+  });
+
   // The countdown bar's data (L2-4): GameProvider gives `autoBar` while the DEAL or CONTINUE step waits, with the real length of that wait.
   describe("the countdown bar's data (L2-4)", () => {
     it("is null until an automatic deal waits, then { DEAL, the wait, when it began } for the delay, and null again once it deals", () => {

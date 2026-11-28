@@ -2128,7 +2128,7 @@ describe("a refused payout (#196)", () => {
 
   it("sets a notice with the amount, and changes nothing else", () => {
     const s = won();
-    expect(refused(s)).toEqual({ ...s, payoutNotice: TEXT });
+    expect(refused(s)).toEqual({ ...s, payoutNotice: TEXT, refusedPayout: 20 });
   });
 
   it("names the amount in the player's currency, to the cent", () => {
@@ -2223,23 +2223,98 @@ describe("the newest message wins the line (#196)", () => {
     expect(run(s, { ...late, payout: 0 })).toBe(s);
   });
 
-  it("an old payout notice, then a refused opening bet: the round's cancel notice is set beside it", () => {
+  it("an old payout notice, then a refused opening bet: one line says both (#207)", () => {
     const s = run(dealt(["10", "10", "9", "7"]), late);
     const voided = run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq });
-    expect(voided).toMatchObject({ phase: GamePhases.PRE_DEAL, payoutNotice: PAYOUT, notice: "The server refused your bet, so the round was cancelled." });
+    expect(voided).toMatchObject({ phase: GamePhases.PRE_DEAL, payoutNotice: PAYOUT, notice: "$20 payout refused, not paid. New bet refused: round cancelled." });
   });
 
   describe("END_ROUND with a rebet auto deal cannot afford", () => {
-    const broke = (payoutNotice) => run({ ...dealt(["10", "10", "9", "7"]), phase: GamePhases.END_ROUND, payoutNotice,
+    const broke = (payoutNotice) => run({ ...dealt(["10", "10", "9", "7"]), phase: GamePhases.END_ROUND, payoutNotice, refusedPayout: payoutNotice ? 20 : 0,
       settings: { ...initialGameState.settings, resetInitialBet: true, autoDeal: true } }, { type: "END_ROUND", credits: 0, shoe: stackedShoe(["2"]) });
 
-    it("says nothing over a refused payout, and still pauses", () => {
-      expect(broke(PAYOUT)).toMatchObject({ notice: null, payoutNotice: PAYOUT, autoDealPaused: true, autoDealPending: false, betCircle: 0 });
+    it("says both over a refused payout, and still pauses (#207)", () => {
+      expect(broke(PAYOUT)).toMatchObject({ notice: "$20 payout refused, not paid. Can't rebet $10: auto deal paused.", payoutNotice: PAYOUT, autoDealPaused: true, autoDealPending: false, betCircle: 0 });
     });
 
     it("says so when no payout was refused", () => {
       expect(broke(null)).toMatchObject({ notice: "Not enough credits to rebet $10: auto deal paused", autoDealPaused: true });
     });
+  });
+});
+
+describe("a refused payout beside another notice (#207)", () => {
+  const late = { type: "BET_REJECTED", seq: 999, payout: 20 };
+  const PAYOUT = "The server refused your $20 payout; it was not paid.";
+  const CANCELLED = "The server refused your bet, so the round was cancelled.";
+  const BOTH = "$20 payout refused, not paid. Can't rebet $10: auto deal paused.";
+  const BROKE = "Not enough credits to rebet $10: auto deal paused";
+  const auto = { ...initialGameState.settings, resetInitialBet: true, autoDeal: true };
+  const ended = () => ({ ...dealt(["10", "10", "9", "7"]), phase: GamePhases.END_ROUND, settings: auto });
+  const endBroke = { type: "END_ROUND", credits: 0, shoe: stackedShoe(["2"]) };
+  const refuseOpening = (s) => run(s, { type: "BET_REJECTED", seq: s.pendingBets.at(-1).seq });
+  // A $5 chip and a deal, from a betting step.
+  const dealAgain = (s) => run({ ...s, pendingBets: [], shoe: stackedShoe(["10", "10", "9", "7"]) }, { type: "ADD_BET", amount: 5 }, { type: "DEAL" });
+  afterEach(() => setCurrency("USD"));
+
+  it("a refused opening bet with no refused payout keeps the old wording", () => {
+    expect(refuseOpening(dealt(["10", "10", "9", "7"])).notice).toBe(CANCELLED);
+  });
+
+  it("the combined cancel line clears with the next deal, and that round's refused bet reads as usual", () => {
+    const voided = refuseOpening(run(dealt(["10", "10", "9", "7"]), late));
+    expect(voided.notice).toBe("$20 payout refused, not paid. New bet refused: round cancelled.");
+    const next = dealAgain(voided);
+    expect(next).toMatchObject({ phase: GamePhases.DEALING, notice: null, payoutNotice: null, refusedPayout: 0 });
+    expect(refuseOpening(next).notice).toBe(CANCELLED);
+  });
+
+  it("both amounts are in the player's currency, to the cent", () => {
+    setCurrency("GBP");
+    const s = run(ended(), endBroke, { ...late, payout: 1234567.5 });
+    expect(s.notice).toBe("£1,234,567.50 payout refused, not paid. Can't rebet £10: auto deal paused.");
+  });
+
+  it("refusal first, then the unaffordable rebet: one line says both", () => {
+    expect(run(ended(), late, endBroke)).toMatchObject({ notice: BOTH, payoutNotice: PAYOUT, autoDealPaused: true });
+  });
+
+  it("unaffordable rebet first, then the refusal: the same line", () => {
+    const paused = run(ended(), endBroke);
+    expect(paused).toMatchObject({ notice: BROKE, autoDealBroke: true });
+    expect(run(paused, late)).toMatchObject({ notice: BOTH, payoutNotice: PAYOUT, payoutNoticeOld: false, autoDealPaused: true });
+  });
+
+  it("a chip bet in between does not lose the reason", () => {
+    expect(run(ended(), endBroke, { type: "ADD_BET", amount: 5 }, late).notice).toBe(BOTH);
+  });
+
+  it("after Resume the line is clear, and a later refusal does not bring the pause reason back", () => {
+    const resumed = run(ended(), endBroke, { type: "RESUME_AUTO_DEAL" });
+    expect(resumed).toMatchObject({ notice: null, autoDealBroke: false, autoDealPaused: false });
+    expect(run(resumed, late)).toMatchObject({ notice: null, payoutNotice: PAYOUT });
+  });
+
+  it.each([
+    ["a deal", dealAgain],
+    ["a table reset", (s) => run(s, { type: "RESET_GAME", shoe: stackedShoe(["2"]), phase: GamePhases.PRE_DEAL })],
+    ["a rule change (new shoe)", (s) => run(s, { type: "SET_SETTING", key: "deckCount", value: 2, shoe: stackedShoe(["2"]) })],
+    ["a sign-out", (s) => run(s, { type: "SIGN_OUT" })],
+    ["turning auto deal off", (s) => run(s, { type: "SET_SETTING", key: "autoDeal", value: false })],
+    ["turning auto deal on again", (s) => run(s, { type: "SET_SETTING", key: "autoDeal", value: true })],
+  ])("%s forgets the unaffordable rebet", (_, step) => {
+    const after = step(run(ended(), endBroke));
+    expect(after.autoDealBroke).toBe(false);
+    expect(run(after, late).notice).toBeNull();
+  });
+
+  it("a change to another setting keeps it", () => {
+    const s = run(ended(), endBroke, { type: "SET_SETTING", key: "showTotals", value: false });
+    expect(run(s, late).notice).toBe(BOTH);
+  });
+
+  it("a round that ends with an affordable rebet is not marked broke", () => {
+    expect(run(ended(), { ...endBroke, credits: 1000 })).toMatchObject({ autoDealBroke: false, notice: null });
   });
 });
 

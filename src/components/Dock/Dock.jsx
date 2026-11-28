@@ -98,7 +98,7 @@ function ChipRack({ chips, chip, onTap, off }) {
 // the keyboard hints show only with the `showKeyHints` setting (L2-3, the `hints` class: Dock.css). //
 export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false }) {
   const { player } = usePlayer();
-  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPaused, autoBar } = useGameState();
+  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPaused, autoBar, payoutNotice, payoutNoticeOld } = useGameState();
   const actions = useGameActions();
   const ref = useRef(null);
   const credits = player ? player.credits : 0; // a signed-out player has nothing to bet or double with
@@ -195,11 +195,12 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   } else if (phase === GamePhases.POST_ROUND) {
     face = "results";
     const net = roundNet(hands);
+    const refused = !!payoutNotice && !payoutNoticeOld; // this round's payout was refused: no win or loss amount (#207)
     rowA = (
       <div className="summary">
         <div className="s-l">
-          <small>{net > 0 ? "You won" : net < 0 ? "You lost" : "Even round"}</small>
-          <b className={net > 0 ? "up" : net < 0 ? "down" : undefined}>{signed(net)}</b>
+          <small>{refused ? "Payout refused" : net > 0 ? "You won" : net < 0 ? "You lost" : "Even round"}</small>
+          <b className={refused ? undefined : net > 0 ? "up" : net < 0 ? "down" : undefined}>{refused ? "Not paid" : signed(net)}</b>
         </div>
         <div className="s-r">Balance<b>{money(credits)}</b></div>
       </div>
