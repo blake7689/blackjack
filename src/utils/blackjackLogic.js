@@ -97,6 +97,10 @@ export const isSplitAces = (hand) => hand.isSplit && hand.cards[0].rank === "ace
 // How many hands a spot holds: the split limit counts per spot (#59). Hands without a `spot` are one group. //
 export const spotHands = (hands, spot) => hands.filter((h) => h.spot === spot).length;
 
+// Several spots (the table names them): the setting offers more than one, or the round on the table was dealt to more than the first (the
+// setting can be lowered mid-round). //
+export const severalSpots = (settings, hands) => settings.handSpots > 1 || hands.some((h) => h.spot > 0);
+
 // Two cards of equal value (10-J-Q-K pair), while its spot has fewer than maxSplitHands hands (`handCount`; 0 = unlimited). //
 // Split aces resplit only with resplitAces. //
 export function canSplit(hand, handCount, maxSplitHands, resplitAces = false) {

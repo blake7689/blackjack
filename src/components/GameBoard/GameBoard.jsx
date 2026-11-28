@@ -19,6 +19,7 @@ import { useLight } from "../../hooks/useLight";
 import { usePeek } from "../../hooks/usePeek";
 import { centrePrint } from "../../utils/centrePrint";
 import { discardCount } from "../../utils/cards";
+import { severalSpots } from "../../utils/blackjackLogic";
 import { DEFAULT_CHIP, effectiveChip, visibleChips } from "../../utils/chips";
 import TopBar from "../TopBar/TopBar";
 import DealerArea from "../DealerArea/DealerArea";
@@ -41,7 +42,7 @@ const subscribeLanded = (l) => { landed.listeners.add(l); return () => landed.li
 const ROUND_SOUND = { win: "win", bj: "win", even: "win", lose: "lose", bust: "lose", surrender: "lose" }; // verdict kind -> sound and buzz (a push has neither)
 
 export default function GameBoard() {
-  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, settings, pendingBets, notice, offers, autoDealPending, cutCardFound,
+  const { dealer, dealerHole, shoe, hands, selectedHandIndex, phase, betCircle, betSpots, settings, pendingBets, notice, offers, autoDealPending, cutCardFound,
     seenIds, shoeSeq, shoeMid, nextHandTag, payoutNotice, payoutNoticeOld, settingsUnloaded } = useGameState();
   const { continueRound, addBet } = useGameActions();
   const { player, reconnecting } = usePlayer();
@@ -55,7 +56,15 @@ export default function GameBoard() {
   const probeRef = useRef(null);
   useCardWidth(stageInRef, probeRef);
   useDealerRoom(stageInRef, probeRef);
-  const [tight, decideTight] = useTightSeats(seatsRef, stageInRef, Math.max(1, hands.length));
+  // The seats: the hands, or (before the deal) one empty seat per offered spot with the chips on it (one spot: the circle's total). Keyed by tag, never by index.
+  const several = severalSpots(settings, hands);
+  const seats = hands.length ? hands : Array.from({ length: settings.handSpots }, (_, spot) => (
+    { tag: `bet${spot}`, spot, cards: [], hiddenCards: [], bet: several ? betSpots[spot] : betCircle, result: HandResult.NONE }));
+  const [tight, decideTight] = useTightSeats(seatsRef, stageInRef, seats.length);
+  // The circle tapped last (#59) is UI state too: the rack's double tap and the keys 1-9 bet into it. A spot no longer offered falls back to the first.
+  const [tapped, setTapped] = useState(0);
+  const selectedSpot = tapped < settings.handSpots ? tapped : 0;
+  const betOnSpot = useCallback((value, spot) => { setTapped(spot); if (spot) addBet(value, spot); else addBet(value); }, [addBet]);
   // The chip picked in the rack (#82) is UI state, not round state: the rack picks it, the bet circle bets it. What is shown is always a chip the
   // rack offers (the balance fell below it: the largest one below it).
   const [picked, setPicked] = useState(DEFAULT_CHIP);
@@ -105,6 +114,8 @@ export default function GameBoard() {
     return () => { undo(); fx.cancel(); clearTimeout(landedAt); setSwept(false); };
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
+  // The hand in play, and with several spots the one being asked at the offers, is highlighted and kept in view.
+  const asking = phase === GamePhases.PLAYER_TURN || (several && phase === GamePhases.OFFERS);
   const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
   // The message line's notice (it takes the verdict's place too). The newest wins: a refused payout clears `notice` (or sets one that says both, #207), so one set here includes or came after it. A payout refusal replaces
   // its own verdict (it would be wrong), never a later round's. Unloaded settings never hide a verdict.
@@ -119,9 +130,6 @@ export default function GameBoard() {
   }, [kind]);
   const shownDiscard = shuf && !shuf.emptied ? shuf.pile : swept ? discard + onTable : discard;
 
-  // The seats: the hands, or (before the deal) one empty seat holding the chips in the circle. Keyed by tag, never by index.
-  const seats = hands.length ? hands : [{ tag: "bet", cards: [], hiddenCards: [], bet: betCircle, result: HandResult.NONE }];
-
   // Layout reads (#140): useSeatsScroll's overflow check and useCentrePrint measure boxes only when this string changes (a re-render that changes none of
   // what sizes a box reads nothing). It lists what sizes them: each seat's cards, bet, result tag and side stakes; the dealer's cards; the phase, the
   // message line's state, the shuffle and the totals switch, and how many of each seat's cards have landed (#161: the pill, which can widen to
@@ -132,7 +140,7 @@ export default function GameBoard() {
     seats.map((h) => [h.tag, h.cards.length, h.hiddenCards.length, h.bet, h.result, h.isDouble ? 1 : 0, h.baseStake ?? 0, h.insurance ?? 0, h.insurancePayout ?? 0].join(".")).join("|"),
     dealer.cards.length, dealerHole.cards.length, phase, !!offers, !!lineNotice, reconnecting, peek, verdict?.kind, !!shuf, settings.showTotals,
   ].join(",");
-  const [scroll, syncScroll] = useSeatsScroll(seatsRef, stageInRef, Math.max(1, hands.length), phase === GamePhases.PLAYER_TURN ? selectedHandIndex : -1, layoutKey);
+  const [scroll, syncScroll] = useSeatsScroll(seatsRef, stageInRef, seats.length, asking ? selectedHandIndex : -1, layoutKey, !hands.length);
   useCentrePrint(stageInRef, `${layoutKey},${scroll},${tight}`); // scroll and tight change the seats' boxes too
 
   // A click on the felt moves on from the results (the dock has its own Next hand key) //
@@ -143,8 +151,8 @@ export default function GameBoard() {
   // The hidden top-up taps (#90) count only when idle, signed in, low, with no chips in the circle and nothing awaiting the server.
   const tapEnabled = !!player && player.credits < TOP_UP_BELOW && phase === GamePhases.PRE_DEAL && betCircle === 0 && pendingBets.length === 0;
 
-  const seatsClass = `seats${scroll ? " scroll" : ""}${tight ? " tight" : ""}${hands.length > 1 && phase === GamePhases.PLAYER_TURN ? " turns" : ""}`;
-  const stageClass = `stage-in${hands.length > 1 ? " multi" : ""}${hands.length >= 4 ? " many" : ""}${phase === GamePhases.DEALING ? " dealing" : ""}${phase === GamePhases.END_ROUND ? " ending" : ""}`;
+  const seatsClass = `seats${scroll ? " scroll" : ""}${tight ? " tight" : ""}${hands.length > 1 && asking ? " turns" : ""}`;
+  const stageClass = `stage-in${seats.length > 1 ? " multi" : ""}${seats.length >= 4 ? " many" : ""}${several ? " spots" : ""}${phase === GamePhases.DEALING ? " dealing" : ""}${phase === GamePhases.END_ROUND ? " ending" : ""}`;
 
   return (
     <FlightContext.Provider value={flight}>
@@ -165,7 +173,7 @@ export default function GameBoard() {
           <CardWidthSync stageRef={stageInRef} probeRef={probeRef} seats={seats.length} decideTight={decideTight} syncScroll={syncScroll} />
           <Shoe discard={shownDiscard} cutOut={cutCardFound} away={!!shuf?.away} />
           <div className="dealer-container">
-            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} seats={seats.length} />}
+            {dealer.cards.length > 0 && <DealerArea dealer={dealer} hiddenCount={dealerHole.cards.length} showTotals={settings.showTotals} holdHole={hideHole} holeOrder={2 * Math.max(1, new Set(hands.map((h) => h.spot)).size) + 1} seats={seats.length} />}
           </div>
 
           <FeltPrint settings={settings} onOpen={openRules} onDraw={centrePrint} />
@@ -186,6 +194,7 @@ export default function GameBoard() {
               peek={peek}
               messages={settings.tableMessages}
               hand={selectedHandIndex}
+              askSpot={several && phase === GamePhases.OFFERS ? hands[selectedHandIndex].spot + 1 : 0}
             />
           </div>
 
@@ -195,12 +204,15 @@ export default function GameBoard() {
                 key={hand.tag}
                 hand={hand}
                 index={idx}
-                active={hands.length ? selectedHandIndex === idx && phase === GamePhases.PLAYER_TURN : phase === GamePhases.PRE_DEAL && canBet}
+                active={hands.length ? asking && selectedHandIndex === idx : phase === GamePhases.PRE_DEAL && canBet && idx === selectedSpot}
+                spotNo={several ? hand.spot + 1 : 0}
+                first={idx === 0 || seats[idx - 1].spot !== hand.spot}
+                pressed={!hands.length && several ? idx === selectedSpot : undefined}
                 gamePhase={phase}
                 showTotals={settings.showTotals}
                 chip={chip}
                 canBet={canBet}
-                onBet={addBet}
+                onBet={betOnSpot}
                 multi={seats.length > 1}
                 seats={seats.length}
               />
@@ -214,7 +226,7 @@ export default function GameBoard() {
       {/* #3: the tips slot, 0 px tall while empty */}
       <div className="tip-line" />
 
-      <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} />
+      <Dock busy={busy} chip={chip} onChip={setPicked} shuffling={!!shuf} spot={selectedSpot} />
       <div className="flight-layer" ref={layerRef} />
       {rules && <Suspense fallback={null}><RulesSheet settings={settings} onClose={() => setRules(false)} /></Suspense>}
     </div>

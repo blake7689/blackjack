@@ -47,8 +47,10 @@ function useArrival(amount, fromNothing, launch) {
 // Its chips are one stack (the bet), and the side stacks beside it: a double's second stake and the insurance stake, never over the bet.
 // Motion (#83): chips glide in from the rack (or the dock) and a stack that comes off the table glides back; at the results the stacks lift into moving
 // copies that are paid or swept (payoutFx), after the verdict has been on show for a moment, reserving the board's time so the next step waits.
-// `multi`: several hands, so each carries its own result tag under its circle (one hand has the verdict line instead). //
-function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chip = null, canBet = false, onBet, multi = false }) {
+// `multi`: several hands, so each carries its own result tag under its circle (one hand has the verdict line instead).
+// Several spots (#59): `spotNo` (1-based, 0 with one spot) starts the hand's accessible name; `first` (the spot's first dealt hand) shows it above the cards.
+// `pressed`: before the deal with several circles, whether this one is selected (undefined = a plain button). A tap calls `onBet(chip, index)`. //
+function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chip = null, canBet = false, onBet, multi = false, spotNo = 0, first = false, pressed }) {
   const { enabled } = useContext(FlightContext);
   const seatRef = useRef(null);
   const rowRef = useRef(null);
@@ -64,6 +66,7 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
   // hand (baseStake 0: its whole stake was an added one) have no such split: one stack of the whole bet, its exact amount on the label.
   const dbl = hand.isDouble && hand.baseStake > 0 && hand.bet === hand.baseStake * 2 ? hand.baseStake : 0;
   const ins = hand.insurance > 0 ? hand.insurance : 0;
+  const handName = spotNo ? `Spot ${spotNo}, hand ${index + 1}` : `Hand ${index + 1}`;
   const spotName = betting ? `Bet spot ${index + 1}, ${money(hand.bet)}${canBet && chip ? `. Adds a ${money(chip)} chip` : ""}` : `Bet ${money(hand.bet)}`;
 
   // Chips arriving and leaving. The flights are state-driven: whoever changed the bet (a tap, a key, Rebet, 2x, the automatic rebet, a double, insurance) gets the
@@ -116,7 +119,8 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
 
   return (
     <div ref={seatRef} className={`seat${active ? " active" : ""}${empty ? " nocards" : ""}${dbl || ins ? " sides" : ""}${paid ? " paid" : ""}`}>
-      <div className="hand player-hand" role="group" aria-label={empty ? `Hand ${index + 1}: no cards` : handLabel(`Hand ${index + 1}`, hand.cards, hand.hiddenCards.length, shown, shown.totals, { showTotals, natural })}>
+      <div className="hand player-hand" role="group" aria-label={empty ? `${handName}: no cards` : handLabel(handName, hand.cards, hand.hiddenCards.length, shown, shown.totals, { showTotals, natural })}>
+        {spotNo > 0 && first && !empty && <span className="spot-name" aria-hidden="true">Spot {spotNo}</span>}
         <div className="fan-row cards" ref={rowRef}>
           {/* One list, so a double's card keeps its element from face down to face up (no second flight).
               Face down: the hidden card itself (and its id) never reaches the DOM. */}
@@ -133,8 +137,8 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
       </div>
       <div className="spot-row">
         {ins > 0 && <div className="side-spot ins"><span className="stack"><ChipStack amount={insShown} /></span><i>INS<span className="sr-only"> {money(ins)}</span></i></div>}
-        <button type="button" className={`spot${hand.bet > 0 ? " has" : ""}${canBet && !hand.bet ? " open" : ""}`} aria-label={spotName} disabled={!betting || !canBet}
-          onClick={() => onBet(chip)}>
+        <button type="button" className={`spot${hand.bet > 0 ? " has" : ""}${canBet && !hand.bet ? " open" : ""}`} aria-label={spotName} aria-pressed={pressed} disabled={!betting || !canBet}
+          onClick={() => onBet(chip, index)}>
           <span className="bet-lbl">BET</span>
           <span className="stack"><ChipStack amount={mainShown} /></span>
         </button>
@@ -143,8 +147,8 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
       <div className="amt">
         {tag ? <span className={`tag ${tag.kind}`}>{tag.text}</span> : hand.bet > 0 && <span className="num">{money(hand.bet)}</span>}
         {tag && settled && hand.insurance > 0 && (hand.insurancePayout > 0
-          ? <span className="tag win">Insurance pays {money(hand.insurancePayout)}</span>
-          : <span className="tag lose">Insurance lost</span>)}
+          ? <span className="tag win">{spotNo ? "Ins. pays" : "Insurance pays"} {money(hand.insurancePayout)}</span>
+          : <span className="tag lose">{spotNo ? "Ins. lost" : "Insurance lost"}</span>)}
       </div>
     </div>
   );

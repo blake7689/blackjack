@@ -2832,7 +2832,7 @@ describe("multi-hand (#59): up to 3 spots a round", () => {
       const r = three({ refuse: [1, 2] });
       expect(r.hands.map((h) => [h.bet, h.baseStake])).toEqual([[10, 10], [0, 0], [0, 0]]);
       expect([r.answered.betCircle, r.accepted, r.settled]).toEqual([10, 10, 20]);
-      expect(r.answered.notice).toBe("The server refused your $10 bet on spot 3; it plays for nothing.");
+      expect(r.answered.notice).toBe("The server refused your $20 bets on spots 2 and 3; they play for nothing.");
     });
 
     const offered = (mode, extra) => playRound({ mode, rules: { insurance: true }, ...extra });

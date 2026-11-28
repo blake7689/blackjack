@@ -16,17 +16,20 @@ const MESSAGES = {
   [GamePhases.RESULTS]: "Settling bets",
 };
 
-// The offer still open asks itself, one question at a time: even money, then insurance, then surrender. //
-const offerMessage = ({ evenMoney, insurance }) => (evenMoney ? "Even money?" : insurance ? "Insurance?" : "Surrender?");
+// The offer still open asks itself, one question at a time: even money, then insurance, then surrender. With several spots it names the one asked ("Spot 2: insurance?"). //
+const offerMessage = ({ evenMoney, insurance }, spot) => {
+  const ask = evenMoney ? "Even money?" : insurance ? "Insurance?" : "Surrender?";
+  return spot ? `Spot ${spot}: ${ask.toLowerCase()}` : ask;
+};
 
 // Between rounds: auto deal says it is about to deal, else a bet on the table says to tap Deal; with nothing on the table and no chip the balance covers (`broke`), it says so. //
 const bettingMessage = (bet, autoDealing, broke) => (autoDealing ? ["Dealing soon", STATUS] : bet > 0 ? ["Tap Deal", PROMPT] : broke ? ["Out of credits", NOTICE] : ["Place your bets", PROMPT]);
 
 // What the one line says for a phase, and what kind of line it is. `lastHand`: the cut card is out, so this is the last hand before the shuffle. //
-function phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand, broke }) {
+function phaseMessage({ gamePhase, offers, askSpot, bet, autoDealing, lastHand, broke }) {
   switch (gamePhase) {
     case GamePhases.PRE_DEAL: return bettingMessage(bet, autoDealing, broke);
-    case GamePhases.OFFERS: return [offerMessage(offers), PROMPT];
+    case GamePhases.OFFERS: return [offerMessage(offers, askSpot), PROMPT];
     case GamePhases.PLAYER_TURN: return lastHand ? ["Last hand before the shuffle", NOTICE] : ["Your move", PROMPT];
     case GamePhases.END_ROUND: return [lastHand ? "Shuffling" : "", STATUS];
     default: return [MESSAGES[gamePhase] ?? "", STATUS];
@@ -60,10 +63,10 @@ function useIdle(key, active) {
 // `messages` (L2-1, the tableMessages setting): "all" shows every line; "hints" (default) leaves a status line out and a prompt out until the player has been idle
 // 5 s (it fades in); "results" shows no prompt or status. Results and notices (reconnecting, a refused bet, Out of credits, the last hand) show in every mode.
 // `hand` (the selected hand) is part of the wait's key: the turn moving to another split hand starts it again. A line that is not shown is not rendered at all, so screen readers do not hear it either; the .msg element and its height stay. //
-function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, broke = false, autoDealing = false, lastHand = false, verdict = null, shuffling = false, peek = null, heard = null, messages = "all", hand = 0 }) {
+function CenterMessage({ gamePhase, waiting, reconnecting, notice, offers, bet = 0, broke = false, autoDealing = false, lastHand = false, verdict = null, shuffling = false, peek = null, heard = null, messages = "all", hand = 0, askSpot = 0 }) {
   const [text, kind] = waiting ? ["Waiting for the server...", STATUS] : shuffling ? ["Shuffling", STATUS]
     : peek === "clear" ? ["No blackjack", STATUS] : peek === "checking" ? ["Dealer checks for blackjack", STATUS]
-    : phaseMessage({ gamePhase, offers, bet, autoDealing, lastHand, broke });
+    : phaseMessage({ gamePhase, offers, askSpot, bet, autoDealing, lastHand, broke });
   const shown = reconnecting || notice || (verdict && !shuffling); // these are never left out
   const prompt = !shown && kind === PROMPT && text;
   const idle = useIdle(`${text}|${hand}`, messages === "hints" && !!prompt);

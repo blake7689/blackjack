@@ -15,6 +15,12 @@
 .seat .hand { min-height: var(--ch); } /* the card slot is kept while the seat is empty, so the felt print above does not move when the cards come */
 .seat { position: relative; flex: none; width: var(--sw); display: flex; flex-direction: column; align-items: center; scroll-snap-align: center; }
 .stage-in.multi .seat .hand { margin-top: 32px; } /* room for the pill above the hand */
+/* several spots (#59): "Spot n" over each spot's first dealt hand. Every seat keeps the room (--lbl, GameBoard.css), before the deal too, so the cards stay level and the print does not move. */
+.stage-in.spots .seat .hand { margin-top: var(--lbl); }
+.stage-in.spots.multi .seat .hand { margin-top: calc(32px + var(--lbl)); }
+.spot-name { position: absolute; left: 50%; bottom: 100%; translate: -50% 0; font-size: 12px; font-weight: 700; line-height: 16px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; color: var(--print-strong); text-shadow: 0 1px 2px rgb(0 0 0 / .4); }
+.stage-in.multi .spot-name { bottom: calc(100% + 32px); } /* above the pill */
+.stage-in.ending .spot-name { visibility: hidden; }
 
 .spot-row { position: relative; width: 100%; height: var(--spot); margin-top: 12px; display: flex; justify-content: center; }
 .spot { position: relative; width: var(--spot); height: var(--spot); border-radius: 50%; border: 0; padding: 0; background: transparent; color: var(--print); font: inherit; cursor: pointer; touch-action: manipulation; }
@@ -54,6 +60,15 @@
 .tag.push { background: var(--push); color: #0d1216; }
 .tag.surrender { background: var(--surr); color: #2a1503; }
 .tag.bj { background: var(--accent); color: var(--accent-ink); }
+/* several spots (#59): the seats are narrow, so a result tag wraps instead of being cut */
+.stage-in.spots .tag { white-space: normal; text-align: center; line-height: 1.15; padding: 2px 4px; letter-spacing: .01em; }
+/* under 360 px three seats have no room under the amount for the side stacks (they went under the dock): they sit in the circle's two outer gaps, smaller */
+@media (max-width: 359px) and (min-height: 521px) {
+  .stage-in.spots .seats.tight .seat { padding-bottom: 0; }
+  .stage-in.spots .seats.tight .side-spot { top: 50%; transform: translateY(-50%); width: min(calc(var(--chip) * 1.12), calc((var(--sw) - var(--spot)) / 2)); height: min(calc(var(--chip) * 1.12), calc((var(--sw) - var(--spot)) / 2)); }
+  .stage-in.spots .seats.tight .side-spot.ins { left: 0; right: auto; }
+  .stage-in.spots .seats.tight .side-spot.dbl { left: auto; right: 0; }
+}
 /* the results (#83): the stacks have gone to the dealer or the dock (their moving copies are in the flight layer), so the circle is bare */
 .seat.paid .stack, .seat.paid .side-spot, .seat.paid .amt .num { visibility: hidden; }
 .seat.paid .spot.has .bet-lbl { display: grid; } /* #147: `paid` is set when the chips have gone, so the bare circle says BET again */
@@ -62,6 +77,8 @@
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
   .seats { --spot: max(44px, min(calc(var(--cw) * 1), calc(var(--sw) * .36))); --sw: min(calc(var(--cw) * 4.6), calc((100cqi - 24px - (var(--n) - 1) * var(--sg)) / var(--n))); margin-top: 6px; }
   .stage-in.multi .seat .hand { margin-top: 0; }
+  .stage-in.spots .seat .hand, .stage-in.spots.multi .seat .hand { margin-top: var(--lbl); }
+  .stage-in.multi .spot-name { bottom: 100%; } /* the pill is beside the hand */
   .seat { display: grid; grid-template-columns: var(--spot) auto var(--spot); grid-template-rows: auto auto; column-gap: 10px; align-content: center; justify-content: center; }
   .seat .hand { margin-top: 0; grid-column: 2; grid-row: 1 / span 2; align-self: center; }
   .seat::after { content: ""; width: var(--spot); grid-column: 3; grid-row: 1; }
@@ -88,4 +105,5 @@
   .spot-row:has(.ins) .dbl { transform: translateY(-100%); }
   .spot-row:has(.dbl) .ins { transform: none; }
   .side-spot i { left: 50%; right: auto; top: 100%; transform: translateX(-50%); margin: 2px 0 0; }
+  .spot-name { line-height: 12px; }
 }

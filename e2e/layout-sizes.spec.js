@@ -202,6 +202,47 @@ for (const [w, h] of SIZES) {
   });
 }
 
+// Three betting spots (#59), at every size above: three circles, the offers, a split on spot 1 (four hands) and the results.
+// Seed 8956: see multihand.spec.js.
+for (const [w, h] of SIZES) {
+  const size = `${w}x${h}`;
+  test.describe(`three spots at ${size} (#59)`, () => {
+    test.skip(({ isMobile }) => isMobile, 'the chromium project sets the sizes');
+    test.use({ viewport: { width: w, height: h }, reducedMotion: 'reduce', hasTouch: w < 900 });
+
+    test('betting, offers, a split and the results', async ({ page }) => {
+      await stubApi(page, { startCredits: 5000, settings: { ...VEGAS, handSpots: 3, playTimeout: 250 } });
+      await seedRandom(page, 8956);
+      await login(page);
+      await audit(page, size, 'M1 three empty circles');
+      await btn(page, '$25 chip').click();
+      for (const n of [1, 2, 3]) await page.getByRole('button', { name: new RegExp(`^Bet spot ${n},`) }).click();
+      await audit(page, size, 'M2 three bets');
+      await btn(page, 'Deal').click();
+      const offers = page.getByRole('group', { name: 'Offers' });
+      for (const n of [1, 2, 3]) {
+        await expect(page.getByText(`Spot ${n}: insurance?`, { exact: true })).toBeVisible({ timeout: 20_000 });
+        await expect(offers.getByRole('button', { name: /^No thanks/ })).toBeEnabled({ timeout: 20_000 });
+        if (n === 2) { await audit(page, size, 'M3 offers on spot 2'); await offers.getByRole('button', { name: /^Insurance/ }).click(); }
+        else await offers.getByRole('button', { name: /^No thanks/ }).click();
+      }
+      await hitReady(page);
+      await audit(page, size, 'M4 three spots, your move');
+      await btn(page, 'Split').click();
+      await expect(page.locator('.player-hand')).toHaveCount(4);
+      await hitReady(page);
+      await audit(page, size, 'M5 four hands');
+      for (let i = 0; i < 8; i++) {
+        await expect(btn(page, 'Stay').or(btn(page, 'Next hand'))).toBeEnabled({ timeout: 25_000 });
+        if (await btn(page, 'Next hand').count()) break;
+        await btn(page, 'Stay').click();
+      }
+      await nextReady(page);
+      await audit(page, size, 'M6 results');
+    });
+  });
+}
+
 // Re-picking a seed (a change to when shoes are built, or to the deck count, breaks the card assertions first): replay what the page does before
 // the deal with mulberry32 as seedRandom does (4 router-key numbers, then createShoe(6, true) for the settings load and again for the game start)
 // and take the first seed whose second shoe starts with the wanted ranks (T = a ten): insurance '9 A 7 6', pair '8 6 8 T 3 5', play 'T 9 6 T'.

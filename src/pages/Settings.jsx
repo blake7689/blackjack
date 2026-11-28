@@ -33,7 +33,7 @@ const PROFILE = ["userName", "email", "firstName", "lastName"];
 const IDENTITY = ["userName", "email"]; // changing one needs the current password
 const WRONG_PASSWORD = "Incorrect password."; // the API's words, for a wrong password and a lockout alike
 const PROFILE_FIELDS = { userName: ["Username", "username"], email: ["Email", "email"], firstName: ["First name", "given-name"], lastName: ["Last name", "family-name"] };
-const PLAY_KEYS = ["playTimeout", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "tableMessages", "showKeyHints"];
+const PLAY_KEYS = ["playTimeout", "handSpots", "resetInitialBet", "showTotals", "showCardCount", "autoDeal", "autoDealDelay", "tableMessages", "showKeyHints"];
 const LOOK_KEYS = ["feltTheme", "accent", "mode", "currency"];
 const SOUND_KEYS = ["soundOn", "soundVolume", "hapticsOn"];
 const MODES = [["dark", "Dark"], ["light", "Light"], ["system", "Device"]];
@@ -265,6 +265,9 @@ export default function Settings() {
           <Slider id="playTimeout" label={text("playTimeout").label} hint={text("playTimeout").hint} min={0} max={1000} step={1} value={msToPos(draft.playTimeout)}
             text={speedText(draft.playTimeout)} onChange={(pos) => edit({ playTimeout: posToMs(pos) })} stops={SPEED_STOPS} tail="5 s"
             current={speedName(draft.playTimeout)} />
+          <Row id="handSpots" label={text("handSpots").label} hint={text("handSpots").hint}>
+            {[1, 2, 3].map((n) => <Radio key={n} checked={draft.handSpots === n} data-pick-spots={n} onClick={() => edit({ handSpots: n })}><span>{n}</span></Radio>)}
+          </Row>
           <Switch id="resetInitialBet" label={text("resetInitialBet").label} hint={text("resetInitialBet").hint} checked={draft.resetInitialBet}
             onChange={(v) => edit(v ? { resetInitialBet: true } : { resetInitialBet: false, autoDeal: false })} />
           {flag("showTotals")}

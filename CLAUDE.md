@@ -13,7 +13,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Build: `npm run build` (output `dist/`)
 - E2E (#93): `npm run e2e` builds with `.env.e2e` (fake API origin) and runs the Playwright smoke tests in `e2e/` against it, API stubbed;
   `npm run e2e:ui` for the UI runner, `--headed` to watch (keep the window focused: animation timing needs it). First run: `npx playwright install chromium`;
-  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) + screens (#87) + loop1 + loop2 (#166) + a11y + reauth (BlackJackAPI#71) at Pixel 7 size
+  if that browser will not start, `E2E_CHANNEL=chrome npm run e2e` uses the installed Chrome. A second project, `phone` (#121), re-runs smoke + topup + split (#133) + layout (#80) + sound (#86) + screens (#87) + loop1 + loop2 (#166) + a11y + reauth (BlackJackAPI#71) + multihand (#59) at Pixel 7 size
   (`npm run e2e -- --project=phone`); the smoke test also asserts the board has no horizontal scroll. A third, `webkit` (#167), runs the same specs in WebKit at iPhone 14 size (`npm run e2e -- --project=webkit`; first run `npx playwright install webkit`). CI has an `e2e` job in `ci.yml` that gates the deploy; there webkit runs as 2 shards (#208; run one locally: `npm run e2e -- --project=webkit --shard=1/2`, or `2/2`).
   `e2e/a11y.spec.js` (#120) scans each screen with axe (`@axe-core/playwright`): serious and critical violations fail e2e; the helper is `expectNoSeriousA11y` in `e2e/a11y.js`; to waive a rule pass `{ disableRules: ['rule-id'] }` with a one-line comment giving the reason, never a blanket disable.
   `e2e/layout-sizes.spec.js` (#168, chromium project only) plays a round, a split round and the Settings sections at 7 sizes (320x568 to 1920x1080) and fails on sideways scroll, clipped or overlapping pieces, top bar / dock heights off DESIGN section 4, and tap targets under 44 px; each accepted finding is a named entry in its `WAIVERS` table with a one-line reason (a fix removes its waiver); a change to when shoes are built means re-picking its `SEEDS`.
@@ -116,14 +116,18 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (the API has no such field; a refused one voids only the insurance, in `BET_REJECTED`). `settleHand` pays it 3x its stake when the dealer has
   blackjack, inside the hand's `payout`, so the round still settles once. Even money is `evenMoney: true` (WIN, 2x). `dealerShowsSecondCard`
   reads `insurance`; `dealerOnlyChecksBlackjack` must not (a live insured hand still needs the dealer's total). `playRound` takes `offers`.
-- Multi-hand state (#59): setting `handSpots` (1-3, default 1; not a table rule; no UI yet, PR 2 adds it with the circles, Dock keys and offers face, and the hole card's
-  `dealOrder` of 2n+1). Hands carry `spot`; split limits count per spot. `betCircle` is the total and `betSpots` (in `emptyRound`, always 3 long) the per-spot bets; only the first
+- Multi-hand state (#59): setting `handSpots` (1-3, default 1; not a table rule; Settings > Gameplay "Hands per round"). Hands carry `spot`; split limits count per spot. `betCircle` is the total and `betSpots` (in `emptyRound`, always 3 long) the per-spot bets; only the first
   `handSpots` ever hold chips (lowering it before the deal refunds the rest; a dealt round plays on). `ADD_BET` takes `{ amount, spot }` or `{ spots }` (`addSpots`), and
   `betHistory` holds one per-spot array each. `initialBet` is the last deal's total, `initialSpots` per spot; the rebet is `initialSpots` within `handSpots`, all or nothing.
   `dealRound` takes per-spot bets (a number = one spot); each hand carries `offer`, and offers walk the spots with `selectedHandIndex` (the peek comes once, after the last).
   Spot bets after the first are `newRound: false`, `side: "spot"`; a refused one zeroes that hand's `bet` and `baseStake` and withdraws its offer. `DEALING` waits for every
   spot bet: no stake may ever be added on a spot before its own bet is answered, because the server caps a settle at 2.5x the stakes it accepted. PlayerProvider holds
-  `alreadyDeducted` bets in `pendingRef` until each is answered (a deal queues several).
+  `alreadyDeducted` bets in `pendingRef` until each is answered (a deal queues several). The notice names every refused spot (`refusedSpots`, in `emptyRound`).
+  Table UI: with one spot nothing differs (names, `addBet(v)` call shapes, no `aria-pressed`, no label room). "Several spots" is `severalSpots(settings, hands)` (blackjackLogic.js; the
+  setting, or a dealt hand past spot 1): names start "Spot n, hand i", each spot's first dealt hand shows an aria-hidden "Spot n", `.stage-in.spots` keeps `--lbl` of room for it on every
+  seat, before the deal too (every `--cwr` formula subtracts `--lbl`), and the spot asked at `OFFERS` is highlighted and named in the prompt. Before the deal there is one seat per
+  spot, so seat count, `.multi` / `.many` come from `seats.length`. The selected circle is GameBoard UI state (the dock's `spot`). Dock's Offers focus effect depends on the asked hand
+  (two spots can open the same offers). The hole card's `dealOrder` is 2n+1, n = spots dealt (DealerArea `holeOrder`; splits do not change it).
 - Rules section (#91, #84): the Settings Table rules section is `components/RulesSection` (preset dropdown with each preset's house edge, flat groups Shoe, Dealer, Payouts,
   Doubling, Splitting, Surrender, House variations, Advanced). It is part of Settings' one draft: `onApply(patch)` writes the draft, and Save sends only the keys that changed
   (a key GameProvider sees in a patch with a `RESET_SETTINGS` name deals a new shoe even when unchanged, so an unchanged draft saves nothing); a changed `RESET_SETTINGS` key asks
@@ -178,7 +182,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   `.flight-layer`) and flips as it lands; the dealer's hole card and a face-down double stay one element (keys `hole` / `dbl`,
   hidden and shown cards in one list), so they flip in place. Never key them by card id or split them into two lists (a remount
   flies again). Hints (`dealOrder`, `revealed`, `moved`) sit on card copies, never in place; a hidden back gets `dealOrder` by prop
-  (3 for the hole) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
+  (2n+1 for the hole with n spots dealt, 3 with one) and has no card object, so nothing hidden reaches the DOM. `DEAL` goes through `DEALING`. Hands are keyed by `tag`.
 - Table art (#81): the table's top bar is `components/TopBar` (menu, `#bal` balance, count, Settings; its Count shows only landed cards), laid out with `useCardWidth`, `useDealerRoom`, `useCentrePrint`
   and `useSeatsScroll` on `.stage-in`. Signed-in start: `GameProvider` starts the table itself (`START_GAME`, one shoe) once per sign-in or restore, after the settings load (a failed load starts with the settings
   it has), and a player still on `/` is sent to `/game` (replace); the provider flag `starting` (and `restoring` in PlayerProvider) makes Home show "Shuffling up..." instead of a flash of Home. Home's "Play" is a link to `/game` that calls `startGame`.
@@ -230,7 +234,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   (a dock key since #80, so it needs no stopPropagation) shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal). `UNDO_BET` (#82) clears `autoDealPending` like ADD_BET and CLEAR_BET (Rebet and 2x are ADD_BETs, so they do too). `OFFERS` has no automatic step, so auto deal waits there.
 - Chips and betting (#82): `betHistory` is what was added since the spots were last all empty (one per-spot array each, #59), oldest first; ADD_BET pushes, `UNDO_BET` pops the last
   (`local(+x)`), and it is emptied by DEAL, CLEAR_BET, `resetTable` and a voided round (BET_REJECTED on the opening bet); END_ROUND's auto rebet seeds it with the one rebet array.
-  The dock's Rebet is `ADD_BET` of `initialBet` and 2x is `ADD_BET` of `betCircle`, both on the first spot until #59 PR 2 moves them to `addSpots` (the dock dims them unless affordable): never give them reducer actions or ledger events of their
+  The dock's Rebet is `ADD_BET` of `rebetSpots(state)` and 2x of `betSpots` (`addSpots`; with one spot `addBet(total)`); the dock dims them unless the total is affordable: never give them reducer actions or ledger events of their
   own. The ledger sees one bet per dealt spot, at the deal. The selected rack chip is UI state in GameBoard (`picked`, shown through `effectiveChip`), never reducer state: the rack
   selects it, the bet circle (`.spot`, a button named "Bet spot N, ...") bets it, and a double tap on a rack chip (timed by hand, 400 ms) bets it too. Stacks are
   `ChipStack` (`splitChips`: greedy over `ALLOWED_CHIPS`, up to 10 drawn, the exact amount on `.amt`); a double's second stake and the insurance are `.side-spot`
