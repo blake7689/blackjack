@@ -47,8 +47,25 @@ export const confirmBets = (state) =>
 // `credits` is the balance the deal and the offers see (insurance must be affordable); the bets themselves always go through.
 // The server answers every bet once the round reaches settling: it confirms them all, except the ledger bets whose
 // position in `refuse` (0 = the opening bet, 1 = the next bet, ...) is listed, which it refuses.
-export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], offers = [], blackJackOnSplit = false, rules = {}, refuse = [], credits = RICH }) {
-  const step = (state, action) => gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
+// Multi-hand (#59): `bets` is the stake on each spot, left to right (0 = empty; it replaces `bet` and sets handSpots). Then the server
+// answers the deal's bets (position 0 = the first betting spot's, 1 = the next spot's, ...) before DEAL_DONE, as the table waits for them.
+// `spotActions` is { [spot]: [...] }, each spot's actions in the order its hands ask; it replaces `actions`.
+// Every round is also held to the server's cap: a settle is never more than 2.5x the stakes the server accepted.
+export function playRound({ cards, mode = Modes.PEEK, bet = 10, bets, actions = [], spotActions, offers = [], blackJackOnSplit = false, rules = {}, refuse = [], credits = RICH }) {
+  const ledger = []; // every credit event of the round (state.creditEvents keeps only the last 20)
+  let logged = 0;
+  const step = (state, action) => {
+    const next = gameReducer(state, { refill: outOfCards, credits: RICH, ...action });
+    for (const e of next.creditEvents) if (e.seq > logged) { ledger.push(e); logged = e.seq; }
+    return next;
+  };
+  const betEvents = () => ledger.filter((e) => e.kind === "bet");
+  const refusedSeqs = new Set();
+  const answer = (state, seq) => {
+    const refused = refuse.includes(betEvents().findIndex((e) => e.seq === seq));
+    if (refused) refusedSeqs.add(seq);
+    return step(state, { type: refused ? "BET_REJECTED" : "BET_CONFIRMED", seq });
+  };
   let s = step(initialGameState, { type: "START_GAME", shoe: stackedShoe(cards) });
   // Scenarios start from the rules the game had before #91 (S17, 2 decks, no split limit, a dealer blackjack takes all); `rules` changes them.
   s = step(s, { type: "SET_SETTING", values: LEGACY_RULES });
@@ -56,8 +73,20 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], of
   s = step(s, { type: "SET_SETTING", key: "blackJackOnSplit", value: blackJackOnSplit });
   // Scenarios start from the bare mode: a blackjack waits for the dealer unless `rules` says otherwise.
   for (const [key, value] of Object.entries({ blackjackPaysImmediately: false, ...rules })) s = step(s, { type: "SET_SETTING", key, value });
-  s = step(s, { type: "ADD_BET", amount: bet });
+  if (bets) {
+    s = step(s, { type: "SET_SETTING", key: "handSpots", value: bets.length });
+    bets.forEach((amount, spot) => { if (amount > 0) s = step(s, { type: "ADD_BET", amount, spot }); });
+  } else {
+    s = step(s, { type: "ADD_BET", amount: bet });
+  }
   s = step(s, { type: "DEAL", credits });
+  const dealt = s; // DEALING, no bet answered yet
+  if (s.pendingBets.some((b) => b.side === "spot")) {
+    for (const { seq } of dealt.pendingBets) {
+      if (s.pendingBets.some((b) => b.seq === seq)) s = answer(s, seq); // a refused opening bet voids the round, and the rest with it
+    }
+  }
+  const answered = s;
   s = step(s, { type: "DEAL_DONE" }); // the cards sit on the table for one step, then play (or the dealer) begins
   const afterDeal = s;
   const offerQueue = [...offers];
@@ -66,16 +95,17 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], of
   const afterOffers = s;
 
   const queue = [...actions];
+  const perSpot = spotActions && Object.fromEntries(Object.entries(spotActions).map(([spot, list]) => [spot, [...list]]));
+  const nextMove = () => (perSpot ? perSpot[s.hands[s.selectedHandIndex].spot]?.shift() : queue.shift()) ?? "stand";
   while (s.phase === GamePhases.PLAYER_TURN) {
     // splitDeal "one": a split-off hand waits for its card (an automatic step), then the player acts on it
     s = nextAutoAction(s) === "DEAL_SPLIT_CARD" ? step(s, { type: "DEAL_SPLIT_CARD" })
-      : step(s, { type: (queue.shift() ?? "stand").toUpperCase(), handIdx: s.selectedHandIndex });
+      : step(s, { type: nextMove().toUpperCase(), handIdx: s.selectedHandIndex });
   }
   let beforeReveal = null; // the state just before REVEAL_HIDDEN (face-down doubles), if the round reaches it
-  const betSeqs = s.creditEvents.filter((e) => e.kind === "bet").map((e) => e.seq);
   while (nextAutoAction(s) || (s.phase === GamePhases.SETTLING_HANDS && s.pendingBets.length)) {
     if (!nextAutoAction(s)) {
-      for (const { seq } of s.pendingBets) s = step(s, { type: refuse.includes(betSeqs.indexOf(seq)) ? "BET_REJECTED" : "BET_CONFIRMED", seq });
+      for (const { seq } of s.pendingBets) s = answer(s, seq);
       if (s.phase === GamePhases.PRE_DEAL) break; // a refused opening bet voided the round
       continue;
     }
@@ -84,7 +114,18 @@ export function playRound({ cards, mode = Modes.PEEK, bet = 10, actions = [], of
     if (s.phase === GamePhases.POST_ROUND) break;
   }
 
+  // Bets still unanswered here were never asked about (a round that stopped short): count them as accepted.
+  const accepted = betEvents().filter((e) => !refusedSeqs.has(e.seq)).reduce((sum, e) => sum + e.amount, 0);
+  const settled = ledger.find((e) => e.kind === "settle")?.amount;
+  if (settled > accepted * 2.5 + 1e-9) throw new Error(`Settle ${settled} is over the server's cap: 2.5 x ${accepted} accepted`);
+
   return {
+    dealt,
+    answered,
+    ledger,
+    accepted,
+    settled,
+    net: (settled ?? 0) - (s.phase === GamePhases.PRE_DEAL ? 0 : accepted), // what the player's server balance moved by
     afterDeal,
     afterOffers,
     beforeReveal,

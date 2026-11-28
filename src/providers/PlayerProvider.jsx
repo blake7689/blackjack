@@ -209,16 +209,15 @@ export function PlayerProvider({ children }) {
     } else if (event.kind === "bet") {
       const requestId = newRequestId(); // once per event; every retry reuses it
       const call = () => placeBet(event.amount, event.newRound, requestId);
-      const common = { seq: event.seq, newRound: event.newRound, call };
       if (event.alreadyDeducted) {
-        // The chips were taken from the balance locally; they now move to the server.
+        // The chips already left the shown balance as local moves; they are now held as pending until the server answers. A deal can queue
+        // several (#59): each stays held until its own answer, so an earlier answer or a reload never shows a later one as unspent.
         unsentRef.current += event.amount;
-        enqueue({ ...common, optimistic: 0 }, report);
       } else {
         setCredits(playerRef.current.credits - event.amount);
         showChange(-event.amount);
-        enqueue({ ...common, optimistic: -event.amount }, report);
       }
+      enqueue({ seq: event.seq, newRound: event.newRound, call, optimistic: -event.amount }, report);
     } else {
       setCredits(playerRef.current.credits + event.amount);
       showChange(event.amount, event.seq);

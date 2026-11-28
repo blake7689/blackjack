@@ -886,7 +886,7 @@ describe("auto deal (#88)", () => {
     });
 
     it("writes a four-digit bet with its thousands separator", () => {
-      const s = run({ ...finished(), initialBet: 1500 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
+      const s = run({ ...finished(), initialBet: 1500, initialSpots: [1500, 0, 0] }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 1499 });
       expect(s.notice).toBe("Not enough credits to rebet $1,500: auto deal paused");
       expect(s.notice).toMatch(/^Not enough credits to rebet \$1\D?500: auto deal paused$/);
     });
@@ -898,7 +898,7 @@ describe("auto deal (#88)", () => {
     });
 
     it("does not pause when nothing was bet in the round (initialBet 0)", () => {
-      const s = run({ ...finished(), initialBet: 0 }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0 });
+      const s = run({ ...finished(), initialBet: 0, initialSpots: [0, 0, 0] }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0 });
       expect(s).toMatchObject({ autoDealPaused: false, notice: null, autoDealPending: false });
     });
 
@@ -1971,18 +1971,18 @@ describe("betHistory and UNDO_BET (#82)", () => {
 
   it("starts empty, and ADD_BET pushes each amount in the order it was added", () => {
     expect(initialGameState.betHistory).toEqual([]);
-    expect(betting(10, 5, 25).betHistory).toEqual([10, 5, 25]);
+    expect(betting(10, 5, 25).betHistory).toEqual([[10, 0, 0], [5, 0, 0], [25, 0, 0]]);
   });
 
   it("a refused ADD_BET (too poor, wrong phase) leaves the history alone", () => {
     const s = betting(10);
-    expect(run(s, { type: "ADD_BET", amount: 50, credits: 5 }).betHistory).toEqual([10]);
+    expect(run(s, { type: "ADD_BET", amount: 50, credits: 5 }).betHistory).toEqual([[10, 0, 0]]);
     expect(run(initialGameState, { type: "ADD_BET", amount: 5 }).betHistory).toEqual([]);
   });
 
   it("UNDO_BET takes the last amount off the circle and gives it back locally, one at a time", () => {
     const s = run(betting(10, 5, 25), { type: "UNDO_BET" });
-    expect([s.betCircle, s.betHistory]).toEqual([15, [10, 5]]);
+    expect([s.betCircle, s.betHistory]).toEqual([15, [[10, 0, 0], [5, 0, 0]]]);
     expect(events(s)).toEqual([local(-10), local(-5), local(-25), local(25)]);
     const none = run(s, { type: "UNDO_BET" }, { type: "UNDO_BET" });
     expect([none.betCircle, none.betHistory]).toEqual([0, []]);
@@ -2039,7 +2039,7 @@ describe("betHistory and UNDO_BET (#82)", () => {
 
   it("END_ROUND seeds the history with the initial bet on an auto rebet, and leaves it empty otherwise", () => {
     const rebet = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND" });
-    expect([rebet.betCircle, rebet.betHistory]).toEqual([10, [10]]);
+    expect([rebet.betCircle, rebet.betHistory]).toEqual([10, [[10, 0, 0]]]);
     const off = run(finishedRound(), { type: "CONTINUE" }, { type: "END_ROUND" });
     expect(off.betHistory).toEqual([]);
     const poor = run(finishedRound({ resetInitialBet: true }), { type: "CONTINUE" }, { type: "END_ROUND", credits: 5 });
@@ -2051,7 +2051,7 @@ describe("betHistory and UNDO_BET (#82)", () => {
     const undone = run(rebet, { type: "UNDO_BET" });
     expect(undone).toMatchObject({ betCircle: 0, betHistory: [] });
     expect(run(undone, { type: "UNDO_BET" })).toBe(undone);
-    expect(run(undone, ...add(5)).betHistory).toEqual([5]);
+    expect(run(undone, ...add(5)).betHistory).toEqual([[5, 0, 0]]);
   });
 });
 
@@ -2335,5 +2335,333 @@ describe("a refill in the middle of a round, with real shoes (#197)", () => {
 
   it("the running count takes the repeated face on the step after the refill", () => {
     expect(hitTwice().runningCount).toBe(3); // 2 +1, 3 +1, 10 -1, 4 +1, 2 +1
+  });
+});
+
+describe("multi-hand (#59): betting spots, rebet and the handSpots setting", () => {
+  const { PRE_DEAL, DEALING, PLAYER_TURN } = GamePhases;
+  const set = (key, value) => ({ type: "SET_SETTING", key, value });
+  const chip = (amount, spot) => ({ type: "ADD_BET", amount, spot });
+  // A table with 3 spots offered and the given chips down.
+  const table = (amounts = [], cards = ["5"]) => run(started(cards), set("handSpots", 3), ...amounts.map((a, i) => chip(a, i)).filter((a) => a.amount > 0));
+  const added = (before, after) => events(after).slice(before.creditEvents.length);
+  const money = (s) => [s.betSpots, s.betCircle, s.betHistory];
+  // The sum the shown balance moved by since the table started (local chip moves only).
+  const localSum = (s) => s.creditEvents.filter((e) => e.kind === "local").reduce((sum, e) => sum + e.amount, 0);
+
+  describe("ADD_BET (criterion 8)", () => {
+    it("starts with three empty spots and one offered", () => {
+      expect([initialGameState.settings.handSpots, initialGameState.betSpots, initialGameState.initialSpots]).toEqual([1, [0, 0, 0], [0, 0, 0]]);
+      expect(SETTING_RANGES.handSpots).toEqual([1, 3]);
+      expect(RESET_SETTINGS).not.toContain("handSpots");
+      expect(Object.values(RULE_PRESETS).some((p) => "handSpots" in p)).toBe(false);
+    });
+
+    it("a chip goes on the spot named, spot 1 when none is named; betCircle is the total", () => {
+      const s = run(table(), { type: "ADD_BET", amount: 5 }, chip(10, 2), chip(25, 1), chip(1, 2));
+      expect(money(s)).toEqual([[5, 25, 11], 41, [[5, 0, 0], [0, 0, 10], [0, 25, 0], [0, 0, 1]]]);
+      expect(events(s)).toEqual([local(-5), local(-10), local(-25), local(-1)]);
+    });
+
+    it.each([[1, 1], [1, 2], [2, 2], [3, 3], [3, -1]])("with %i spot(s) offered a chip on spot index %i is ignored", (handSpots, spot) => {
+      const s = run(started(["5"]), set("handSpots", handSpots));
+      expect(run(s, chip(10, spot))).toBe(s);
+    });
+
+    it("{ spots } adds an amount per spot as one history entry and one local event", () => {
+      const before = table([5]);
+      const s = run(before, { type: "ADD_BET", spots: [10, 0, 20] });
+      expect(money(s)).toEqual([[15, 0, 20], 35, [[5, 0, 0], [10, 0, 20]]]);
+      expect(added(before, s)).toEqual([local(-30)]);
+      expect(s.pendingBets).toEqual([]); // the ledger sees nothing before the deal
+    });
+
+    it("{ spots } drops the spots that are not offered, and a short array is padded", () => {
+      const two = run(started(["5"]), set("handSpots", 2));
+      expect(money(run(two, { type: "ADD_BET", spots: [10, 20, 30] }))).toEqual([[10, 20, 0], 30, [[10, 20, 0]]]);
+      expect(money(run(two, { type: "ADD_BET", spots: [10] }))).toEqual([[10, 0, 0], 10, [[10, 0, 0]]]);
+    });
+
+    it.each([[{ spots: [0, 0, 0] }], [{ spots: [] }], [{ amount: 0 }], [{ amount: -5, spot: 1 }], [{ amount: NaN }], [{}]])("%o adds nothing at all", (extra) => {
+      const s = table([5]);
+      expect(run(s, { type: "ADD_BET", ...extra })).toBe(s);
+    });
+
+    it("only spots that are not offered: a zero sum, so nothing", () => {
+      const s = run(started(["5"]), set("handSpots", 1));
+      expect(run(s, { type: "ADD_BET", spots: [0, 10, 10] })).toBe(s);
+    });
+
+    it("the balance must cover the whole sum, not each spot", () => {
+      const s = table();
+      expect(run(s, { type: "ADD_BET", spots: [10, 10, 10], credits: 29.99 })).toBe(s);
+      expect(run(s, { type: "ADD_BET", spots: [10, 10, 10], credits: 30 }).betSpots).toEqual([10, 10, 10]);
+    });
+
+    it("the totals are kept to the cent", () => {
+      const s = table([0.1, 0.2]);
+      expect(s.betCircle).toBe(0.3);
+      expect(run(s, { type: "UNDO_BET" }).betSpots).toEqual([0.1, 0, 0]);
+      expect(run(s, { type: "ADD_BET", spots: [0.2, 0.1, 0] }).betSpots).toEqual([0.3, 0.3, 0]);
+    });
+
+    it("never mutates the earlier state's spots", () => {
+      const s = table([5, 10]);
+      run(s, chip(1, 0), { type: "UNDO_BET" }, { type: "CLEAR_BET" });
+      expect(s.betSpots).toEqual([5, 10, 0]);
+      expect(initialGameState.betSpots).toEqual([0, 0, 0]);
+      expect(run(s, { type: "CLEAR_BET" }, chip(7, 1)).betSpots).toEqual([0, 7, 0]);
+      expect(table().betSpots).toEqual([0, 0, 0]);
+    });
+  });
+
+  describe("Undo and Clear", () => {
+    it("UNDO_BET takes the last addition off the spot (or spots) it went to", () => {
+      let s = run(table([5]), chip(10, 2), { type: "ADD_BET", spots: [5, 0, 10] }, chip(25, 1));
+      const seen = [money(s).slice(0, 2)];
+      while (s.betHistory.length) { s = run(s, { type: "UNDO_BET" }); seen.push(money(s).slice(0, 2)); }
+      expect(seen).toEqual([[[10, 25, 20], 55], [[10, 0, 20], 30], [[5, 0, 10], 15], [[5, 0, 0], 5], [[0, 0, 0], 0]]);
+      expect(localSum(s)).toBe(0);
+      expect(events(s).slice(-3)).toEqual([local(15), local(10), local(5)]);
+    });
+
+    it("CLEAR_BET empties every spot and gives the whole sum back once", () => {
+      const before = table([5, 10, 25]);
+      const s = run(before, { type: "CLEAR_BET" });
+      expect(money(s)).toEqual([[0, 0, 0], 0, []]);
+      expect(added(before, s)).toEqual([local(40)]);
+    });
+
+    it("a reset refunds the sum once and empties every spot", () => {
+      const before = table([5, 0, 25]);
+      const s = run(before, { type: "RESET_GAME", shoe: stackedShoe(["5"]), phase: PRE_DEAL });
+      expect(money(s)).toEqual([[0, 0, 0], 0, []]);
+      expect(added(before, s)).toEqual([local(30)]);
+    });
+  });
+
+  describe("the deal", () => {
+    it("records the spots dealt, empties the spots, keeps the total in the circle and tags hands in table order", () => {
+      const before = table([10, 0, 20], ["10", "10", "9", "9", "8", "7"]);
+      const s = run(before, { type: "DEAL" });
+      expect(s).toMatchObject({ phase: DEALING, betSpots: [0, 0, 0], initialSpots: [10, 0, 20], betCircle: 30, initialBet: 30, betHistory: [] });
+      expect(s.hands.map((h) => [h.spot, h.tag, h.bet])).toEqual([[0, before.nextHandTag, 10], [2, before.nextHandTag + 1, 20]]);
+      expect(s.nextHandTag).toBe(before.nextHandTag + 2);
+      expect(s.seenIds).toHaveLength(5); // both hands and the up card; never the hole card
+      expect(s.runningCount).toBe([...s.hands.flatMap((h) => h.cards), ...s.dealer.cards].reduce((n, c) => n + c.count, 0));
+    });
+
+    it("a refused double on the second spot lowers that hand only, and the circle with it", () => {
+      const s = run(table([10, 10], ["10", "5", "10", "7", "6", "7", "9"]), { type: "DEAL" });
+      const playing = run(confirmBets(s), { type: "DEAL_DONE" }, { type: "STAND", handIdx: 0 }, { type: "DOUBLE", handIdx: 1 });
+      const refused = run(playing, { type: "BET_REJECTED", seq: playing.pendingBets.at(-1).seq });
+      expect([refused.hands.map((h) => h.bet), refused.betCircle]).toEqual([[10, 10], 20]);
+      expect(refused.notice).toBe("The server refused $10 of your stake; that hand plays for less.");
+    });
+
+    it("splitting asks for the balance of that hand's stake only, and counts hands of that spot only", () => {
+      const s = run(table([10, 25], ["8", "8", "10", "8", "8", "7", "3", "4", "5"]), set("maxSplitHands", 2), { type: "DEAL" });
+      const playing = run(confirmBets(s), { type: "DEAL_DONE" }, { type: "SPLIT", handIdx: 0 });
+      expect(playing.hands.map((h) => h.spot)).toEqual([0, 0, 1]);
+      const second = run(playing, { type: "STAND", handIdx: 0 }, { type: "DEAL_SPLIT_CARD" }, { type: "STAND", handIdx: 1 });
+      expect([second.phase, second.selectedHandIndex]).toEqual([PLAYER_TURN, 2]);
+      expect(run(second, { type: "SPLIT", handIdx: 2, credits: 24 })).toBe(second);
+      const split = run(second, { type: "SPLIT", handIdx: 2, credits: 25 });
+      expect(split.hands.map((h) => [h.spot, h.bet])).toEqual([[0, 10], [0, 10], [1, 25], [1, 25]]);
+    });
+  });
+
+  describe("rebet (criterion 8)", () => {
+    // A finished 3-spot round: every spot stood. amounts are the bets.
+    const finished = (settings = {}, amounts = [10, 20, 30]) => {
+      const r = playRound({ bets: amounts, cards: ["10", "10", "10", "10", "9", "9", "9", "7"] });
+      return { ...r.state, settings: { ...r.state.settings, ...settings } };
+    };
+    const end = (s, credits = 1000) => run(s, { type: "CONTINUE" }, { type: "END_ROUND", credits });
+    const AUTO = { resetInitialBet: true, autoDeal: true };
+
+    it("puts each spot's last-dealt bet back as one addition", () => {
+      const before = finished({ resetInitialBet: true });
+      const s = end(before);
+      expect(money(s)).toEqual([[10, 20, 30], 60, [[10, 20, 30]]]);
+      expect(events(s).at(-1)).toEqual(local(-60));
+      expect(money(run(s, { type: "UNDO_BET" }))).toEqual([[0, 0, 0], 0, []]);
+    });
+
+    it("keeps an empty middle spot empty", () => {
+      const r = playRound({ bets: [10, 0, 30], cards: ["10", "10", "10", "9", "9", "7"] });
+      const s = end({ ...r.state, settings: { ...r.state.settings, resetInitialBet: true } });
+      expect(money(s)).toEqual([[10, 0, 30], 40, [[10, 0, 30]]]);
+    });
+
+    it("all or nothing: one cent short of the sum places no chip on any spot", () => {
+      const before = finished({ resetInitialBet: true });
+      const s = end(before, 59.99);
+      expect(money(s)).toEqual([[0, 0, 0], 0, []]);
+      expect(s.creditEvents).toEqual(before.creditEvents);
+      expect(s.notice).toBeNull(); // auto deal off: no notice, as before
+      expect(end(before, 60).betSpots).toEqual([10, 20, 30]);
+    });
+
+    it("auto deal unaffordable: the notice names the sum and it pauses", () => {
+      const s = end(finished(AUTO), 59);
+      expect(s).toMatchObject({ betCircle: 0, betSpots: [0, 0, 0], autoDealPending: false, autoDealPaused: true, autoDealBroke: true, notice: "Not enough credits to rebet $60: auto deal paused" });
+    });
+
+    it("a refused payout then the unaffordable rebet: one line with the sum", () => {
+      const refused = run(finished(AUTO), { type: "BET_REJECTED", seq: 999, payout: 120 });
+      expect(end(refused, 59).notice).toBe("$120 payout refused, not paid. Can't rebet $60: auto deal paused.");
+    });
+
+    it("the unaffordable rebet then a refused payout: the same line", () => {
+      const broke = end(finished(AUTO), 59);
+      expect(run(broke, { type: "BET_REJECTED", seq: 999, payout: 120 }).notice).toBe("$120 payout refused, not paid. Can't rebet $60: auto deal paused.");
+    });
+
+    it("auto deal rebets every spot and the automatic DEAL deals them all", () => {
+      const armed = end(finished(AUTO));
+      expect(armed).toMatchObject({ autoDealPending: true, betSpots: [10, 20, 30] });
+      expect(nextAutoAction(armed)).toBe("DEAL");
+      const dealt = run(armed, { type: "DEAL", auto: true, shoe: undefined, refill: () => stackedShoe(["10", "10", "10", "10", "9", "9", "9", "7"]) });
+      expect(dealt.hands.map((h) => [h.spot, h.bet])).toEqual([[0, 10], [1, 20], [2, 30]]);
+      expect(events(dealt).slice(-3).map((e) => [e.amount, e.newRound, e.side])).toEqual([[10, true, undefined], [20, false, "spot"], [30, false, "spot"]]);
+    });
+
+    it("Resume re-arms with chips left on any spot after the setting dropped one", () => {
+      const s = run(end(finished(AUTO)), set("handSpots", 2));
+      expect(s.autoDealPending).toBe(false);
+      expect(run(s, { type: "PAUSE_AUTO_DEAL" }, { type: "RESUME_AUTO_DEAL" }).autoDealPending).toBe(true);
+    });
+
+    it("a cut card at the end of the round still puts every spot back, on the new shoe", () => {
+      const s = run({ ...finished({ resetInitialBet: true }), cutCardFound: true }, { type: "CONTINUE" }, { type: "END_ROUND", shoe: stackedShoe(["5"]) });
+      expect([s.betSpots, s.betCircle, s.seenIds, s.cutCardFound]).toEqual([[10, 20, 30], 60, [], false]);
+    });
+
+    it("an initialBet with no per-spot record rebets it on spot 1", () => {
+      const s = end({ ...finished({ resetInitialBet: true }), initialSpots: [0, 0, 0], initialBet: 15 });
+      expect(money(s)).toEqual([[15, 0, 0], 15, [[15, 0, 0]]]);
+    });
+  });
+
+  describe("handSpots lowered before the deal (criterion 9)", () => {
+    const WAYS = [
+      ["SET_SETTING", (values) => ({ type: "SET_SETTING", values })],
+      ["LOAD_SETTINGS", (values, s) => ({ type: "LOAD_SETTINGS", saved: { ...s.settings, v: SETTINGS_VERSION, ...values }, shoe: stackedShoe(["5"]) })],
+    ];
+
+    describe.each(WAYS)("by %s", (name, change) => {
+      it("refunds the removed spots' chips once, keeps the others, empties the history and cancels a pending deal", () => {
+        const before = { ...table([10, 20, 30]), autoDealPending: true, settings: { ...table().settings, resetInitialBet: true, autoDeal: true } };
+        const s = run(before, change({ handSpots: 1 }, before));
+        expect(s.settings.handSpots).toBe(1);
+        expect(money(s)).toEqual([[10, 0, 0], 10, []]);
+        expect(added(before, s)).toEqual([local(50)]);
+        expect(s.autoDealPending).toBe(false);
+        expect(s.shoe).toBe(before.shoe); // no new shoe
+      });
+
+      it("removed spots empty: nothing refunded, the history and a pending deal are kept", () => {
+        const base = table([10, 20]);
+        const before = { ...base, autoDealPending: true, settings: { ...base.settings, resetInitialBet: true, autoDeal: true } };
+        const s = run(before, change({ handSpots: 2 }, before));
+        expect(money(s)).toEqual([[10, 20, 0], 30, [[10, 0, 0], [0, 20, 0]]]);
+        expect(s.creditEvents).toBe(before.creditEvents);
+        expect(s.autoDealPending).toBe(true);
+      });
+
+      it("together with a table rule (a new shoe): every chip goes back exactly once", () => {
+        const before = table([10, 20, 30]);
+        const action = change({ handSpots: 1, deckCount: 2 }, before);
+        const s = run(before, name === "SET_SETTING" ? { ...action, shoe: stackedShoe(["5"]) } : action);
+        expect(money(s)).toEqual([[0, 0, 0], 0, []]);
+        expect(added(before, s)).toEqual([local(50), local(10)]);
+        expect(localSum(s)).toBe(0);
+        expect(s.shoe).not.toBe(before.shoe);
+      });
+
+      it("with chips only on removed spots: refunded once even with a new shoe", () => {
+        const before = table([0, 20, 30]);
+        const action = change({ handSpots: 1, deckCount: 2 }, before);
+        const s = run(before, name === "SET_SETTING" ? { ...action, shoe: stackedShoe(["5"]) } : action);
+        expect(added(before, s)).toEqual([local(50)]);
+        expect(localSum(s)).toBe(0);
+      });
+
+      it("raising it moves no chip", () => {
+        const before = run(started(["5"]), chip(10, 0));
+        const s = run(before, change({ handSpots: 3 }, before));
+        expect(money(s)).toEqual(money(before));
+        expect(s.creditEvents).toBe(before.creditEvents);
+      });
+    });
+  });
+
+  describe("handSpots changed during a round (criterion 9)", () => {
+    const midRound = (settings = {}, amounts = [10, 20, 30]) => {
+      const s = run(table(amounts, ["10", "10", "10", "10", "9", "9", "9", "7"]), ...Object.entries(settings).map(([k, v]) => set(k, v)), { type: "DEAL" });
+      return run(confirmBets(s), { type: "DEAL_DONE" });
+    };
+    const finish = (s) => {
+      let out = s;
+      while (out.phase === PLAYER_TURN) out = run(out, { type: "STAND", handIdx: out.selectedHandIndex });
+      while (nextAutoAction(out) && out.phase !== GamePhases.POST_ROUND) out = run(out, { type: nextAutoAction(out) });
+      return out;
+    };
+
+    it.each(["SET_SETTING", "LOAD_SETTINGS"])("%s leaves the dealt hands and the money alone", (type) => {
+      const before = midRound();
+      const s = run(before, type === "SET_SETTING" ? set("handSpots", 1) : { type, saved: { ...before.settings, v: SETTINGS_VERSION, handSpots: 1 }, shoe: stackedShoe(["5"]) });
+      expect([s.phase, s.hands, s.betCircle, s.creditEvents]).toEqual([PLAYER_TURN, before.hands, 60, before.creditEvents]);
+      expect(s.settings.handSpots).toBe(1);
+      const done = finish(s);
+      expect(done.hands).toHaveLength(3);
+      expect(done.creditEvents.at(-1)).toMatchObject({ kind: "settle", amount: 120 }); // all three 19s beat 17
+    });
+
+    it("the rebet drops the removed spots", () => {
+      const done = finish(run(midRound({ resetInitialBet: true }), set("handSpots", 2)));
+      const s = run(done, { type: "CONTINUE" }, { type: "END_ROUND" });
+      expect(money(s)).toEqual([[10, 20, 0], 30, [[10, 20, 0]]]);
+      expect(events(s).at(-1)).toEqual(local(-30));
+    });
+
+    it("the rebet is affordable when only the kept spots are: the removed ones are not counted", () => {
+      const done = finish(run(midRound({ resetInitialBet: true }), set("handSpots", 1)));
+      expect(run(done, { type: "CONTINUE" }, { type: "END_ROUND", credits: 10 }).betSpots).toEqual([10, 0, 0]);
+    });
+
+    it("every bet spot removed: nothing to rebet, which is not 'broke' (no notice, no pause)", () => {
+      const done = finish(run(midRound({ resetInitialBet: true, autoDeal: true }, [0, 20, 30]), set("handSpots", 1)));
+      const s = run(done, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0 });
+      expect(s).toMatchObject({ phase: PRE_DEAL, betCircle: 0, betSpots: [0, 0, 0], betHistory: [], notice: null, autoDealPaused: false, autoDealBroke: false, autoDealPending: false });
+      expect(s.creditEvents).toEqual(done.creditEvents);
+    });
+
+    it("a late refused payout still names the amount auto deal could not rebet, after handSpots was lowered", () => {
+      const r = playRound({ bets: [0, 20, 30], cards: ["10", "10", "10", "9", "9", "7"] });
+      const broke = run({ ...r.state, settings: { ...r.state.settings, resetInitialBet: true, autoDeal: true } }, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0 });
+      const s = run(broke, { type: "SET_SETTING", key: "handSpots", value: 1 }, { type: "BET_REJECTED", seq: 999, payout: 100 });
+      expect(s.notice).toBe("$100 payout refused, not paid. Can't rebet $50: auto deal paused.");
+    });
+  });
+
+  describe("saved and signed-out state (criterion 9)", () => {
+    it.each([[0, 1], [-4, 1], [1, 1], [2, 2], [3, 3], [4, 3], [99, 3], [2.4, 2], ["3", 1], [null, 1], [true, 1], [undefined, 1]])("a saved handSpots of %o loads as %i", (saved, want) => {
+      expect(sanitizeSettings({ v: SETTINGS_VERSION, handSpots: saved }).handSpots).toBe(want);
+    });
+
+    it.each([1, 4, 5])("an older save (v %i) without it gets 1", (v) => {
+      expect(sanitizeSettings({ v }).handSpots).toBe(1);
+    });
+
+    it("SIGN_OUT empties the spots and forgets the last deal's spots, with no credit event", () => {
+      const dealtState = run(table([10, 20, 30], ["10", "10", "10", "10", "9", "9", "9", "7"]), { type: "DEAL" });
+      for (const before of [table([10, 20, 30]), dealtState]) {
+        const s = run(before, { type: "SIGN_OUT" });
+        expect(s).toMatchObject({ betSpots: [0, 0, 0], initialSpots: [0, 0, 0], betCircle: 0, initialBet: 0, betHistory: [], hands: [], pendingBets: [], creditEvents: [] });
+        expect(s.settings.handSpots).toBe(3);
+      }
+    });
   });
 });

@@ -139,7 +139,8 @@ export function GameProvider({ children }) {
   const actions = useMemo(() => ({
     startGame: () => dispatch({ type: "START_GAME", shoe: makeShoe() }),
     resetGame: (phase = GamePhases.NONE) => dispatch({ type: "RESET_GAME", shoe: makeShoe(), phase }),
-    addBet: (amount) => dispatch({ type: "ADD_BET", amount, credits: getCredits() }),
+    addBet: (amount, spot = 0) => dispatch({ type: "ADD_BET", amount, spot, credits: getCredits() }),
+    addSpots: (spots) => dispatch({ type: "ADD_BET", spots, credits: getCredits() }), // an amount per spot
     undoBet: () => dispatch({ type: "UNDO_BET" }),
     clearBet: () => dispatch({ type: "CLEAR_BET" }),
     deal: () => dispatch({ type: "DEAL", refill: makeShoe, credits: getCredits() }), // credits: only insurance reads it (affordable?)

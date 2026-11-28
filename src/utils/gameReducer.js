@@ -3,7 +3,7 @@ import { HandStatus } from "./constants/handStatus";
 import { HandResult } from "./constants/handResult";
 import { DealerHoleOptions } from "./constants/dealerHoleOptions";
 import { BlackjackPayouts, DoubleOn, NoHoleCardLoss, SurrenderOptions } from "./constants/ruleOptions";
-import { canHit, canSplit, canDouble, canSurrender, cents, insuranceStake } from "./blackjackLogic";
+import { canHit, canSplit, canDouble, canSurrender, cents, insuranceStake, spotHands } from "./blackjackLogic";
 import { DEFAULT_CHIP_VALUES, parseChipValues } from "./chips";
 import { money } from "./money";
 import * as engine from "./gameEngine";
@@ -15,6 +15,7 @@ export const initialGameState = {
   settings: {
     deckCount: 6, // the defaults are the Vegas preset (utils/rulePresets.js)
     includeCutCard: true,
+    handSpots: 1, // betting spots per round, 1-3 (#59): not a table rule, so no new shoe
     playTimeout: 1000,
     dealerHoleBehaviour: DealerHoleOptions.US_PEEK,
     blackJackOnSplit: false,
@@ -59,11 +60,13 @@ export const initialGameState = {
   dealerHole: { cards: [] },
   dealerRevealed: false,
   dealerSkipDraw: false,
-  offers: null, // what the player is still offered before the first move: { insurance, evenMoney, surrender, peek }, or null
+  offers: null, // what is still offered before the first move on the hand at selectedHandIndex: { insurance, evenMoney, surrender, peek }, or null
   selectedHandIndex: 0,
-  betCircle: 0,
-  betHistory: [], // what was added to the circle since it was last empty, oldest first; UNDO_BET takes the last (the ledger never sees it)
-  initialBet: 0,
+  betCircle: 0, // the total: of betSpots before the deal, of the hands' bets during a round
+  betSpots: [0, 0, 0], // the chips on each spot before the deal (always 3 long; only the first settings.handSpots ever hold any)
+  betHistory: [], // what was added since the spots were last all empty, one per-spot array each, oldest first; UNDO_BET takes the last (the ledger never sees it)
+  initialBet: 0, // the last deal's total
+  initialSpots: [0, 0, 0], // and per spot, for the rebet
   cutCardFound: false,
   seenIds: [],
   runningCount: 0,
@@ -78,7 +81,8 @@ export const initialGameState = {
   refusedPayout: 0, // its amount, for a line that must say it along with something else (#207); lives and goes with payoutNotice
   payoutNoticeOld: false, // it was already there at SETTLE, so it is an earlier round's: it must not hide this round's verdict
   autoDealPaused: false, // the player stopped auto deal, or a rebet was unaffordable; Resume clears it
-  autoDealBroke: false, // `notice` says the rebet of initialBet was unaffordable, so a later refused payout must keep saying it (#207)
+  autoDealBroke: false, // `notice` says the rebet was unaffordable, so a later refused payout must keep saying it (#207)
+  brokeRebet: 0, // the amount it named (handSpots may change before that refusal arrives); read only while autoDealBroke
   autoDealPending: false, // a rebet is on the table and the automatic DEAL step is armed
 };
 
@@ -88,7 +92,7 @@ export const RESET_SETTINGS = ["deckCount", "includeCutCard", "dealerHoleBehavio
   "dealerHitsSoft17", "blackjackPayout", "doubleOn", "doubleAfterSplit", "resplitAces", "hitSplitAces", "noHoleCardLoss", "surrender", "insurance", "splitDeal"];
 
 // Allowed ranges for number settings (the Settings page uses them too). maxSplitHands 0 = unlimited.
-export const SETTING_RANGES = { deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000], soundVolume: [0, 100] };
+export const SETTING_RANGES = { handSpots: [1, 3], deckCount: [1, 8], playTimeout: [250, 5000], maxSplitHands: [2, 4], autoDealDelay: [0, 10000], soundVolume: [0, 100] };
 
 // Saved settings carry a version (`v`). Version 2 (#91) added the table rules above, version 3 added surrender, version 4
 // insurance, version 5 splitDeal; every save before that is `v: 1`. A missing rule key in an older object gets today's behaviour from
@@ -151,9 +155,17 @@ const emptyRound = {
   dealerSkipDraw: false,
   offers: null,
   selectedHandIndex: 0,
+  betSpots: [0, 0, 0],
   notice: null,
   autoDealBroke: false,
 };
+
+const total = (amounts) => cents(amounts.reduce((sum, a) => sum + a, 0));
+// Per-spot amounts with nothing on a spot the setting does not offer: only the first handSpots ever carry chips (#59).
+const offeredSpots = (amounts, { handSpots }) => emptyRound.betSpots.map((_, i) => (i < handSpots ? amounts[i] ?? 0 : 0));
+// What a rebet puts back, and what the "can't rebet" notice names. An initialBet with no per-spot record (DEAL always sets both; a
+// state built by hand, as e2e/smoke.spec.js does for the notices, may not) is one spot's.
+const rebetSpots = (state) => offeredSpots(state.initialSpots.some((v) => v > 0) ? state.initialSpots : [state.initialBet], state.settings);
 
 // One line for a refused payout and an unaffordable rebet, whichever came first (#207).
 const refusedAndBroke = (payout, rebet) => `${money(payout)} payout refused, not paid. Can't rebet ${money(rebet)}: auto deal paused.`;
@@ -162,7 +174,8 @@ const refusedAndBroke = (payout, rebet) => `${money(payout)} payout refused, not
 //   local:  chips moved on the table only ({ amount } is the change to the shown balance)
 //   bet:    a stake for the server ledger ({ amount, newRound, alreadyDeducted, handTag, side }); handTag finds the hand
 //           again when the answer comes (null for the opening bet). Until the server answers it sits in pendingBets.
-//           side: "insurance" tells a refused insurance bet from a refused double or split (the API has no such field).
+//           side: "insurance" tells a refused insurance bet from a refused double or split, and side: "spot" a refused bet of a further
+//           spot at the deal (the API has no such field).
 //   settle: the round's payout for the server ledger ({ amount }, sent even when 0 to close the round)
 function credit(state, event) {
   const creditSeq = state.creditSeq + 1;
@@ -176,6 +189,19 @@ function credit(state, event) {
 }
 
 const local = (amount) => ({ kind: "local", amount });
+
+// A further spot's bet not yet answered. Until it is, the round stays in DEALING: no stake may ever be added on a spot whose own bet
+// can still be refused (the server caps a settle at 2.5x the stakes it accepted).
+const awaitingSpotBet = (state) => state.pendingBets.some((b) => b.side === "spot");
+
+// Before the deal, chips on a spot that handSpots no longer offers go back to the balance. A dealt round plays on.
+function dropSpots(state) {
+  if (state.phase !== GamePhases.PRE_DEAL) return state;
+  const betSpots = offeredSpots(state.betSpots, state.settings);
+  const removed = cents(total(state.betSpots) - total(betSpots));
+  if (removed <= 0) return state;
+  return credit({ ...state, betSpots, betCircle: total(betSpots), betHistory: [], autoDealPending: false }, local(removed));
+}
 
 // Runs an engine draw on a copy of the shoe, so the state's shoe is never mutated. //
 function draw(state, refill, fn) {
@@ -210,10 +236,10 @@ function canAct(state, handIdx) {
     && state.hands[handIdx]?.status === HandStatus.PLAYING && !state.hands[handIdx].awaitingCard; // a hand waiting for its split card can't act
 }
 
-// A split ace left waiting to be split again that no longer can be (the hand limit) has nothing to do: finish it before advance(),
+// A split ace left waiting to be split again that no longer can be (its spot's hand limit) has nothing to do: finish it before advance(),
 // or the turn could stay on a finished hand. Every ace-split hand of the round is checked; one still waiting for its card is not (it has one card).
 const finishDeadAces = (hands, { maxSplitHands, resplitAces, hitSplitAces }) => hands.map((h) =>
-  !h.awaitingCard && !canHit(h, { hitSplitAces }) && h.status === HandStatus.PLAYING && !canSplit(h, hands.length, maxSplitHands, resplitAces)
+  !h.awaitingCard && !canHit(h, { hitSplitAces }) && h.status === HandStatus.PLAYING && !canSplit(h, spotHands(hands, h.spot), maxSplitHands, resplitAces)
     ? { ...h, status: HandStatus.DONE } : h);
 
 // After an action: keep playing this hand, move to the next unfinished hand, or hand over to the dealer. //
@@ -225,31 +251,42 @@ function advance(state, hands, handIdx) {
   return { ...state, hands, betCircle, selectedHandIndex: 0, phase: GamePhases.DEALER_TURN };
 }
 
-// Each offer closes by itself; when none is left open the offers are over: the peek (if it was deferred), else the first move. //
-// While the peek is pending `offers` is kept so PEEK knows; PEEK clears it.
-function closeOffer(state, keys, hands = state.hands) {
-  const offers = { ...state.offers, ...Object.fromEntries(keys.map((key) => [key, false])) };
-  if (offers.insurance || offers.evenMoney || offers.surrender) return { ...state, hands, offers };
-  const phase = offers.peek ? GamePhases.PEEK : hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN;
-  return { ...state, hands, offers: offers.peek ? offers : null, phase };
+// Once the cards (and any offers) are done: the first unfinished hand plays, or the dealer when every hand is finished. //
+function firstMove(hands) {
+  const idx = hands.findIndex((h) => h.status !== HandStatus.DONE);
+  return idx === -1 ? { selectedHandIndex: 0, phase: GamePhases.DEALER_TURN } : { selectedHandIndex: idx, phase: GamePhases.PLAYER_TURN };
 }
 
-// The offers all act on the one hand dealt (hand 0). //
+const anyOpen = (offers) => offers.insurance || offers.evenMoney || offers.surrender;
+
+// Each offer closes by itself. When the hand being asked has none left open, the next hand with an `offer` is asked; after the last, the
+// peek (if it was deferred), else the first move. While the peek is pending `offers` is kept so PEEK knows; PEEK clears it. //
+function closeOffer(state, keys, hands = state.hands) {
+  const offers = { ...state.offers, ...Object.fromEntries(keys.map((key) => [key, false])) };
+  if (anyOpen(offers)) return { ...state, hands, offers };
+  const nextIdx = hands.findIndex((h, i) => i > state.selectedHandIndex && h.offer);
+  if (nextIdx !== -1) return { ...state, hands, offers: { ...hands[nextIdx].offer, peek: offers.peek }, selectedHandIndex: nextIdx };
+  if (offers.peek) return { ...state, hands, offers, phase: GamePhases.PEEK };
+  return { ...state, hands, offers: null, ...firstMove(hands) };
+}
+
+// The offers act on the hand being asked (selectedHandIndex). //
 function offerAction(state, action) {
   if (state.phase !== GamePhases.OFFERS) return state;
-  const hand = state.hands[0];
+  const idx = state.selectedHandIndex;
+  const hand = state.hands[idx];
   switch (action.type) {
     case "TAKE_INSURANCE": {
       const stake = insuranceStake(hand.bet);
-      if (!state.offers.insurance || action.credits < stake) return state;
+      if (!state.offers.insurance || hand.bet <= 0 || action.credits < stake) return state;
       const insured = credit(state, { kind: "bet", amount: stake, newRound: false, alreadyDeducted: false, handTag: hand.tag, side: "insurance" });
-      return closeOffer(insured, ["insurance"], replaceHand(state.hands, 0, { ...hand, insurance: stake }));
+      return closeOffer(insured, ["insurance"], replaceHand(state.hands, idx, { ...hand, insurance: stake }));
     }
     case "EVEN_MONEY":
-      return state.offers.evenMoney ? closeOffer(state, ["evenMoney", "insurance"], replaceHand(state.hands, 0, { ...hand, result: HandResult.WIN, evenMoney: true })) : state;
+      return state.offers.evenMoney ? closeOffer(state, ["evenMoney", "insurance"], replaceHand(state.hands, idx, { ...hand, result: HandResult.WIN, evenMoney: true })) : state;
     case "SURRENDER":
-      return state.offers.surrender ? closeOffer(state, ["surrender"], replaceHand(state.hands, 0, engine.playerSurrender(hand, state.dealer.cards[0], state.settings))) : state;
-    default: // DECLINE_OFFERS
+      return state.offers.surrender ? closeOffer(state, ["surrender"], replaceHand(state.hands, idx, engine.playerSurrender(hand, state.dealer.cards[0], state.settings))) : state;
+    default: // DECLINE_OFFERS: this hand's only
       return closeOffer(state, ["insurance", "evenMoney", "surrender"]);
   }
 }
@@ -296,7 +333,7 @@ function playerAction(state, action) {
 
   // SPLIT
   const { maxSplitHands, resplitAces, hitSplitAces, splitDeal } = state.settings;
-  if (!canSplit(hand, state.hands.length, maxSplitHands, resplitAces)) return state;
+  if (!canSplit(hand, spotHands(state.hands, hand.spot), maxSplitHands, resplitAces)) return state;
   const { result, next, refilled } = draw(state, action.refill,
     (shoe, cut, refill) => engine.playerSplit(hand, shoe, cut, refill, { blackJackOnSplit: state.settings.blackJackOnSplit, resplitAces, hitSplitAces, splitDeal }));
   // Both new hands start as copies of the parent; the second one is a new hand and gets its own tag (it takes the new stake).
@@ -337,7 +374,8 @@ export function gameReducer(state, action) {
       // Enabling auto deal starts it running; a pending deal does not outlive turning it off.
       const next = { ...state, settings, ...("autoDeal" in values && { autoDealPaused: false, autoDealBroke: false }) };
       next.autoDealPending = state.autoDealPending && autoDealOn(next);
-      return action.shoe ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
+      const kept = dropSpots(next); // before any reset, so nothing is refunded twice
+      return action.shoe ? resetTable(kept, action.shoe, GamePhases.PRE_DEAL) : kept;
     }
 
     case "LOAD_SETTINGS": {
@@ -346,37 +384,46 @@ export function gameReducer(state, action) {
       const next = { ...state, settings: sanitizeSettings(action.saved) };
       next.autoDealPending = state.autoDealPending && autoDealOn(next);
       const tableChanged = RESET_SETTINGS.some((key) => next.settings[key] !== state.settings[key]);
-      return tableChanged && state.phase === GamePhases.PRE_DEAL ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
+      const kept = dropSpots(next);
+      return tableChanged && state.phase === GamePhases.PRE_DEAL ? resetTable(kept, action.shoe, GamePhases.PRE_DEAL) : kept;
     }
 
-    case "ADD_BET":
-      if (state.phase !== GamePhases.PRE_DEAL || action.amount > action.credits) return state;
-      return credit({ ...state, betCircle: state.betCircle + action.amount, betHistory: [...state.betHistory, action.amount], autoDealPending: false }, local(-action.amount));
+    case "ADD_BET": { // a chip: { amount, spot }; several spots at once (Rebet, 2x): { spots }, an amount per spot
+      if (state.phase !== GamePhases.PRE_DEAL) return state;
+      const { amount, spot = 0 } = action;
+      const added = offeredSpots(action.spots ?? emptyRound.betSpots.map((_, i) => (i === spot ? amount : 0)), state.settings);
+      const sum = total(added);
+      if (!(sum > 0) || sum > action.credits) return state;
+      const betSpots = state.betSpots.map((v, i) => cents(v + added[i]));
+      return credit({ ...state, betSpots, betCircle: total(betSpots), betHistory: [...state.betHistory, added], autoDealPending: false }, local(-sum));
+    }
 
     case "UNDO_BET": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betHistory.length === 0) return state;
-      const amount = state.betHistory.at(-1);
-      return credit({ ...state, betCircle: state.betCircle - amount, betHistory: state.betHistory.slice(0, -1), autoDealPending: false }, local(amount));
+      const added = state.betHistory.at(-1);
+      const betSpots = state.betSpots.map((v, i) => cents(v - added[i]));
+      return credit({ ...state, betSpots, betCircle: total(betSpots), betHistory: state.betHistory.slice(0, -1), autoDealPending: false }, local(total(added)));
     }
 
     case "CLEAR_BET":
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
-      return credit({ ...state, betCircle: 0, betHistory: [], autoDealPending: false }, local(state.betCircle));
+      return credit({ ...state, betCircle: 0, betSpots: emptyRound.betSpots, betHistory: [], autoDealPending: false }, local(state.betCircle));
 
     case "DEAL": {
       if (state.phase !== GamePhases.PRE_DEAL || state.betCircle === 0) return state;
       if (action.auto && !state.autoDealPending) return state; // a timer step that was cancelled
       const { result, next, refilled } = draw(state, action.refill,
-        (shoe, cut, refill) => engine.dealRound(shoe, state.betCircle, cut, refill, state.settings, action.credits));
+        (shoe, cut, refill) => engine.dealRound(shoe, state.betSpots, cut, refill, state.settings, action.credits));
       const dealt = {
         ...next,
         ...emptyRound,
-        hands: result.hands.map((h) => ({ ...h, tag: state.nextHandTag })),
-        nextHandTag: state.nextHandTag + 1,
+        hands: result.hands.map((h, i) => ({ ...h, tag: state.nextHandTag + i })),
+        nextHandTag: state.nextHandTag + result.hands.length,
         dealer: result.dealer,
         dealerHole: result.dealerHoleCards,
         offers: result.offers,
         initialBet: state.betCircle,
+        initialSpots: state.betSpots,
         betHistory: [],
         payoutNotice: null,
         refusedPayout: 0,
@@ -384,14 +431,18 @@ export function gameReducer(state, action) {
         autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
       };
-      // The chips already left the shown balance; this stakes them on the server and opens the round.
-      return countSeen(credit(dealt, { kind: "bet", amount: state.betCircle, newRound: true, alreadyDeducted: true, handTag: null }), refilled);
+      // The chips already left the shown balance; this stakes them on the server, one bet per spot in table order: the first opens the round.
+      return countSeen(dealt.hands.reduce((s, h, i) => credit(s, {
+        kind: "bet", amount: h.bet, newRound: i === 0, alreadyDeducted: true, handTag: i === 0 ? null : h.tag, ...(i > 0 && { side: "spot" }),
+      }), dealt), refilled);
     }
 
     case "DEAL_DONE":
-      if (state.phase !== GamePhases.DEALING) return state;
-      if (state.offers) return { ...state, phase: GamePhases.OFFERS };
-      return { ...state, phase: state.hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN };
+      if (state.phase !== GamePhases.DEALING || awaitingSpotBet(state)) return state;
+      if (!state.offers) return { ...state, ...firstMove(state.hands) };
+      // Nothing open: the only offered spot was refused, so there is nothing to ask (the peek may still be due).
+      if (!anyOpen(state.offers)) return closeOffer(state, []);
+      return { ...state, phase: GamePhases.OFFERS, selectedHandIndex: Math.max(0, state.hands.findIndex((h) => h.offer)) };
 
     case "TAKE_INSURANCE":
     case "EVEN_MONEY":
@@ -401,9 +452,7 @@ export function gameReducer(state, action) {
     case "PEEK": {
       if (state.phase !== GamePhases.PEEK) return state;
       const { hands, dealer, hole } = engine.peekDealer(state.hands, state.dealer, state.dealerHole);
-      // The same turn order as DEAL_DONE: the dealer's turn if every hand is finished, else the player's.
-      const phase = hands[0].status === HandStatus.DONE ? GamePhases.DEALER_TURN : GamePhases.PLAYER_TURN;
-      return countSeen({ ...state, hands, dealer, dealerHole: hole, offers: null, phase });
+      return countSeen({ ...state, hands, dealer, dealerHole: hole, offers: null, ...firstMove(hands) }); // the same turn order as DEAL_DONE
     }
 
     case "HIT":
@@ -455,7 +504,7 @@ export function gameReducer(state, action) {
     case "BET_REJECTED": {
       // A settle is never in pendingBets, so GameProvider sends its amount (`payout`). A refused 0 costs nothing: no notice.
       if (action.payout > 0) return { ...state, payoutNotice: `The server refused your ${money(action.payout)} payout; it was not paid.`, refusedPayout: action.payout, payoutNoticeOld: false,
-        notice: state.autoDealBroke ? refusedAndBroke(action.payout, state.initialBet) : null }; // the newest message wins the line, but never loses why auto deal paused
+        notice: state.autoDealBroke ? refusedAndBroke(action.payout, state.brokeRebet) : null }; // the newest message wins the line, but never loses why auto deal paused
       const bet = state.pendingBets.find((b) => b.seq === action.seq);
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
@@ -464,6 +513,17 @@ export function gameReducer(state, action) {
         return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, betHistory: [], pendingBets: [],
           notice: state.payoutNotice ? `${money(state.refusedPayout)} payout refused, not paid. New bet refused: round cancelled.`
             : "The server refused your bet, so the round was cancelled." };
+      }
+      // A further spot's bet (always still in DEALING): the server never took it, so its hand stays on the table but plays for nothing.
+      // baseStake goes too (else "original" would give back bet - baseStake < 0), and so does its offer; the first spot still offered is asked.
+      if (bet.side === "spot") {
+        const refused = state.hands.find((h) => h.tag === bet.handTag);
+        const hands = state.hands.map((h) => (h === refused ? { ...h, bet: 0, baseStake: 0, offer: null } : h));
+        const asked = hands.findIndex((h) => h.offer);
+        return { ...state, hands, betCircle: total(hands.map((h) => h.bet)), pendingBets: state.pendingBets.filter((b) => b !== bet),
+          selectedHandIndex: Math.max(0, asked),
+          offers: state.offers && { insurance: false, evenMoney: false, surrender: false, ...hands[asked]?.offer, peek: state.offers.peek },
+          notice: `The server refused your ${money(bet.amount)} bet on spot ${refused.spot + 1}; it plays for nothing.` };
       }
       // Find the hand by its tag: its index may have moved since the bet was made.
       if (bet.side === "insurance") {
@@ -489,14 +549,15 @@ export function gameReducer(state, action) {
       return state.phase === GamePhases.POST_ROUND ? { ...state, phase: GamePhases.END_ROUND } : state;
 
     case "END_ROUND": {
-      const { initialBet } = state;
+      const spots = rebetSpots(state);
+      const stake = total(spots); // every spot comes back, or none
       const on = autoDealOn(state);
-      const rebet = state.settings.resetInitialBet && initialBet > 0 && action.credits >= initialBet;
-      const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
-      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
-        autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke, autoDealBroke: broke,
-        notice: !broke ? null : state.payoutNotice ? refusedAndBroke(state.refusedPayout, initialBet) : `Not enough credits to rebet ${money(initialBet)}: auto deal paused` };
-      if (rebet) next = credit(next, local(-initialBet));
+      const rebet = state.settings.resetInitialBet && stake > 0 && action.credits >= stake;
+      const broke = on && stake > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
+      let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, ...(rebet && { betSpots: spots }), betCircle: rebet ? stake : 0, betHistory: rebet ? [spots] : [],
+        autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke, autoDealBroke: broke, brokeRebet: stake,
+        notice: !broke ? null : state.payoutNotice ? refusedAndBroke(state.refusedPayout, stake) : `Not enough credits to rebet ${money(stake)}: auto deal paused` };
+      if (rebet) next = credit(next, local(-stake));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;
     }
@@ -520,7 +581,7 @@ export function gameReducer(state, action) {
 // Which automatic step comes next, if any; GameProvider schedules it after the play timeout. //
 export function nextAutoAction(state) {
   switch (state.phase) {
-    case GamePhases.DEALING: return "DEAL_DONE";
+    case GamePhases.DEALING: return awaitingSpotBet(state) ? null : "DEAL_DONE"; // waits for every spot's bet
     case GamePhases.OFFERS: return null; // the player decides; no timer, and auto deal never declines for them
     case GamePhases.PEEK: return "PEEK";
     case GamePhases.PLAYER_TURN: return state.hands[state.selectedHandIndex]?.awaitingCard ? "DEAL_SPLIT_CARD" : null; // else the player acts

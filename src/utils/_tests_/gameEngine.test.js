@@ -372,3 +372,76 @@ describe("playerSplit splitDeal and dealSplitSecondCard (#133)", () => {
     });
   });
 });
+
+describe("dealRound for several spots (#59)", () => {
+  const MODES = [["US peek", Modes.PEEK, 1], ["US no peek", Modes.NO_PEEK, 1], ["EU", Modes.EU, 0]];
+  const cards = ["10", "9", "6", "5", "7", "8", "K", "2", "3", "4"];
+  const run = (bets, mode, extra = {}, credits) => {
+    const shoe = stackedShoe(cards);
+    return { ...dealRound(shoe, bets, () => {}, outOfCards, { ...settings(mode), ...extra }, credits), left: shoe.length };
+  };
+
+  it.each(MODES)("%s: a plain number, a one-item list and trailing empty spots deal exactly the same round", (_name, mode) => {
+    // Everything but the card ids, which are new for every stacked shoe.
+    const strip = (r) => JSON.parse(JSON.stringify({ hands: r.hands, dealer: r.dealer, hole: r.dealerHoleCards, offers: r.offers, left: r.left }, (key, value) => (key === "id" ? undefined : value)));
+    const plain = strip(run(10, mode));
+    expect(plain.hands.map((h) => [h.spot, h.bet, h.offer])).toEqual([[0, 10, null]]);
+    for (const bets of [[10], [10, 0, 0]]) {
+      expect(strip(run(bets, mode))).toEqual(plain);
+    }
+  });
+
+  it.each(MODES)("%s: each betting spot takes two cards, plus the dealer's one or two", (_name, mode, holes) => {
+    for (const [bets, spots] of [[[10], [0]], [[0, 10], [1]], [[10, 0, 20], [0, 2]], [[10, 20, 30], [0, 1, 2]]]) {
+      const r = run(bets, mode);
+      expect(r.hands.map((h) => h.spot)).toEqual(spots);
+      expect(r.hands.map((h) => [h.bet, h.baseStake])).toEqual(bets.filter(Boolean).map((b) => [b, b]));
+      expect(cards.length - r.left).toBe(2 * spots.length + 1 + holes);
+      expect(r.dealerHoleCards.cards).toHaveLength(holes);
+    }
+  });
+
+  it("draws in table order for three spots and evaluates every hand against the same dealer", () => {
+    const r = run([10, 10, 10], Modes.PEEK);
+    expect(r.hands.map((h) => h.cards.map((c) => c.rank))).toEqual([["10", "7"], ["9", "8"], ["6", "king"]]);
+    expect(r.hands.map((h) => h.total)).toEqual([17, 17, 16]);
+    expect([r.dealer.cards.map((c) => c.rank), r.dealerHoleCards.cards.map((c) => c.rank)]).toEqual([["5"], ["2"]]);
+    expect(r.offers).toBeNull();
+  });
+
+  it("offers: each hand carries its own, the top-level one is the first offered hand's plus peek", () => {
+    const shoe = stackedShoe(["10", "A", "10", "A", "K", "K", "5", "7"]);
+    const r = dealRound(shoe, [10, 10, 10], () => {}, outOfCards, { ...settings(Modes.PEEK), insurance: true }, 1000);
+    expect(r.hands.map((h) => h.offer)).toEqual([
+      { insurance: true, evenMoney: false, surrender: false },
+      { evenMoney: true, insurance: false, surrender: false },
+      { insurance: true, evenMoney: false, surrender: false },
+    ]);
+    expect(r.offers).toEqual({ ...r.hands[0].offer, peek: true });
+    expect(r.hands[1].result).toBe(HandResult.NONE); // the blackjack waits for the deferred peek
+  });
+
+  it("insurance affordability reads each spot's own half bet", () => {
+    const shoe = stackedShoe(["10", "10", "A", "5", "6", "7"]);
+    const r = dealRound(shoe, [40, 10], () => {}, outOfCards, { ...settings(Modes.PEEK), insurance: true }, 5);
+    expect(r.hands.map((h) => h.offer)).toEqual([null, { insurance: true, evenMoney: false, surrender: false }]);
+    expect(r.offers).toEqual({ ...r.hands[1].offer, peek: true });
+  });
+
+  it("refills a shoe that runs out part way through a 3-spot deal and notes the cut card", () => {
+    const shoe = [...stackedShoe(["10", "9"]), { id: "CUT", type: "cut" }];
+    let cut = false;
+    let refills = 0;
+    const r = dealRound(shoe, [10, 10, 10], () => { cut = true; }, () => { refills++; return stackedShoe(["6", "5", "7", "8", "K", "2", "3"]); }, settings(Modes.PEEK));
+    expect([cut, refills, r.hands.map((h) => h.total), r.shoe.length]).toEqual([true, 1, [17, 17, 16], 1]);
+  });
+
+  it("the peek finishes every hand against a dealer blackjack, sparing even money and surrender", () => {
+    const shoe = stackedShoe(["A", "10", "10", "A", "K", "6", "9", "K"]);
+    const r = dealRound(shoe, [10, 10, 10], () => {}, outOfCards, { ...settings(Modes.PEEK), insurance: true });
+    const hands = [{ ...r.hands[0], evenMoney: true, result: HandResult.WIN }, { ...r.hands[1], surrendered: true, result: HandResult.SURRENDER }, r.hands[2]];
+    const peeked = peekDealer(hands, r.dealer, r.dealerHoleCards);
+    expect(peeked.hands.map((h) => h.result)).toEqual([HandResult.WIN, HandResult.SURRENDER, HandResult.LOSE]);
+    expect(peeked.dealer).toMatchObject({ isBlackjack: true, status: HandStatus.DONE });
+  });
+});
