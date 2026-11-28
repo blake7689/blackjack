@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { SurrenderOptions } from "../../utils/constants/ruleOptions";
-import { handActions, insuranceStake, roundNet } from "../../utils/blackjackLogic";
+import { handActions, insuranceStake, roundNet, spotHands } from "../../utils/blackjackLogic";
 import { effectiveChip, visibleChips } from "../../utils/chips";
 import { money, signed } from "../../utils/money";
 import { OPEN_LAYER } from "../../utils/constants/layers";
@@ -217,7 +217,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
     const sel = selectedHandIndex;
     // Only on your turn, on a hand still in play with its cards dealt (a split hand waits for its card), and no card in flight.
     const yours = !busy && phase === GamePhases.PLAYER_TURN && hands[sel]?.status === HandStatus.PLAYING && !hands[sel].awaitingCard;
-    const can = yours ? handActions(hands[sel], dealer, hands.length, credits, settings) : NOTHING;
+    const can = yours ? handActions(hands[sel], dealer, spotHands(hands, hands[sel].spot), credits, settings) : NOTHING;
     rowA = (
       <>
         <Key label="Double" icon="i-double" {...bind("D", !can.double, () => actions.double(sel))} />

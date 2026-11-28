@@ -149,7 +149,7 @@ describe("GameProvider", () => {
     act(() => ctx.actions.addBet(25));
     act(() => ctx.actions.addBet(10));
     act(() => ctx.actions.undoBet());
-    expect([ctx.state.betCircle, ctx.state.betHistory]).toEqual([25, [25]]);
+    expect([ctx.state.betCircle, ctx.state.betHistory]).toEqual([25, [[25, 0, 0]]]);
     expect(events(player).filter((e) => e.kind === "local").map((e) => e.amount)).toEqual([-25, -10, 10]);
     act(() => ctx.actions.deal());
     expect(events(player).filter((e) => e.kind === "bet")).toEqual([{ kind: "bet", amount: 25, newRound: true, alreadyDeducted: true, handTag: null }]);
@@ -1834,5 +1834,164 @@ describe("GameProvider: a refused settle (#196)", () => {
     const lost = playToSettle("rejected", ["10", "10", "7", "9"]);
     expect(lost.player.applyCreditEvent.mock.calls.at(-1)[0]).toMatchObject({ kind: "settle", amount: 0 });
     expect(lost.ctx.state.payoutNotice).toBeNull();
+  });
+});
+
+describe("GameProvider multi-hand (#59)", () => {
+  const { PRE_DEAL, DEALING, OFFERS, PEEK, PLAYER_TURN, POST_ROUND } = GamePhases;
+  const bets = (player) => events(player).filter((e) => e.kind === "bet");
+  // A table with 3 spots offered, dealt from `codes` (changing handSpots makes no new shoe).
+  function threeSpots(codes, options = {}) {
+    shoes.push(stackedShoe(codes));
+    const view = setup(options);
+    act(() => view.ctx.actions.startGame());
+    act(() => { view.ctx.actions.changeSetting("handSpots", 3); });
+    return view;
+  }
+  const CARDS = ["10", "10", "10", "10", "9", "9", "9", "7"]; // three 19s against 17
+
+  it("addBet takes the spot (spot 1 when none is given) and addSpots an amount per spot, both against the current balance", () => {
+    const { ctx, player } = threeSpots(CARDS);
+    act(() => ctx.actions.addBet(10));
+    act(() => ctx.actions.addBet(5, 2));
+    act(() => ctx.actions.addBet(25, 1));
+    expect([ctx.state.betSpots, ctx.state.betCircle, player.getCredits()]).toEqual([[10, 25, 5], 40, 60]);
+    act(() => ctx.actions.addSpots([10, 25, 25])); // 60: all that is left
+    expect([ctx.state.betSpots, player.getCredits()]).toEqual([[20, 50, 30], 0]);
+    const before = ctx.state;
+    act(() => ctx.actions.addSpots([1, 0, 0]));
+    act(() => ctx.actions.addBet(1, 1));
+    expect(ctx.state).toBe(before);
+    act(() => ctx.actions.undoBet());
+    expect([ctx.state.betSpots, player.getCredits()]).toEqual([[10, 25, 5], 60]);
+    act(() => ctx.actions.clearBet());
+    expect([ctx.state.betSpots, player.getCredits()]).toEqual([[0, 0, 0], 100]);
+  });
+
+  it("changing handSpots makes no new shoe, refunds a removed spot once and saves the setting", async () => {
+    remote.token = "tok";
+    const { ctx, player } = setup({ signedIn: true });
+    await flush();
+    act(() => { ctx.actions.changeSetting("handSpots", 3); });
+    expect(remote.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ handSpots: 3 }));
+    act(() => ctx.actions.addBet(10, 0));
+    act(() => ctx.actions.addBet(25, 2));
+    const [shoe, made] = [ctx.state.shoe, cards.createShoe.mock.calls.length];
+    act(() => { ctx.actions.changeSetting("handSpots", 1); });
+    expect([ctx.state.shoe, cards.createShoe.mock.calls.length]).toEqual([shoe, made]);
+    expect([ctx.state.betSpots, player.getCredits()]).toEqual([[10, 0, 0], 90]);
+    expect(events(player).filter((e) => e.kind === "local").map((e) => e.amount)).toEqual([-10, -25, 25]);
+    expect(remote.saveSettings).toHaveBeenLastCalledWith(expect.objectContaining({ handSpots: 1 }));
+  });
+
+  it("a saved handSpots out of range arrives clamped", async () => {
+    remote.token = "tok";
+    remote.getSettings.mockResolvedValue({ v: 5, handSpots: 9 });
+    const { ctx } = setup({ signedIn: true });
+    await flush();
+    expect(ctx.state.settings.handSpots).toBe(3);
+  });
+
+  it.each([[2], [3]])("a %i-spot deal waits in DEALING, with no timer, until every spot bet is answered, then moves on", (n) => {
+    const codes = n === 2 ? ["10", "10", "10", "9", "9", "7"] : CARDS;
+    const { ctx, player } = threeSpots(codes, { answer: null });
+    for (let spot = 0; spot < n; spot++) act(() => ctx.actions.addBet(10, spot));
+    act(() => ctx.actions.deal());
+    const seqs = Object.keys(player.reports).map(Number);
+    expect(bets(player).map((b) => [b.newRound, b.alreadyDeducted, b.side])).toEqual([[true, true, undefined], ...Array(n - 1).fill([false, true, "spot"])]);
+    expect(player.getCredits()).toBe(100 - 10 * n);
+    for (const seq of seqs) {
+      expect([ctx.state.phase, vi.getTimerCount()]).toEqual([DEALING, 0]);
+      act(() => { vi.advanceTimersByTime(60_000); });
+      act(() => { ctx.actions.hit(0); ctx.actions.double(0); ctx.actions.takeInsurance(); });
+      expect([ctx.state.phase, bets(player).length]).toEqual([DEALING, n]);
+      player.reports[seq]("confirmed");
+    }
+    expect(vi.getTimerCount()).toBe(1);
+    tick();
+    expect([ctx.state.phase, ctx.state.selectedHandIndex]).toEqual([PLAYER_TURN, 0]);
+  });
+
+  it("spot 2 refused while the table waits: its hand plays for nothing and the round moves on", () => {
+    const { ctx, player } = threeSpots(CARDS, { answer: (e) => (e.side === "spot" && e.handTag === 2 ? "rejected" : "confirmed") });
+    for (const spot of [0, 1, 2]) act(() => ctx.actions.addBet(10, spot));
+    act(() => ctx.actions.deal());
+    expect(ctx.state.hands.map((h) => h.bet)).toEqual([10, 0, 10]);
+    expect(ctx.state.notice).toBe("The server refused your $10 bet on spot 2; it plays for nothing.");
+    tick();
+    for (const i of [0, 1, 2]) act(() => ctx.actions.stand(i));
+    for (let i = 0; i < 8 && ctx.state.phase !== POST_ROUND; i++) tick();
+    expect(events(player).at(-1)).toEqual({ kind: "settle", amount: 40 });
+  });
+
+  it("the only offered spot refused: the deferred peek runs on its timers with no input", () => {
+    // 35 credits: 20 + 10 down leaves 5, too little to insure spot 1 (10) and just enough for spot 2 (5). Insurance is on by default.
+    const { ctx } = threeSpots(["10", "10", "A", "K", "5", "7"], { credits: 35, answer: (e) => (e.side === "spot" ? "rejected" : "confirmed") });
+    act(() => ctx.actions.addBet(20, 0));
+    act(() => ctx.actions.addBet(10, 1));
+    act(() => ctx.actions.deal());
+    expect(ctx.state.offers).toEqual({ insurance: false, evenMoney: false, surrender: false, peek: true });
+    const seen = [ctx.state.phase];
+    for (let i = 0; i < 2; i++) { tick(); seen.push(ctx.state.phase); }
+    expect(seen).toEqual([DEALING, PEEK, PLAYER_TURN]);
+  });
+
+  it("offers on two spots wait for the player on each, with no timer, then one peek", () => {
+    const { ctx, player } = threeSpots(["A", "10", "A", "K", "5", "7"]);
+    act(() => ctx.actions.addBet(10, 0));
+    act(() => ctx.actions.addBet(10, 1));
+    act(() => ctx.actions.deal());
+    tick();
+    expect([ctx.state.phase, ctx.state.selectedHandIndex, vi.getTimerCount()]).toEqual([OFFERS, 0, 0]);
+    act(() => ctx.actions.evenMoney());
+    expect([ctx.state.phase, ctx.state.selectedHandIndex, vi.getTimerCount()]).toEqual([OFFERS, 1, 0]);
+    act(() => ctx.actions.takeInsurance());
+    expect(bets(player).at(-1)).toMatchObject({ amount: 5, side: "insurance", handTag: ctx.state.hands[1].tag });
+    expect(ctx.state.phase).toBe(PEEK);
+    tick();
+    expect([ctx.state.phase, ctx.state.selectedHandIndex]).toEqual([PLAYER_TURN, 1]);
+  });
+
+  it("two waiting split hands in a row, then one on the next spot, each get their card on their own timer", () => {
+    // Spot 1 A,A and spot 2 8,8 against 10 / 7. Draws: A (resplit), 3, then 4 and 2 for the two waiting aces, 5 for spot 2's first hand, 6 for its waiting one.
+    const { ctx } = threeSpots(["A", "8", "10", "A", "8", "7", "A", "3", "4", "2", "5", "6"]);
+    act(() => { ctx.actions.changeSetting("playTimeout", 1000); });
+    // resplitAces is a table rule (a new shoe): script it
+    shoes.push(stackedShoe(["A", "8", "10", "A", "8", "7", "A", "3", "4", "2", "5", "6"]));
+    act(() => { ctx.actions.changeSetting("resplitAces", true); });
+    act(() => ctx.actions.addBet(10, 0));
+    act(() => ctx.actions.addBet(10, 1));
+    act(() => ctx.actions.deal());
+    tick();
+    act(() => ctx.actions.split(0));
+    act(() => ctx.actions.split(0)); // aces again: the first hand is finished by its next card, and two hands wait
+    const table = () => [ctx.state.selectedHandIndex, ctx.state.hands.map((h) => h.cards.map((c) => c.rank).join(","))];
+    expect(table()).toEqual([1, ["ace,3", "ace", "ace", "8,8"]]);
+    tick();
+    expect(table()).toEqual([2, ["ace,3", "ace,4", "ace", "8,8"]]);
+    tick();
+    expect(table()).toEqual([3, ["ace,3", "ace,4", "ace,2", "8,8"]]);
+    act(() => ctx.actions.split(3));
+    act(() => ctx.actions.stand(3));
+    tick();
+    expect(table()).toEqual([4, ["ace,3", "ace,4", "ace,2", "8,5", "8,6"]]);
+    expect(ctx.state.hands.map((h) => h.spot)).toEqual([0, 0, 0, 1, 1]);
+  });
+
+  it("auto deal rebets every spot and deals them all on its own timers", () => {
+    const { ctx, player } = threeSpots([...CARDS, ...CARDS, "2", "2"]);
+    act(() => { ctx.actions.changeSettings({ resetInitialBet: true, autoDeal: true }); });
+    act(() => ctx.actions.addBet(10, 0));
+    act(() => ctx.actions.addBet(15, 2));
+    act(() => ctx.actions.deal());
+    tick();
+    act(() => ctx.actions.stand(0));
+    act(() => ctx.actions.stand(1));
+    for (let i = 0; i < 8 && ctx.state.phase !== PRE_DEAL; i++) tick();
+    expect([ctx.state.betSpots, ctx.state.autoDealPending]).toEqual([[10, 0, 15], true]);
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect(ctx.state.phase).toBe(DEALING);
+    expect(ctx.state.hands.map((h) => [h.spot, h.bet])).toEqual([[0, 10], [2, 15]]);
+    expect(bets(player).slice(-2).map((b) => [b.amount, b.newRound])).toEqual([[10, true], [15, false]]);
   });
 });

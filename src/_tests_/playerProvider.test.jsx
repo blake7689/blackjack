@@ -1681,12 +1681,14 @@ describe("a refused settle takes back its own +$ badge (#207)", () => {
   it("a refused bet behind it leaves a top-up's badge alone", async () => {
     const { ctx, answer } = await held(engine.placeBet);
     engine.topUp.mockResolvedValue({ credits: 10000 });
+    act(() => ctx.applyCreditEvent({ seq: 5, kind: "local", amount: -10 }, vi.fn())); // the chips go to the circle before the deal
     act(() => { ctx.topUp("dummy-code-123"); });
     act(() => ctx.applyCreditEvent({ seq: 6, kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, vi.fn()));
     await settleQueue();
-    expect(ctx.creditChange).toMatchObject({ delta: 9010 }); // 10 chips are still on the table when the top-up answers
+    // The bet is behind the top-up in the queue, so the server's 10000 does not include it yet: shown 9990, up 9000 from 990.
+    expect([ctx.getCredits(), ctx.creditChange.delta]).toEqual([9990, 9000]);
     await refuse(answer);
-    expect(ctx.creditChange).toMatchObject({ delta: 9010 }); // 10 chips are still on the table when the top-up answers
+    expect(ctx.creditChange).toMatchObject({ delta: 9000 }); // the refusal's balance reload leaves the top-up's badge alone
   });
 
   it("a refused top-up drops no badge (it has no seq, like a chip's badge)", async () => {
@@ -1707,5 +1709,157 @@ describe("a refused settle takes back its own +$ badge (#207)", () => {
     await refuse(answer);
     expect(report.mock.calls).toEqual([[4, "rejected"]]);
     expect(ctx.creditChange).toBeNull();
+  });
+});
+
+describe("multi-hand (#59): several alreadyDeducted bets from one deal", () => {
+  let error;
+  beforeEach(() => {
+    [engine.placeBet, engine.settleRound].forEach((m) => m.mockReset());
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => error.mockRestore());
+
+  // The deal as the reducer sends it: three chips of 10 already on the table, then one bet per spot, the first opening the round.
+  const spotBet = (seq, newRound) => ({ seq, kind: "bet", amount: 10, newRound, alreadyDeducted: true, handTag: newRound ? null : seq, ...(!newRound && { side: "spot" }) });
+  const DEAL = [spotBet(4, true), spotBet(5, false), spotBet(6, false)];
+
+  // A player with 100, three spots of 10 down and dealt; each placeBet call waits for the test's answer.
+  async function dealt({ answers = [deferred(), deferred(), deferred()] } = {}) {
+    engine.loginPlayer.mockResolvedValue({ ...player, credits: 100 });
+    const result = await signedIn();
+    const report = vi.fn();
+    answers.forEach((a) => engine.placeBet.mockReturnValueOnce(a.promise));
+    for (const seq of [1, 2, 3]) act(() => result.ctx.applyCreditEvent({ seq, kind: "local", amount: -10 }, report));
+    report.mockClear();
+    const shown = [result.ctx.getCredits()];
+    for (const event of DEAL) { act(() => result.ctx.applyCreditEvent(event, report)); shown.push(result.ctx.getCredits()); }
+    await settleQueue();
+    return { ...result, report, answers, shown };
+  }
+  const answer = async (fn) => { await act(async () => { fn(); }); await settleQueue(); };
+
+  it("shows 70 from the chips, through the three bet events and between every server answer, and ends on the server's 70", async () => {
+    const { ctx, report, answers, shown } = await dealt();
+    expect(shown).toEqual([70, 70, 70, 70]);
+    for (const [i, credits] of [90, 80, 70].entries()) {
+      expect(engine.placeBet).toHaveBeenCalledTimes(i + 1); // one at a time
+      expect(ctx.getCredits()).toBe(70);
+      await answer(() => answers[i].resolve({ credits }));
+      expect([ctx.getCredits(), ctx.player.credits]).toEqual([70, 70]);
+    }
+    expect(report.mock.calls).toEqual([[4, "confirmed"], [5, "confirmed"], [6, "confirmed"]]);
+    expect(engine.placeBet.mock.calls.map(([amount, newRound]) => [amount, newRound])).toEqual([[10, true], [10, false], [10, false]]);
+    expect(new Set(engine.placeBet.mock.calls.map((c) => c[2])).size).toBe(3);
+    expect(ctx.creditChange).toMatchObject({ delta: -10 }); // the chips' badge only: moving them to the server shows none
+  });
+
+  it("spot 2 refused: its chips come back at once and stay right while spot 3 is still queued", async () => {
+    const { ctx, report, answers } = await dealt();
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    await answer(() => answers[1].reject(refusal(400, "Insufficient credits.")));
+    expect(ctx.getCredits()).toBe(80); // before the reload answers
+    expect(engine.placeBet).toHaveBeenCalledTimes(2); // spot 3 waits behind the reload
+    await answer(() => me.resolve({ ...player, credits: 90 })); // the server: only spot 1 taken
+    expect(ctx.getCredits()).toBe(80); // 90, less spot 3's chips still queued
+    await answer(() => answers[2].resolve({ credits: 80 }));
+    expect(ctx.getCredits()).toBe(80);
+    expect(report.mock.calls).toEqual([[4, "confirmed"], [5, "rejected"], [6, "confirmed"]]);
+    expect(engine.placeBet.mock.calls[2].slice(0, 2)).toEqual([10, false]); // still sent: only a refused opening bet drops the rest
+  });
+
+  it("the opening bet refused: the later spot bets are never sent and the balance is back to 100", async () => {
+    const { ctx, report, answers } = await dealt();
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    await answer(() => answers[0].reject(refusal(400, "Insufficient credits.")));
+    expect(ctx.getCredits()).toBe(80);
+    await answer(() => me.resolve({ ...player, credits: 100 }));
+    expect([ctx.getCredits(), engine.placeBet.mock.calls.length]).toEqual([100, 1]);
+    expect(report.mock.calls).toEqual([[4, "rejected"], [5, "rejected"], [6, "rejected"]]);
+    expect(engine.getMe).toHaveBeenCalledTimes(1); // a skipped bet needs no reload
+
+    // The next round is not skipped.
+    engine.placeBet.mockResolvedValue({ credits: 90 });
+    act(() => ctx.applyCreditEvent({ seq: 7, kind: "local", amount: -10 }, report));
+    act(() => ctx.applyCreditEvent(spotBet(8, true), report));
+    await settleQueue();
+    expect([ctx.getCredits(), engine.placeBet.mock.calls.length]).toEqual([90, 2]);
+  });
+
+  it.each([
+    ["spot 2", 1, 80],
+    ["spot 3", 2, 80],
+  ])("%s refused and the reload fails: the balance still gets the chips back", async (_name, at, want) => {
+    const { ctx, answers } = await dealt();
+    engine.getMe.mockRejectedValue(new Error("offline"));
+    for (let i = 0; i < 3; i++) {
+      await answer(() => (i === at ? answers[i].reject(refusal(422)) : answers[i].resolve({ credits: i === 0 ? 90 : 80 })));
+    }
+    expect(ctx.getCredits()).toBe(want);
+  });
+
+  it("two spot bets refused: both stakes come back", async () => {
+    const { ctx, answers } = await dealt();
+    engine.getMe.mockReset().mockResolvedValue({ ...player, credits: 90 });
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    await answer(() => answers[1].reject(refusal(400)));
+    expect(ctx.getCredits()).toBe(80);
+    await answer(() => answers[2].reject(refusal(400)));
+    expect(ctx.getCredits()).toBe(90);
+  });
+
+  it("an unknown answer to a spot bet is retried with the same requestId before spot 3 is sent, and the balance stays 70", async () => {
+    const { ctx, report, answers } = await dealt();
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    vi.useFakeTimers();
+    await answer(() => answers[1].reject(refusal(429))); // the ledger's rate limit: unknown, never a refusal
+    expect([ctx.getCredits(), ctx.reconnecting, report.mock.calls.length]).toEqual([70, true, 1]);
+    await act(async () => { await vi.advanceTimersByTimeAsync(1000); }); // the third queued answer is the retry's
+    expect(engine.placeBet.mock.calls[2]).toEqual(engine.placeBet.mock.calls[1]);
+    engine.placeBet.mockResolvedValueOnce({ credits: 70 }); // spot 3's
+    await answer(() => answers[2].resolve({ credits: 80 }));
+    expect([ctx.getCredits(), ctx.reconnecting, engine.placeBet.mock.calls.length]).toEqual([70, false, 4]);
+    expect(report.mock.calls).toEqual([[4, "confirmed"], [5, "confirmed"], [6, "confirmed"]]);
+  });
+
+  it("a step that throws after the server answered a spot bet: reported confirmed, balance re-read with the queued chips held", async () => {
+    const { ctx, report, answers } = await dealt();
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    engine.getMe.mockReset().mockResolvedValue({ ...player, credits: 80 });
+    await answer(() => answers[1].resolve(undefined)); // no body: reading res.credits throws
+    expect([ctx.getCredits(), report.mock.calls.at(-1)]).toEqual([70, [5, "confirmed"]]);
+    await answer(() => answers[2].resolve({ credits: 70 }));
+    expect([ctx.getCredits(), report.mock.calls.at(-1)]).toEqual([70, [6, "confirmed"]]);
+  });
+
+  it("a step that throws while handling a refused spot bet: reported rejected, chips back, the queue carries on", async () => {
+    const { ctx, report, answers } = await dealt();
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    error.mockImplementationOnce(() => { throw new Error("console.error blew up"); });
+    await answer(() => answers[1].reject(refusal(400)));
+    expect([ctx.getCredits(), report.mock.calls.at(-1)]).toEqual([80, [5, "rejected"]]);
+    await answer(() => answers[2].resolve({ credits: 80 }));
+    expect(ctx.getCredits()).toBe(80);
+  });
+
+  it("sign-out with spot bets queued: none of the queued ones is sent, each is reported confirmed, and the next session is untouched", async () => {
+    const { ctx, report, answers } = await dealt();
+    act(() => ctx.logout());
+    engine.loginPlayer.mockResolvedValue({ ...player, credits: 500 });
+    await act(async () => { await ctx.login({}); });
+    await answer(() => answers[0].resolve({ credits: 90 }));
+    expect(engine.placeBet).toHaveBeenCalledTimes(1);
+    expect(report.mock.calls).toEqual([[4, "confirmed"], [5, "confirmed"], [6, "confirmed"]]);
+    expect(ctx.getCredits()).toBe(500);
+    // nothing held over from the old session: the new one's first chip and bet move the balance exactly once
+    engine.placeBet.mockReset().mockResolvedValue({ credits: 490 });
+    act(() => ctx.applyCreditEvent({ seq: 7, kind: "local", amount: -10 }, vi.fn()));
+    expect(ctx.getCredits()).toBe(490);
+    act(() => ctx.applyCreditEvent(spotBet(8, true), vi.fn()));
+    await settleQueue();
+    expect(ctx.getCredits()).toBe(490);
   });
 });

@@ -69,7 +69,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   GameProvider sends its amount as `BET_REJECTED.payout`, and above 0 it sets `payoutNotice` (not in `emptyRound`: only the next DEAL or sign-out clears it), shown in place of the verdict. The newest message wins: it clears `notice`,
   GameBoard shows `notice` first. If it is already there at SETTLE it is an earlier round's (serial queue),
   so `payoutNoticeOld` keeps it from hiding that verdict, and it returns at the next betting step.
-  Loose ends (#207): when the payout notice meets a refused opening bet or an unaffordable rebet (either order; `autoDealBroke` marks the second, amounts in `refusedPayout` / `initialBet`), `notice` is one line saying both.
+  Loose ends (#207): when the payout notice meets a refused opening bet or an unaffordable rebet (either order; `autoDealBroke` marks the second, amounts in `refusedPayout` / `brokeRebet`, the sum END_ROUND named), `notice` is one line saying both.
   While the payout is this round's, the dock summary reads "Payout refused / Not paid"; a refused settle takes back its own balance badge (`creditChange.settle`), never a newer one; and auto deal's DEAL step waits at least 4 s
   while a payout notice is up (a late refusal restarts the wait; no pause). `.msg .notice` has `line-height: 1.2`: a new notice must fit 320x568 and 568x320 with a 1,234,567.50 amount.
 - Dealer hole-card rules (`DealerHoleOptions`): US draws early (with or without a peek); EU draws after
@@ -91,7 +91,7 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
 - Ace = 1 or 11; natural blackjack is not the same as 21; push, bust, split (including a blackjack
   after split, which must not skip the next hand) and double must all settle correctly.
 - Splits: `canSplit(hand, handCount, maxSplitHands, resplitAces)`; `maxSplitHands` (2-4, or 0 = unlimited; default 4) caps the
-  hands in a round and each split takes one more stake. Split aces get one card and stand unless `hitSplitAces`; with `resplitAces`
+  hands of one spot (`handCount` = `spotHands(hands, hand.spot)`, #59) and each split takes one more stake. Split aces get one card and stand unless `hitSplitAces`; with `resplitAces`
   a hand of A,A stays PLAYING (Stay or Split, no Hit). In SPLIT every ace-split hand that can no longer split is set DONE before
   `advance()` (or the turn can stay on a finished hand). `canDouble` (hard 9-11 / 10-11 means no ace counted as 11; never on split
   aces; DAS) also gates TRIPLE.
@@ -101,21 +101,29 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   hand; the dealer never plays while one waits (it is not DONE). GameProvider's `autoKey` includes `selectedHandIndex` so two waiting hands in a row each get a timer.
 - Surrender (#91): `canSurrender` (pure; first two cards, never split or doubled; `earlyNoAce` never vs an ace) and `engine.playerSurrender`.
   Every surrender sets `surrendered: true`: at once (`result` SURRENDER) or, for `late` with no peek against an ace or ten, waiting (`result`
-  NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered round has one hand. The
-  dealer takes its second card after any surrender and stops at two (`dealerShowsSecondCard`, `dealerOnlyChecksBlackjack`, `dealerNeedsToPlay`
+  NONE, DONE) until `settleHand` decides (dealer blackjack = LOSE 0, else SURRENDER, payout `bet / 2`). A surrendered hand is never a split one; other spots (#59) play on. The
+  dealer takes its second card after any surrender and stops at two unless another hand still needs its total (`dealerShowsSecondCard`, `dealerOnlyChecksBlackjack`, `dealerNeedsToPlay`
   read the flag). In a peek game `early` / `earlyNoAce` against an ace or ten are offered at `OFFERS` only (`earlyOffer`), never again on the
   turn (`canSurrender` excludes them); no-peek and EU keep early surrender on the turn (the player acts before any peek anyway).
-- Offers (#91): `offersAtDeal` (pure) says what is offered at the deal: insurance (setting on, ace up, half the bet, only if affordable), even
+- Offers (#91): `offersAtDeal` (pure) says what is offered on a hand at the deal: insurance (setting on, ace up, half the bet, only if affordable), even
   money (player blackjack vs an ace, not when the settings already pay the blackjack at once) and early surrender (peek game, ace or ten up,
   non-blackjack hand). Nothing offered = `state.offers` is `null`, no `OFFERS`/`PEEK` phase, and `dealRound` runs exactly as before:
   never add a step to a round that offers nothing. With an offer in a peek game the peek is
   deferred: `dealRound` shows one dealer card and leaves the hole card in `dealerHoleCards`, then `OFFERS` waits for the player (no timer: auto
   deal waits there and never declines), then the auto step `PEEK` (`engine.peekDealer`) does what `dealRound` would have done at the deal,
-  skipping even-money and surrendered hands. Each offer closes alone (`closeOffer`); `DECLINE_OFFERS` closes the rest. Insurance is
+  skipping even-money and surrendered hands. Each offer closes alone (`closeOffer`); `DECLINE_OFFERS` closes the rest of that hand's. Insurance is
   `hand.insurance` (the stake; zeroed on a split-off hand), a ledger `bet` with `newRound: false` and the reducer-only tag `side: "insurance"`
   (the API has no such field; a refused one voids only the insurance, in `BET_REJECTED`). `settleHand` pays it 3x its stake when the dealer has
   blackjack, inside the hand's `payout`, so the round still settles once. Even money is `evenMoney: true` (WIN, 2x). `dealerShowsSecondCard`
   reads `insurance`; `dealerOnlyChecksBlackjack` must not (a live insured hand still needs the dealer's total). `playRound` takes `offers`.
+- Multi-hand state (#59): setting `handSpots` (1-3, default 1; not a table rule; no UI yet, PR 2 adds it with the circles, Dock keys and offers face, and the hole card's
+  `dealOrder` of 2n+1). Hands carry `spot`; split limits count per spot. `betCircle` is the total and `betSpots` (in `emptyRound`, always 3 long) the per-spot bets; only the first
+  `handSpots` ever hold chips (lowering it before the deal refunds the rest; a dealt round plays on). `ADD_BET` takes `{ amount, spot }` or `{ spots }` (`addSpots`), and
+  `betHistory` holds one per-spot array each. `initialBet` is the last deal's total, `initialSpots` per spot; the rebet is `initialSpots` within `handSpots`, all or nothing.
+  `dealRound` takes per-spot bets (a number = one spot); each hand carries `offer`, and offers walk the spots with `selectedHandIndex` (the peek comes once, after the last).
+  Spot bets after the first are `newRound: false`, `side: "spot"`; a refused one zeroes that hand's `bet` and `baseStake` and withdraws its offer. `DEALING` waits for every
+  spot bet: no stake may ever be added on a spot before its own bet is answered, because the server caps a settle at 2.5x the stakes it accepted. PlayerProvider holds
+  `alreadyDeducted` bets in `pendingRef` until each is answered (a deal queues several).
 - Rules section (#91, #84): the Settings Table rules section is `components/RulesSection` (preset dropdown with each preset's house edge, flat groups Shoe, Dealer, Payouts,
   Doubling, Splitting, Surrender, House variations, Advanced). It is part of Settings' one draft: `onApply(patch)` writes the draft, and Save sends only the keys that changed
   (a key GameProvider sees in a patch with a `RESET_SETTINGS` name deals a new shoe even when unchanged, so an unchanged draft saves nothing); a changed `RESET_SETTINGS` key asks
@@ -220,10 +228,10 @@ Blackjack front end (React + Vite) for desktop and mobile; talks to the blackJac
   after the CONTINUE and END_ROUND steps. GameProvider nulls those two steps while `pathname !== "/game"` (no Resume needed on return) and dispatches
   `CANCEL_AUTO_DEAL` (pending only, not a pause). Timer dispatches carry `auto: true`; an `auto` DEAL with nothing pending is ignored. The Pause/Resume button
   (a dock key since #80, so it needs no stopPropagation) shows only between rounds (PRE_DEAL, POST_ROUND, END_ROUND; removed from the DOM otherwise) while auto deal is enabled, even if nothing is armed (enable it with a rebet on the table and nothing deals until a manual Deal). `UNDO_BET` (#82) clears `autoDealPending` like ADD_BET and CLEAR_BET (Rebet and 2x are ADD_BETs, so they do too). `OFFERS` has no automatic step, so auto deal waits there.
-- Chips and betting (#82): `betHistory` is the amounts added to the circle since it was last empty, oldest first; ADD_BET pushes, `UNDO_BET` pops the last
-  (`local(+x)`), and it is emptied by DEAL, CLEAR_BET, `resetTable` and a voided round (BET_REJECTED on the opening bet); END_ROUND's auto rebet seeds it with `[initialBet]`.
-  Rebet is `ADD_BET` of `initialBet` and 2x is `ADD_BET` of `betCircle` (the dock dims them unless affordable): never give them reducer actions or ledger events of their
-  own. The ledger still sees one opening bet. The selected rack chip is UI state in GameBoard (`picked`, shown through `effectiveChip`), never reducer state: the rack
+- Chips and betting (#82): `betHistory` is what was added since the spots were last all empty (one per-spot array each, #59), oldest first; ADD_BET pushes, `UNDO_BET` pops the last
+  (`local(+x)`), and it is emptied by DEAL, CLEAR_BET, `resetTable` and a voided round (BET_REJECTED on the opening bet); END_ROUND's auto rebet seeds it with the one rebet array.
+  The dock's Rebet is `ADD_BET` of `initialBet` and 2x is `ADD_BET` of `betCircle`, both on the first spot until #59 PR 2 moves them to `addSpots` (the dock dims them unless affordable): never give them reducer actions or ledger events of their
+  own. The ledger sees one bet per dealt spot, at the deal. The selected rack chip is UI state in GameBoard (`picked`, shown through `effectiveChip`), never reducer state: the rack
   selects it, the bet circle (`.spot`, a button named "Bet spot N, ...") bets it, and a double tap on a rack chip (timed by hand, 400 ms) bets it too. Stacks are
   `ChipStack` (`splitChips`: greedy over `ALLOWED_CHIPS`, up to 10 drawn, the exact amount on `.amt`); a double's second stake and the insurance are `.side-spot`
   stacks beside the circle, never over the bet. The chip symbols (`#chip-<v>`, `#chip-<v>-p`, `#side-<v>`) are in `components/Sprite/ChipSymbols.jsx`: change a colour

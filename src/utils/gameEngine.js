@@ -8,34 +8,61 @@ import { SurrenderOptions } from "./constants/ruleOptions";
 
 // ---- GAME ACTIONS ----
 
-// Deal Initial Hands. credits: the balance after the bet (only insurance's affordability reads it). //
-// Returns `offers` (see offersAtDeal): null when nothing is offered. In a peek game with something offered the peek waits: the dealer
-// shows one card, the hole card stays in dealerHoleCards, and a player blackjack does not win yet (peekDealer finishes the deal). //
-export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings, credits) {
-  const playerFirstCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const dealerUpCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const playerSecondCard = drawCardFromShoe(shoe, setCutCardFound, resetShoe);
-  const playerCards = [{ ...playerFirstCard, dealOrder: 0 }, { ...playerSecondCard, dealOrder: 2 }];
+// Deal Initial Hands. bets: the stake on each spot, left to right (0 = an empty spot, not dealt; a plain number is one spot). One hand per
+// betting spot, with its `spot`. Table order: a first card to each hand, the dealer's up card, second cards, then the hole card.
+// credits: the balance after the bets (only insurance's affordability reads it). //
+// Each hand carries its `offer` (see offersAtDeal), null when nothing is offered on it; `offers` is the first offered hand's plus `peek`, or null.
+// In a peek game with anything offered the peek waits: the dealer shows one card, the hole card stays in dealerHoleCards, and a player
+// blackjack does not win yet (peekDealer finishes the deal). //
+export function dealRound(shoe, bets, setCutCardFound, resetShoe, settings, credits) {
+  const spots = [].concat(bets).flatMap((bet, spot) => (bet > 0 ? [{ bet, spot }] : []));
+  const draw = () => drawCardFromShoe(shoe, setCutCardFound, resetShoe);
+  const firstCards = spots.map(draw);
+  const dealerUpCard = draw();
+  const secondCards = spots.map(draw);
   const drawsAfter = isEU(settings);
   const dealerPeeks = settings.dealerHoleBehaviour === DealerHoleOptions.US_PEEK;
-  const dealerHoleCard = drawsAfter ? [] : [drawCardFromShoe(shoe, setCutCardFound, resetShoe)];
+  const dealerHoleCard = drawsAfter ? [] : [draw()];
   const dealerCardsAll = [dealerUpCard, ...dealerHoleCard];
-  const playerTotals = getHandTotals(playerCards);
   const dealerTotals = getHandTotals(dealerCardsAll);
   const dealerUpCardTotals = getHandTotals([dealerUpCard]);
-  const offers = offersAtDeal(playerCards, dealerUpCard, settings, bet, credits);
-  const deferPeek = dealerPeeks && offers !== null;
+  // Animation hints go on copies: dealOrder is the card's place in the deal.
+  const players = spots.map((p, i) => {
+    const cards = [{ ...firstCards[i], dealOrder: i }, { ...secondCards[i], dealOrder: spots.length + 1 + i }];
+    return { ...p, cards, offer: offersAtDeal(cards, dealerUpCard, settings, p.bet, credits) };
+  });
+  const offered = players.find((p) => p.offer);
+  const deferPeek = dealerPeeks && !!offered;
   // Only a peek reveals a dealer blackjack now; with no peek it stays hidden until the dealer's turn.
   const dealerBlackjackRevealed = dealerPeeks && !deferPeek && dealerCardsAll.length === 2 && isTotalBlackjack(dealerTotals.total);
-  // Animation hints go on copies. The hole card carries one only when the peek shows it at the deal.
-  const dealerUpShown = { ...dealerUpCard, dealOrder: 1 };
-  const dealerCardsShowing = dealerBlackjackRevealed ? [dealerUpShown, { ...dealerHoleCard[0], dealOrder: 3, revealed: true }] : [dealerUpShown];
-  const playerHasBlackjack = isTotalBlackjack(playerTotals.total);
+  // The hole card carries a hint only when the peek shows it at the deal.
+  const dealerUpShown = { ...dealerUpCard, dealOrder: spots.length };
+  const dealerCardsShowing = dealerBlackjackRevealed ? [dealerUpShown, { ...dealerHoleCard[0], dealOrder: 2 * spots.length + 1, revealed: true }] : [dealerUpShown];
   // An EU dealer that won't draw on a player blackjack has nothing to compare it with, so it must pay now.
   // A deferred peek has not found out yet, so the blackjack waits for it.
   const blackjackPaysNow = !deferPeek && (dealerPeeks || bjPaysWithoutPeek(settings));
-  const playerHandEvaluation = getInitialPlayerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, blackjackPaysNow);
-  const dealerHandStatus = getInitialDealerHandEvaluation(playerHasBlackjack, dealerBlackjackRevealed, settings);
+  const hands = players.map(({ cards, bet, spot, offer }) => {
+    const totals = getHandTotals(cards);
+    const isBlackjack = isTotalBlackjack(totals.total);
+    const evaluation = getInitialPlayerHandEvaluation(isBlackjack, dealerBlackjackRevealed, blackjackPaysNow);
+    return {
+      spot,
+      offer,
+      cards,
+      hiddenCards: [], // a face-down double's card, kept out of `cards` until REVEAL_HIDDEN
+      bet,
+      baseStake: bet, // the first bet; a dealer blackjack found later takes only this with noHoleCardLoss "original"
+      status: evaluation.handStatus,
+      isBlackjack,
+      isDouble: false,
+      isBusted: false,
+      total: totals.total,
+      totals: totals.totals,
+      result: evaluation.handResult,
+      payout: 0
+    };
+  });
+  const dealerHandStatus = getInitialDealerHandEvaluation(hands.every((h) => h.isBlackjack), dealerBlackjackRevealed, settings);
 
   const updatedDealerHandStatus =
     dealerHandStatus === HandStatus.NONE ?
@@ -43,24 +70,11 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings, credi
       dealerTotals.totals, { status: dealerHandStatus, isBusted: false }, false, dealerCardsAll.length, settings.dealerHitsSoft17
     ).handStatus :
     dealerHandStatus;
-  
+
   return {
-    hands: [{ 
-      cards: playerCards, 
-      hiddenCards: [], // a face-down double's card, kept out of `cards` until REVEAL_HIDDEN
-      bet: bet, 
-      baseStake: bet, // the first bet; a dealer blackjack found later takes only this with noHoleCardLoss "original"
-      status: playerHandEvaluation.handStatus,
-      isBlackjack: playerHasBlackjack, 
-      isDouble: false,
-      isBusted: false,
-      total: playerTotals.total,
-      totals: playerTotals.totals,
-      result: playerHandEvaluation.handResult,
-      payout: 0
-    }],
-    dealer: { 
-      cards: dealerCardsShowing, 
+    hands,
+    dealer: {
+      cards: dealerCardsShowing,
       status: updatedDealerHandStatus,
       dealerDisplayTotal: dealerBlackjackRevealed ? dealerTotals.total : dealerUpCardTotals.total,
       total: dealerTotals.total,
@@ -70,7 +84,7 @@ export function dealRound(shoe, bet, setCutCardFound, resetShoe, settings, credi
     },
     shoe,
     dealerHoleCards: { cards: dealerBlackjackRevealed ? [] : dealerHoleCard },
-    offers: offers && { ...offers, peek: deferPeek },
+    offers: offered ? { ...offered.offer, peek: deferPeek } : null,
   };
 }
 

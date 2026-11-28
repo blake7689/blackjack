@@ -2395,3 +2395,584 @@ describe("splitDeal (#133): one at a time, or both at once", () => {
     expect(r.payout).toBe(0); // 8-3 loses, and the 8-K win had no stake
   });
 });
+
+describe("multi-hand (#59): up to 3 spots a round", () => {
+  const { SURRENDER } = HandResult;
+  const { DEALING, OFFERS, PEEK, PLAYER_TURN, DEALER_TURN, PRE_DEAL, POST_ROUND } = GamePhases;
+  const step = (state, ...actions) => actions.reduce((s, a) => gameReducer(s, { refill: outOfCards, credits: 1e9, ...a }), state);
+  const MODES = [["US peek", Modes.PEEK], ["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]];
+  const NO_PEEK_MODES = [["US no peek", Modes.NO_PEEK], ["EU", Modes.EU]];
+
+  // The shoe for the spots dealt, left to right: a first card each, the up card, a second card each; then the hole card (US) or, in EU,
+  // the players' draws before the dealer's second card. `draws` are the players' draws, `more` the dealer's further ones.
+  const table = (mode, spots, up, hole, draws = [], more = []) => {
+    const first = spots.map((c) => c[0]);
+    const second = spots.map((c) => c[1]);
+    return mode === Modes.EU
+      ? [...first, up, ...second, ...draws, ...(hole ? [hole] : []), ...more]
+      : [...first, up, ...second, hole, ...draws, ...more];
+  };
+  const ranks = (hands) => hands.map((h) => h.cards.map((c) => c.rank).join(","));
+  const bySpot = (hands) => hands.map((h) => h.spot);
+  const bets = (r) => r.ledger.filter((e) => e.kind === "bet").map((e) => [e.amount, e.newRound, e.alreadyDeducted, e.handTag, e.side]);
+  const SPARES = ["2", "2"]; // a draw that should not happen shows in cardsLeft
+
+  describe.each(MODES)("%s: the deal (criterion 2)", (_name, mode) => {
+    it("3 spots: a card to each left to right, the up card, a second card each; the hints follow that order", () => {
+      const r = playRound({ mode, bets: [10, 10, 10], cards: ["10", "9", "6", "9", "7", "8", "K", "8"] });
+      expect(ranks(r.dealt.hands)).toEqual(["10,7", "9,8", "6,king"]);
+      expect(r.dealt.hands.map((h) => h.cards.map((c) => c.dealOrder))).toEqual([[0, 4], [1, 5], [2, 6]]);
+      expect(r.dealt.dealer.cards.map((c) => [c.rank, c.dealOrder])).toEqual([["9", 3]]);
+      expect(r.dealt.dealerHole.cards.map((c) => c.rank)).toEqual(mode === Modes.EU ? [] : ["8"]);
+      expect(r.dealt.phase).toBe(DEALING);
+      expect([r.results, r.payout, r.accepted, r.net]).toEqual([[PUSH, PUSH, LOSE], 20, 30, -10]); // 17, 17, 16 against 17
+      expect(r.cardsLeft).toBe(0);
+    });
+
+    it("spots 1 and 3 with an empty middle spot: no hand for spot 2, and each hand keeps its spot number", () => {
+      const r = playRound({ mode, bets: [10, 0, 20], cards: table(mode, [["10", "9"], ["10", "7"]], "10", "8") });
+      expect([bySpot(r.dealt.hands), ranks(r.dealt.hands)]).toEqual([[0, 2], ["10,9", "10,7"]]);
+      expect(r.dealt.hands.map((h) => h.cards.map((c) => c.dealOrder))).toEqual([[0, 3], [1, 4]]);
+      expect(r.dealt.dealer.cards[0].dealOrder).toBe(2);
+      expect(r.dealt.hands.map((h) => [h.bet, h.baseStake])).toEqual([[10, 10], [20, 20]]);
+      expect([r.results, r.payout, r.accepted]).toEqual([[WIN, LOSE], 20, 30]);
+    });
+  });
+
+  it.each([[[10]], [[10, 10]], [[10, 10, 10]], [[0, 10, 10]]])("a hole card shown by the peek is dealt after every second card (bets %j: order 2n+1)", (amounts) => {
+    const n = amounts.filter(Boolean).length;
+    const r = playRound({ bets: amounts, cards: table(Modes.PEEK, Array(n).fill(["10", "7"]), "K", "A") });
+    expect(r.dealt.dealer.cards.map((c) => [c.dealOrder, c.revealed])).toEqual([[n, undefined], [2 * n + 1, true]]);
+    expect([r.dealt.dealerHole.cards, r.results, r.payout]).toEqual([[], Array(n).fill(LOSE), 0]);
+  });
+
+  describe.each(["one", "both"])("splits stay in their spot, splitDeal %s (criterion 3)", (splitDeal) => {
+    it.each(MODES)("%s: the new hand is inserted after its parent, in the same spot, with its own tag", (_name, mode) => {
+      const r = playRound({
+        mode, bets: [10, 10, 10], rules: { splitDeal }, spotActions: { 1: ["split"] },
+        cards: table(mode, [["10", "7"], ["8", "8"], ["10", "9"]], "10", "7", ["3", "10"]),
+      });
+      expect([bySpot(r.hands), ranks(r.hands)]).toEqual([[0, 1, 1, 2], ["10,7", "8,3", "8,10", "10,9"]]);
+      expect(r.hands.map((h) => h.tag)).toEqual([r.dealt.hands[0].tag, r.dealt.hands[1].tag, r.dealt.hands[2].tag + 1, r.dealt.hands[2].tag]);
+      expect([r.results, r.payout, r.accepted]).toEqual([[PUSH, LOSE, WIN, WIN], 50, 40]);
+    });
+
+    it("two spots can each reach maxSplitHands 2: the limit counts per spot, and a third hand in a spot is refused", () => {
+      const mine = ["split", "split", "stand", "split", "stand"];
+      const r = playRound({
+        bets: [10, 10], rules: { splitDeal, maxSplitHands: 2 }, spotActions: { 0: mine, 1: mine },
+        cards: table(Modes.PEEK, [["8", "8"], ["8", "8"]], "10", "7", ["8", "8", "8", "8"], SPARES),
+      });
+      expect([bySpot(r.hands), ranks(r.hands)]).toEqual([[0, 0, 1, 1], ["8,8", "8,8", "8,8", "8,8"]]);
+      expect([r.accepted, r.cardsLeft]).toEqual([40, 2]); // the refused splits staked and drew nothing
+    });
+
+    it("two spots can each reach maxSplitHands 3", () => {
+      // Per spot: split (the first hand pairs again), split the first again, then every further split is refused.
+      const mine = ["split", "split", "split", "stand", "split", "stand", "split", "stand"];
+      const each = splitDeal === "one" ? ["8", "8", "3", "2"] : ["8", "2", "8", "3"];
+      const r = playRound({
+        bets: [10, 10], rules: { splitDeal, maxSplitHands: 3 }, spotActions: { 0: mine, 1: mine },
+        cards: table(Modes.PEEK, [["8", "8"], ["8", "8"]], "10", "7", [...each, ...each], SPARES),
+      });
+      expect(bySpot(r.hands)).toEqual([0, 0, 0, 1, 1, 1]);
+      expect([r.accepted, r.cardsLeft, r.state.phase]).toEqual([60, 2, POST_ROUND]);
+    });
+  });
+
+  describe("split aces with resplitAces at the limit (criterion 3)", () => {
+    const aces = (rules) => playRound({
+      bets: [10, 10], rules: { splitDeal: "both", resplitAces: true, ...rules }, spotActions: { 0: ["split"], 1: ["split"] },
+      cards: table(Modes.PEEK, [["A", "A"], ["A", "A"]], "10", "7", ["A", "5", "A", "6"]),
+    });
+
+    it("both spots split their aces to the limit", () => {
+      const r = aces({ maxSplitHands: 2 });
+      expect([bySpot(r.hands), ranks(r.hands)]).toEqual([[0, 0, 1, 1], ["ace,ace", "ace,5", "ace,ace", "ace,6"]]);
+      expect(r.hands.every((h) => h.status === HandStatus.DONE)).toBe(true);
+      expect(r.accepted).toBe(40);
+    });
+
+    it("spot 1 reaching its limit finishes only its own dead aces: spot 2's pair of aces still plays and can split", () => {
+      const start = aces({ maxSplitHands: 2 }).afterOffers;
+      const first = step(start, { type: "SPLIT", handIdx: 0, refill: () => { throw new Error("no refill expected"); } });
+      expect(first.hands.map((h) => [h.spot, h.status])).toEqual([[0, HandStatus.DONE], [0, HandStatus.DONE], [1, HandStatus.PLAYING]]);
+      expect([first.phase, first.selectedHandIndex]).toEqual([PLAYER_TURN, 2]);
+      expect(canSplit(first.hands[2], 1, 2, true)).toBe(true);
+    });
+
+    it("a spot below its limit keeps a resplittable ace hand although the whole round holds that many hands", () => {
+      // maxSplitHands 3: spot 1 holds 2 hands while the table holds 3. A round-wide count would refuse the resplit.
+      const r = playRound({
+        bets: [10, 10], rules: { splitDeal: "both", maxSplitHands: 3, resplitAces: true }, spotActions: { 0: ["split", "split"] },
+        cards: table(Modes.PEEK, [["A", "A"], ["10", "9"]], "10", "7", ["5", "A", "6", "4"]),
+      });
+      expect([bySpot(r.hands), ranks(r.hands)]).toEqual([[0, 0, 0, 1], ["ace,5", "ace,6", "ace,4", "10,9"]]);
+      expect(r.accepted).toBe(40);
+    });
+
+    it("waiting split aces at the limit (splitDeal one): the pair is dead, the waiting hand gets its card, then spot 2 plays", () => {
+      const r = playRound({
+        bets: [10, 10], rules: { splitDeal: "one", maxSplitHands: 2, resplitAces: true }, spotActions: { 0: ["split"], 1: ["hit"] },
+        cards: table(Modes.PEEK, [["A", "A"], ["10", "2"]], "10", "7", ["A", "A", "5"]),
+      });
+      expect(ranks(r.hands)).toEqual(["ace,ace", "ace,ace", "10,2,5"]);
+      expect([r.state.phase, r.cardsLeft]).toEqual([POST_ROUND, 0]);
+    });
+  });
+
+  it("two waiting split hands in a row each get their card in turn, then the next spot plays (criterion 3)", () => {
+    const r = playRound({
+      bets: [10, 10], rules: { splitDeal: "one", resplitAces: true }, spotActions: { 0: ["split", "split"], 1: ["hit"] },
+      cards: table(Modes.PEEK, [["A", "A"], ["10", "2"]], "10", "7", ["A", "2", "3", "4", "5"]),
+    });
+    expect([bySpot(r.hands), ranks(r.hands)]).toEqual([[0, 0, 0, 1], ["ace,2", "ace,3", "ace,4", "10,2,5"]]);
+    expect(r.hands.some((h) => h.awaitingCard)).toBe(false);
+    expect([r.state.phase, r.cardsLeft]).toEqual([POST_ROUND, 0]);
+  });
+
+  describe.each(MODES)("%s: double, triple and surrender on their own spots (criterion 7)", (_name, mode) => {
+    it("pays each spot by what it did", () => {
+      const r = playRound({
+        mode, bets: [10, 10, 10], rules: { tripleDown: true, surrender: "late" }, spotActions: { 0: ["double"], 1: ["triple"], 2: ["surrender"] },
+        cards: table(mode, [["5", "6"], ["4", "5"], ["10", "6"]], "10", "7", ["10", "5", "3"]),
+      });
+      expect(r.hands.map((h) => [h.spot, h.bet, h.result, h.payout])).toEqual([[0, 20, WIN, 40], [1, 30, PUSH, 30], [2, 10, SURRENDER, 5]]);
+      expect([r.settled, r.accepted, r.net]).toEqual([75, 60, 15]);
+      const [a, b] = r.dealt.hands.map((h) => h.tag);
+      expect(bets(r).slice(3)).toEqual([[10, false, false, a, undefined], [20, false, false, b, undefined]]);
+      expect(r.cardsLeft).toBe(0);
+    });
+
+    it("face-down doubles on spots 1 and 3 stay hidden until one reveal turns both over", () => {
+      const r = playRound({
+        mode, bets: [10, 10, 10], rules: { doubleFaceDown: true }, spotActions: { 0: ["double"], 2: ["double"] },
+        cards: table(mode, [["5", "6"], ["10", "7"], ["4", "5"]], "10", "7", ["10", "8"]),
+      });
+      const before = r.beforeReveal;
+      expect(before.hands.map((h) => [h.hiddenCards.length, h.cards.length, h.total])).toEqual([[1, 2, 11], [0, 2, 17], [1, 2, 9]]);
+      const hidden = before.hands.flatMap((h) => h.hiddenCards.map((c) => c.id));
+      expect(hidden.filter((id) => before.seenIds.includes(id))).toEqual([]);
+      expect(r.hands.map((h) => [h.hiddenCards.length, h.total, h.result, h.payout])).toEqual([[0, 21, WIN, 40], [0, 17, PUSH, 10], [0, 17, PUSH, 20]]);
+      expect(hidden.every((id) => r.state.seenIds.includes(id))).toBe(true);
+      expect(r.state.runningCount).toBe([...r.hands.flatMap((h) => h.cards), ...r.dealer.cards].reduce((sum, c) => sum + c.count, 0));
+      expect([r.settled, r.accepted]).toEqual([70, 50]);
+    });
+
+    it("every spot face-down doubled, one a hidden bust: the dealer still plays and each settles after the reveal", () => {
+      const r = playRound({
+        mode, bets: [10, 10, 10], rules: { doubleFaceDown: true }, spotActions: { 0: ["double"], 1: ["double"], 2: ["double"] },
+        cards: table(mode, [["10", "2"], ["5", "6"], ["4", "5"]], "10", "6", ["K", "9", "10"], ["2"]),
+      });
+      expect(r.beforeReveal.dealer.cards).toHaveLength(3); // 16 hit a 2
+      expect([r.results, r.settled, r.accepted]).toEqual([[LOSE, WIN, WIN], 80, 60]);
+    });
+  });
+
+  describe("blackjacks among the spots", () => {
+    it.each([0, 1, 2])("one blackjack spot (index %i): paid 3:2 at once under a peek, and play passes over it", (at) => {
+      const spots = [["10", "7"], ["10", "7"], ["10", "7"]];
+      spots[at] = ["A", "K"];
+      const r = playRound({ bets: [10, 10, 10], cards: table(Modes.PEEK, spots, "9", "8", [], SPARES) });
+      expect(r.dealt.hands[at]).toMatchObject({ isBlackjack: true, result: WIN, status: HandStatus.DONE });
+      expect(r.afterOffers.selectedHandIndex).toBe(at === 0 ? 1 : 0);
+      expect([r.hands[at].payout, r.settled, r.cardsLeft]).toEqual([25, 45, 2]);
+    });
+
+    it("every spot a blackjack: no player turn, no dealer draw, and 3:2 on all three is exactly the 2.5x cap", () => {
+      const r = playRound({ bets: [10, 10, 10], cards: table(Modes.PEEK, [["A", "K"], ["A", "Q"], ["A", "J"]], "9", "8", [], SPARES) });
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+      expect([r.settled, r.accepted, r.cardsLeft]).toEqual([75, 30, 2]);
+    });
+
+    it("a dealer blackjack the peek finds at the deal ends every spot: a blackjack pushes, the others lose", () => {
+      const r = playRound({ bets: [10, 10, 10], spotActions: { 1: ["hit"], 2: ["double"] }, cards: table(Modes.PEEK, [["A", "K"], ["10", "7"], ["10", "10"]], "K", "A", [], SPARES) });
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+      expect([r.results, r.settled, r.accepted, r.cardsLeft]).toEqual([[PUSH, LOSE, LOSE], 10, 30, 2]);
+    });
+
+    it("a dealer blackjack the peek finds after the offers spares the even-money and surrendered spots; insurance pays on its own spot", () => {
+      const r = playRound({
+        bets: [10, 10, 10], rules: { insurance: true, surrender: "early" },
+        offers: ["even_money", "surrender", "decline_offers", "take_insurance", "decline_offers"],
+        cards: table(Modes.PEEK, [["A", "K"], ["10", "6"], ["10", "9"]], "A", "K", [], SPARES),
+      });
+      expect(r.hands.map((h) => [h.result, h.payout, h.insurance ?? 0])).toEqual([[WIN, 20, 0], [SURRENDER, 5, 0], [LOSE, 15, 5]]);
+      expect([r.settled, r.accepted, r.net, r.cardsLeft]).toEqual([40, 35, 5, 2]);
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+    });
+  });
+
+  describe.each(NO_PEEK_MODES)("%s: noHoleCardLoss across spots (criterion 7)", (_name, mode) => {
+    const play = (noHoleCardLoss) => playRound({
+      mode, bets: [10, 10, 10], rules: { noHoleCardLoss, splitDeal: "both" }, spotActions: { 0: ["double"], 1: ["split"], 2: ["hit"] },
+      cards: table(mode, [["5", "6"], ["8", "8"], ["10", "6"]], "10", "A", ["9", "10", "9", "K"]),
+    });
+
+    it("original: a late dealer blackjack takes each spot's first bet; the double and split stakes come back, a busted spot loses all", () => {
+      const r = play("original");
+      expect(r.dealer.isBlackjack).toBe(true);
+      expect(r.hands.map((h) => [h.spot, h.baseStake, h.bet, h.payout])).toEqual([[0, 10, 20, 10], [1, 10, 10, 0], [1, 0, 10, 10], [2, 10, 10, 0]]);
+      expect([r.settled, r.accepted, r.net]).toEqual([20, 50, -30]);
+    });
+
+    it("all: it takes every stake", () => {
+      const r = play("all");
+      expect([r.settled, r.accepted]).toEqual([0, 50]);
+    });
+  });
+
+  describe("EU with dealerDrawsOnPlayerBlackjack off (criterion 5)", () => {
+    const off = { dealerDrawsOnPlayerBlackjack: false };
+    const eu = (spots, { rules = {}, spotActions, draws = [], hole = null } = {}) => playRound({
+      mode: Modes.EU, bets: spots.map(() => 10), rules: { ...off, ...rules }, spotActions,
+      cards: table(Modes.EU, spots, "9", hole, draws, SPARES),
+    });
+
+    it.each([2, 3])("%i spots, all blackjack: each pays at once and the dealer skips its second card", (n) => {
+      const r = eu(Array(n).fill(["A", "K"]));
+      expect(r.dealt.hands.map((h) => h.result)).toEqual(Array(n).fill(WIN));
+      expect(r.dealt.dealer.status).toBe(HandStatus.DONE);
+      expect([r.dealer.cards.length, r.cardsLeft, r.settled]).toEqual([1, 2, 25 * n]);
+    });
+
+    it("with the toggle on, all blackjacks still get the dealer's second card", () => {
+      const r = eu([["A", "K"], ["A", "Q"]], { rules: { dealerDrawsOnPlayerBlackjack: true }, hole: "7" });
+      expect([r.dealer.cards.length, r.settled]).toEqual([2, 50]);
+    });
+
+    it.each([0, 1])("a blackjack (index %i) beside an 18: it pays at once and the dealer still draws for the other", (at) => {
+      const spots = [["10", "8"], ["10", "8"]];
+      spots[at] = ["A", "K"];
+      const r = eu(spots, { hole: "8" }); // dealer 9 + 8 = 17
+      expect(r.dealt.hands[at].result).toBe(WIN);
+      expect(r.dealt.dealer.status).toBe(HandStatus.DRAW_HOLE);
+      expect([r.dealer.cards.length, r.dealer.total, r.settled]).toEqual([2, 17, 45]);
+    });
+
+    it("the paid blackjack stays paid when the dealer then draws a blackjack against the other spot", () => {
+      const r = playRound({ mode: Modes.EU, bets: [10, 10], rules: off, cards: table(Modes.EU, [["A", "K"], ["10", "8"]], "10", "A", [], SPARES) });
+      expect([r.results, r.settled]).toEqual([[WIN, LOSE], 25]);
+    });
+
+    it("a blackjack beside a busted spot: nothing depends on the dealer, which stays on one card", () => {
+      const r = eu([["A", "K"], ["10", "6"]], { spotActions: { 1: ["hit"] }, draws: ["K"] });
+      expect([r.results, r.dealer.cards.length, r.cardsLeft, r.settled]).toEqual([[WIN, LOSE], 1, 2, 25]);
+    });
+
+    it("a blackjack beside a surrender: the dealer takes its second card and stops at two", () => {
+      const r = eu([["A", "K"], ["10", "6"]], { rules: { surrender: "late" }, spotActions: { 1: ["surrender"] }, hole: "2" });
+      expect([r.dealer.cards.length, r.settled]).toEqual([2, 30]);
+    });
+  });
+
+  describe("EU and no-peek toggles with several spots", () => {
+    it.each([[true, 2], [false, 1]])("EU dealerDrawsOnPlayerBust %s with every spot busted: the dealer holds %i card(s)", (on, count) => {
+      const r = playRound({
+        mode: Modes.EU, bets: [10, 10], rules: { dealerDrawsOnPlayerBust: on }, spotActions: { 0: ["hit"], 1: ["hit"] },
+        cards: table(Modes.EU, [["10", "6"], ["10", "6"]], "5", null, ["K", "Q"], ["6", "2"]),
+      });
+      expect([r.dealer.cards.length, r.settled]).toEqual([count, 0]);
+    });
+
+    it("EU dealerDrawsOnceOn21: a 21 spot and a blackjack spot need only the dealer's second card", () => {
+      const r = playRound({
+        mode: Modes.EU, bets: [10, 10], rules: { dealerDrawsOnceOn21: true }, spotActions: { 0: ["hit"] },
+        cards: table(Modes.EU, [["10", "6"], ["A", "K"]], "5", "6", ["5"], SPARES),
+      });
+      expect([r.dealer.cards.length, r.cardsLeft, r.results]).toEqual([2, 2, [WIN, WIN]]);
+    });
+
+    it("EU dealerDrawsOnceOn21: an 18 spot beside the 21 makes the dealer play its hand out", () => {
+      const r = playRound({
+        mode: Modes.EU, bets: [10, 10], rules: { dealerDrawsOnceOn21: true }, spotActions: { 0: ["hit"] },
+        cards: table(Modes.EU, [["10", "6"], ["10", "8"]], "5", "6", ["5"], ["8"]),
+      });
+      expect([r.dealer.cards.length, r.dealer.total, r.results]).toEqual([3, 19, [WIN, LOSE]]);
+    });
+
+    it("no peek, blackjackPaysImmediately: a blackjack spot keeps its 3:2 although the dealer's hidden blackjack takes the other spot", () => {
+      const r = playRound({ mode: Modes.NO_PEEK, bets: [10, 10], rules: { blackjackPaysImmediately: true }, cards: table(Modes.NO_PEEK, [["A", "K"], ["10", "9"]], "10", "A") });
+      expect([r.results, r.settled]).toEqual([[WIN, LOSE], 25]);
+    });
+
+    it("no peek, blackjack waiting: against the dealer's hidden blackjack it pushes and the other spot loses", () => {
+      const r = playRound({ mode: Modes.NO_PEEK, bets: [10, 10], cards: table(Modes.NO_PEEK, [["A", "K"], ["10", "9"]], "10", "A") });
+      expect([r.results, r.settled]).toEqual([[PUSH, LOSE], 10]);
+    });
+  });
+
+  describe("a 3-spot round with a split, a double and an insured spot: exact money (criterion 7)", () => {
+    const play = (mode, hole, noHoleCardLoss = "all") => playRound({
+      mode, bets: [10, 10, 10], rules: { insurance: true, splitDeal: "both", noHoleCardLoss },
+      offers: ["decline_offers", "decline_offers", "take_insurance"], spotActions: { 0: ["split"], 1: ["double"] },
+      cards: table(mode, [["8", "8"], ["6", "5"], ["10", "10"]], "A", hole, ["10", "3", "K"], SPARES),
+    });
+
+    it.each(MODES)("%s, dealer soft 18: payout 70 on 55 staked, balance +15", (_name, mode) => {
+      const r = play(mode, "7");
+      expect(r.hands.map((h) => [h.spot, h.bet, h.result, h.payout])).toEqual([[0, 10, PUSH, 10], [0, 10, LOSE, 0], [1, 20, WIN, 40], [2, 10, WIN, 20]]);
+      expect([r.settled, r.accepted, r.net, r.cardsLeft]).toEqual([70, 55, 15, 2]);
+      const [a, b, c] = r.dealt.hands.map((h) => h.tag);
+      expect(bets(r)).toEqual([
+        [10, true, true, null, undefined], [10, false, true, b, "spot"], [10, false, true, c, "spot"],
+        [5, false, false, c, "insurance"], [10, false, false, c + 1, undefined], [10, false, false, b, undefined],
+      ]);
+      expect(a).not.toBe(b);
+      expect(r.ledger.filter((e) => e.kind === "settle")).toHaveLength(1);
+    });
+
+    it("US peek, dealer blackjack: only the insurance pays; no split or double ever happens", () => {
+      const r = play(Modes.PEEK, "K");
+      expect([r.settled, r.accepted, r.net]).toEqual([15, 35, -20]);
+    });
+
+    it.each(NO_PEEK_MODES)("%s, late dealer blackjack: all takes every stake, original gives back the split and double stakes", (_name, mode) => {
+      expect([play(mode, "K", "all").settled, play(mode, "K", "original").settled]).toEqual([15, 35]);
+    });
+  });
+
+  describe("the ledger's bets at the deal (criterion 6)", () => {
+    it("3 spots: the first opens the round with no tag; the others add to it, tagged side spot; all alreadyDeducted", () => {
+      const r = playRound({ bets: [10, 20, 30], cards: table(Modes.PEEK, [["10", "7"], ["10", "7"], ["10", "7"]], "9", "8") });
+      const [, b, c] = r.dealt.hands.map((h) => h.tag);
+      const sent = r.dealt.creditEvents.filter((e) => e.kind === "bet").map((e) => { const copy = { ...e }; delete copy.seq; return copy; });
+      expect(sent).toEqual([
+        { kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null },
+        { kind: "bet", amount: 20, newRound: false, alreadyDeducted: true, handTag: b, side: "spot" },
+        { kind: "bet", amount: 30, newRound: false, alreadyDeducted: true, handTag: c, side: "spot" },
+      ]);
+      expect(r.dealt.pendingBets).toHaveLength(3);
+    });
+
+    it("an empty first spot: the first betting spot opens the round", () => {
+      const r = playRound({ bets: [0, 20, 30], cards: table(Modes.PEEK, [["10", "7"], ["10", "7"]], "9", "8") });
+      expect(bets(r)).toEqual([[20, true, true, null, undefined], [30, false, true, r.dealt.hands[1].tag, "spot"]]);
+    });
+
+    it("while any spot bet is unanswered the round stays in DEALING, and no action of any kind adds a stake or moves it", () => {
+      const r = playRound({ bets: [10, 10, 10], rules: { insurance: true, surrender: "early", tripleDown: true }, cards: table(Modes.PEEK, [["8", "8"], ["5", "6"], ["10", "6"]], "A", "7") });
+      const [opening, second, third] = r.dealt.pendingBets;
+      let s = r.dealt;
+      for (const confirmed of [null, opening, second]) {
+        if (confirmed) s = step(s, { type: "BET_CONFIRMED", seq: confirmed.seq });
+        expect(nextAutoAction(s)).toBeNull();
+        expect(step(s, { type: "DEAL_DONE" })).toBe(s);
+        for (const type of ["HIT", "STAND", "DOUBLE", "TRIPLE", "SPLIT", "SURRENDER"]) {
+          for (const handIdx of [0, 1, 2]) expect(step(s, { type, handIdx })).toBe(s);
+        }
+        for (const type of ["TAKE_INSURANCE", "EVEN_MONEY", "DECLINE_OFFERS", "PEEK", "DEAL", "UNDO_BET", "CLEAR_BET", "DEAL_SPLIT_CARD"]) expect(step(s, { type })).toBe(s);
+        expect(step(s, { type: "ADD_BET", amount: 10 })).toBe(s);
+        expect(step(s, { type: "ADD_BET", spots: [10, 10, 10] })).toBe(s);
+      }
+      s = step(s, { type: "BET_CONFIRMED", seq: third.seq });
+      expect(nextAutoAction(s)).toBe("DEAL_DONE");
+      expect(step(s, { type: "DEAL_DONE" }).phase).toBe(OFFERS);
+    });
+
+    it("the order of the answers does not matter: the opening bet may still be unanswered once the spot bets are in", () => {
+      const r = playRound({ bets: [10, 10], cards: table(Modes.PEEK, [["10", "7"], ["10", "7"]], "9", "8") });
+      const s = step(r.dealt, { type: "BET_CONFIRMED", seq: r.dealt.pendingBets[1].seq });
+      expect(nextAutoAction(s)).toBe("DEAL_DONE");
+    });
+
+    it("with one spot nothing waits: DEAL_DONE moves on with the opening bet unanswered", () => {
+      const r = playRound({ bets: [0, 10, 0], cards: table(Modes.PEEK, [["10", "7"]], "9", "8") });
+      expect(r.dealt.pendingBets).toHaveLength(1);
+      expect(nextAutoAction(r.dealt)).toBe("DEAL_DONE");
+      expect(r.afterDeal.phase).toBe(PLAYER_TURN);
+    });
+  });
+
+  describe("a refused spot bet (criterion 6)", () => {
+    const three = (extra = {}) => playRound({ bets: [10, 10, 10], cards: table(Modes.PEEK, [["10", "9"], ["8", "8"], ["10", "10"]], "10", "8", [], SPARES), ...extra });
+    const reject = (state, handAt) => step(state, { type: "BET_REJECTED", seq: state.pendingBets.find((b) => b.handTag === state.hands[handAt].tag).seq });
+
+    it("spot 1 (the opening bet): the round is void and every circle is empty; the later answers change nothing", () => {
+      const r = three({ refuse: [0] });
+      expect(r.state).toMatchObject({ phase: PRE_DEAL, hands: [], betCircle: 0, betSpots: [0, 0, 0], betHistory: [], pendingBets: [], offers: null });
+      expect(r.state.notice).toBe("The server refused your bet, so the round was cancelled.");
+      expect(r.ledger.filter((e) => e.kind === "settle")).toEqual([]);
+      for (const { seq } of r.dealt.pendingBets) expect(step(r.state, { type: "BET_REJECTED", seq })).toBe(r.state);
+    });
+
+    it("spot 2: its stake and first bet drop to 0, the total is recomputed, the notice names it, and the hand stays", () => {
+      const r = three();
+      const s = reject(r.dealt, 1);
+      expect(s.hands.map((h) => [h.spot, h.bet, h.baseStake, h.offer])).toEqual([[0, 10, 10, null], [1, 0, 0, null], [2, 10, 10, null]]);
+      expect([s.betCircle, s.phase, s.offers, s.selectedHandIndex]).toEqual([20, DEALING, null, 0]);
+      expect(s.notice).toBe("The server refused your $10 bet on spot 2; it plays for nothing.");
+      expect(s.pendingBets.map((b) => b.amount)).toEqual([10, 10]);
+      expect(s.creditEvents).toBe(r.dealt.creditEvents); // the balance is PlayerProvider's job
+    });
+
+    it("the notice names the spot, not the hand's position, when an earlier spot is empty", () => {
+      const r = playRound({ bets: [0, 10, 25], cards: table(Modes.PEEK, [["10", "9"], ["10", "9"]], "10", "8") });
+      expect(reject(r.dealt, 1).notice).toBe("The server refused your $25 bet on spot 3; it plays for nothing.");
+    });
+
+    it("it can only be stood or hit: never doubled, tripled or split, and it pays nothing", () => {
+      const r = three({ refuse: [1], rules: { tripleDown: true }, spotActions: { 1: ["double", "split", "triple", "stand"] } });
+      expect([r.hands.length, r.hands[1].bet, r.hands[1].payout]).toEqual([3, 0, 0]);
+      expect(r.ledger.filter((e) => e.kind === "bet")).toHaveLength(3);
+      expect([r.settled, r.accepted, r.cardsLeft]).toEqual([40, 20, 2]); // 19 and 20 beat 18
+    });
+
+    it.each(NO_PEEK_MODES)("%s, original-bet-only against a late dealer blackjack: the refused spot is paid 0, never a negative sum", (_name, mode) => {
+      const r = playRound({ mode, bets: [10, 10, 10], refuse: [1], rules: { noHoleCardLoss: "original" }, cards: table(mode, [["10", "9"], ["10", "8"], ["10", "7"]], "10", "A") });
+      expect([r.dealer.isBlackjack, r.hands.map((h) => h.payout), r.settled]).toEqual([true, [0, 0, 0], 0]);
+    });
+
+    it("a refused blackjack spot pays nothing", () => {
+      const r = playRound({ bets: [10, 10], refuse: [1], cards: table(Modes.PEEK, [["10", "8"], ["A", "K"]], "10", "8") });
+      expect(r.hands.map((h) => [h.result, h.payout])).toEqual([[PUSH, 10], [WIN, 0]]);
+    });
+
+    it("two refused spots: both play for nothing and only the first spot's money is in the round", () => {
+      const r = three({ refuse: [1, 2] });
+      expect(r.hands.map((h) => [h.bet, h.baseStake])).toEqual([[10, 10], [0, 0], [0, 0]]);
+      expect([r.answered.betCircle, r.accepted, r.settled]).toEqual([10, 10, 20]);
+      expect(r.answered.notice).toBe("The server refused your $10 bet on spot 3; it plays for nothing.");
+    });
+
+    const offered = (mode, extra) => playRound({ mode, rules: { insurance: true }, ...extra });
+
+    it("the only offered spot refused (spot 1 hard 20 and short of insurance), peek game: the deferred peek runs with no input", () => {
+      // 5 credits after the bets: spot 1's insurance (10) is unaffordable, spot 2's (5) is offered.
+      const r = offered(Modes.PEEK, { bets: [20, 10], credits: 5, refuse: [1], cards: table(Modes.PEEK, [["10", "K"], ["10", "5"]], "A", "7") });
+      expect(r.dealt.offers).toEqual({ insurance: true, evenMoney: false, surrender: false, peek: true });
+      expect(r.dealt.hands.map((h) => h.offer?.insurance ?? false)).toEqual([false, true]);
+      expect(r.answered.offers).toEqual({ insurance: false, evenMoney: false, surrender: false, peek: true });
+      expect(r.afterDeal.phase).toBe(PEEK); // never OFFERS with nothing to answer
+      expect(nextAutoAction(r.afterDeal)).toBe("PEEK");
+      expect(r.afterOffers).toMatchObject({ phase: PLAYER_TURN, offers: null, selectedHandIndex: 0 });
+      expect(r.ledger.some((e) => e.side === "insurance")).toBe(false);
+    });
+
+    it("the same with a dealer blackjack under the ace: the peek shows it and ends the round", () => {
+      const r = offered(Modes.PEEK, { bets: [20, 10], credits: 5, refuse: [1], cards: table(Modes.PEEK, [["10", "K"], ["10", "5"]], "A", "K") });
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+      expect([r.results, r.settled]).toEqual([[LOSE, LOSE], 0]);
+    });
+
+    it.each(NO_PEEK_MODES)("%s: the only offered spot (even money) refused: no peek, play goes straight on", (_name, mode) => {
+      const r = offered(mode, { bets: [20, 10], credits: 0, refuse: [1], cards: table(mode, [["10", "9"], ["A", "K"]], "A", "7") });
+      expect(r.dealt.offers).toEqual({ insurance: false, evenMoney: true, surrender: false, peek: false });
+      expect(r.afterDeal).toMatchObject({ phase: PLAYER_TURN, offers: null, selectedHandIndex: 0 });
+      expect([r.hands[1].bet, r.hands[1].payout, r.hands[1].evenMoney]).toEqual([0, 0, undefined]);
+    });
+
+    it("the refused spot was the first one offered and a later one still is: that later spot is asked", () => {
+      const r = offered(Modes.PEEK, { bets: [20, 10, 4], credits: 5, refuse: [1], cards: table(Modes.PEEK, [["10", "K"], ["10", "5"], ["10", "6"]], "A", "7") });
+      expect(r.answered).toMatchObject({ selectedHandIndex: 2, offers: { insurance: true, evenMoney: false, surrender: false, peek: true } });
+      expect(r.afterDeal).toMatchObject({ phase: OFFERS, selectedHandIndex: 2 });
+    });
+
+    it("a refused spot behind an offered one leaves that offer as it was", () => {
+      const r = offered(Modes.PEEK, { bets: [10, 10], refuse: [1], cards: table(Modes.PEEK, [["A", "K"], ["10", "5"]], "A", "7") });
+      expect(r.answered).toMatchObject({ offers: { evenMoney: true, insurance: false, peek: true }, selectedHandIndex: 0 });
+      expect(r.afterDeal).toMatchObject({ phase: OFFERS, selectedHandIndex: 0 });
+      expect(r.afterOffers.phase).not.toBe(OFFERS);
+    });
+
+    it("a refused middle offered spot: the walk goes from spot 1 straight to spot 3, then the one peek", () => {
+      const r = offered(Modes.PEEK, { bets: [10, 10, 10], refuse: [1], cards: table(Modes.PEEK, [["10", "9"], ["10", "5"], ["10", "6"]], "A", "7") });
+      expect(r.afterDeal).toMatchObject({ phase: OFFERS, selectedHandIndex: 0 });
+      const next = step(r.afterDeal, { type: "DECLINE_OFFERS" });
+      expect(next).toMatchObject({ phase: OFFERS, selectedHandIndex: 2 });
+      expect(step(next, { type: "DECLINE_OFFERS" }).phase).toBe(PEEK);
+    });
+
+    it("a refused insurance on spot 3 voids only that insurance (the multi-spot round keeps its spot bets)", () => {
+      const r = offered(Modes.PEEK, { bets: [10, 10, 10], offers: ["decline_offers", "decline_offers", "take_insurance"], refuse: [3], cards: table(Modes.PEEK, [["10", "9"], ["10", "9"], ["10", "9"]], "A", "7") });
+      expect(r.hands.map((h) => [h.bet, h.insurance ?? 0])).toEqual([[10, 0], [10, 0], [10, 0]]);
+      expect([r.accepted, r.settled]).toEqual([30, 60]);
+    });
+  });
+
+  describe("offers walk the spots (criterion 4)", () => {
+    const rules = { insurance: true };
+    const deal = (spots, up = "A", hole = "7", extra = {}, mode = Modes.PEEK) => playRound({ mode, bets: spots.map(() => 10), rules, cards: table(mode, spots, up, hole, [], SPARES), ...extra });
+
+    it("blackjack then hard 15 against an ace: even money, then insurance, then exactly one peek", () => {
+      const start = deal([["A", "K"], ["10", "5"]]).afterDeal;
+      expect(start).toMatchObject({ phase: OFFERS, selectedHandIndex: 0, offers: { evenMoney: true, insurance: false, surrender: false, peek: true } });
+      expect(nextAutoAction(start)).toBeNull();
+      expect(step(start, { type: "TAKE_INSURANCE" })).toBe(start); // not offered to this spot
+      const second = step(start, { type: "EVEN_MONEY" });
+      expect(second).toMatchObject({ phase: OFFERS, selectedHandIndex: 1, offers: { evenMoney: false, insurance: true, surrender: false, peek: true } });
+      expect(nextAutoAction(second)).toBeNull();
+      expect(step(second, { type: "EVEN_MONEY" })).toBe(second);
+      const peek = step(second, { type: "TAKE_INSURANCE" });
+      expect([peek.phase, nextAutoAction(peek)]).toEqual([PEEK, "PEEK"]);
+      const after = step(peek, { type: "PEEK" });
+      expect(after).toMatchObject({ phase: PLAYER_TURN, offers: null, selectedHandIndex: 1 }); // the even-money hand is done
+      expect(after.hands.map((h) => [h.evenMoney ?? false, h.insurance ?? 0, h.result])).toEqual([[true, 0, WIN], [false, 5, HandResult.NONE]]);
+      expect(step(after, { type: "PEEK" })).toBe(after);
+    });
+
+    it.each([
+      ["first", [["A", "K"], ["10", "6"], ["9", "7"]], [1, 2]],
+      ["middle", [["10", "6"], ["A", "K"], ["9", "7"]], [0, 2]],
+      ["last", [["10", "6"], ["9", "7"], ["A", "K"]], [0, 1]],
+    ])("early surrender against a ten: the %s spot qualifies for nothing and is skipped", (_where, spots, asked) => {
+      let s = deal(spots, "10", "7", { rules: { surrender: "early" } }).afterDeal;
+      const visited = [];
+      while (s.phase === OFFERS) {
+        visited.push(s.selectedHandIndex);
+        expect(s.offers).toEqual({ insurance: false, evenMoney: false, surrender: true, peek: true });
+        s = step(s, { type: "SURRENDER" });
+      }
+      expect([visited, s.phase]).toEqual([asked, PEEK]);
+      expect(asked.map((i) => s.hands[i].result)).toEqual([SURRENDER, SURRENDER]);
+      const natural = [0, 1, 2].find((i) => !asked.includes(i));
+      expect(s.hands[natural].result).toBe(HandResult.NONE); // not offered anything, but its blackjack still waits for the one peek
+      const peeked = step(s, { type: "PEEK" });
+      expect([peeked.phase, peeked.hands[natural].result]).toEqual([DEALER_TURN, WIN]);
+    });
+
+    it("early surrender per spot: surrendering one leaves the other to be asked and to play", () => {
+      const r = deal([["10", "6"], ["10", "6"]], "10", "7", { rules: { surrender: "early" }, offers: ["decline_offers", "surrender"] });
+      expect(r.hands.map((h) => h.surrendered ?? false)).toEqual([false, true]);
+      expect(r.afterOffers).toMatchObject({ phase: PLAYER_TURN, selectedHandIndex: 0 });
+      expect([r.results, r.settled]).toEqual([[LOSE, SURRENDER], 5]);
+    });
+
+    it("DECLINE_OFFERS closes only the current spot's offers, and the selection follows the spot asked", () => {
+      const start = deal([["10", "6"], ["10", "5"], ["10", "4"]], "A", "7", { rules: { insurance: true, surrender: "early" } }).afterDeal;
+      const both = { insurance: true, evenMoney: false, surrender: true, peek: true };
+      expect(start).toMatchObject({ selectedHandIndex: 0, offers: both });
+      const second = step(start, { type: "DECLINE_OFFERS" });
+      expect(second).toMatchObject({ phase: OFFERS, selectedHandIndex: 1, offers: both });
+      const insured = step(second, { type: "TAKE_INSURANCE" });
+      expect(insured).toMatchObject({ phase: OFFERS, selectedHandIndex: 1, offers: { insurance: false, surrender: true } }); // this spot's other offer stays
+      const surrendered = step(insured, { type: "SURRENDER" });
+      expect(surrendered).toMatchObject({ phase: OFFERS, selectedHandIndex: 2, offers: both });
+      expect(surrendered.hands.map((h) => [h.insurance ?? 0, h.surrendered ?? false])).toEqual([[0, false], [5, true], [0, false]]);
+    });
+
+    it("TAKE_INSURANCE is checked against the balance at each take", () => {
+      const start = deal([["10", "6"], ["10", "5"], ["10", "4"]], "A", "7", { credits: 5 }).afterDeal;
+      expect(start.hands.map((h) => h.offer?.insurance)).toEqual([true, true, true]); // each alone is affordable at the deal
+      const second = step(start, { type: "TAKE_INSURANCE", credits: 5 });
+      expect(second.selectedHandIndex).toBe(1);
+      expect(step(second, { type: "TAKE_INSURANCE", credits: 0 })).toBe(second);
+      const third = step(second, { type: "DECLINE_OFFERS" });
+      expect(step(third, { type: "TAKE_INSURANCE", credits: 4.99 })).toBe(third);
+      const done = step(third, { type: "TAKE_INSURANCE", credits: 5 });
+      expect(done.phase).toBe(PEEK);
+      expect(done.creditEvents.filter((e) => e.side === "insurance").map((e) => e.handTag)).toEqual([start.hands[0].tag, start.hands[2].tag]);
+    });
+
+    it.each(NO_PEEK_MODES)("%s: after the last spot's offer play starts at the first unfinished hand, with no peek", (_name, mode) => {
+      const r = deal([["A", "K"], ["10", "5"], ["10", "4"]], "A", "7", { offers: ["even_money", "take_insurance", "decline_offers"] }, mode);
+      expect(r.afterOffers).toMatchObject({ phase: PLAYER_TURN, offers: null, selectedHandIndex: 1 });
+    });
+
+    it.each(NO_PEEK_MODES)("%s: every spot even money: the dealer's turn", (_name, mode) => {
+      const r = deal([["A", "K"], ["A", "Q"]], "A", "7", { offers: ["even_money", "even_money"] }, mode);
+      expect(r.afterOffers.phase).toBe(DEALER_TURN);
+      expect([r.settled, r.accepted]).toEqual([40, 20]);
+    });
+  });
+});

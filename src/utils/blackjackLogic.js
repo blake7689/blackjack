@@ -29,16 +29,16 @@ export function getInitialPlayerHandEvaluation(playerHasBlackjack, dealerHasBlac
   return { handStatus, handResult };
 }
 
-// Sets initial dealer status based on blackjack conditions //
-export function getInitialDealerHandEvaluation(playerHasBlackjack, dealerHasBlackjack, settings)
+// Sets initial dealer status based on blackjack conditions. allBlackjack: every dealt hand is a blackjack. //
+export function getInitialDealerHandEvaluation(allBlackjack, dealerHasBlackjack, settings)
 {
   let handStatus = isEU(settings) ? HandStatus.DRAW_HOLE : HandStatus.NONE;
 
-  if (dealerHasBlackjack && playerHasBlackjack) {
+  if (dealerHasBlackjack && allBlackjack) {
     handStatus = HandStatus.DONE;
   } else if (dealerHasBlackjack) {
     handStatus = HandStatus.DONE;
-  } else if (playerHasBlackjack && isEU(settings) && !settings.dealerDrawsOnPlayerBlackjack) {
+  } else if (allBlackjack && isEU(settings) && !settings.dealerDrawsOnPlayerBlackjack) {
     handStatus = HandStatus.DONE;
   }
 
@@ -94,7 +94,10 @@ export function getDealerHandEvaluation(totals, hand, skipDraw, cardCount, hitsS
 // A hand made by splitting aces //
 export const isSplitAces = (hand) => hand.isSplit && hand.cards[0].rank === "ace";
 
-// Two cards of equal value (10-J-Q-K pair), while the round has fewer than maxSplitHands hands (0 = unlimited). //
+// How many hands a spot holds: the split limit counts per spot (#59). Hands without a `spot` are one group. //
+export const spotHands = (hands, spot) => hands.filter((h) => h.spot === spot).length;
+
+// Two cards of equal value (10-J-Q-K pair), while its spot has fewer than maxSplitHands hands (`handCount`; 0 = unlimited). //
 // Split aces resplit only with resplitAces. //
 export function canSplit(hand, handCount, maxSplitHands, resplitAces = false) {
   return hand.cards.length === 2 && hand.cards[0].value === hand.cards[1].value
