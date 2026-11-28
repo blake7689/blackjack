@@ -13,6 +13,8 @@ import { readLook, saveLook } from "../utils/theme";
 import { setCurrency } from "../utils/money";
 
 const ENTRY_ROUTES = new Set(["/", "/login", "/signup"]);
+// The least the automatic deal waits while a refused payout is on the line (#207): the deal wipes it.
+const REFUSED_PAYOUT_READ_MS = 4000;
 // A failed settings load is retried after 1, 2, 4, 8, 16 and 30 s, then every 30 s.
 const retryWait = (attempt) => Math.min(1000 * 2 ** attempt, 30000);
 
@@ -108,16 +110,17 @@ export function GameProvider({ children }) {
   const autoKey = auto && `${auto}|${state.dealer.cards.length}|${state.dealer.status}|${state.selectedHandIndex}`; // the hand: two split hands can wait for a card one after the other
   // `autoBar` (L2-4): while auto deal's own DEAL or CONTINUE step waits, the length of that wait for the countdown bar on the Deal / Next hand key, and when it began (a new object each time the timer restarts).
   const [autoBar, setAutoBar] = useState(null);
+  const unread = auto === "DEAL" ? state.payoutNotice : null; // a dependency below: a refusal that arrives while the deal waits restarts the wait
   useEffect(() => {
     if (!autoKey) return;
     const type = autoKey.split("|")[0];
-    const wait = stepWait(Number(type === "DEAL" ? autoDealDelay : playTimeout));
+    const wait = Math.max(stepWait(Number(type === "DEAL" ? autoDealDelay : playTimeout)), unread ? REFUSED_PAYOUT_READ_MS : 0);
     const timer = setTimeout(() => {
       dispatch({ type, auto: true, refill: makeShoe, credits: getCredits(), shoe: type === "END_ROUND" ? makeShoe() : undefined });
     }, wait);
     if (type === "DEAL" || type === "CONTINUE") setAutoBar({ type, ms: wait, at: performance.now() });
     return () => { clearTimeout(timer); setAutoBar(null); };
-  }, [autoKey, playTimeout, autoDealDelay, makeShoe, getCredits]);
+  }, [autoKey, unread, playTimeout, autoDealDelay, makeShoe, getCredits]);
 
   // A hand in play is lost by a reload (L2-12): the browser asks first. Between rounds (nothing dealt yet, or the round settled) it does not.
   const inPlay = ![GamePhases.NONE, GamePhases.PRE_DEAL, GamePhases.POST_ROUND, GamePhases.END_ROUND].includes(state.phase);

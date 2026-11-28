@@ -106,7 +106,7 @@ export default function GameBoard() {
   }, [phase]);
   useLight(feltRef, stageInRef, { phase, active: selectedHandIndex });
   const verdict = phase === GamePhases.RESULTS || phase === GamePhases.POST_ROUND ? verdictOf(hands) : null;
-  // The message line's notice (it takes the verdict's place too). The newest wins: a refused payout clears `notice`, so one set here came after it. A payout refusal replaces
+  // The message line's notice (it takes the verdict's place too). The newest wins: a refused payout clears `notice` (or sets one that says both, #207), so one set here includes or came after it. A payout refusal replaces
   // its own verdict (it would be wrong), never a later round's. Unloaded settings never hide a verdict.
   const lineNotice = notice || (payoutNoticeOld && verdict ? null : payoutNotice) || (settingsUnloaded && !verdict ? SETTINGS_UNLOADED : null);
   // The round's one win or lose sound and buzz, when the verdict first shows (a push has neither).

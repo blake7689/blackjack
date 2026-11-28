@@ -120,9 +120,12 @@ export function PlayerProvider({ children }) {
   const getCredits = useCallback(() => playerRef.current?.credits ?? 0, []);
 
   // The badge says what the balance just did; a change of nothing (a settled loss) takes an older badge away: nothing shows after a loss.
-  const showChange = useCallback((delta) => {
-    setCreditChange((prev) => (delta !== 0 ? { delta, seq: (prev?.seq ?? 0) + 1 } : null));
+  // `settle`: the credit event's seq when a payout set it, so a refusal can take that badge back, never a newer one (#207).
+  const showChange = useCallback((delta, settle) => {
+    setCreditChange((prev) => (delta !== 0 ? { delta, seq: (prev?.seq ?? 0) + 1, settle } : null));
   }, []);
+  // A top-up's ledger call has no seq, so it matches nothing.
+  const dropBadge = useCallback((seq) => setCreditChange((prev) => (seq && prev?.settle === seq ? null : prev)), []);
 
   // Sends one ledger call after the ones before it (the queue stays serial, so a retrying call blocks the rest),
   // then shows the server's balance plus local changes. It stops quietly if the player signed out or changed
@@ -162,6 +165,7 @@ export function PlayerProvider({ children }) {
         if (!quiet) console.error("Ledger call refused; the game drops it", seq);
         if (newRound) roundRefusedRef.current = true;
         setCredits(playerRef.current.credits - undo); // undo the optimistic change even if the reload below fails
+        dropBadge(seq);
         undo = 0;
         if (!skipped) await reload();
         report(seq, stop() ? "confirmed" : "rejected"); // signed out during the reload: the refusal must not reach the next table (#195)
@@ -177,10 +181,11 @@ export function PlayerProvider({ children }) {
           return report(seq, "confirmed");
         }
         setCredits(playerRef.current.credits - undo);
+        dropBadge(seq);
         report(seq, "rejected");
       }
     });
-  }, [setCredits]);
+  }, [setCredits, dropBadge]);
 
   // Applies one credit event from the game reducer: local chip moves, ledger bets, and the round's settlement. //
   const applyCreditEvent = useCallback((event, report) => {
@@ -204,7 +209,7 @@ export function PlayerProvider({ children }) {
       }
     } else {
       setCredits(playerRef.current.credits + event.amount);
-      showChange(event.amount);
+      showChange(event.amount, event.seq);
       const requestId = newRequestId();
       enqueue({ seq: event.seq, optimistic: event.amount, call: () => settleRound(event.amount, requestId) }, report);
     }

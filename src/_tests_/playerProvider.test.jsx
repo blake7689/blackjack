@@ -1609,3 +1609,95 @@ describe("a refusal that outlives its session is reported confirmed (#196)", () 
     expect(ctx.player).toBeNull();
   });
 });
+
+describe("a refused settle takes back its own +$ badge (#207)", () => {
+  let error;
+  beforeEach(() => {
+    [engine.placeBet, engine.settleRound, engine.topUp].forEach((m) => m.mockReset());
+    engine.getMe.mockReset().mockResolvedValue(player);
+    error = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => error.mockRestore());
+
+  const settle = { seq: 4, kind: "settle", amount: 20 };
+
+  // A signed-in table whose next `call` the test answers by hand. The clock is faked and never run, so the 3 s fade cannot be what removes a badge.
+  async function held(call) {
+    const result = await signedIn();
+    const answer = deferred();
+    call.mockReturnValueOnce(answer.promise);
+    vi.useFakeTimers();
+    return { ...result, answer };
+  }
+  const refuse = async (answer) => {
+    await act(async () => { answer.reject(refusal(400)); });
+    await settleQueue();
+  };
+
+  it("at once, while the balance reload is still pending", async () => {
+    const { ctx, answer } = await held(engine.settleRound);
+    const me = deferred();
+    engine.getMe.mockReturnValueOnce(me.promise);
+    const report = vi.fn();
+    act(() => ctx.applyCreditEvent(settle, report));
+    expect(ctx.creditChange).toMatchObject({ delta: 20 });
+    await refuse(answer);
+    expect(engine.getMe).toHaveBeenCalledOnce();
+    expect(report).not.toHaveBeenCalled(); // the reload has not answered
+    expect(ctx.creditChange).toBeNull();
+    await act(async () => { me.resolve(player); });
+    await settleQueue();
+    expect(ctx.creditChange).toBeNull();
+  });
+
+  it("a confirmed settle keeps its badge", async () => {
+    const { ctx, answer } = await held(engine.settleRound);
+    act(() => ctx.applyCreditEvent(settle, vi.fn()));
+    await act(async () => { answer.resolve({ credits: 1020 }); });
+    await settleQueue();
+    expect(ctx.creditChange).toMatchObject({ delta: 20 });
+  });
+
+  it.each([
+    ["a chip bet's", { seq: 5, kind: "local", amount: -10 }, -10],
+    ["a later payout's", { seq: 5, kind: "settle", amount: 30 }, 30],
+  ])("leaves %s newer badge alone", async (_, later, delta) => {
+    const { ctx, answer } = await held(engine.settleRound);
+    engine.settleRound.mockReturnValue(new Promise(() => {})); // the later settle is never answered
+    act(() => ctx.applyCreditEvent(settle, vi.fn()));
+    act(() => ctx.applyCreditEvent(later, vi.fn()));
+    await refuse(answer);
+    expect(ctx.creditChange).toMatchObject({ delta });
+  });
+
+  it("a refused bet behind it leaves a top-up's badge alone", async () => {
+    const { ctx, answer } = await held(engine.placeBet);
+    engine.topUp.mockResolvedValue({ credits: 10000 });
+    act(() => { ctx.topUp("dummy-code-123"); });
+    act(() => ctx.applyCreditEvent({ seq: 6, kind: "bet", amount: 10, newRound: true, alreadyDeducted: true, handTag: null }, vi.fn()));
+    await settleQueue();
+    expect(ctx.creditChange).toMatchObject({ delta: 9010 }); // 10 chips are still on the table when the top-up answers
+    await refuse(answer);
+    expect(ctx.creditChange).toMatchObject({ delta: 9010 }); // 10 chips are still on the table when the top-up answers
+  });
+
+  it("a refused top-up drops no badge (it has no seq, like a chip's badge)", async () => {
+    const { ctx, answer } = await held(engine.topUp);
+    let outcome;
+    act(() => { ctx.topUp("dummy-code-123").then((res) => { outcome = res; }); });
+    act(() => ctx.applyCreditEvent({ seq: 1, kind: "local", amount: -10 }, vi.fn()));
+    await refuse(answer);
+    expect(outcome).toMatchObject({ ok: false });
+    expect(ctx.creditChange).toMatchObject({ delta: -10 });
+  });
+
+  it("also when a ledger step throws on the way (the catch path)", async () => {
+    const { ctx, answer } = await held(engine.settleRound);
+    error.mockImplementationOnce(() => { throw new Error("console.error blew up"); }); // the refusal log: throws before the badge is dropped
+    const report = vi.fn();
+    act(() => ctx.applyCreditEvent(settle, report));
+    await refuse(answer);
+    expect(report.mock.calls).toEqual([[4, "rejected"]]);
+    expect(ctx.creditChange).toBeNull();
+  });
+});

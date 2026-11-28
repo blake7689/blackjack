@@ -75,8 +75,10 @@ export const initialGameState = {
   nextHandTag: 1,
   notice: null, // a message about the round, such as a refused bet
   payoutNotice: null, // a refused payout (#196): outlives CONTINUE, the sweep and Resume; only the next DEAL (or sign-out) clears it
+  refusedPayout: 0, // its amount, for a line that must say it along with something else (#207); lives and goes with payoutNotice
   payoutNoticeOld: false, // it was already there at SETTLE, so it is an earlier round's: it must not hide this round's verdict
   autoDealPaused: false, // the player stopped auto deal, or a rebet was unaffordable; Resume clears it
+  autoDealBroke: false, // `notice` says the rebet of initialBet was unaffordable, so a later refused payout must keep saying it (#207)
   autoDealPending: false, // a rebet is on the table and the automatic DEAL step is armed
 };
 
@@ -150,7 +152,11 @@ const emptyRound = {
   offers: null,
   selectedHandIndex: 0,
   notice: null,
+  autoDealBroke: false,
 };
+
+// One line for a refused payout and an unaffordable rebet, whichever came first (#207).
+const refusedAndBroke = (payout, rebet) => `${money(payout)} payout refused, not paid. Can't rebet ${money(rebet)}: auto deal paused.`;
 
 // Queues a balance change; GameProvider hands each event to PlayerProvider exactly once. Kinds:
 //   local:  chips moved on the table only ({ amount } is the change to the shown balance)
@@ -329,7 +335,7 @@ export function gameReducer(state, action) {
       const values = action.values ?? { [action.key]: action.value };
       const settings = { ...state.settings, ...values };
       // Enabling auto deal starts it running; a pending deal does not outlive turning it off.
-      const next = { ...state, settings, autoDealPaused: "autoDeal" in values ? false : state.autoDealPaused };
+      const next = { ...state, settings, ...("autoDeal" in values && { autoDealPaused: false, autoDealBroke: false }) };
       next.autoDealPending = state.autoDealPending && autoDealOn(next);
       return action.shoe ? resetTable(next, action.shoe, GamePhases.PRE_DEAL) : next;
     }
@@ -373,6 +379,7 @@ export function gameReducer(state, action) {
         initialBet: state.betCircle,
         betHistory: [],
         payoutNotice: null,
+        refusedPayout: 0,
         payoutNoticeOld: false,
         autoDealPending: false,
         phase: GamePhases.DEALING, // DEAL_DONE picks the next phase once the cards have been on the table for a step
@@ -447,14 +454,16 @@ export function gameReducer(state, action) {
 
     case "BET_REJECTED": {
       // A settle is never in pendingBets, so GameProvider sends its amount (`payout`). A refused 0 costs nothing: no notice.
-      if (action.payout > 0) return { ...state, payoutNotice: `The server refused your ${money(action.payout)} payout; it was not paid.`, payoutNoticeOld: false, notice: null }; // the newest message wins the line
+      if (action.payout > 0) return { ...state, payoutNotice: `The server refused your ${money(action.payout)} payout; it was not paid.`, refusedPayout: action.payout, payoutNoticeOld: false,
+        notice: state.autoDealBroke ? refusedAndBroke(action.payout, state.initialBet) : null }; // the newest message wins the line, but never loses why auto deal paused
       const bet = state.pendingBets.find((b) => b.seq === action.seq);
       if (!bet) return state; // answered already, or the table was reset
       if (bet.newRound) {
         // The server never took the stake, so the round never happened: back to betting, nothing to refund. Its cards were seen face up, so they stay
         // out of the shoe and go to the discard pile, like a misdeal (L1-27: by design; putting them back would deal them again).
         return { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: 0, betHistory: [], pendingBets: [],
-          notice: "The server refused your bet, so the round was cancelled." };
+          notice: state.payoutNotice ? `${money(state.refusedPayout)} payout refused, not paid. New bet refused: round cancelled.`
+            : "The server refused your bet, so the round was cancelled." };
       }
       // Find the hand by its tag: its index may have moved since the bet was made.
       if (bet.side === "insurance") {
@@ -485,8 +494,8 @@ export function gameReducer(state, action) {
       const rebet = state.settings.resetInitialBet && initialBet > 0 && action.credits >= initialBet;
       const broke = on && initialBet > 0 && !rebet; // auto deal cannot rebet: nothing is dealt and it pauses
       let next = { ...state, ...emptyRound, phase: GamePhases.PRE_DEAL, betCircle: rebet ? initialBet : 0, betHistory: rebet ? [initialBet] : [],
-        autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke,
-        notice: broke && !state.payoutNotice ? `Not enough credits to rebet ${money(initialBet)}: auto deal paused` : null };
+        autoDealPending: rebet && on, autoDealPaused: state.autoDealPaused || broke, autoDealBroke: broke,
+        notice: !broke ? null : state.payoutNotice ? refusedAndBroke(state.refusedPayout, initialBet) : `Not enough credits to rebet ${money(initialBet)}: auto deal paused` };
       if (rebet) next = credit(next, local(-initialBet));
       if (state.cutCardFound) next = countSeen({ ...next, shoe: action.shoe, cutCardFound: false }, true);
       return next;
@@ -499,7 +508,7 @@ export function gameReducer(state, action) {
       return state.autoDealPending ? { ...state, autoDealPending: false } : state;
 
     case "RESUME_AUTO_DEAL": {
-      const next = { ...state, autoDealPaused: false, notice: null };
+      const next = { ...state, autoDealPaused: false, autoDealBroke: false, notice: null };
       return { ...next, autoDealPending: autoDealOn(next) && state.phase === GamePhases.PRE_DEAL && state.betCircle > 0 };
     }
 

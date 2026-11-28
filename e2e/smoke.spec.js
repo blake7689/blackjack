@@ -1,5 +1,6 @@
 import { test, expect, stubApi, seedRandom, submitLogin, login, VEGAS, placeBet } from './fixtures';
 import { expectNoSeriousA11y } from './a11y';
+import { gameReducer, initialGameState } from '../src/utils/gameReducer';
 
 const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
@@ -296,17 +297,28 @@ test('saved settings that arrive mid-round wait for the next hand (#196)', async
   await expect(page.locator('.felt')).toContainText(/blackjack pays 6 to 5/i);
 });
 
-test('a payout the server refuses is said in place of the verdict until the next deal (#196)', async ({ page }) => {
-  const api = await stubApi(page, { settleRefusal: { status: 400, message: 'The payout is over the cap.' } });
+test('a payout the server refuses is said in place of the verdict until the next deal; the dock says Not paid and the +$ badge goes at once (#196, #207)', async ({ page }) => {
+  let release;
+  const api = await stubApi(page, { settleRefusal: { status: 400, message: 'The payout is over the cap.', gate: new Promise((resolve) => { release = resolve; }) } });
   await seedRandom(page, 183);
   await login(page);
   await placeBet(page);
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
 
+  const badge = page.locator('.bal .delta');
+  const summary = page.locator('.summary .s-l');
+  await expect(badge).toHaveText('+$5', { timeout: 30_000 }); // the settle is on its way, its answer held
+  await expect(summary).toHaveText('You lost-$5');
+  release();
+  // Well inside the badge's own 3 s life, so only the refusal can have removed it.
+  await expect(badge).toHaveCount(0, { timeout: 1500 });
+
   const line = page.locator('.msg');
   const notice = 'The server refused your $5 payout; it was not paid.';
-  await expect(line).toHaveText(notice, { timeout: 30_000 });
+  await expect(line).toHaveText(notice);
+  await expect(summary).toHaveText('Payout refusedNot paid');
+  await expect(summary.locator('b')).not.toHaveClass(/up|down/);
   await expect(line).toHaveAttribute('aria-live', 'polite');
   await expect(page.locator('[aria-live]')).toHaveCount(1);
   await expect(line.locator('.verdict')).toHaveCount(0);
@@ -322,6 +334,48 @@ test('a payout the server refuses is said in place of the verdict until the next
   await page.getByRole('button', { name: 'Deal', exact: true }).click();
   await expect(line).not.toContainText('refused');
   expect(api.settles).toHaveLength(1);
+});
+
+// Every notice that carries an amount, worded by the reducer itself, with the longest amount (#207). A real refused payout puts a notice on the line;
+// each wording then takes its place there, so the real CSS lays it out.
+function amountNotices() {
+  const big = 1234567.5;
+  const reduce = (state, action) => gameReducer({ ...initialGameState, ...state }, action);
+  const payout = reduce({}, { type: 'BET_REJECTED', payout: big });
+  const broke = {
+    type: 'END_ROUND', credits: 0, state: { initialBet: big, settings: { ...initialGameState.settings, resetInitialBet: true, autoDeal: true } },
+  };
+  const stake = (extra) => reduce({ pendingBets: [{ seq: 1, handTag: 1, amount: big, ...extra }], hands: [{ tag: 1, bet: big }] }, { type: 'BET_REJECTED', seq: 1 }).notice;
+  return [
+    payout.payoutNotice,
+    reduce(broke.state, broke).notice,
+    reduce({ ...broke.state, payoutNotice: payout.payoutNotice, refusedPayout: big }, broke).notice,
+    reduce({ payoutNotice: payout.payoutNotice, refusedPayout: big, pendingBets: [{ seq: 1, newRound: true }] }, { type: 'BET_REJECTED', seq: 1 }).notice,
+    stake({}),
+    stake({ side: 'insurance' }),
+  ];
+}
+
+test('every notice with a long amount fits the message line on the smallest screens (#207)', async ({ page }) => {
+  const notices = amountNotices();
+  expect(new Set(notices).size).toBe(6);
+  for (const text of notices) expect(text).toContain('1,234,567.50');
+  await stubApi(page, { settleRefusal: { status: 400, message: 'The payout is over the cap.' } });
+  await seedRandom(page, 183);
+  await login(page);
+  await placeBet(page);
+  await page.getByRole('button', { name: 'Deal', exact: true }).click();
+  await page.getByRole('button', { name: 'Surrender' }).click({ timeout: 15_000 });
+  const line = page.locator('.msg .notice');
+  await expect(line).toContainText('refused', { timeout: 30_000 });
+
+  for (const size of [{ width: 320, height: 568 }, { width: 568, height: 320 }]) {
+    await page.setViewportSize(size);
+    for (const text of notices) {
+      await line.evaluate((el, words) => { el.textContent = words; }, text);
+      await expect.poll(() => lineFits(page), { message: `${size.width}x${size.height}: ${text}` }).toEqual(FITS);
+    }
+  }
 });
 
 test('a refusal that arrives a round late never replaces the new round\'s verdict (#196)', async ({ page }) => {

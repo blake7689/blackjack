@@ -326,9 +326,9 @@ describe("the board shows the newest of a refused payout and a round's notice (#
     return document.querySelector(".msg").textContent;
   };
 
-  it("an old payout notice, then a refused opening bet: the line says the round was cancelled", () => {
+  it("an old payout notice, then a refused opening bet: the line says both (#207)", () => {
     const s = run(dealt(["10", "10", "9", "7"]), late);
-    expect(shown(run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq }))).toBe("The server refused your bet, so the round was cancelled.");
+    expect(shown(run(s, { type: "BET_REJECTED", seq: s.pendingBets[0].seq }))).toBe("$20 payout refused, not paid. New bet refused: round cancelled.");
   });
 
   it("an old payout notice, then a refused double: the line says so during play", () => {
@@ -345,12 +345,12 @@ describe("the board shows the newest of a refused payout and a round's notice (#
     expect(shown(run(s, late))).toBe(PAYOUT);
   });
 
-  it("this round's payout refused and the rebet now unaffordable: the next betting step still says the payout was not paid", () => {
+  it("this round's payout refused and the rebet now unaffordable: the next betting step says both (#207)", () => {
     let s = confirmBets(dealt(["10", "10", "9", "7"], { resetInitialBet: true, autoDeal: true }));
     s = run(s, { type: "STAND", handIdx: 0 });
     for (let i = 0; i < 10 && s.phase !== GamePhases.POST_ROUND; i++) s = run(s, { type: nextAutoAction(s) });
     s = run(s, late, { type: "CONTINUE" }, { type: "END_ROUND", credits: 0, shoe: stackedShoe(["2"]) });
     expect(s).toMatchObject({ phase: GamePhases.PRE_DEAL, autoDealPaused: true });
-    expect(shown(s)).toBe(PAYOUT);
+    expect(shown(s)).toBe("$20 payout refused, not paid. Can't rebet $10: auto deal paused.");
   });
 });
