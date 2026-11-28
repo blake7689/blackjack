@@ -39,6 +39,7 @@
   --groove-1: #040505; --groove-2: #0f1211;
   --scrim: rgba(3, 4, 4, .72);
   --sec-body: #0a0d0c; /* a Settings section's inset body, under the --surf header */
+  --screen-glow: 38%; /* the felt's share at the top of the .page-screen gradient (pages.css) */
   color-scheme: dark;
 }
 [data-mode="light"] {
@@ -48,6 +49,7 @@
   --groove-1: #d9dcd5; --groove-2: #eceee9;
   --scrim: rgba(20, 24, 22, .4);
   --sec-body: #eaece6;
+  --screen-glow: 6%; /* the felt stays dark in this mode: at 6% the lowest text on it (--tx-3, red felt) is 4.53:1, so do not raise it (#214) */
   --win-tx: #07703f; --lose-tx: #b42318; --lose-line: rgb(180 35 24 / .45); /* on --bg 4.97:1 and 5.29:1 (the felt keeps --win / --lose) */
   --err-tx: #b3261e; --alert-tx: #8c1d14;
   color-scheme: light;

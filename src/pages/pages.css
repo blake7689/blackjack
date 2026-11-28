@@ -21,7 +21,7 @@
 
 /* ---- Home, Log in, Create an account, Loading, Error (#87, the mockup's page screens) ---- */
 .page-screen { box-sizing: border-box; height: var(--app-vh); overflow-y: auto; display: grid; place-items: center; padding: calc(24px + var(--safe-t)) 16px calc(24px + var(--safe-b));
-  background: radial-gradient(90% 60% at 50% 0%, color-mix(in srgb, var(--felt) 38%, var(--bg)), var(--bg) 70%); }
+  background: radial-gradient(90% 60% at 50% 0%, color-mix(in srgb, var(--felt) var(--screen-glow), var(--bg)), var(--bg) 70%); }
 .page { width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; }
 .page .wm { display: block; height: 40px; width: auto; aspect-ratio: 276 / 64; color: var(--tx); }
 .page h1 { margin: 0; font-family: var(--font-display); font-weight: 600; font-size: 26px; }
