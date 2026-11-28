@@ -2,7 +2,8 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { GamePhases } from "../../utils/constants/gamePhases";
 import { HandStatus } from "../../utils/constants/handStatus";
 import { SurrenderOptions } from "../../utils/constants/ruleOptions";
-import { handActions, insuranceStake, roundNet, spotHands } from "../../utils/blackjackLogic";
+import { cents, handActions, insuranceStake, roundNet, spotHands } from "../../utils/blackjackLogic";
+import { rebetSpots } from "../../utils/gameReducer";
 import { effectiveChip, visibleChips } from "../../utils/chips";
 import { money, signed } from "../../utils/money";
 import { OPEN_LAYER } from "../../utils/constants/layers";
@@ -95,10 +96,12 @@ function ChipRack({ chips, chip, onTap, off }) {
 // circle. Keys 1-9 do the same by rack position (1, 1 = select, bet), U undoes, C clears, B rebets, X doubles. `shuffling` (#83): the betting keys
 // wait (the Deal key still says "Deal", L2-4); a tap on the dock skips the shuffle (useShuffle listens for it); the rack and keys are dimmed and refuse bets (#147).
 // While auto deal waits to deal or to continue, GameProvider's `autoBar` ({ type, ms, at }) gives Deal or Next hand a bar that fills over that wait (L2-4);
-// the keyboard hints show only with the `showKeyHints` setting (L2-3, the `hints` class: Dock.css). //
-export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false }) {
+// the keyboard hints show only with the `showKeyHints` setting (L2-3, the `hints` class: Dock.css).
+// Several spots (#59): a double tap and the keys 1-9 bet into `spot`, the circle selected on the table; Rebet restores every spot and 2x doubles every spot. //
+export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling = false, spot = 0 }) {
   const { player } = usePlayer();
-  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betHistory, initialBet, settings, autoDealPaused, autoBar, payoutNotice, payoutNoticeOld } = useGameState();
+  const state = useGameState();
+  const { phase, hands, dealer, offers, selectedHandIndex, betCircle, betSpots, betHistory, settings, autoDealPaused, autoBar, payoutNotice, payoutNoticeOld } = state;
   const actions = useGameActions();
   const ref = useRef(null);
   const credits = player ? player.credits : 0; // a signed-out player has nothing to bet or double with
@@ -111,12 +114,16 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   const chip = effectiveChip(chips, picked);
   const lastTap = useRef({ chip: 0, at: 0 });
   const lastKey = useRef("");
+  const betChip = (v) => (spot ? actions.addBet(v, spot) : actions.addBet(v));
+  const several = settings.handSpots > 1;
+  const rebet = rebetSpots(state);
+  const rebetStake = cents(rebet.reduce((sum, v) => sum + v, 0));
   const tapChip = (v) => {
     const now = performance.now();
     const twice = lastTap.current.chip === v && now - lastTap.current.at < 400;
     lastTap.current = twice ? { chip: 0, at: 0 } : { chip: v, at: now };
     onChip(v);
-    if (twice) actions.addBet(v);
+    if (twice) betChip(v);
   };
   // The keyboard (DESIGN section 8) and the buttons share one table: `bind` registers a key's letter with the same `off` flag and action as its button
   // (a dimmed or absent key does nothing) and gives the button its props. Space and Enter are one key (Deal, Next hand).
@@ -134,7 +141,7 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
       if (betting && /^[1-9]$/.test(k)) {
         const v = chips[Number(k) - 1];
         if (v === undefined || wait) return;
-        if (prev === k && chip === v) { lastKey.current = ""; actions.addBet(v); } else onChip(v);
+        if (prev === k && chip === v) { lastKey.current = ""; betChip(v); } else onChip(v);
         return;
       }
       if (k === "space" && e.target.closest?.(OWN_ACTION)) return;
@@ -150,13 +157,15 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
 
   // Focus follows the phase (offers: the first offer; your move: Hit; results: Next hand), but only when it was on nothing
   // or already in the dock: never pulled from Settings, a menu or a dialog. It also runs when the open offers change: the focused
-  // offer unmounts when taken, and focus would fall to the page. It runs again when `busy` clears, so a move that waited on a flying card still lands.
+  // offer unmounts when taken, and focus would fall to the page. It runs again when `busy` clears, so a move that waited on a flying card still lands,
+  // and when the next spot is asked (#59), whose open offers can look the same as the last one's.
+  const asked = phase === GamePhases.OFFERS ? selectedHandIndex : -1;
   const openOffers = offers ? `${!!offers.insurance}${!!offers.evenMoney}${!!offers.surrender}` : "";
   useEffect(() => {
     const active = document.activeElement;
     if (active && active !== document.body && !ref.current.contains(active)) return;
     ref.current.querySelector("[data-focus]")?.focus({ preventScroll: true });
-  }, [phase, openOffers, busy]);
+  }, [phase, openOffers, asked, busy]);
 
   const autoOn = settings.autoDeal && settings.resetInitialBet; // Pause / Resume shows between rounds while auto deal is on
   const pause = autoOn && (
@@ -175,8 +184,8 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
       <>
         <Key label="Undo" icon="i-undo" {...bind("U", wait || betHistory.length === 0, actions.undoBet)} />
         <Key label="Clear" icon="i-clear" {...bind("C", wait || betCircle === 0, actions.clearBet)} />
-        <Key label="Rebet" icon="i-rebet" {...bind("B", wait || betCircle > 0 || initialBet <= 0 || credits < initialBet, () => actions.addBet(initialBet))} />
-        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", wait || betCircle === 0 || credits < betCircle, () => actions.addBet(betCircle))} />
+        <Key label="Rebet" icon="i-rebet" {...bind("B", wait || betCircle > 0 || rebetStake <= 0 || credits < rebetStake, () => (several ? actions.addSpots(rebet) : actions.addBet(rebetStake)))} />
+        <Key label={<span className="glyph" data-text="2x" />} name="Double every bet" {...bind("X", wait || betCircle === 0 || credits < betCircle, () => (several ? actions.addSpots(betSpots) : actions.addBet(betCircle)))} />
         {pause}
         <Key label="Deal" kind="primary big wider" bar={autoBar?.type === "DEAL" ? autoBar : undefined} {...bind("Space", wait || betCircle === 0 || !player, actions.deal)} />
       </>
@@ -184,13 +193,14 @@ export default function Dock({ busy, chip: picked, onChip = () => {}, shuffling 
   } else if (phase === GamePhases.OFFERS) {
     face = "offers";
     acting = true;
-    const half = insuranceStake(hands[0].bet);
+    const half = insuranceStake(hands[selectedHandIndex].bet); // the hand being asked
     const open = [
-      offers.insurance && { id: "insurance", hotkey: "I", label: `Insurance ${money(half)}`, icon: "i-shield", run: actions.takeInsurance },
+      // `short`: an earlier spot's insurance may have taken what this one's would cost
+      offers.insurance && { id: "insurance", hotkey: "I", label: `Insurance ${money(half)}`, icon: "i-shield", short: credits < half, run: actions.takeInsurance },
       offers.evenMoney && { id: "evenMoney", hotkey: "E", label: "Even money", icon: "i-money", run: actions.evenMoney },
-      offers.surrender && { id: "surrender", hotkey: "R", label: "Surrender", icon: "i-surrender", sub: `${money(half)} back`, run: () => actions.surrender(0) },
+      offers.surrender && { id: "surrender", hotkey: "R", label: "Surrender", icon: "i-surrender", sub: `${money(half)} back`, run: () => actions.surrender(selectedHandIndex) },
     ].filter(Boolean);
-    rowA = open.map((o, i) => <Key key={o.id} label={o.label} icon={o.icon} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy, o.run)} />);
+    rowA = open.map((o, i) => <Key key={o.id} label={o.label} icon={o.icon} sub={o.sub} kind="offer" focus={i === 0} {...bind(o.hotkey, busy || !!o.short, o.run)} />);
     rowB = <Key label="No thanks" kind="solid big" {...bind("N", busy, actions.declineOffers)} />;
   } else if (phase === GamePhases.POST_ROUND) {
     face = "results";

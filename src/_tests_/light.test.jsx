@@ -84,6 +84,13 @@ describe("useLight", () => {
     expect(lamp(view)).toEqual(["50%", "50%"]);
   });
 
+  it("with several hands it also follows the one asked at the offers (#59)", () => {
+    const view = render(<Table phase={GamePhases.OFFERS} active={1} />);
+    lay(view);
+    view.rerender(<Table phase={GamePhases.OFFERS} active={1} />);
+    expect(lamp(view)).toEqual(["75.0%", "62%"]);
+  });
+
   it("a lamp position the browser cannot read leaves the pool in the middle", () => {
     const spy = vi.spyOn(window, "getComputedStyle").mockReturnValue({ getPropertyValue: () => "" });
     const view = render(<Table phase={GamePhases.PRE_DEAL} />);

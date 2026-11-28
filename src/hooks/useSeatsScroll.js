@@ -7,13 +7,14 @@ import { reducedMotion } from "../utils/cardAnimation";
 // and only ever turns scrolling on within that pair. Returns [`scroll`, `sync`]: `sync` decides and puts the class on the row at once, so
 // CardWidthSync can call it before the seats measure (#193); this hook's own effect checks again after them (for a size a seat's effect set).
 // `layoutKey` (#140, GameBoard): a string that changes whenever a box measured here changes size (cards, bets, tags, phase...); the overflow check runs
-// only when it, the stage width, the hand count or `scroll` changes, never on a plain re-render. //
-export function useSeatsScroll(seatsRef, stageRef, count, active, layoutKey) {
+// only when it, the stage width, the hand count or `scroll` changes, never on a plain re-render.
+// `betting` (#59): the row holds the empty betting seats, decided apart from a round with as many hands (or it could stay scrolling after one). //
+export function useSeatsScroll(seatsRef, stageRef, count, active, layoutKey, betting = false) {
   const [width, setWidth] = useState(0);
   const [scroll, setScroll] = useState(false);
   const decided = useRef(""); // the count@width the row was decided for
   const measured = useRef(""); // ... with the layoutKey it was last measured at
-  const pair = `${count}@${width}`;
+  const pair = `${count}@${width}${betting ? " betting" : ""}`;
   const stamp = `${pair},${layoutKey}`;
 
   useEffect(() => {

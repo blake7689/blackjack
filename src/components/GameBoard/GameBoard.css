@@ -164,12 +164,14 @@
 .stage-in {
   --step: calc(var(--cw) * .27); /* useCardWidth floors it to whole pixels */
   --fixed: 172px; --rows: 4.254; --cwi: 23cqi; --cmax: 118px;
-  --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), var(--cwi), var(--cmax)), 160px);
+  --cwr: clamp(40px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), var(--cwi), var(--cmax)), 160px);
   --cw: var(--cwr); --ch: calc(var(--cw) * 1.452);
   --ph: calc(var(--cw) * .2 + 52px); /* the print's height */
   --stage-pt: 20px; --stage-pb: 8px; /* room above the dealer and under the hands */
   --room: 9999px; /* how far the dealer's hand may reach to the right (useDealerRoom); unlimited until measured */
+  --lbl: 0px; /* the room each hand keeps for the "Spot n" label (several spots, #59) */
 }
+.stage-in.spots { --lbl: 16px; }
 .cw-probe { position: absolute; width: var(--cwr); height: 0; visibility: hidden; pointer-events: none; }
 .stage-in.multi { --fixed: 204px; --cwi: 17cqi; }
 .stage-in.multi:has(.seats.tight) { --fixed: 226px; --rows: 5.254; } /* the room kept under narrow seats for the side stacks (#82) */
@@ -180,18 +182,18 @@
 @media (min-width: 900px) { .stage-in { --cmax: 128px; --cwi: 15cqi; } .stage-in.multi { --cwi: 12cqi; } }
 /* landscape phone, and wide desktop (900 px and 5:4 or wider): up to four hands in one row */
 @media (max-height: 520px), (min-width: 900px) and (min-aspect-ratio: 5/4) {
-  .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px), 104px); --stage-pt: 12px; --stage-pb: 6px; }
+  .stage-in, .stage-in.multi { --fixed: 60px; --rows: 2.904; --cwr: clamp(40px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 13cqi, 100px), 104px); --stage-pt: 12px; --stage-pb: 6px; }
 }
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) {
-  .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed)) / var(--rows), 12cqi, 156px), 160px); --stage-pt: 26px; --stage-pb: 12px; }
-  .stage-in.multi { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 9cqi, 124px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 124px); }
-  .stage-in.multi.many { --cwr: clamp(48px, min((100cqb - var(--fixed)) / var(--rows), 6.5cqi, 110px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 110px); }
+  .stage-in, .stage-in.multi { --fixed: 168px; --rows: 3.104; --cwr: clamp(60px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 12cqi, 156px), 160px); --stage-pt: 26px; --stage-pb: 12px; }
+  .stage-in.multi { --cwr: clamp(48px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 9cqi, 124px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 124px); }
+  .stage-in.multi.many { --cwr: clamp(48px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 6.5cqi, 110px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 110px); }
   /* PC: hands closer together (L2-8). The card width is capped, so a tall window left a wide empty middle between the dealer's hand (top) and the seats (bottom).
      The middle may now keep only --mid-room of what --fixed and --rows (the room the rows need) leave; the rest goes above the dealer and under the seats, equally,
      so the group sits in the middle of the felt. The shoe and the pile stay in the felt's corners (they are positioned against the stage, not the padding). */
-  .stage-in { --mid-room: clamp(40px, 11cqb, 110px); --slack: max(0px, calc(100cqb - var(--fixed) - var(--rows) * var(--cw) - var(--mid-room))); padding-top: calc(var(--stage-pt) + var(--slack) / 2); padding-bottom: calc(var(--stage-pb) + var(--slack) / 2); }
+  .stage-in { --mid-room: clamp(40px, 11cqb, 110px); --slack: max(0px, calc(100cqb - var(--fixed) - var(--lbl) - var(--rows) * var(--cw) - var(--mid-room))); padding-top: calc(var(--stage-pt) + var(--slack) / 2); padding-bottom: calc(var(--stage-pb) + var(--slack) / 2); }
 }
 @media (max-height: 520px) {
   .stage-in, .stage-in.multi { --fixed: 88px; }
-  .stage-in.multi { --cwr: clamp(40px, min((100cqb - var(--fixed)) / var(--rows), 13cqi, 100px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 104px); }
+  .stage-in.multi { --cwr: clamp(40px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 13cqi, 100px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 104px); }
 }

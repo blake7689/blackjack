@@ -77,6 +77,7 @@ export const initialGameState = {
   pendingBets: [], // bets sent to the server and not yet answered: { seq, handTag, amount, newRound }
   nextHandTag: 1,
   notice: null, // a message about the round, such as a refused bet
+  refusedSpots: [], // this round's refused further-spot bets ({ spot, amount }): the notice names them all
   payoutNotice: null, // a refused payout (#196): outlives CONTINUE, the sweep and Resume; only the next DEAL (or sign-out) clears it
   refusedPayout: 0, // its amount, for a line that must say it along with something else (#207); lives and goes with payoutNotice
   payoutNoticeOld: false, // it was already there at SETTLE, so it is an earlier round's: it must not hide this round's verdict
@@ -157,6 +158,7 @@ const emptyRound = {
   selectedHandIndex: 0,
   betSpots: [0, 0, 0],
   notice: null,
+  refusedSpots: [],
   autoDealBroke: false,
 };
 
@@ -164,8 +166,16 @@ const total = (amounts) => cents(amounts.reduce((sum, a) => sum + a, 0));
 // Per-spot amounts with nothing on a spot the setting does not offer: only the first handSpots ever carry chips (#59).
 const offeredSpots = (amounts, { handSpots }) => emptyRound.betSpots.map((_, i) => (i < handSpots ? amounts[i] ?? 0 : 0));
 // What a rebet puts back, and what the "can't rebet" notice names. An initialBet with no per-spot record (DEAL always sets both; a
-// state built by hand, as e2e/smoke.spec.js does for the notices, may not) is one spot's.
-const rebetSpots = (state) => offeredSpots(state.initialSpots.some((v) => v > 0) ? state.initialSpots : [state.initialBet], state.settings);
+// state built by hand, as e2e/smoke.spec.js does for the notices, may not) is one spot's. The dock's Rebet uses it too.
+export const rebetSpots = (state) => offeredSpots(state.initialSpots.some((v) => v > 0) ? state.initialSpots : [state.initialBet], state.settings);
+
+// One line for every further spot whose bet the server refused this round.
+function refusedSpotsLine(refused) {
+  const amount = money(total(refused.map((r) => r.amount)));
+  return refused.length === 1
+    ? `The server refused your ${amount} bet on spot ${refused[0].spot + 1}; it plays for nothing.`
+    : `The server refused your ${amount} bets on spots ${refused.map((r) => r.spot + 1).join(" and ")}; they play for nothing.`;
+}
 
 // One line for a refused payout and an unaffordable rebet, whichever came first (#207).
 const refusedAndBroke = (payout, rebet) => `${money(payout)} payout refused, not paid. Can't rebet ${money(rebet)}: auto deal paused.`;
@@ -520,10 +530,11 @@ export function gameReducer(state, action) {
         const refused = state.hands.find((h) => h.tag === bet.handTag);
         const hands = state.hands.map((h) => (h === refused ? { ...h, bet: 0, baseStake: 0, offer: null } : h));
         const asked = hands.findIndex((h) => h.offer);
-        return { ...state, hands, betCircle: total(hands.map((h) => h.bet)), pendingBets: state.pendingBets.filter((b) => b !== bet),
+        const refusedSpots = [...state.refusedSpots, { spot: refused.spot, amount: bet.amount }];
+        return { ...state, hands, refusedSpots, betCircle: total(hands.map((h) => h.bet)), pendingBets: state.pendingBets.filter((b) => b !== bet),
           selectedHandIndex: Math.max(0, asked),
           offers: state.offers && { insurance: false, evenMoney: false, surrender: false, ...hands[asked]?.offer, peek: state.offers.peek },
-          notice: `The server refused your ${money(bet.amount)} bet on spot ${refused.spot + 1}; it plays for nothing.` };
+          notice: refusedSpotsLine(refusedSpots) };
       }
       // Find the hand by its tag: its index may have moved since the bet was made.
       if (bet.side === "insurance") {

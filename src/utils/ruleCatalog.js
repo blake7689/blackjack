@@ -106,6 +106,7 @@ export const APP_TOGGLES = [
 // The settings that are not table rules (Gameplay, Chips, Appearance): their labels, one-line subtitles and hints, by key.
 export const APP_SETTINGS = {
   playTimeout: { label: "Game speed", hint: "How fast cards move" },
+  handSpots: { label: "Hands per round", hint: "Betting spots on the table" },
   resetInitialBet: { label: "Rebet automatically", hint: "Same bet each round" },
   showTotals: { label: "Show hand totals", sub: "Yours and the dealer's", hint: "Hand totals on the table" },
   showCardCount: { label: "Show the count", sub: "Running and true count", hint: "Hi-Lo card count" },

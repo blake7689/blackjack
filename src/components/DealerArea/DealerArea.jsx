@@ -7,8 +7,9 @@ import { handLabel } from "../../utils/handDisplay";
 import "./DealerArea.css";
 
 // The dealer's hand (#81): a straight row of cards with its total pill beside it on the right. `hiddenCount`: the face-down hole card. `holdHole`: the
-// hole card is already in the hand (a peek found a blackjack at the deal) but its face waits for the mirror check (#83): it stays the face-down element. //
-function DealerArea({ dealer, hiddenCount = 0, showTotals = true, holdHole = false }) {
+// hole card is already in the hand (a peek found a blackjack at the deal) but its face waits for the mirror check (#83): it stays the face-down element.
+// `holeOrder`: the hole card's place in the deal, 2n+1 with n spots dealt (#59; gameEngine.dealRound gives a revealed one the same). //
+function DealerArea({ dealer, hiddenCount = 0, showTotals = true, holdHole = false, holeOrder = 3 }) {
   const rowRef = useRef(null);
   useSmoothRow(rowRef);
   const shown = useLanded(dealer.cards);
@@ -18,13 +19,13 @@ function DealerArea({ dealer, hiddenCount = 0, showTotals = true, holdHole = fal
       <div className="dealer-hand hand" role="group" aria-label={handLabel("Dealer", dealer.cards, hiddenCount, shown, shown.totals, { showTotals, natural })}>
         <div className="fan-row dealer cards" ref={rowRef}>
           {/* One list, so the hole card keeps its element from face down to face up (two lists would remount it and fly it in again).
-              Face down: the card itself never reaches the DOM, only its place in the deal (dealOrder 3). */}
+              Face down: the card itself never reaches the DOM, only its place in the deal (holeOrder). */}
           {[
             ...dealer.cards.map((c, i) => {
               const k = i === 1 ? "hole" : c.id;
               return <FlyCard key={k} fk={k} card={holdHole && i === 1 ? undefined : c} dealOrder={c.dealOrder} />;
             }),
-            ...Array.from({ length: hiddenCount }, () => <FlyCard key="hole" fk="hole" dealOrder={3} />),
+            ...Array.from({ length: hiddenCount }, () => <FlyCard key="hole" fk="hole" dealOrder={holeOrder} />),
           ]}
         </div>
         <Pill totals={shown.totals} natural={natural} />
