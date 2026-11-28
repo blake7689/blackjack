@@ -155,6 +155,7 @@ describe("account", () => {
     expect(engine.changePassword).toHaveBeenCalledWith("old", "new", "tester");
     await act(async () => { await ctx.deletePlayer("my-password"); });
     expect(engine.deleteMe).toHaveBeenCalledWith("my-password");
+    expect(engine.logoutPlayer).toHaveBeenCalledOnce(); // drops the token (#212)
     expect(ctx.player).toBeNull();
   });
 
@@ -162,6 +163,13 @@ describe("account", () => {
     const { ctx } = await signedIn();
     engine.deleteMe.mockRejectedValue(refusal(400, "Incorrect password."));
     await act(async () => { await expect(ctx.deletePlayer("wrong")).rejects.toThrow("Incorrect password."); });
+    expect(ctx.player).toEqual(player);
+  });
+
+  it("a refused profile change in the same session rejects, so the page can show why (#212)", async () => {
+    const { ctx } = await signedIn();
+    engine.updateProfile.mockRejectedValue(refusal(400, "That username is taken."));
+    await act(async () => { await expect(ctx.updatePlayer({ userName: "taken" })).rejects.toThrow("That username is taken."); });
     expect(ctx.player).toEqual(player);
   });
 

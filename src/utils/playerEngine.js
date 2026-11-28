@@ -19,7 +19,12 @@ export async function getMe(timeout) {
 async function signInWith(url, body) {
   const { accessToken } = await apiPost(url, body, COLD_START_TIMEOUT_MS);
   setToken(accessToken);
-  return getMe(COLD_START_TIMEOUT_MS);
+  try {
+    return await getMe(COLD_START_TIMEOUT_MS);
+  } catch (err) {
+    clearToken(); // a failed sign-in must leave no session to restore (#212)
+    throw err;
+  }
 }
 
 export const loginPlayer = ({ usernameOrEmail, password }) => signInWith("/auth/login", { usernameOrEmail, password });
@@ -41,18 +46,17 @@ export const changePassword = (currentPassword, newPassword, userName) => swapTo
   if (!getToken()) return false; // signed out while the change was in flight: stay signed out
   try {
     const { accessToken } = await apiPost("/auth/login", { usernameOrEmail: userName, password: newPassword }, COLD_START_TIMEOUT_MS, true);
-    setToken(accessToken);
+    if (getToken()) setToken(accessToken); // signed out during the login: store nothing (#212)
     return false;
   } catch {
+    if (!getToken()) return false;
     clearToken();
     return true;
   }
 });
 
-export async function deleteMe(currentPassword) {
-  await apiDelete("/player/me", { currentPassword });
-  clearToken();
-}
+// The caller drops the token, and only if the same session is still signed in (#212).
+export const deleteMe = (currentPassword) => apiDelete("/player/me", { currentPassword });
 
 export const logoutPlayer = () => clearToken();
 
