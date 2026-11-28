@@ -50,4 +50,10 @@ describe('dependabot.yml', () => {
     expect(entry).toMatch(/\n {4}directory: \/\n/);
     expect(entry).toMatch(/\n {4}schedule:\n {6}interval: \w+\n/);
   });
+  // Majors are taken by hand (#223); minor and patch updates arrive as one grouped PR.
+  it.each(['npm', 'github-actions'])('%s ignores every semver-major update and groups minor with patch', (ecosystem) => {
+    const entry = read('.github', 'dependabot.yml').split('- package-ecosystem: ').find((part) => part.startsWith(`${ecosystem}\n`));
+    expect(entry).toMatch(/\n {4}ignore:\n {6}- dependency-name: "\*"\n {8}update-types: \["version-update:semver-major"\]\n/);
+    expect(entry).toMatch(/\n {4}groups:\n {6}[\w-]+:\n {8}update-types: \[minor, patch\]/);
+  });
 });
