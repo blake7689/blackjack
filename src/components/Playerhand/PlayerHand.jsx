@@ -147,8 +147,8 @@ function PlayerHand({ hand, index = 0, active, gamePhase, showTotals = true, chi
       <div className="amt">
         {tag ? <span className={`tag ${tag.kind}`}>{tag.text}</span> : hand.bet > 0 && <span className="num">{money(hand.bet)}</span>}
         {tag && settled && hand.insurance > 0 && (hand.insurancePayout > 0
-          ? <span className="tag win">Insurance pays {money(hand.insurancePayout)}</span>
-          : <span className="tag lose">Insurance lost</span>)}
+          ? <span className="tag win">{spotNo ? "Ins. pays" : "Insurance pays"} {money(hand.insurancePayout)}</span>
+          : <span className="tag lose">{spotNo ? "Ins. lost" : "Insurance lost"}</span>)}
       </div>
     </div>
   );

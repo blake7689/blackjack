@@ -60,6 +60,15 @@
 .tag.push { background: var(--push); color: #0d1216; }
 .tag.surrender { background: var(--surr); color: #2a1503; }
 .tag.bj { background: var(--accent); color: var(--accent-ink); }
+/* several spots (#59): the seats are narrow, so a result tag wraps instead of being cut */
+.stage-in.spots .tag { white-space: normal; text-align: center; line-height: 1.15; padding: 2px 4px; letter-spacing: .01em; }
+/* under 360 px three seats have no room under the amount for the side stacks (they went under the dock): they sit in the circle's two outer gaps, smaller */
+@media (max-width: 359px) and (min-height: 521px) {
+  .stage-in.spots .seats.tight .seat { padding-bottom: 0; }
+  .stage-in.spots .seats.tight .side-spot { top: 50%; transform: translateY(-50%); width: min(calc(var(--chip) * 1.12), calc((var(--sw) - var(--spot)) / 2)); height: min(calc(var(--chip) * 1.12), calc((var(--sw) - var(--spot)) / 2)); }
+  .stage-in.spots .seats.tight .side-spot.ins { left: 0; right: auto; }
+  .stage-in.spots .seats.tight .side-spot.dbl { left: auto; right: 0; }
+}
 /* the results (#83): the stacks have gone to the dealer or the dock (their moving copies are in the flight layer), so the circle is bare */
 .seat.paid .stack, .seat.paid .side-spot, .seat.paid .amt .num { visibility: hidden; }
 .seat.paid .spot.has .bet-lbl { display: grid; } /* #147: `paid` is set when the chips have gone, so the bare circle says BET again */
@@ -96,4 +105,5 @@
   .spot-row:has(.ins) .dbl { transform: translateY(-100%); }
   .spot-row:has(.dbl) .ins { transform: none; }
   .side-spot i { left: 50%; right: auto; top: 100%; transform: translateX(-50%); margin: 2px 0 0; }
+  .spot-name { line-height: 12px; }
 }

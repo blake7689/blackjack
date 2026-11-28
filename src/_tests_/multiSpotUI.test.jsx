@@ -98,6 +98,10 @@ describe("a dealt round with several spots (#59)", () => {
     expect(screen.getByRole("group", { name: /^Spot 1, hand 2:/ })).toBeTruthy();
     expect(screen.getByRole("group", { name: /^Spot 3, hand 3:/ })).toBeTruthy();
   });
+  it.each([[0, "Ins. lost"], [15, "Ins. pays $15"]])("a result tag on a narrow seat shortens the insurance (paid %i)", (insurancePayout, text) => {
+    board(dealt({ phase: GamePhases.POST_ROUND, offers: null, hands: [hand(1, 0, { insurance: 5, insurancePayout, result: HandResult.LOSE, payout: 0, status: HandStatus.DONE, cards: [] , hiddenCards: [] }), hand(2, 1, { cards: [], result: HandResult.LOSE, payout: 0 })] }));
+    expect(screen.getByText(text)).toBeTruthy();
+  });
 });
 
 describe("Settings: Hands per round (#59)", () => {

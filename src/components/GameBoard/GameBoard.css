@@ -195,5 +195,6 @@
 }
 @media (max-height: 520px) {
   .stage-in, .stage-in.multi { --fixed: 88px; }
+  .stage-in.spots { --lbl: 12px; } /* a 320 px high table has 12 px to give the "Spot n" label, not 16 */
   .stage-in.multi { --cwr: clamp(40px, min((100cqb - var(--fixed) - var(--lbl)) / var(--rows), 13cqi, 100px, ((100cqi - 24px - (min(var(--n), 4) - 1) * var(--sg)) / min(var(--n), 4) - 82px) / 3.664), 104px); }
 }
